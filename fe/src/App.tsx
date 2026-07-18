@@ -72,7 +72,7 @@ const App = () => (
                   </ProtectedRoute>
                 }
               >
-                <Route index element={<Navigate to="/cau-hinh/thanh-vien" replace />} />
+                <Route index element={<Navigate to="/cau-hinh/vai-tro" replace />} />
                 <Route path="profile" element={<ProfilePage />} />
 
                 {/* Cấu hình */}
