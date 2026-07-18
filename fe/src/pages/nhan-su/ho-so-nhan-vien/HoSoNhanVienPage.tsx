@@ -1,16 +1,31 @@
-import { Typography } from 'antd';
+import { useEffect } from "react";
+import {
+  HoSoNhanVienHandlerProvider,
+  useHoSoNhanVienHandler,
+} from "./HoSoNhanVienHandlerContext";
+import { HoSoNhanVienTable } from "./components/table/HoSoNhanVienTable";
+import { HoSoNhanVienForm } from "./components/form/HoSoNhanVienForm";
 
-const { Title } = Typography;
+function HoSoNhanVienPageInner() {
+  const handler = useHoSoNhanVienHandler();
 
-/**
- * Placeholder — Task 4 sẽ thay bằng trang đầy đủ (CHandler feature) quản lý
- * hồ sơ nhân viên. Task 3 chỉ cần route/menu trỏ tới được trang này.
- */
-const HoSoNhanVienPage: React.FC = () => {
+  useEffect(() => {
+    handler.executeEvent("init", {});
+  }, [handler]);
+
   return (
     <div className="space-y-3">
-      <Title level={4}>Hồ sơ nhân viên</Title>
+      <HoSoNhanVienTable />
+      <HoSoNhanVienForm />
     </div>
+  );
+}
+
+const HoSoNhanVienPage: React.FC = () => {
+  return (
+    <HoSoNhanVienHandlerProvider>
+      <HoSoNhanVienPageInner />
+    </HoSoNhanVienHandlerProvider>
   );
 };
 
