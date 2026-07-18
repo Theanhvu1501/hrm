@@ -16,6 +16,7 @@ import { ThoiViec_Module } from './thoi-viec/thoi-viec.module';
 import { CaLamViec_Module } from './ca-lam-viec/ca-lam-viec.module';
 import { DiaDiemChamCong_Module } from './dia-diem-cham-cong/dia-diem-cham-cong.module';
 import { DonChamCong_Module } from './don-cham-cong/don-cham-cong.module';
+import { BangCong_Module } from './bang-cong/bang-cong.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { DonChamCong_Module } from './don-cham-cong/don-cham-cong.module';
     CaLamViec_Module,
     DiaDiemChamCong_Module,
     DonChamCong_Module,
+    BangCong_Module,
   ],
 })
 export class ConfigServiceModule {}
