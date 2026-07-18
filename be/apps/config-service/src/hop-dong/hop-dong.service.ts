@@ -75,15 +75,17 @@ export class HopDong_Service {
       isActive: true,
     };
 
+    // NOTE: use find(), not repo.count({ where }). On a MongoRepository,
+    // count() takes a raw Mongo filter, so passing a `{ where: {...} }`
+    // FindManyOptions matches zero documents and the rule silently never
+    // fires (caught only in live testing — unit tests mock the repo). find()
+    // does honour FindManyOptions.where on Mongo (same as nhan-vien's dedup).
+    const docs = await this.repo.find({ where });
     let count: number;
     if (excludeId === undefined) {
-      count = await this.repo.count({ where });
+      count = docs.length;
     } else {
-      // update() is excluding the record being edited from its own count.
-      // Filtering `_id !== excludeId` client-side (rather than pushing it
-      // into the `where`) keeps this working regardless of how the ORM/driver
-      // shapes not-equal filters for Mongo ObjectId fields.
-      const docs = await this.repo.find({ where });
+      // update() excludes the record being edited from its own count.
       const excludeIdStr = String(excludeId);
       count = docs.filter((d: any) => String(d._id ?? d.id) !== excludeIdStr)
         .length;

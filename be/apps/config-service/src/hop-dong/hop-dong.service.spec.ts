@@ -137,7 +137,11 @@ describe('HopDong_Service', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('create — quy tắc luật 2 lần HĐ xác định thời hạn', () => {
     it('throws ConflictException on the 3rd xac_dinh_thoi_han contract for the same employee', async () => {
-      mockContractRepo.count.mockResolvedValueOnce(2);
+      // 2 existing active fixed-term contracts → find() returns both.
+      mockContractRepo.find.mockResolvedValueOnce([
+        { _id: 'c1', employeeId: 'emp-1', loaiHopDong: 'xac_dinh_thoi_han', isActive: true },
+        { _id: 'c2', employeeId: 'emp-1', loaiHopDong: 'xac_dinh_thoi_han', isActive: true },
+      ]);
 
       await expect(
         service.create({
@@ -146,7 +150,9 @@ describe('HopDong_Service', () => {
         } as any),
       ).rejects.toThrow(ConflictException);
 
-      expect(mockContractRepo.count).toHaveBeenCalledWith({
+      // Rule uses find({ where }) (NOT count — MongoRepository.count ignores
+      // FindManyOptions.where), then counts the array length.
+      expect(mockContractRepo.find).toHaveBeenCalledWith({
         where: {
           employeeId: 'emp-1',
           loaiHopDong: 'xac_dinh_thoi_han',
@@ -156,7 +162,9 @@ describe('HopDong_Service', () => {
     });
 
     it('allows the 2nd xac_dinh_thoi_han contract (only 1 existing)', async () => {
-      mockContractRepo.count.mockResolvedValueOnce(1);
+      mockContractRepo.find.mockResolvedValueOnce([
+        { _id: 'c1', employeeId: 'emp-1', loaiHopDong: 'xac_dinh_thoi_han', isActive: true },
+      ]);
 
       const result = await service.create({
         employeeId: 'emp-1',
@@ -167,7 +175,10 @@ describe('HopDong_Service', () => {
     });
 
     it('does not block khong_xac_dinh_thoi_han even when the employee already has 2 fixed-term contracts', async () => {
-      mockContractRepo.count.mockResolvedValueOnce(2);
+      mockContractRepo.find.mockResolvedValueOnce([
+        { _id: 'c1', employeeId: 'emp-1', loaiHopDong: 'xac_dinh_thoi_han', isActive: true },
+        { _id: 'c2', employeeId: 'emp-1', loaiHopDong: 'xac_dinh_thoi_han', isActive: true },
+      ]);
 
       const result = await service.create({
         employeeId: 'emp-1',
@@ -175,9 +186,9 @@ describe('HopDong_Service', () => {
       } as any);
 
       expect(result.contractNo).toBe('HD0001');
-      // Rule only applies to xac_dinh_thoi_han, so the count check should be
-      // skipped entirely for other contract types.
-      expect(mockContractRepo.count).not.toHaveBeenCalled();
+      // Rule only applies to xac_dinh_thoi_han, so the rule's find() check
+      // should be skipped entirely for other contract types.
+      expect(mockContractRepo.find).not.toHaveBeenCalled();
     });
   });
 
