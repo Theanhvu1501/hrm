@@ -134,8 +134,8 @@ export class AuthServiceService {
    *
    * New flow (Task 5.1b):
    *   1. identityClient.getMe(token)  → user + current tenant (name/slug)
-   *   2. identityClient.getMyTenantsForApp(token, 'ke-toan') → ke-toan tenant list
-   *   3. Enrich each ke-toan tenant with digital_book (AppUserRole + TenantAppConfig)
+   *   2. identityClient.getMyTenantsForApp(token, 'nhan-su') → nhan-su tenant list
+   *   3. Enrich each nhan-su tenant with digital_book (AppUserRole + TenantAppConfig)
    *   4. Build current tenant + load permissions from PhanQuyen
    */
   async getMe(
@@ -156,17 +156,17 @@ export class AuthServiceService {
       tenant?: IdentityTenantData;
     };
 
-    // 2. Get ke-toan tenants from identity
-    const tenantsRes = await this.identityClient.getMyTenantsForApp(token, 'ke-toan');
+    // 2. Get nhan-su tenants from identity
+    const tenantsRes = await this.identityClient.getMyTenantsForApp(token, 'nhan-su');
     if (!tenantsRes.success) this.throwFromServiceError(tenantsRes);
-    const keToanTenants: IdentityTenantData[] = tenantsRes.data ?? [];
+    const nhanSuTenants: IdentityTenantData[] = tenantsRes.data ?? [];
 
     const isSuperAdmin = meData.user.isSuperAdmin;
 
     // 3. Enrich availableTenants with digital_book role + config
     // Super admin: force role to 'SUPER_ADMIN' (skip AppUserRole lookup to avoid KIEM_SOAT default)
     const availableTenants: TenantInfo[] = await Promise.all(
-      keToanTenants.map(async (t) => {
+      nhanSuTenants.map(async (t) => {
         if (isSuperAdmin) {
           const cfg = await this.tenantAppConfigRepo.findOne({
             where: { tenantId: t.tenantId } as any,

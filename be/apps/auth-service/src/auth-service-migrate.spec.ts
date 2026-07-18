@@ -119,7 +119,7 @@ describe('AuthServiceService (migrated): getMe', () => {
     tenantSlug: 'acme',
   };
 
-  it('returns enriched response with availableTenants from ke-toan + current tenant', async () => {
+  it('returns enriched response with availableTenants from nhan-su + current tenant', async () => {
     const appUserRoleRepo = stubRepo();
     appUserRoleRepo.findOne.mockResolvedValue({
       userId: USER_ID,
@@ -243,7 +243,7 @@ describe('AuthServiceService (migrated): getMe', () => {
     );
   });
 
-  it('calls identityClient.getMyTenantsForApp with ke-toan', async () => {
+  it('calls identityClient.getMyTenantsForApp with nhan-su', async () => {
     const getMyTenantsForApp = jest.fn(async () => ({
       success: true,
       data: [],
@@ -260,7 +260,7 @@ describe('AuthServiceService (migrated): getMe', () => {
     });
 
     await service.getMe(TOKEN, USER_ID, TENANT_ID);
-    expect(getMyTenantsForApp).toHaveBeenCalledWith(TOKEN, 'ke-toan');
+    expect(getMyTenantsForApp).toHaveBeenCalledWith(TOKEN, 'nhan-su');
   });
 });
 

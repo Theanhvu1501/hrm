@@ -25,7 +25,7 @@ async function bootstrap() {
 
   app.enableCors();
 
-  const port = process.env.CONFIG_SERVICE_PORT || 3007;
+  const port = process.env.PORT || 4007;
   await app.listen(port);
   console.log(`Config Service is running on port ${port}`);
 }
