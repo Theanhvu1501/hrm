@@ -9,13 +9,9 @@ import { Repository } from 'typeorm';
 import { VaiTro } from '@app/entities';
 
 const DEFAULT_ROLES = [
-  { ten: 'Giám đốc', moTa: 'Quản lý toàn bộ hệ thống' },
-  { ten: 'Kế toán trưởng', moTa: 'Quản lý kế toán' },
-  { ten: 'Kế toán quỹ', moTa: 'Quản lý thu chi' },
-  { ten: 'Kế toán công nợ', moTa: 'Quản lý công nợ' },
-  { ten: 'Kế toán tổng hợp', moTa: 'Tổng hợp báo cáo' },
-  { ten: 'Quản lý', moTa: 'Quản lý phòng ban' },
-  { ten: 'Kiểm soát', moTa: 'Kiểm soát nội bộ' },
+  { ten: 'HR Admin', moTa: 'Quản lý toàn bộ hệ thống nhân sự' },
+  { ten: 'Quản lý trực tiếp', moTa: 'Quản lý nhân viên thuộc phòng ban' },
+  { ten: 'Nhân viên', moTa: 'Nhân viên sử dụng hệ thống' },
 ];
 
 @Injectable()
