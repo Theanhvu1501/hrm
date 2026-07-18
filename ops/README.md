@@ -70,3 +70,13 @@ To fully register `nhan-su`:
 1. Run this seed script (Option 1) — registers app globally + optionally grants to tenant
 2. Update CORS on identity-service and redeploy (manual on identity project)
 3. Users with access to the tenant will see `nhan-su` in AppSwitcher
+
+## ⚠️ Deploy caveat — KHÔNG rsync đè env của server
+Server giữ env THẬT (secrets + `MONGODB_DATABASE=nhan_su`) trong `be/env/*.env`. Bản local có thể lệch.
+Khi deploy PHẢI loại trừ env để không ghi đè:
+```bash
+rsync -az --delete --exclude=node_modules --exclude=dist --exclude=.git --exclude=.superpowers --exclude=env \
+  ./be ./fe kt:/root/chimseo/nhan-su/
+ssh kt 'cd /root/chimseo/nhan-su && docker compose -f docker-compose.production.yml up -d --build'
+```
+Sự cố đã gặp (2026-07-18): rsync KHÔNG loại `env/` → db.env local (`digital_book`) đè lên server → app ghi nhầm vào DB master-seo. Đã dọn + khôi phục. Luôn dùng `--exclude=env`.
