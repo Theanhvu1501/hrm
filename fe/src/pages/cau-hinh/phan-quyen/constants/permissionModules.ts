@@ -38,6 +38,7 @@ export const permissionModules: PermissionModule[] = [
     children: [
       { key: '/nhan-su/ho-so-nhan-vien', label: 'Hồ sơ nhân viên' },
       { key: '/nhan-su/hop-dong-lao-dong', label: 'Hợp đồng lao động' },
+      { key: '/nhan-su/qua-trinh-cong-tac', label: 'Quá trình công tác' },
     ],
   },
 ];
