@@ -6,3 +6,4 @@ export * from './auth';
 export * from './config';
 export * from './tenant';
 export * from './menu-catalog';
+export * from './nhan-su';
