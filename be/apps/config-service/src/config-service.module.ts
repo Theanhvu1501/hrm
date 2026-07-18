@@ -14,6 +14,8 @@ import { HopDong_Module } from './hop-dong/hop-dong.module';
 import { QuaTrinhCongTac_Module } from './qua-trinh-cong-tac/qua-trinh-cong-tac.module';
 import { ThoiViec_Module } from './thoi-viec/thoi-viec.module';
 import { CaLamViec_Module } from './ca-lam-viec/ca-lam-viec.module';
+import { DiaDiemChamCong_Module } from './dia-diem-cham-cong/dia-diem-cham-cong.module';
+import { DonChamCong_Module } from './don-cham-cong/don-cham-cong.module';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { CaLamViec_Module } from './ca-lam-viec/ca-lam-viec.module';
     QuaTrinhCongTac_Module,
     ThoiViec_Module,
     CaLamViec_Module,
+    DiaDiemChamCong_Module,
+    DonChamCong_Module,
   ],
 })
 export class ConfigServiceModule {}

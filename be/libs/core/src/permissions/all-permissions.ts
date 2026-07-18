@@ -16,6 +16,8 @@ export const PERMISSION_MODULES = [
   '/nhan-su/qua-trinh-cong-tac',
   '/nhan-su/thoi-viec',
   '/cham-cong/ca-lam-viec',
+  '/cham-cong/dia-diem',
+  '/cham-cong/don-tu',
 ];
 
 const PERMISSION_ACTIONS = ['xem', 'them', 'sua', 'xoa', 'xuat'];
