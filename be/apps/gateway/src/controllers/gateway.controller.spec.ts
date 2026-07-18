@@ -49,7 +49,7 @@ describe('GatewayController', () => {
         success: false,
         error: {
           code: 'ROUTE_NOT_FOUND',
-          message: expect.stringContaining('No service configured'),
+          message: expect.stringContaining('Không tìm thấy dịch vụ'),
         },
       });
     });
@@ -132,7 +132,7 @@ describe('GatewayController', () => {
             success: false,
             error: {
               code: 'BAD_GATEWAY',
-              message: expect.stringContaining('Service unavailable'),
+              message: expect.stringContaining('Dịch vụ không khả dụng'),
             },
           });
           resolve();
@@ -160,7 +160,7 @@ describe('GatewayController', () => {
       });
 
       const mockReq = {
-        params: { path: ['voucher', 'phieu-thu'] },
+        params: { path: ['config', 'vai-tro'] },
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         pipe: jest.fn(),

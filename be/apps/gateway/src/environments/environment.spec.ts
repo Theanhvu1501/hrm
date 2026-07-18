@@ -83,22 +83,23 @@ describe('Gateway Routing', () => {
       );
     });
 
-    it('should map each prefix to correct service port', () => {
-      const expectedMappings: Record<string, number> = {
-        '/auth': 3001,
-        '/master-data': 3002,
-        '/voucher': 3003,
-        '/cash-book': 3004,
-        '/payable': 3005,
-        '/reporting': 3006,
-        '/config': 3007,
-      };
-
-      for (const [prefix, expectedPort] of Object.entries(expectedMappings)) {
-        const result = getServiceForPath(prefix);
+    it('should map each configured prefix to its declared service port', () => {
+      // Post-strip reality: only /auth, /config, /tai-lieu remain (see environment.ts routes).
+      // Assert against the environment's own service config rather than hardcoding ports,
+      // so this stays correct regardless of which env vars are loaded at test time.
+      for (const route of environment.routes) {
+        const result = getServiceForPath(route.pathPrefix);
+        const expectedService = environment.services[route.service];
         expect(result).not.toBeNull();
-        expect(result?.service.port).toBe(expectedPort);
+        expect(expectedService).toBeDefined();
+        expect(result?.service.port).toBe(expectedService.port);
+        expect(result?.service.host).toBe(expectedService.host);
       }
+    });
+
+    it('should only expose the current HRM routes (auth, config, tai-lieu)', () => {
+      const prefixes = environment.routes.map((r) => r.pathPrefix).sort();
+      expect(prefixes).toEqual(['/auth', '/config', '/tai-lieu']);
     });
   });
 });

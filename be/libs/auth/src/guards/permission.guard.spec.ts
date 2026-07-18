@@ -7,17 +7,18 @@ describe('PermissionGuard', () => {
   let permissionGuard: PermissionGuard;
   let reflector: Reflector;
 
+  // Current HRM permissions (no more accounting-specific phieu_thu/phieu_chi permissions).
   const ALL_PERMISSIONS = [
-    'view_phieu_thu',
-    'create_phieu_thu',
-    'update_phieu_thu',
-    'delete_phieu_thu',
-    'approve_phieu_thu',
-    'view_phieu_chi',
-    'create_phieu_chi',
-    'update_phieu_chi',
-    'delete_phieu_chi',
-    'approve_phieu_chi',
+    'view_nhan_vien',
+    'create_nhan_vien',
+    'update_nhan_vien',
+    'delete_nhan_vien',
+    'approve_nhan_vien',
+    'view_vai_tro',
+    'create_vai_tro',
+    'update_vai_tro',
+    'delete_vai_tro',
+    'approve_vai_tro',
     'view_reports',
     'manage_permissions',
   ];
@@ -166,13 +167,13 @@ describe('PermissionGuard', () => {
     });
 
     it('should throw ForbiddenException when user is not in request', () => {
-      const context = createMockExecutionContext(undefined, ['view_phieu_thu']);
+      const context = createMockExecutionContext(undefined, ['view_nhan_vien']);
 
       expect(() => permissionGuard.canActivate(context)).toThrow(
         ForbiddenException,
       );
       expect(() => permissionGuard.canActivate(context)).toThrow(
-        'User not found in request',
+        'Không tìm thấy thông tin người dùng',
       );
     });
 
@@ -181,13 +182,13 @@ describe('PermissionGuard', () => {
         id: 'user-123',
         email: 'test@example.com',
         vaiTro: 'ADMIN',
-        permissions: ['view_phieu_thu'],
+        permissions: ['view_nhan_vien'],
       };
 
       const context = createMockExecutionContext(user, [
-        'view_phieu_thu',
-        'create_phieu_thu',
-        'delete_phieu_thu',
+        'view_nhan_vien',
+        'create_nhan_vien',
+        'delete_nhan_vien',
       ]);
 
       try {
@@ -196,10 +197,10 @@ describe('PermissionGuard', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(ForbiddenException);
         expect((error as ForbiddenException).message).toContain(
-          'create_phieu_thu',
+          'create_nhan_vien',
         );
         expect((error as ForbiddenException).message).toContain(
-          'delete_phieu_thu',
+          'delete_nhan_vien',
         );
       }
     });
