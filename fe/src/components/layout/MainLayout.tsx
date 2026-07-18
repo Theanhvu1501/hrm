@@ -24,6 +24,7 @@ import {
   TeamOutlined,
   HomeOutlined,
   IdcardOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
@@ -150,6 +151,8 @@ const MainLayout: React.FC = () => {
   ];
 
   const canViewHoSoNhanVien = hasPermission('/nhan-su/ho-so-nhan-vien:xem') || user?.isSuperAdmin;
+  const canViewHopDongLaoDong = hasPermission('/nhan-su/hop-dong-lao-dong:xem') || user?.isSuperAdmin;
+  const canViewNhanSuGroup = canViewHoSoNhanVien || canViewHopDongLaoDong;
 
   // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" (Phase 2+), thêm dần theo module.
   const siderMenuItems: MenuItem[] = [
@@ -158,16 +161,21 @@ const MainLayout: React.FC = () => {
       icon: <HomeOutlined />,
       label: "Trang chủ",
     },
-    ...(canViewHoSoNhanVien ? [{
+    ...(canViewNhanSuGroup ? [{
       key: "nhan-su-group",
       type: "group" as const,
       label: "NHÂN SỰ",
       children: [
-        {
+        ...(canViewHoSoNhanVien ? [{
           key: "/nhan-su/ho-so-nhan-vien",
           icon: <IdcardOutlined />,
           label: "Hồ sơ nhân viên",
-        },
+        }] : []),
+        ...(canViewHopDongLaoDong ? [{
+          key: "/nhan-su/hop-dong-lao-dong",
+          icon: <FileTextOutlined />,
+          label: "Hợp đồng lao động",
+        }] : []),
       ],
     }] : []),
   ];

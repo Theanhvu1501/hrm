@@ -22,6 +22,7 @@ import {
   TenantPage,
   LinhVucPage,
   HoSoNhanVienPage,
+  HopDongLaoDongPage,
   NotFound
 } from "./pages/loadable";
 
@@ -119,6 +120,14 @@ const App = () => (
                     element={
                       <ProtectedRoute requiredPermission="/nhan-su/ho-so-nhan-vien:xem">
                         <HoSoNhanVienPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="hop-dong-lao-dong"
+                    element={
+                      <ProtectedRoute requiredPermission="/nhan-su/hop-dong-lao-dong:xem">
+                        <HopDongLaoDongPage />
                       </ProtectedRoute>
                     }
                   />

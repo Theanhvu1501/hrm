@@ -43,6 +43,10 @@ export const HoSoNhanVienPage = loadable(() => import('./nhan-su/ho-so-nhan-vien
   fallback: <PageLoader />
 });
 
+export const HopDongLaoDongPage = loadable(() => import('./nhan-su/hop-dong-lao-dong/HopDongLaoDongPage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const PlaceholderPage = loadable(() => import('./PlaceholderPage'), {
   fallback: <PageLoader />
