@@ -28,6 +28,7 @@ import {
   CaLamViecPage,
   DiaDiemChamCongPage,
   DonChamCongPage,
+  BangCongPage,
   NotFound
 } from "./pages/loadable";
 
@@ -177,6 +178,14 @@ const App = () => (
                     element={
                       <ProtectedRoute requiredPermission="/cham-cong/don-tu:xem">
                         <DonChamCongPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="bang-cong"
+                    element={
+                      <ProtectedRoute requiredPermission="/cham-cong/bang-cong:xem">
+                        <BangCongPage />
                       </ProtectedRoute>
                     }
                   />

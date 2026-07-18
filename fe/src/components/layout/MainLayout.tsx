@@ -30,6 +30,7 @@ import {
   ClockCircleOutlined,
   EnvironmentOutlined,
   FileDoneOutlined,
+  TableOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
@@ -164,7 +165,8 @@ const MainLayout: React.FC = () => {
   const canViewCaLamViec = hasPermission('/cham-cong/ca-lam-viec:xem') || user?.isSuperAdmin;
   const canViewDiaDiemChamCong = hasPermission('/cham-cong/dia-diem:xem') || user?.isSuperAdmin;
   const canViewDonChamCong = hasPermission('/cham-cong/don-tu:xem') || user?.isSuperAdmin;
-  const canViewChamCongGroup = canViewCaLamViec || canViewDiaDiemChamCong || canViewDonChamCong;
+  const canViewBangCong = hasPermission('/cham-cong/bang-cong:xem') || user?.isSuperAdmin;
+  const canViewChamCongGroup = canViewCaLamViec || canViewDiaDiemChamCong || canViewDonChamCong || canViewBangCong;
 
   // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" + section "CHẤM CÔNG" (Phase 2+), thêm dần theo module.
   const siderMenuItems: MenuItem[] = [
@@ -219,6 +221,11 @@ const MainLayout: React.FC = () => {
           key: "/cham-cong/don-tu",
           icon: <FileDoneOutlined />,
           label: "Đơn chấm công",
+        }] : []),
+        ...(canViewBangCong ? [{
+          key: "/cham-cong/bang-cong",
+          icon: <TableOutlined />,
+          label: "Bảng công",
         }] : []),
       ],
     }] : []),

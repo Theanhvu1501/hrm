@@ -68,6 +68,10 @@ export const DonChamCongPage = loadable(() => import('./cham-cong/don-cham-cong/
   fallback: <PageLoader />
 });
 
+export const BangCongPage = loadable(() => import('./cham-cong/bang-cong/BangCongPage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const PlaceholderPage = loadable(() => import('./PlaceholderPage'), {
   fallback: <PageLoader />
