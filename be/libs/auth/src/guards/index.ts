@@ -6,4 +6,3 @@ export * from './super-admin.guard';
 export * from './admin.guard';
 export * from './tenant-active.guard';
 export * from './tenant-admin.guard';
-export * from './module.guard';

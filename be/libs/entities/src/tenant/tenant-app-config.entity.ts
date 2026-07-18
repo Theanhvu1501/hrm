@@ -1,6 +1,14 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../base.entity';
-import type { Glossary } from '../nganh/nganh.entity';
+
+/** Một nhãn trong từ điển thuật ngữ: nhãn gốc + override theo vị trí. */
+export interface GlossaryItem {
+  label: string;
+  surfaces?: Record<string, string>;
+}
+
+/** Từ điển thuật ngữ: key khái niệm (vd 'chuDauTu') → nhãn. */
+export type Glossary = Record<string, GlossaryItem>;
 
 @Entity('tenant_app_config')
 export class TenantAppConfig extends BaseEntity {
