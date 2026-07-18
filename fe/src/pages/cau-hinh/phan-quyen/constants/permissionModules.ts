@@ -31,4 +31,12 @@ export const permissionModules: PermissionModule[] = [
       { key: '/cau-hinh/tenant', label: 'Quản lý Công ty' },
     ],
   },
+  {
+    key: 'nhan-su',
+    label: 'NHÂN SỰ',
+    isSection: true,
+    children: [
+      { key: '/nhan-su/ho-so-nhan-vien', label: 'Hồ sơ nhân viên' },
+    ],
+  },
 ];
