@@ -51,6 +51,10 @@ export const QuaTrinhCongTacPage = loadable(() => import('./nhan-su/qua-trinh-co
   fallback: <PageLoader />
 });
 
+export const ThoiViecPage = loadable(() => import('./nhan-su/thoi-viec/ThoiViecPage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const PlaceholderPage = loadable(() => import('./PlaceholderPage'), {
   fallback: <PageLoader />

@@ -39,6 +39,7 @@ export const permissionModules: PermissionModule[] = [
       { key: '/nhan-su/ho-so-nhan-vien', label: 'Hồ sơ nhân viên' },
       { key: '/nhan-su/hop-dong-lao-dong', label: 'Hợp đồng lao động' },
       { key: '/nhan-su/qua-trinh-cong-tac', label: 'Quá trình công tác' },
+      { key: '/nhan-su/thoi-viec', label: 'Thôi việc / Bàn giao' },
     ],
   },
 ];
