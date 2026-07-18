@@ -13,6 +13,7 @@ import { NhanVien_Module } from './nhan-vien/nhan-vien.module';
 import { HopDong_Module } from './hop-dong/hop-dong.module';
 import { QuaTrinhCongTac_Module } from './qua-trinh-cong-tac/qua-trinh-cong-tac.module';
 import { ThoiViec_Module } from './thoi-viec/thoi-viec.module';
+import { CaLamViec_Module } from './ca-lam-viec/ca-lam-viec.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { ThoiViec_Module } from './thoi-viec/thoi-viec.module';
     HopDong_Module,
     QuaTrinhCongTac_Module,
     ThoiViec_Module,
+    CaLamViec_Module,
   ],
 })
 export class ConfigServiceModule {}
