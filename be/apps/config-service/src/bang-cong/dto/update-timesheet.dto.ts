@@ -1,10 +1,33 @@
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsArray,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class ChiTietNgayDto {
+  @IsNumber()
+  @Min(1)
+  ngay: number;
+
+  @IsString()
+  kyHieu: string;
+}
 
 export class UpdateTimesheetDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
   soNgayCong?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChiTietNgayDto)
+  chiTietNgay?: ChiTietNgayDto[];
 
   @IsOptional()
   @IsNumber()

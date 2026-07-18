@@ -2,7 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Timesheet, Employee, AttendanceRequest } from '@app/entities';
-import { UpdateTimesheetDto } from './dto';
+import type { ChiTietNgayCong } from '@app/entities';
+import { UpdateTimesheetDto, SetDayDto } from './dto';
+import { soCongCuaKyHieu } from './cham-cong-ky-hieu';
 
 export interface BangCongFilter {
   thang?: string;
@@ -64,10 +66,30 @@ export class BangCong_Service {
   }
 
   /**
+   * Recomputes the derived/aggregate fields from `chiTietNgay`:
+   * - soNgayCong = Σ soCongCuaKyHieu(cell.kyHieu)
+   * - soNgayNghiPhep / soNgayNghiKhongLuong / soNgayOm = counts of P/KL/O cells
+   * Mutates `ts` in place; caller is responsible for persisting it.
+   */
+  private recompute(ts: Timesheet): void {
+    const cells = ts.chiTietNgay ?? [];
+
+    ts.soNgayCong = cells.reduce(
+      (sum, cell) => sum + soCongCuaKyHieu(cell.kyHieu),
+      0,
+    );
+    ts.soNgayNghiPhep = cells.filter((c) => c.kyHieu === 'P').length;
+    ts.soNgayNghiKhongLuong = cells.filter((c) => c.kyHieu === 'KL').length;
+    ts.soNgayOm = cells.filter((c) => c.kyHieu === 'O').length;
+  }
+
+  /**
    * Upserts one Timesheet row per active employee for `thang`. Existing rows
-   * keep their manually-entered values (soNgayCong, soLanDiMuon, ...) — only
-   * soGioLamThem is (re)computed every run from approved lam_them_gio
-   * requests, since that field is fully automatic.
+   * keep their manually-entered values (soLanDiMuon, ...) and their
+   * chiTietNgay grid — only soGioLamThem is (re)computed every run from
+   * approved lam_them_gio requests, since that field is fully automatic.
+   * New rows start with an empty chiTietNgay grid; soNgayCong (and the P/KL/O
+   * counters) are always derived via `recompute`, never set directly.
    */
   async generate(thang: string): Promise<Timesheet[]> {
     const employees = await this.employeeRepo.find({
@@ -90,6 +112,7 @@ export class BangCong_Service {
           employeeId,
           employeeName: emp.hoTen,
           employeeCode: emp.employeeId,
+          chiTietNgay: [],
           soNgayCong: 0,
           soGioLamThem: 0,
           soLanDiMuon: 0,
@@ -99,7 +122,9 @@ export class BangCong_Service {
         } as Partial<Timesheet>);
       }
 
+      if (!row.chiTietNgay) row.chiTietNgay = [];
       row.soGioLamThem = await this.sumApprovedOtHours(employeeId, thang);
+      this.recompute(row);
 
       rows.push(await this.repo.save(row));
     }
@@ -132,9 +157,43 @@ export class BangCong_Service {
     return item;
   }
 
+  /**
+   * Upserts a single day's symbol into `chiTietNgay` and recomputes the
+   * derived totals. Passing an empty/falsy `kyHieu` removes that day's
+   * entry entirely (clearing the cell) rather than storing a blank symbol.
+   */
+  async setDay(id: string, dto: SetDayDto): Promise<Timesheet> {
+    const item = await this.findOne(id);
+    const cells = (item.chiTietNgay ?? []).filter((c) => c.ngay !== dto.ngay);
+
+    if (dto.kyHieu) {
+      cells.push({ ngay: dto.ngay, kyHieu: dto.kyHieu });
+    }
+
+    cells.sort((a, b) => a.ngay - b.ngay);
+    item.chiTietNgay = cells;
+    this.recompute(item);
+
+    return this.repo.save(item);
+  }
+
+  /**
+   * `soNgayCong` (and the P/KL/O counters) are always derived from
+   * `chiTietNgay` — any value the caller sends for them is ignored. If the
+   * dto includes a new `chiTietNgay` array, it replaces the existing grid
+   * wholesale and triggers a recompute; manual fields (soLanDiMuon,
+   * soLanVeSom, ghiChu, soGioLamThem) are applied as-is.
+   */
   async update(id: string, dto: UpdateTimesheetDto): Promise<Timesheet> {
     const item = await this.findOne(id);
-    Object.assign(item, dto);
+    const { soNgayCong: _ignored, chiTietNgay, ...rest } = dto;
+
+    Object.assign(item, rest);
+    if (chiTietNgay) {
+      item.chiTietNgay = chiTietNgay as ChiTietNgayCong[];
+    }
+    this.recompute(item);
+
     return this.repo.save(item);
   }
 

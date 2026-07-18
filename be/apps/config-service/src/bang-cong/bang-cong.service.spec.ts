@@ -83,8 +83,18 @@ describe('BangCong_Service', () => {
   describe('generate — tạo mới', () => {
     it('creates one row per active employee, denorming employeeName/employeeCode', async () => {
       mockEmployeeRepo.find.mockResolvedValue([
-        { _id: EMP1, employeeId: 'NV0001', hoTen: 'Nguyen Van A', isActive: true },
-        { _id: EMP2, employeeId: 'NV0002', hoTen: 'Tran Thi B', isActive: true },
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          isActive: true,
+        },
+        {
+          _id: EMP2,
+          employeeId: 'NV0002',
+          hoTen: 'Tran Thi B',
+          isActive: true,
+        },
       ]);
 
       const result = await service.generate('2026-07');
@@ -100,6 +110,7 @@ describe('BangCong_Service', () => {
       expect(row1.thang).toBe('2026-07');
       expect(row1.trangThai).toBe('nhap');
       expect(row1.soNgayCong).toBe(0);
+      expect(row1.chiTietNgay).toEqual([]);
 
       const row2 = result.find((r) => r.employeeId === EMP2)!;
       expect(row2.employeeName).toBe('Tran Thi B');
@@ -110,7 +121,12 @@ describe('BangCong_Service', () => {
   describe('generate — cộng dồn giờ OT đã duyệt', () => {
     it('sums approved lam_them_gio hours (18:00-20:00 => 2h) into soGioLamThem', async () => {
       mockEmployeeRepo.find.mockResolvedValue([
-        { _id: EMP1, employeeId: 'NV0001', hoTen: 'Nguyen Van A', isActive: true },
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          isActive: true,
+        },
       ]);
       requestStore = [
         {
@@ -131,7 +147,12 @@ describe('BangCong_Service', () => {
 
     it('ignores requests that are not approved or not OT type', async () => {
       mockEmployeeRepo.find.mockResolvedValue([
-        { _id: EMP1, employeeId: 'NV0001', hoTen: 'Nguyen Van A', isActive: true },
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          isActive: true,
+        },
       ]);
       requestStore = [
         // pending approval — must not count
@@ -173,9 +194,14 @@ describe('BangCong_Service', () => {
   });
 
   describe('generate — không ghi đè giá trị nhập tay', () => {
-    it('keeps the existing row soNgayCong instead of resetting it', async () => {
+    it('keeps the existing row chiTietNgay/soLanDiMuon, re-deriving soNgayCong from the grid', async () => {
       mockEmployeeRepo.find.mockResolvedValue([
-        { _id: EMP1, employeeId: 'NV0001', hoTen: 'Nguyen Van A', isActive: true },
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          isActive: true,
+        },
       ]);
       timesheetStore = [
         {
@@ -184,7 +210,11 @@ describe('BangCong_Service', () => {
           employeeId: EMP1,
           employeeName: 'Nguyen Van A',
           employeeCode: 'NV0001',
-          soNgayCong: 22,
+          chiTietNgay: [
+            { ngay: 1, kyHieu: 'X' },
+            { ngay: 2, kyHieu: 'X' },
+          ],
+          soNgayCong: 2,
           soGioLamThem: 0,
           soLanDiMuon: 1,
           soLanVeSom: 0,
@@ -195,7 +225,13 @@ describe('BangCong_Service', () => {
 
       const [row] = await service.generate('2026-07');
 
-      expect(row.soNgayCong).toBe(22);
+      // soNgayCong is re-derived from the (untouched) chiTietNgay grid, not
+      // reset to 0 — the existing day-by-day data survives a re-generate.
+      expect(row.soNgayCong).toBe(2);
+      expect(row.chiTietNgay).toEqual([
+        { ngay: 1, kyHieu: 'X' },
+        { ngay: 2, kyHieu: 'X' },
+      ]);
       expect(row.soLanDiMuon).toBe(1);
       expect(mockTimesheetRepo.create).not.toHaveBeenCalled();
     });
@@ -264,13 +300,14 @@ describe('BangCong_Service', () => {
   // update — sửa tay
   // ──────────────────────────────────────────────────────────────────────────
   describe('update', () => {
-    it('edits manual fields (soNgayCong, soGioLamThem, soLanDiMuon, soLanVeSom, ghiChu)', async () => {
+    it('edits manual fields (soGioLamThem, soLanDiMuon, soLanVeSom, ghiChu) without touching chiTietNgay', async () => {
       const id = '507f1f77bcf86cd799439033';
       const existing = {
         _id: id,
         thang: '2026-07',
         employeeId: EMP1,
-        soNgayCong: 20,
+        chiTietNgay: [{ ngay: 1, kyHieu: 'X' }],
+        soNgayCong: 1,
         soGioLamThem: 2,
         soLanDiMuon: 0,
         soLanVeSom: 0,
@@ -280,21 +317,52 @@ describe('BangCong_Service', () => {
       mockTimesheetRepo.findOne.mockResolvedValue(existing);
 
       const result = await service.update(id, {
-        soNgayCong: 21,
         soLanDiMuon: 2,
         ghiChu: 'Nghỉ phép 1 ngày',
       });
 
-      expect(result.soNgayCong).toBe(21);
       expect(result.soLanDiMuon).toBe(2);
       expect(result.ghiChu).toBe('Nghỉ phép 1 ngày');
+      // soNgayCong is untouched (still derived from the unchanged grid).
+      expect(result.soNgayCong).toBe(1);
       expect(mockTimesheetRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          soNgayCong: 21,
           soLanDiMuon: 2,
           ghiChu: 'Nghỉ phép 1 ngày',
         }),
       );
+    });
+
+    it('recomputes soNgayCong from a replaced chiTietNgay and ignores any soNgayCong sent in the dto', async () => {
+      const id = '507f1f77bcf86cd799439034';
+      const existing = {
+        _id: id,
+        thang: '2026-07',
+        employeeId: EMP1,
+        chiTietNgay: [{ ngay: 1, kyHieu: 'X' }],
+        soNgayCong: 1,
+        soGioLamThem: 0,
+        soLanDiMuon: 0,
+        soLanVeSom: 0,
+        trangThai: 'nhap',
+        isActive: true,
+      };
+      mockTimesheetRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.update(id, {
+        // Bogus/stale value — must be ignored; the real total is derived
+        // from chiTietNgay below (20 × X + 1 × 1/2 = 20.5).
+        soNgayCong: 999,
+        chiTietNgay: [
+          ...Array.from({ length: 20 }, (_, i) => ({
+            ngay: i + 1,
+            kyHieu: 'X',
+          })),
+          { ngay: 21, kyHieu: '1/2' },
+        ],
+      });
+
+      expect(result.soNgayCong).toBe(20.5);
     });
   });
 
@@ -302,9 +370,101 @@ describe('BangCong_Service', () => {
     it('throws NotFoundException', async () => {
       mockTimesheetRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.findOne('507f1f77bcf86cd799439099'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('507f1f77bcf86cd799439099')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // setDay — chấm công theo từng ngày (chi tiết ngày) + tự tính tổng công
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('setDay', () => {
+    const id = '507f1f77bcf86cd799439055';
+
+    it('adds a cell and recompute derives soNgayCong (20×X + 1×1/2 = 20.5)', async () => {
+      const existing = {
+        _id: id,
+        thang: '2026-07',
+        employeeId: EMP1,
+        chiTietNgay: Array.from({ length: 20 }, (_, i) => ({
+          ngay: i + 1,
+          kyHieu: 'X',
+        })),
+        soNgayCong: 20,
+        isActive: true,
+      };
+      mockTimesheetRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.setDay(id, { ngay: 21, kyHieu: '1/2' });
+
+      expect(result.chiTietNgay).toHaveLength(21);
+      expect(result.soNgayCong).toBe(20.5);
+    });
+
+    it('replaces the symbol for a day that already has one, instead of duplicating it', async () => {
+      const existing = {
+        _id: id,
+        thang: '2026-07',
+        employeeId: EMP1,
+        chiTietNgay: [{ ngay: 5, kyHieu: 'X' }],
+        soNgayCong: 1,
+        isActive: true,
+      };
+      mockTimesheetRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.setDay(id, { ngay: 5, kyHieu: '1/2' });
+
+      expect(result.chiTietNgay).toEqual([{ ngay: 5, kyHieu: '1/2' }]);
+      expect(result.soNgayCong).toBe(0.5);
+    });
+
+    it("'P'/'L'/'CT' count as full công (1 each), while 'KL'/'O' contribute 0 công but bump their own counters", async () => {
+      const existing = {
+        _id: id,
+        thang: '2026-07',
+        employeeId: EMP1,
+        chiTietNgay: [
+          { ngay: 1, kyHieu: 'P' },
+          { ngay: 2, kyHieu: 'L' },
+          { ngay: 3, kyHieu: 'CT' },
+        ],
+        soNgayCong: 3,
+        isActive: true,
+      };
+      mockTimesheetRepo.findOne.mockResolvedValue(existing);
+
+      // Add one KL day and one O day on top of the existing P/L/CT cells.
+      // (mockTimesheetRepo.findOne always resolves the same `existing`
+      // object, so the mutation from the first call is visible to the
+      // second — same as how a real findOne→save round-trip would behave.)
+      await service.setDay(id, { ngay: 4, kyHieu: 'KL' });
+      const result = await service.setDay(id, { ngay: 5, kyHieu: 'O' });
+
+      expect(result.soNgayCong).toBe(3); // P+L+CT = 1 each, KL/O = 0
+      expect(result.soNgayNghiPhep).toBe(1);
+      expect(result.soNgayNghiKhongLuong).toBe(1);
+      expect(result.soNgayOm).toBe(1);
+    });
+
+    it('removes the day entry entirely when kyHieu is empty', async () => {
+      const existing = {
+        _id: id,
+        thang: '2026-07',
+        employeeId: EMP1,
+        chiTietNgay: [
+          { ngay: 1, kyHieu: 'X' },
+          { ngay: 2, kyHieu: 'X' },
+        ],
+        soNgayCong: 2,
+        isActive: true,
+      };
+      mockTimesheetRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.setDay(id, { ngay: 1, kyHieu: '' });
+
+      expect(result.chiTietNgay).toEqual([{ ngay: 2, kyHieu: 'X' }]);
+      expect(result.soNgayCong).toBe(1);
     });
   });
 
