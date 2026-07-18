@@ -19,8 +19,6 @@ import {
   PhanQuyenPage,
   VaiTroPage,
   ThanhVienPage,
-  TenantPage,
-  LinhVucPage,
   HoSoNhanVienPage,
   HopDongLaoDongPage,
   QuaTrinhCongTacPage,
@@ -108,14 +106,6 @@ const App = () => (
                         <ThanhVienPage />
                       </ProtectedRoute>
                     }
-                  />
-                  <Route
-                    path="tenant"
-                    element={<TenantPage />}
-                  />
-                  <Route
-                    path="linh-vuc"
-                    element={<LinhVucPage />}
                   />
                 </Route>
 

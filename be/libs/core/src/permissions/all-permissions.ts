@@ -10,7 +10,6 @@ export const PERMISSION_MODULES = [
   '/cau-hinh/vai-tro',
   '/cau-hinh/phan-quyen',
   '/cau-hinh/thanh-vien',
-  '/cau-hinh/tenant',
   '/nhan-su/ho-so-nhan-vien',
   '/nhan-su/hop-dong-lao-dong',
   '/nhan-su/qua-trinh-cong-tac',

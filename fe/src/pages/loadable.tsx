@@ -26,14 +26,6 @@ export const VaiTroPage = loadable(() => import('./cau-hinh/vai-tro/VaiTroPage')
   fallback: <PageLoader />
 });
 
-export const TenantPage = loadable(() => import('./cau-hinh/tenant/TenantPage'), {
-  fallback: <PageLoader />
-});
-
-export const LinhVucPage = loadable(() => import('./cau-hinh/linh-vuc/LinhVucPage'), {
-  fallback: <PageLoader />
-});
-
 export const ThanhVienPage = loadable(() => import('./cau-hinh/thanh-vien/ThanhVienPage'), {
   fallback: <PageLoader />
 });

@@ -28,7 +28,6 @@ export const permissionModules: PermissionModule[] = [
       { key: '/cau-hinh/vai-tro', label: 'Quản lý Vai trò' },
       { key: '/cau-hinh/phan-quyen', label: 'Phân quyền' },
       { key: '/cau-hinh/thanh-vien', label: 'Quản lý Thành viên' },
-      { key: '/cau-hinh/tenant', label: 'Quản lý Công ty' },
     ],
   },
   {

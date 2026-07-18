@@ -17,7 +17,6 @@ import {
   DownloadOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
-  AppstoreOutlined,
   SafetyCertificateOutlined,
   MenuOutlined,
   CloseOutlined,
@@ -255,18 +254,6 @@ const MainLayout: React.FC = () => {
         onClick: () => navigate("/cau-hinh/thanh-vien"),
       }] : []),
     ] : []),
-    ...(user?.isSuperAdmin ? [{
-      key: "tenant",
-      icon: <TeamOutlined />,
-      label: "Quản lý Công ty",
-      onClick: () => navigate("/cau-hinh/tenant"),
-    }] : []),
-    ...(user?.isSuperAdmin ? [{
-      key: "linh-vuc",
-      icon: <AppstoreOutlined />,
-      label: "Quản lý Lĩnh vực",
-      onClick: () => navigate("/cau-hinh/linh-vuc"),
-    }] : []),
   ];
 
   const getSelectedKeys = () => {
