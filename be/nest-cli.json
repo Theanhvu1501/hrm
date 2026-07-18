@@ -55,15 +55,6 @@
         "tsConfigPath": "apps/auth-service/tsconfig.app.json"
       }
     },
-    "cash-book-service": {
-      "type": "application",
-      "root": "apps/cash-book-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/cash-book-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/cash-book-service/tsconfig.app.json"
-      }
-    },
     "config-service": {
       "type": "application",
       "root": "apps/config-service",
@@ -98,69 +89,6 @@
       "sourceRoot": "apps/gateway/src",
       "compilerOptions": {
         "tsConfigPath": "apps/gateway/tsconfig.app.json"
-      }
-    },
-    "master-data-service": {
-      "type": "application",
-      "root": "apps/master-data-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/master-data-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/master-data-service/tsconfig.app.json"
-      }
-    },
-    "payable-service": {
-      "type": "application",
-      "root": "apps/payable-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/payable-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/payable-service/tsconfig.app.json"
-      }
-    },
-    "reporting-service": {
-      "type": "application",
-      "root": "apps/reporting-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/reporting-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/reporting-service/tsconfig.app.json"
-      }
-    },
-    "voucher-service": {
-      "type": "application",
-      "root": "apps/voucher-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/voucher-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/voucher-service/tsconfig.app.json"
-      }
-    },
-    "kho-service": {
-      "type": "application",
-      "root": "apps/kho-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/kho-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/kho-service/tsconfig.app.json"
-      }
-    },
-    "mam-non-service": {
-      "type": "application",
-      "root": "apps/mam-non-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/mam-non-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/mam-non-service/tsconfig.app.json"
-      }
-    },
-    "tax-service": {
-      "type": "application",
-      "root": "apps/tax-service",
-      "entryFile": "main",
-      "sourceRoot": "apps/tax-service/src",
-      "compilerOptions": {
-        "tsConfigPath": "apps/tax-service/tsconfig.app.json"
       }
     }
   }
