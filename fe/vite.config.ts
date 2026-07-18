@@ -27,7 +27,7 @@ export default defineConfig(({ mode }) => ({
       manifest: {
         name: "Nhân sự",
         short_name: "Nhân sự",
-        description: "Phần mềm kế toán số Master CEO",
+        description: "Phần mềm quản lý nhân sự",
         lang: "vi",
         theme_color: "#1F3864",
         background_color: "#ffffff",
