@@ -5,6 +5,7 @@ import {
   CalculatorOutlined,
   CheckSquareOutlined,
   CheckCircleFilled,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { identityApps, decodeApps, CURRENT_APP_ID, type IdentityApp } from '@/services/identitySession';
 import { getAuthToken } from '@/services/base/service-base';
@@ -17,6 +18,7 @@ const APP_NAME = 'Kế toán';
 const APP_STYLE: Record<string, { bg: string; icon: ReactNode }> = {
   'ke-toan': { bg: '#1f7769', icon: <CalculatorOutlined /> },
   'giao-viec': { bg: '#2f6fed', icon: <CheckSquareOutlined /> },
+  'nhan-su': { bg: '#7c3aed', icon: <TeamOutlined /> },
 };
 const PALETTE = ['#e8453c', '#2f6fed', '#1f7769', '#f59e0b', '#7c3aed', '#0ea5e9'];
 

@@ -8,7 +8,7 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 8081,
     cors: {
       origin: "*",
       methods: ["GET", "POST", "PUT", "DELETE"],
@@ -25,8 +25,8 @@ export default defineConfig(({ mode }) => ({
       injectRegister: false,
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "logo.jpg"],
       manifest: {
-        name: "Master CEO",
-        short_name: "Master CEO",
+        name: "Nhân sự",
+        short_name: "Nhân sự",
         description: "Phần mềm kế toán số Master CEO",
         lang: "vi",
         theme_color: "#1F3864",

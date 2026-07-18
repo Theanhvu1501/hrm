@@ -55,7 +55,7 @@ export function isIdentityConfigured(): boolean {
 }
 
 // Phải khớp appId đã đăng ký ở Identity portal (app "Kế toán").
-const APP_ID = 'ke-toan';
+const APP_ID = 'nhan-su';
 
 /** appId của app hiện tại (Kế toán). */
 export const CURRENT_APP_ID = APP_ID;
