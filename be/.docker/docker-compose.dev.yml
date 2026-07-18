@@ -1,0 +1,46 @@
+version: '3.8'
+
+# Development docker-compose - only infrastructure services
+# Application services run locally with yarn start:*:dev
+
+services:
+  # MongoDB Database (commented - using external DB)
+  # mongodb:
+  #   image: mongo:7
+  #   container_name: digital-book-mongodb-dev
+  #   restart: unless-stopped
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongodb_dev_data:/data/db
+  #   networks:
+  #     - digital-book-dev-network
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # Mongo Express - Database UI (commented - using external DB)
+  # mongo-express:
+  #   image: mongo-express:latest
+  #   container_name: digital-book-mongo-express
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     - ME_CONFIG_MONGODB_SERVER=mongodb
+  #     - ME_CONFIG_BASICAUTH_USERNAME=admin
+  #     - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+  #   depends_on:
+  #     mongodb:
+  #       condition: service_healthy
+  #   networks:
+  #     - digital-book-dev-network
+
+networks:
+  digital-book-dev-network:
+    driver: bridge
+
+# volumes:
+#   mongodb_dev_data:

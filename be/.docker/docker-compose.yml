@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # ============================================
+  # Infrastructure
+  # ============================================
+  
+  # MongoDB Database (commented - using external DB)
+  # mongodb:
+  #   image: mongo:7
+  #   container_name: digital-book-mongodb
+  #   restart: unless-stopped
+  #   ports:
+  #     - "27017:27017"
+  #   volumes:
+  #     - mongodb_data:/data/db
+  #   networks:
+  #     - digital-book-network
+  #   healthcheck:
+  #     test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # # Nginx Reverse Proxy
+  # nginx:
+  #   build:
+  #     context: ./nginx
+  #     dockerfile: Dockerfile
+  #   container_name: digital-book-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #   depends_on:
+  #     - app
+  #   networks:
+  #     - digital-book-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+
+  # ============================================
+  # All Services in Single Container
+  # ============================================
+  app:
+    build:
+      context: ..
+      dockerfile: .docker/dockerfiles/Dockerfile.all
+    container_name: digital-book-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+      - "3002:3002"
+      - "3003:3003"
+      - "3004:3004"
+      - "3005:3005"
+      - "3006:3006"
+      - "3007:3007"
+    env_file:
+      - ./env/db.env
+      - ./env/jwt.env
+      - ./env/services.env
+    networks:
+      - digital-book-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  digital-book-network:
+    driver: bridge
+
+# volumes:
+#   mongodb_data:

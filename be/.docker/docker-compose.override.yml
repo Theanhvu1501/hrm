@@ -1,0 +1,37 @@
+version: '3.8'
+
+# Override file for local development with exposed ports
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+
+services:
+  gateway:
+    ports:
+      - "3000:3000"
+
+  auth-service:
+    ports:
+      - "3001:3001"
+
+  master-data-service:
+    ports:
+      - "3002:3002"
+
+  voucher-service:
+    ports:
+      - "3003:3003"
+
+  cash-book-service:
+    ports:
+      - "3004:3004"
+
+  payable-service:
+    ports:
+      - "3005:3005"
+
+  reporting-service:
+    ports:
+      - "3006:3006"
+
+  config-service:
+    ports:
+      - "3007:3007"

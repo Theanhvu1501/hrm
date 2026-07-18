@@ -1,0 +1,82 @@
+import { DuAn } from '@/types';
+
+export const trangThaiDuAnOptions = [
+  { value: 'DANG_THUC_HIEN', label: 'Đang thực hiện', color: 'processing' },
+  { value: 'HOAN_THANH', label: 'Hoàn thành', color: 'success' },
+  { value: 'TAM_DUNG', label: 'Tạm dừng', color: 'warning' },
+];
+
+export const mockDuAn: DuAn[] = [
+  {
+    id: '1',
+    ma: 'DA001',
+    ten: 'Xây dựng nhà máy ABC',
+    ngayBatDau: '2024-01-15',
+    ngayKetThuc: '2024-12-31',
+    chuDuAn: 'Công ty TNHH ABC',
+    trangThai: 'DANG_THUC_HIEN',
+  },
+  {
+    id: '2',
+    ma: 'DA002',
+    ten: 'Cải tạo văn phòng XYZ',
+    ngayBatDau: '2024-03-01',
+    ngayKetThuc: '2024-06-30',
+    chuDuAn: 'Công ty CP XYZ',
+    trangThai: 'HOAN_THANH',
+  },
+  {
+    id: '3',
+    ma: 'DA003',
+    ten: 'Xây dựng cầu đường nội bộ',
+    ngayBatDau: '2024-05-01',
+    ngayKetThuc: '2025-05-01',
+    chuDuAn: 'Ban Quản lý Khu CN',
+    trangThai: 'DANG_THUC_HIEN',
+  },
+  {
+    id: '4',
+    ma: 'DA004',
+    ten: 'Lắp đặt hệ thống điện mặt trời',
+    ngayBatDau: '2024-02-01',
+    ngayKetThuc: '2024-04-30',
+    chuDuAn: 'Nhà máy Sản xuất DEF',
+    trangThai: 'HOAN_THANH',
+  },
+  {
+    id: '5',
+    ma: 'DA005',
+    ten: 'Xây dựng kho bãi logistics',
+    ngayBatDau: '2024-06-01',
+    ngayKetThuc: '2025-02-28',
+    chuDuAn: 'Công ty Logistics GHI',
+    trangThai: 'TAM_DUNG',
+  },
+  {
+    id: '6',
+    ma: 'DA006',
+    ten: 'Nâng cấp hệ thống PCCC',
+    ngayBatDau: '2024-07-15',
+    ngayKetThuc: '2024-10-15',
+    chuDuAn: 'Tòa nhà Văn phòng Tower',
+    trangThai: 'DANG_THUC_HIEN',
+  },
+  {
+    id: '7',
+    ma: 'DA007',
+    ten: 'Xây dựng nhà xưởng sản xuất',
+    ngayBatDau: '2024-08-01',
+    ngayKetThuc: '2025-08-01',
+    chuDuAn: 'Công ty TNHH JKL',
+    trangThai: 'DANG_THUC_HIEN',
+  },
+  {
+    id: '8',
+    ma: 'DA008',
+    ten: 'Lắp đặt hệ thống điều hòa trung tâm',
+    ngayBatDau: '2024-04-01',
+    ngayKetThuc: '2024-05-31',
+    chuDuAn: 'Trung tâm Thương mại MNO',
+    trangThai: 'HOAN_THANH',
+  },
+];

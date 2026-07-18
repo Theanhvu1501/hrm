@@ -1,0 +1,44 @@
+# Runner stage - production runtime with PM2
+FROM node:20-alpine AS runner
+
+# Install dumb-init and PM2
+RUN apk add --no-cache dumb-init curl && \
+    npm install -g pm2 && \
+    rm -rf /var/cache/apk/*
+
+WORKDIR /app
+
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nestjs -u 1001
+
+# Copy production dependencies from builder
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package.json ./
+
+# Copy PM2 ecosystem config
+COPY .docker/pm2/ecosystem.config.js ./ecosystem.config.js
+
+# Set ownership
+RUN chown -R nestjs:nodejs /app
+
+USER nestjs
+
+# Build arguments
+ARG SERVICE_NAME=gateway
+ARG PORT=3000
+
+ENV NODE_ENV=production
+ENV SERVICE_NAME=${SERVICE_NAME}
+ENV PORT=${PORT}
+
+EXPOSE ${PORT}
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["pm2-runtime", "ecosystem.config.js", "--only", "${SERVICE_NAME}"]

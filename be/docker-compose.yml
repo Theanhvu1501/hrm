@@ -1,0 +1,28 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.all
+    image: digital-book-be:latest
+    container_name: digital-book-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./env/db.env
+      - ./env/jwt.env
+      - ./env/services.env
+    networks:
+      - chimseo
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - ./dist:/app/dist
+      - ./pm2/ecosystem.config.js:/app/ecosystem.config.js
+
+networks:
+  chimseo:
+    external: true
