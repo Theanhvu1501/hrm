@@ -64,12 +64,13 @@ USER nestjs
 
 ENV NODE_ENV=production
 
-# Expose all service ports
-EXPOSE 3000 3001 3002 3003 3004 3005 3006 3007
+# Expose service ports (gateway, auth-service, config-service)
+EXPOSE 3000 3001 3007
 
-# Health check on gateway
+# Health check on gateway (lenient liveness: any HTTP response counts, since the
+# gateway's global prefix is /api/ and /health may 404 there)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -s -o /dev/null http://localhost:3000/ || exit 1
 
 ENTRYPOINT ["dumb-init", "--"]
 CMD ["pm2-runtime", "ecosystem.config.js"]

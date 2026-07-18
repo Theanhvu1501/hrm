@@ -1,11 +1,6 @@
 const services = [
   { name: 'gateway', port: 3000 },
   { name: 'auth-service', port: 3001 },
-  { name: 'master-data-service', port: 3002 },
-  { name: 'voucher-service', port: 3003 },
-  { name: 'cash-book-service', port: 3004 },
-  { name: 'payable-service', port: 3005 },
-  { name: 'reporting-service', port: 3006 },
   { name: 'config-service', port: 3007 },
 ];
 

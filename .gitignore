@@ -4,3 +4,7 @@ coverage/
 .env-cmdrc
 *.log
 .DS_Store
+
+# Real deploy env files (contain secrets) — keep only the .example templates tracked
+be/env/*.env
+!be/env/*.env.example

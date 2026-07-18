@@ -14,7 +14,7 @@ async function main() {
   const app = {
     appId: 'nhan-su',
     name: 'Nhân sự',
-    feUrl: process.env.FE_NHAN_SU_URL || 'https://nhan-su.masterceo.com.vn',
+    feUrl: process.env.FE_NHAN_SU_URL || 'https://nhansu.masterceo.com.vn',
     isActive: true,
   };
   await db.collection('apps').updateOne({ appId: app.appId }, { $set: app }, { upsert: true });

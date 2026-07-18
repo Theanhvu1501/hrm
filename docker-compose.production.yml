@@ -1,7 +1,7 @@
 services:
   be:
     build:
-      context: .
+      context: ./be
       dockerfile: Dockerfile.all
     image: nhan-su-be:latest
     container_name: nhan-su-be
@@ -9,9 +9,9 @@ services:
     ports:
       - "3030:3000"
     env_file:
-      - ./env/db.env
-      - ./env/jwt.env
-      - ./env/services.env
+      - ./be/env/db.env
+      - ./be/env/jwt.env
+      - ./be/env/services.env
     networks:
       - chimseo
     healthcheck:
@@ -19,6 +19,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+
+  fe:
+    build:
+      context: ./fe
+      dockerfile: Dockerfile
+    image: nhan-su-fe:latest
+    container_name: nhan-su-fe
+    restart: unless-stopped
+    ports:
+      - "8091:80"
+    depends_on:
+      - be
+    networks:
+      - chimseo
 
 networks:
   chimseo:
