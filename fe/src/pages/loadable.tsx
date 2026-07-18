@@ -64,6 +64,10 @@ export const DiaDiemChamCongPage = loadable(() => import('./cham-cong/dia-diem-c
   fallback: <PageLoader />
 });
 
+export const DonChamCongPage = loadable(() => import('./cham-cong/don-cham-cong/DonChamCongPage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const PlaceholderPage = loadable(() => import('./PlaceholderPage'), {
   fallback: <PageLoader />

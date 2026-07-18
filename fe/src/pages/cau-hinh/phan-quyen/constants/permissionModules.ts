@@ -47,11 +47,9 @@ export const permissionModules: PermissionModule[] = [
     label: 'CHẤM CÔNG',
     isSection: true,
     children: [
-      // '/cham-cong/don-tu' đã có trong BE PERMISSION_MODULES nhưng chưa có
-      // màn hình FE tương ứng (Phase 2+) — chưa thêm vào catalog để tránh
-      // hiển thị quyền cho màn hình không tồn tại.
       { key: '/cham-cong/ca-lam-viec', label: 'Cấu hình ca làm việc' },
       { key: '/cham-cong/dia-diem', label: 'Địa điểm chấm công' },
+      { key: '/cham-cong/don-tu', label: 'Đơn chấm công' },
     ],
   },
 ];

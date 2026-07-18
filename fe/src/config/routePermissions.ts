@@ -10,6 +10,7 @@ export const routePermissions: Record<string, string> = {
   '/nhan-su/thoi-viec': '/nhan-su/thoi-viec:xem',
   '/cham-cong/ca-lam-viec': '/cham-cong/ca-lam-viec:xem',
   '/cham-cong/dia-diem': '/cham-cong/dia-diem:xem',
+  '/cham-cong/don-tu': '/cham-cong/don-tu:xem',
 };
 
 export const getRoutePermission = (path: string): string | undefined => {

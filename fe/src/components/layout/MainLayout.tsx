@@ -29,6 +29,7 @@ import {
   UserDeleteOutlined,
   ClockCircleOutlined,
   EnvironmentOutlined,
+  FileDoneOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
@@ -162,7 +163,8 @@ const MainLayout: React.FC = () => {
 
   const canViewCaLamViec = hasPermission('/cham-cong/ca-lam-viec:xem') || user?.isSuperAdmin;
   const canViewDiaDiemChamCong = hasPermission('/cham-cong/dia-diem:xem') || user?.isSuperAdmin;
-  const canViewChamCongGroup = canViewCaLamViec || canViewDiaDiemChamCong;
+  const canViewDonChamCong = hasPermission('/cham-cong/don-tu:xem') || user?.isSuperAdmin;
+  const canViewChamCongGroup = canViewCaLamViec || canViewDiaDiemChamCong || canViewDonChamCong;
 
   // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" + section "CHẤM CÔNG" (Phase 2+), thêm dần theo module.
   const siderMenuItems: MenuItem[] = [
@@ -212,6 +214,11 @@ const MainLayout: React.FC = () => {
           key: "/cham-cong/dia-diem",
           icon: <EnvironmentOutlined />,
           label: "Địa điểm chấm công",
+        }] : []),
+        ...(canViewDonChamCong ? [{
+          key: "/cham-cong/don-tu",
+          icon: <FileDoneOutlined />,
+          label: "Đơn chấm công",
         }] : []),
       ],
     }] : []),
