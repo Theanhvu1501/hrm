@@ -1,10 +1,31 @@
-import React from 'react';
+import { useEffect } from "react";
+import {
+  HopDongLaoDongHandlerProvider,
+  useHopDongLaoDongHandler,
+} from "./HopDongLaoDongHandlerContext";
+import { HopDongLaoDongTable } from "./components/table/HopDongLaoDongTable";
+import { HopDongLaoDongForm } from "./components/form/HopDongLaoDongForm";
+
+function HopDongLaoDongPageInner() {
+  const handler = useHopDongLaoDongHandler();
+
+  useEffect(() => {
+    handler.executeEvent("init", {});
+  }, [handler]);
+
+  return (
+    <div className="space-y-3">
+      <HopDongLaoDongTable />
+      <HopDongLaoDongForm />
+    </div>
+  );
+}
 
 const HopDongLaoDongPage: React.FC = () => {
   return (
-    <div className="space-y-3">
-      <h1 className="text-lg font-semibold">Hợp đồng lao động</h1>
-    </div>
+    <HopDongLaoDongHandlerProvider>
+      <HopDongLaoDongPageInner />
+    </HopDongLaoDongHandlerProvider>
   );
 };
 

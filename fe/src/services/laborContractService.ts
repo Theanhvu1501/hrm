@@ -27,6 +27,8 @@ export interface LaborContractFilter {
 
 export interface CreateLaborContractDto {
   employeeId: string;
+  employeeName?: string;
+  employeeCode?: string;
   loaiHopDong: string;
   ngayBatDau?: string;
   ngayKetThuc?: string;
