@@ -38,6 +38,11 @@ export const ThanhVienPage = loadable(() => import('./cau-hinh/thanh-vien/ThanhV
   fallback: <PageLoader />
 });
 
+// Nhân sự
+export const HoSoNhanVienPage = loadable(() => import('./nhan-su/ho-so-nhan-vien/HoSoNhanVienPage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const PlaceholderPage = loadable(() => import('./PlaceholderPage'), {
   fallback: <PageLoader />

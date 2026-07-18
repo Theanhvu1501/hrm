@@ -23,6 +23,7 @@ import {
   CloseOutlined,
   TeamOutlined,
   HomeOutlined,
+  IdcardOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
@@ -39,15 +40,6 @@ type MenuItem = Required<MenuProps>["items"][number];
 const IS_MOBILE_OR_TABLET =
   /android|iphone|ipod|ipad/i.test(navigator.userAgent) ||
   (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-
-// Sider tạm: chỉ 1 mục "Trang chủ" cho tới khi menu nghiệp vụ HRM được thêm (Phase 2+).
-const baseMenuItems: MenuItem[] = [
-  {
-    key: "/",
-    icon: <HomeOutlined />,
-    label: "Trang chủ",
-  },
-];
 
 // Helper function to check if current route is a form screen (create/edit)
 const isFormScreen = (pathname: string): boolean => {
@@ -157,6 +149,29 @@ const MainLayout: React.FC = () => {
     },
   ];
 
+  const canViewHoSoNhanVien = hasPermission('/nhan-su/ho-so-nhan-vien:xem') || user?.isSuperAdmin;
+
+  // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" (Phase 2+), thêm dần theo module.
+  const siderMenuItems: MenuItem[] = [
+    {
+      key: "/",
+      icon: <HomeOutlined />,
+      label: "Trang chủ",
+    },
+    ...(canViewHoSoNhanVien ? [{
+      key: "nhan-su-group",
+      type: "group" as const,
+      label: "NHÂN SỰ",
+      children: [
+        {
+          key: "/nhan-su/ho-so-nhan-vien",
+          icon: <IdcardOutlined />,
+          label: "Hồ sơ nhân viên",
+        },
+      ],
+    }] : []),
+  ];
+
   const canManageConfig = hasPermission('/cau-hinh/vai-tro:xem') || hasPermission('/cau-hinh/phan-quyen:xem') || hasPermission('/cau-hinh/thanh-vien:xem') || user?.isSuperAdmin;
 
   // Settings menu items for gear icon dropdown
@@ -235,7 +250,7 @@ const MainLayout: React.FC = () => {
           theme="dark"
           mode="inline"
           selectedKeys={getSelectedKeys()}
-          items={baseMenuItems}
+          items={siderMenuItems}
           onClick={handleMenuClick}
           className="!bg-transparent border-r-0 sidebar-menu"
         />
@@ -308,7 +323,7 @@ const MainLayout: React.FC = () => {
                 theme="dark"
                 mode="inline"
                 selectedKeys={getSelectedKeys()}
-                items={baseMenuItems}
+                items={siderMenuItems}
                 onClick={handleMenuClick}
                 className="!bg-transparent border-r-0 sidebar-menu"
               />

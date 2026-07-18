@@ -21,6 +21,7 @@ import {
   ThanhVienPage,
   TenantPage,
   LinhVucPage,
+  HoSoNhanVienPage,
   NotFound
 } from "./pages/loadable";
 
@@ -108,6 +109,18 @@ const App = () => (
                   <Route
                     path="linh-vuc"
                     element={<LinhVucPage />}
+                  />
+                </Route>
+
+                {/* Nhân sự */}
+                <Route path="nhan-su">
+                  <Route
+                    path="ho-so-nhan-vien"
+                    element={
+                      <ProtectedRoute requiredPermission="/nhan-su/ho-so-nhan-vien:xem">
+                        <HoSoNhanVienPage />
+                      </ProtectedRoute>
+                    }
                   />
                 </Route>
               </Route>
