@@ -54,21 +54,51 @@ export class HopDong_Service {
     return 'HD' + String(seq).padStart(4, '0');
   }
 
+  /**
+   * VN labor-law rule: an employee may have at most 2 active
+   * (`isActive: true`) `xac_dinh_thoi_han` (fixed-term) contracts. Shared by
+   * both create() and update() so the check can never drift between the two
+   * entry points — update() must re-run this whenever an edit turns a
+   * contract INTO a fixed-term one, otherwise the rule can be bypassed via
+   * PUT (create with an allowed type, then edit loaiHopDong afterwards).
+   *
+   * `excludeId` lets update() exclude the very record being edited from its
+   * own count.
+   */
+  private async assertFixedTermLimitNotExceeded(
+    employeeId: string | undefined,
+    excludeId?: unknown,
+  ): Promise<void> {
+    const where: Record<string, any> = {
+      employeeId,
+      loaiHopDong: 'xac_dinh_thoi_han',
+      isActive: true,
+    };
+
+    let count: number;
+    if (excludeId === undefined) {
+      count = await this.repo.count({ where });
+    } else {
+      // update() is excluding the record being edited from its own count.
+      // Filtering `_id !== excludeId` client-side (rather than pushing it
+      // into the `where`) keeps this working regardless of how the ORM/driver
+      // shapes not-equal filters for Mongo ObjectId fields.
+      const docs = await this.repo.find({ where });
+      const excludeIdStr = String(excludeId);
+      count = docs.filter((d: any) => String(d._id ?? d.id) !== excludeIdStr)
+        .length;
+    }
+
+    if (count >= 2) {
+      throw new ConflictException(
+        'Nhân viên đã ký 2 HĐ xác định thời hạn, lần này phải ký HĐ không xác định thời hạn',
+      );
+    }
+  }
+
   async create(dto: CreateHopDongDto): Promise<LaborContract> {
     if (dto.loaiHopDong === 'xac_dinh_thoi_han') {
-      const count = await this.repo.count({
-        where: {
-          employeeId: dto.employeeId,
-          loaiHopDong: 'xac_dinh_thoi_han',
-          isActive: true,
-        },
-      });
-
-      if (count >= 2) {
-        throw new ConflictException(
-          'Nhân viên đã ký 2 HĐ xác định thời hạn, lần này phải ký HĐ không xác định thời hạn',
-        );
-      }
+      await this.assertFixedTermLimitNotExceeded(dto.employeeId);
     }
 
     const tenantId = this.tenantContext.getCurrentTenantId();
@@ -122,6 +152,18 @@ export class HopDong_Service {
 
   async update(id: string, dto: UpdateHopDongDto): Promise<LaborContract> {
     const item = await this.findOne(id);
+
+    const turningIntoFixedTerm =
+      dto.loaiHopDong === 'xac_dinh_thoi_han' &&
+      item.loaiHopDong !== 'xac_dinh_thoi_han';
+
+    if (turningIntoFixedTerm) {
+      const employeeId = dto.employeeId ?? item.employeeId;
+      await this.assertFixedTermLimitNotExceeded(
+        employeeId,
+        (item as any)._id ?? (item as any).id,
+      );
+    }
 
     Object.assign(item, dto);
     return this.repo.save(item);

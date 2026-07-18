@@ -182,6 +182,53 @@ describe('HopDong_Service', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // update — re-check the same rule (closes the PUT bypass)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('update — quy tắc luật 2 lần HĐ xác định thời hạn', () => {
+    it('throws ConflictException when editing loaiHopDong to xac_dinh_thoi_han and the employee already has 2 OTHER active fixed-term contracts', async () => {
+      const id = '507f1f77bcf86cd799439011';
+      const existing = {
+        _id: id,
+        employeeId: 'emp-1',
+        loaiHopDong: 'thu_viec',
+        isActive: true,
+      };
+      mockContractRepo.findOne.mockResolvedValue(existing);
+      mockContractRepo.find.mockResolvedValueOnce([
+        { _id: 'other-1', employeeId: 'emp-1', loaiHopDong: 'xac_dinh_thoi_han', isActive: true },
+        { _id: 'other-2', employeeId: 'emp-1', loaiHopDong: 'xac_dinh_thoi_han', isActive: true },
+      ]);
+
+      await expect(
+        service.update(id, { loaiHopDong: 'xac_dinh_thoi_han' } as any),
+      ).rejects.toThrow(ConflictException);
+
+      expect(mockContractRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('allows editing loaiHopDong to xac_dinh_thoi_han when only 1 OTHER active fixed-term contract exists (self excluded from the count)', async () => {
+      const id = '507f1f77bcf86cd799439011';
+      const existing = {
+        _id: id,
+        employeeId: 'emp-1',
+        loaiHopDong: 'thu_viec',
+        isActive: true,
+      };
+      mockContractRepo.findOne.mockResolvedValue(existing);
+      mockContractRepo.find.mockResolvedValueOnce([
+        { _id: 'other-1', employeeId: 'emp-1', loaiHopDong: 'xac_dinh_thoi_han', isActive: true },
+      ]);
+
+      const result = await service.update(id, { loaiHopDong: 'xac_dinh_thoi_han' } as any);
+
+      expect(result.loaiHopDong).toBe('xac_dinh_thoi_han');
+      expect(mockContractRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ loaiHopDong: 'xac_dinh_thoi_han' }),
+      );
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   // findAll
   // ──────────────────────────────────────────────────────────────────────────
   describe('findAll', () => {
