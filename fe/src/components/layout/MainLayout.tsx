@@ -27,6 +27,8 @@ import {
   FileTextOutlined,
   SwapOutlined,
   UserDeleteOutlined,
+  ClockCircleOutlined,
+  EnvironmentOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
@@ -158,7 +160,11 @@ const MainLayout: React.FC = () => {
   const canViewThoiViec = hasPermission('/nhan-su/thoi-viec:xem') || user?.isSuperAdmin;
   const canViewNhanSuGroup = canViewHoSoNhanVien || canViewHopDongLaoDong || canViewQuaTrinhCongTac || canViewThoiViec;
 
-  // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" (Phase 2+), thêm dần theo module.
+  const canViewCaLamViec = hasPermission('/cham-cong/ca-lam-viec:xem') || user?.isSuperAdmin;
+  const canViewDiaDiemChamCong = hasPermission('/cham-cong/dia-diem:xem') || user?.isSuperAdmin;
+  const canViewChamCongGroup = canViewCaLamViec || canViewDiaDiemChamCong;
+
+  // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" + section "CHẤM CÔNG" (Phase 2+), thêm dần theo module.
   const siderMenuItems: MenuItem[] = [
     {
       key: "/",
@@ -189,6 +195,23 @@ const MainLayout: React.FC = () => {
           key: "/nhan-su/thoi-viec",
           icon: <UserDeleteOutlined />,
           label: "Thôi việc",
+        }] : []),
+      ],
+    }] : []),
+    ...(canViewChamCongGroup ? [{
+      key: "cham-cong-group",
+      type: "group" as const,
+      label: "CHẤM CÔNG",
+      children: [
+        ...(canViewCaLamViec ? [{
+          key: "/cham-cong/ca-lam-viec",
+          icon: <ClockCircleOutlined />,
+          label: "Cấu hình ca làm việc",
+        }] : []),
+        ...(canViewDiaDiemChamCong ? [{
+          key: "/cham-cong/dia-diem",
+          icon: <EnvironmentOutlined />,
+          label: "Địa điểm chấm công",
         }] : []),
       ],
     }] : []),

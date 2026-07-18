@@ -25,6 +25,8 @@ import {
   HopDongLaoDongPage,
   QuaTrinhCongTacPage,
   ThoiViecPage,
+  CaLamViecPage,
+  DiaDiemChamCongPage,
   NotFound
 } from "./pages/loadable";
 
@@ -146,6 +148,26 @@ const App = () => (
                     element={
                       <ProtectedRoute requiredPermission="/nhan-su/thoi-viec:xem">
                         <ThoiViecPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
+
+                {/* Chấm công */}
+                <Route path="cham-cong">
+                  <Route
+                    path="ca-lam-viec"
+                    element={
+                      <ProtectedRoute requiredPermission="/cham-cong/ca-lam-viec:xem">
+                        <CaLamViecPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="dia-diem"
+                    element={
+                      <ProtectedRoute requiredPermission="/cham-cong/dia-diem:xem">
+                        <DiaDiemChamCongPage />
                       </ProtectedRoute>
                     }
                   />

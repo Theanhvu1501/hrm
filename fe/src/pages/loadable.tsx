@@ -55,6 +55,15 @@ export const ThoiViecPage = loadable(() => import('./nhan-su/thoi-viec/ThoiViecP
   fallback: <PageLoader />
 });
 
+// Chấm công
+export const CaLamViecPage = loadable(() => import('./cham-cong/ca-lam-viec/CaLamViecPage'), {
+  fallback: <PageLoader />
+});
+
+export const DiaDiemChamCongPage = loadable(() => import('./cham-cong/dia-diem-cham-cong/DiaDiemChamCongPage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const PlaceholderPage = loadable(() => import('./PlaceholderPage'), {
   fallback: <PageLoader />
