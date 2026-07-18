@@ -13,7 +13,9 @@ export interface EmployeeFilter {
   hoTen?: string;
   phongBan?: string;
   trangThai?: string;
-  isActive?: boolean;
+  // Query-string values arrive as strings (e.g. `?isActive=false`), so this
+  // must accept the raw string form as well as a real boolean.
+  isActive?: boolean | string;
 }
 
 @Injectable()
@@ -29,20 +31,27 @@ export class NhanVien_Service {
   /**
    * Maintains ONE EmployeeCounter doc per tenant, incrementing `seq` and
    * returning a zero-padded employeeId like NV0001, NV0002, ...
+   *
+   * Uses an atomic MongoDB findOneAndUpdate($inc) on the raw (non-tenant-proxied,
+   * non-ORM-cached) mongo repository so concurrent create() calls for the same
+   * tenant can never read-modify-write the same seq value. The tenant-aware
+   * repository proxy (see @app/database DatabaseModule) does not intercept
+   * findOneAndUpdate, so the explicit `{ tenantId }` filter below is exactly
+   * what reaches MongoDB — no reliance on proxy-injected filtering.
    */
   async generateEmployeeId(tenantId?: string): Promise<string> {
-    let counter: EmployeeCounter | null = await this.counterRepo.findOne({
-      where: { tenantId } as any,
-    });
+    const mongoCounterRepo = this.counterRepo.manager.getMongoRepository(
+      EmployeeCounter,
+    ) as unknown as import('typeorm').MongoRepository<EmployeeCounter>;
 
-    if (!counter) {
-      counter = this.counterRepo.create({ tenantId, seq: 0 });
-    }
+    const updated = await mongoCounterRepo.findOneAndUpdate(
+      { tenantId } as any,
+      { $inc: { seq: 1 } } as any,
+      { upsert: true, returnDocument: 'after' } as any,
+    );
 
-    counter.seq = (counter.seq ?? 0) + 1;
-    await this.counterRepo.save(counter);
-
-    return 'NV' + String(counter.seq).padStart(4, '0');
+    const seq = (updated as any)?.seq;
+    return 'NV' + String(seq).padStart(4, '0');
   }
 
   async create(dto: CreateEmployeeDto): Promise<Employee> {
@@ -74,9 +83,21 @@ export class NhanVien_Service {
     return this.repo.save(entity);
   }
 
+  /**
+   * Coerces the `isActive` filter value, which may arrive as a real boolean
+   * (programmatic callers) or as the STRING "true"/"false" (HTTP query params
+   * are never parsed to booleans by Nest's default query pipe). Defaults to
+   * `true` when the value is absent, mirroring the previous behaviour.
+   */
+  private coerceIsActive(value?: boolean | string): boolean {
+    if (value === undefined) return true;
+    if (typeof value === 'boolean') return value;
+    return value !== 'false';
+  }
+
   async findAll(filter?: EmployeeFilter): Promise<Employee[]> {
     const where: Record<string, any> = {
-      isActive: filter?.isActive ?? true,
+      isActive: this.coerceIsActive(filter?.isActive),
     };
 
     if (filter?.hoTen) where.hoTen = filter.hoTen;

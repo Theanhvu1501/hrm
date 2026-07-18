@@ -19,14 +19,18 @@ describe('NhanVien_Service', () => {
     findOne: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
+    manager: { getMongoRepository: jest.Mock };
   };
+  let mockMongoCounterRepo: { findOneAndUpdate: jest.Mock };
   let mockTenantContext: { getCurrentTenantId: jest.Mock };
 
-  // In-memory counter store to genuinely exercise sequential increments across calls
-  let counterStore: { seq: number } | null;
+  // In-memory per-tenant counter store to genuinely exercise sequential,
+  // atomic increments across calls (keyed by tenantId, like the real
+  // `employee_counters` collection).
+  let counterStore: Map<string | undefined, number>;
 
   beforeEach(async () => {
-    counterStore = null;
+    counterStore = new Map();
 
     mockEmployeeRepo = {
       find: jest.fn().mockResolvedValue([]),
@@ -35,13 +39,31 @@ describe('NhanVien_Service', () => {
       save: jest.fn((v) => Promise.resolve({ ...v, _id: v._id ?? 'generated-id' })),
     };
 
+    // Simulates MongoDB's atomic findOneAndUpdate($inc, upsert) — the real
+    // implementation this mock stands in for; see generateEmployeeId().
+    mockMongoCounterRepo = {
+      findOneAndUpdate: jest.fn(
+        async (
+          query: { tenantId?: string },
+          update: { $inc?: { seq?: number } },
+          _options?: unknown,
+        ) => {
+          const key = query.tenantId;
+          const inc = update?.$inc?.seq ?? 0;
+          const next = (counterStore.get(key) ?? 0) + inc;
+          counterStore.set(key, next);
+          return { tenantId: key, seq: next };
+        },
+      ),
+    };
+
     mockCounterRepo = {
-      findOne: jest.fn(async () => (counterStore ? { ...counterStore } : null)),
+      findOne: jest.fn(),
       create: jest.fn((v) => v),
-      save: jest.fn(async (v) => {
-        counterStore = { seq: v.seq };
-        return v;
-      }),
+      save: jest.fn(),
+      manager: {
+        getMongoRepository: jest.fn(() => mockMongoCounterRepo),
+      },
     };
 
     mockTenantContext = {
@@ -70,6 +92,46 @@ describe('NhanVien_Service', () => {
 
       const second = await service.create({ hoTen: 'Tran Thi B', cccd: '002222222222' } as any);
       expect(second.employeeId).toBe('NV0002');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // generateEmployeeId — atomic increment (Fix 1)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('generateEmployeeId — atomic increment', () => {
+    it('uses an atomic $inc findOneAndUpdate keyed by the explicit tenantId, not read-then-write', async () => {
+      const id = await service.generateEmployeeId(TENANT_ID);
+
+      expect(id).toBe('NV0001');
+      expect(mockCounterRepo.manager.getMongoRepository).toHaveBeenCalledWith(EmployeeCounter);
+      expect(mockMongoCounterRepo.findOneAndUpdate).toHaveBeenCalledWith(
+        { tenantId: TENANT_ID },
+        { $inc: { seq: 1 } },
+        expect.objectContaining({ upsert: true, returnDocument: 'after' }),
+      );
+      // The old read-modify-write path is gone entirely.
+      expect(mockCounterRepo.findOne).not.toHaveBeenCalled();
+      expect(mockCounterRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('never mints duplicate ids for two "concurrent" calls on the same tenant', async () => {
+      const [a, b] = await Promise.all([
+        service.generateEmployeeId(TENANT_ID),
+        service.generateEmployeeId(TENANT_ID),
+      ]);
+
+      expect(new Set([a, b]).size).toBe(2);
+      expect([a, b].sort()).toEqual(['NV0001', 'NV0002']);
+    });
+
+    it('keeps independent, first-id-is-NV0001 sequences per tenant', async () => {
+      const tenantA1 = await service.generateEmployeeId('tenant-a');
+      const tenantB1 = await service.generateEmployeeId('tenant-b');
+      const tenantA2 = await service.generateEmployeeId('tenant-a');
+
+      expect(tenantA1).toBe('NV0001');
+      expect(tenantB1).toBe('NV0001');
+      expect(tenantA2).toBe('NV0002');
     });
   });
 
@@ -120,7 +182,7 @@ describe('NhanVien_Service', () => {
   // findAll
   // ──────────────────────────────────────────────────────────────────────────
   describe('findAll', () => {
-    it('returns the list of employees', async () => {
+    it('returns the list of employees and defaults the where clause to isActive: true', async () => {
       const list = [
         { _id: '1', hoTen: 'Nguyen Van A', isActive: true },
         { _id: '2', hoTen: 'Tran Thi B', isActive: true },
@@ -130,7 +192,37 @@ describe('NhanVien_Service', () => {
       const result = await service.findAll();
 
       expect(result).toEqual(list);
-      expect(mockEmployeeRepo.find).toHaveBeenCalled();
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({ where: { isActive: true } });
+    });
+
+    it('includes trangThai in the where clause when provided, alongside the isActive default', async () => {
+      await service.findAll({ trangThai: 'da_nghi' });
+
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({
+        where: { isActive: true, trangThai: 'da_nghi' },
+      });
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // isActive query coercion (Fix 2) — HTTP query params arrive as strings,
+    // not booleans, so the string "false" must not be treated as truthy.
+    // ────────────────────────────────────────────────────────────────────────
+    it('coerces the string "false" query param to boolean false', async () => {
+      await service.findAll({ isActive: 'false' as any });
+
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({ where: { isActive: false } });
+    });
+
+    it('coerces the string "true" query param to boolean true', async () => {
+      await service.findAll({ isActive: 'true' as any });
+
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({ where: { isActive: true } });
+    });
+
+    it('honors a real boolean false (non-HTTP callers)', async () => {
+      await service.findAll({ isActive: false });
+
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({ where: { isActive: false } });
     });
   });
 
