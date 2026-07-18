@@ -1,0 +1,91 @@
+/* Bản in "Bảng chấm công" — chỉ hiển thị khi in (window.print), ẩn hoàn toàn trên màn hình. */
+.bang-cong-print-only {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .bang-cong-print-only,
+  .bang-cong-print-only * {
+    visibility: visible;
+  }
+
+  .bang-cong-print-only {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    color: #000;
+    background: #fff;
+  }
+
+  .bang-cong-print-only table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  .bang-cong-print-only th,
+  .bang-cong-print-only td {
+    border: 1px solid #000;
+    padding: 2px 3px;
+    font-size: 9px;
+    text-align: center;
+  }
+
+  .bang-cong-print-only .bcp-header {
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .bang-cong-print-only .bcp-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .bang-cong-print-only .bcp-meta {
+    font-size: 12px;
+    margin: 2px 0;
+  }
+
+  .bang-cong-print-only .bcp-legend {
+    margin-top: 8px;
+    font-size: 10px;
+  }
+
+  .bang-cong-print-only .bcp-signatures {
+    margin-top: 24px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .bang-cong-print-only .bcp-signature-col {
+    width: 32%;
+    text-align: center;
+    font-size: 11px;
+  }
+
+  .bang-cong-print-only .bcp-signature-title {
+    font-weight: 700;
+  }
+
+  .bang-cong-print-only .bcp-signature-space {
+    height: 60px;
+  }
+
+  .bang-cong-print-only .bcp-date-line {
+    text-align: right;
+    font-style: italic;
+    font-size: 11px;
+    margin-bottom: 12px;
+  }
+}

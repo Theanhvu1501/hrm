@@ -11,11 +11,12 @@ export class InitHandler extends CSubHanlder {
     const thang = dayjs().format("YYYY-MM");
     this.setState("thang", thang);
     this.setState("timesheetList", []);
+    this.setState("kyHieuList", []);
     this.setState("loading", false);
     this.setState("generating", false);
     this.setState("finalizing", false);
 
-    await this.loadList(thang);
+    await Promise.all([this.loadList(thang), this.loadKyHieu()]);
   }
 
   @HandlerDecorator("changeThang")
@@ -34,6 +35,16 @@ export class InitHandler extends CSubHanlder {
       this.setState("timesheetList", []);
     } finally {
       this.setState("loading", false);
+    }
+  }
+
+  private async loadKyHieu(): Promise<void> {
+    try {
+      const kyHieuList = await timesheetService.getKyHieu();
+      this.setState("kyHieuList", kyHieuList);
+    } catch (error) {
+      console.error("Load ky hieu bang cong error:", error);
+      this.setState("kyHieuList", []);
     }
   }
 }

@@ -2,13 +2,29 @@ import { ServiceBase } from './base/service-base';
 
 export type TimesheetStatus = 'nhap' | 'chot';
 
+export interface ChiTietNgay {
+  ngay: number; // 1..31
+  kyHieu: string;
+}
+
+export interface KyHieuDef {
+  kyHieu: string;
+  nhan: string;
+  soCong: number;
+  nhom: 'lam_viec' | 'nghi_huong_luong' | 'nghi_khong_luong' | 'om_bhxh';
+}
+
 export interface Timesheet {
   _id: string;
   thang: string;
   employeeId: string;
   employeeName?: string;
   employeeCode?: string;
+  chiTietNgay: ChiTietNgay[];
   soNgayCong?: number;
+  soNgayNghiPhep?: number;
+  soNgayNghiKhongLuong?: number;
+  soNgayOm?: number;
   soGioLamThem?: number;
   soLanDiMuon?: number;
   soLanVeSom?: number;
@@ -29,6 +45,11 @@ export interface UpdateTimesheetDto {
   soLanDiMuon?: number;
   soLanVeSom?: number;
   ghiChu?: string;
+}
+
+export interface SetDayDto {
+  ngay: number;
+  kyHieu: string;
 }
 
 class TimesheetService extends ServiceBase {
@@ -56,6 +77,19 @@ class TimesheetService extends ServiceBase {
     return this.transform(res);
   }
 
+  /** PATCH /:id/ngay — set (hoặc xoá, khi kyHieu = '') ký hiệu của một ngày. */
+  async setDay(id: string, dto: SetDayDto): Promise<Timesheet> {
+    const res = await this.patch<Record<string, unknown>>(dto, {
+      endpoint: `/${id}/ngay`,
+    });
+    return this.transform(res);
+  }
+
+  /** GET /ky-hieu — danh mục ký hiệu chấm công (dùng làm chú thích). */
+  async getKyHieu(): Promise<KyHieuDef[]> {
+    return this.get<KyHieuDef[]>({ endpoint: '/ky-hieu' });
+  }
+
   async finalize(thang: string): Promise<Timesheet[]> {
     const res = await this.post<Array<Record<string, unknown>>>(
       { thang },
@@ -75,7 +109,13 @@ class TimesheetService extends ServiceBase {
       employeeId: x.employeeId as string,
       employeeName: x.employeeName as string | undefined,
       employeeCode: x.employeeCode as string | undefined,
+      chiTietNgay: Array.isArray(x.chiTietNgay)
+        ? (x.chiTietNgay as ChiTietNgay[])
+        : [],
       soNgayCong: (x.soNgayCong as number) ?? 0,
+      soNgayNghiPhep: (x.soNgayNghiPhep as number) ?? 0,
+      soNgayNghiKhongLuong: (x.soNgayNghiKhongLuong as number) ?? 0,
+      soNgayOm: (x.soNgayOm as number) ?? 0,
       soGioLamThem: (x.soGioLamThem as number) ?? 0,
       soLanDiMuon: (x.soLanDiMuon as number) ?? 0,
       soLanVeSom: (x.soLanVeSom as number) ?? 0,

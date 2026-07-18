@@ -5,6 +5,9 @@ import {
 } from "./BangCongHandlerContext";
 import { BangCongHeader } from "./components/header/BangCongHeader";
 import { BangCongTable } from "./components/table/BangCongTable";
+import { BangCongLegend } from "./components/legend/BangCongLegend";
+import { BangCongPrintView } from "./components/print/BangCongPrintView";
+import "./bangCongPrint.css";
 
 function BangCongPageInner() {
   const handler = useBangCongHandler();
@@ -17,6 +20,8 @@ function BangCongPageInner() {
     <div className="space-y-3">
       <BangCongHeader />
       <BangCongTable />
+      <BangCongLegend />
+      <BangCongPrintView />
     </div>
   );
 }

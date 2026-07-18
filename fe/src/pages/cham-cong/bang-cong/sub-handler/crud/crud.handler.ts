@@ -43,6 +43,25 @@ export class CrudHandler extends CSubHanlder {
     }
   }
 
+  @HandlerDecorator("setDay")
+  async setDay(params: { id: string; ngay: number; kyHieu: string }): Promise<void> {
+    try {
+      const updated = await timesheetService.setDay(params.id, {
+        ngay: params.ngay,
+        kyHieu: params.kyHieu,
+      });
+      const currentList =
+        (this.getState("timesheetList") as Timesheet[]) || [];
+      const updatedList = currentList.map((item) =>
+        item._id === params.id ? updated : item
+      );
+      this.setState("timesheetList", updatedList);
+    } catch (error) {
+      console.error("Set day bang cong error:", error);
+      message.error(apiErrorMessage(error, "Không thể cập nhật ngày công"));
+    }
+  }
+
   @HandlerDecorator("finalizeBangCong")
   async finalizeBangCong(params: { thang: string }): Promise<void> {
     this.setState("finalizing", true);

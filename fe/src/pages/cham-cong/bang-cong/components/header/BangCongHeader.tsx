@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Button, DatePicker, Popconfirm, Space, Tag } from "antd";
-import { LockOutlined, SyncOutlined } from "@ant-design/icons";
+import { LockOutlined, PrinterOutlined, SyncOutlined } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
 import {
   useBangCongHandler,
@@ -16,7 +16,7 @@ export function BangCongHeader() {
   const [timesheetList] = useBangCongState("timesheetList", [] as Timesheet[]);
   const [generating] = useBangCongState("generating", false);
   const [finalizing] = useBangCongState("finalizing", false);
-  const { canCreate, canEdit } = usePagePermission("/cham-cong/bang-cong");
+  const { canCreate, canEdit, canExport } = usePagePermission("/cham-cong/bang-cong");
 
   const trangThai = useMemo(() => {
     if (timesheetList.length === 0) {
@@ -43,6 +43,10 @@ export function BangCongHeader() {
 
   const handleFinalize = () => {
     handler.executeEvent("finalizeBangCong", { thang });
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   return (
@@ -93,6 +97,15 @@ export function BangCongHeader() {
               Chốt bảng công
             </Button>
           </Popconfirm>
+        )}
+        {canExport && (
+          <Button
+            icon={<PrinterOutlined />}
+            onClick={handlePrint}
+            disabled={timesheetList.length === 0}
+          >
+            In bảng chấm công
+          </Button>
         )}
       </Space>
     </div>

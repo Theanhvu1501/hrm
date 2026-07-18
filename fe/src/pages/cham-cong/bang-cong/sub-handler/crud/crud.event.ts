@@ -7,6 +7,10 @@ export interface CrudEvent extends BaseEvents {
     params: { id: string; dto: UpdateTimesheetDto };
     result: void;
   };
+  setDay: {
+    params: { id: string; ngay: number; kyHieu: string };
+    result: void;
+  };
   finalizeBangCong: { params: { thang: string }; result: void };
 }
 
