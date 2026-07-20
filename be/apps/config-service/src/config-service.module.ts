@@ -6,6 +6,7 @@ import { DatabaseModule } from '@app/database';
 import { QuyChuan_Module } from './quy-chuan/quy-chuan.module';
 import { PhanQuyen_Module } from './phan-quyen/phan-quyen.module';
 import { NguoiDung_Module } from './nguoi-dung/nguoi-dung.module';
+import { Tenant_Module } from './tenant/tenant.module';
 import { VaiTro_Module } from './vai-tro/vai-tro.module';
 import { PhieuTemplate_Module } from './phieu-template/phieu-template.module';
 import { TaiLieu_Module } from './tai-lieu/tai-lieu.module';
@@ -29,6 +30,7 @@ import { BangCong_Module } from './bang-cong/bang-cong.module';
     QuyChuan_Module,
     PhanQuyen_Module,
     NguoiDung_Module,
+    Tenant_Module,
     VaiTro_Module,
     PhieuTemplate_Module,
     TaiLieu_Module,
