@@ -25,6 +25,7 @@ export class DuyetHandler extends CSubHanlder {
       // thể đó (vd dòng đã bị duyệt/từ chối/thu hồi từ trước) phải hiển thị
       // nguyên văn, không phải "Duyệt thiết bị thất bại" chung chung.
       message.error(apiErrorMessage(error, "Duyệt thiết bị thất bại"));
+      await this.taiLaiSauLoi();
     }
   }
 
@@ -37,6 +38,7 @@ export class DuyetHandler extends CSubHanlder {
     } catch (error) {
       console.error("Từ chối thiết bị lỗi:", error);
       message.error(apiErrorMessage(error, "Từ chối thiết bị thất bại"));
+      await this.taiLaiSauLoi();
     }
   }
 
@@ -49,6 +51,7 @@ export class DuyetHandler extends CSubHanlder {
     } catch (error) {
       console.error("Thu hồi thiết bị lỗi:", error);
       message.error(apiErrorMessage(error, "Thu hồi thiết bị thất bại"));
+      await this.taiLaiSauLoi();
     }
   }
 
@@ -64,5 +67,23 @@ export class DuyetHandler extends CSubHanlder {
       "deviceList",
       currentList.filter((item) => item.id !== id)
     );
+  }
+
+  /**
+   * Thao tác thất bại (vd dòng vừa bị người khác duyệt/từ chối/thu hồi trước
+   * đó) nghĩa là hiểu biết của FE về trạng thái dòng này đã cũ. Nạp lại đúng
+   * tab đang xem để HR thấy trạng thái thật — nếu không, dòng vẫn hiện nút cũ
+   * và bấm lại bao nhiêu lần cũng lỗi y hệt.
+   */
+  private async taiLaiSauLoi(): Promise<void> {
+    const tab = (this.getState("tab") as string) || "cho_duyet";
+    try {
+      const deviceList = await employeeDeviceService.getList({
+        trangThai: tab,
+      });
+      this.setState("deviceList", deviceList);
+    } catch (error) {
+      console.error("Tải lại danh sách thiết bị sau lỗi thao tác:", error);
+    }
   }
 }

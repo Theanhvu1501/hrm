@@ -24,7 +24,9 @@ export function ThietBiTable() {
       title: "Nhân viên",
       key: "nhanVien",
       render: (_: unknown, r: EmployeeDevice) =>
-        `${r.employeeName ?? ""} (${r.employeeCode ?? ""})`,
+        r.employeeCode
+          ? `${r.employeeName ?? ""} (${r.employeeCode})`
+          : r.employeeName ?? "",
     },
     {
       title: "Tên thiết bị",
