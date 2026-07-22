@@ -24,6 +24,12 @@ export class Employee extends BaseEntity {
   @Column('json', { nullable: true }) bangCap?: BangCap[];
   @Column('json', { nullable: true }) nguoiPhuThuoc?: NguoiPhuThuoc[];
   @Column('json', { nullable: true }) lienHeKhanCap?: LienHeKhanCap;
+  // Liên kết tài khoản SSO: `sub` của identity. Do HR gán có chủ ý —
+  // KHÔNG tự khớp theo email vì email nullable và không unique.
+  @Column({ nullable: true }) userId?: string;
+  @Column({ nullable: true }) workShiftId?: string;
+  // 0=CN, 1=T2 … 6=T7 — khớp Date.getDay()
+  @Column('json', { nullable: true }) ngayLamViecTrongTuan?: number[];
   @Column({ default: true }) isActive: boolean;
 }
 

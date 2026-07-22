@@ -8,6 +8,7 @@ import {
   Body,
   Param,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { NhanVien_Service } from './nhan-vien.service';
@@ -23,6 +24,23 @@ export class NhanVien_Controller {
   @Get()
   async findAll(@Query() query: EmployeeFilter) {
     const data = await this.nhanVien_Service.findAll(query);
+    return { success: true, data };
+  }
+
+  /**
+   * Hồ sơ NV của chính người đang đăng nhập. Chỉ JwtGuard, KHÔNG
+   * PermissionGuard — mọi nhân viên đều phải xem được hồ sơ của mình.
+   * Controller này hiện chỉ gắn JwtGuard ở cấp class (không có
+   * PermissionGuard) nên không cần miễn trừ gì thêm — nhưng nếu sau này
+   * ai đó thêm PermissionGuard ở cấp class, ĐỪNG áp nó lên route `me`.
+   * Phải đặt route này TRƯỚC `@Get(':id')` — nếu đặt sau, Nest sẽ khớp
+   * "me" thành tham số :id.
+   */
+  @Get('me')
+  async me(@Req() req: any) {
+    const data = await this.nhanVien_Service.resolveEmployeeFromUser(
+      req.user,
+    );
     return { success: true, data };
   }
 

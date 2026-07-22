@@ -152,4 +152,31 @@ export class NhanVien_Service {
     item.trangThai = trangThai;
     return this.repo.save(item);
   }
+
+  /**
+   * Suy hồ sơ nhân viên từ tài khoản đang đăng nhập.
+   *
+   * Đây là cửa duy nhất cho mọi endpoint tự phục vụ (chấm công, đơn từ).
+   * Không bao giờ nhận employeeId từ body — nếu nhận thì tồn tại đường
+   * chấm công hộ người khác qua API.
+   */
+  async resolveEmployeeFromUser(user: { id: string }): Promise<Employee> {
+    if (!user?.id) {
+      throw new NotFoundException(
+        'Tài khoản chưa được liên kết với hồ sơ nhân viên',
+      );
+    }
+
+    const emp = await this.repo.findOne({
+      where: { userId: user.id, isActive: true },
+    });
+
+    if (!emp) {
+      throw new NotFoundException(
+        'Tài khoản chưa được liên kết với hồ sơ nhân viên. Liên hệ HR để được gán.',
+      );
+    }
+
+    return emp;
+  }
 }

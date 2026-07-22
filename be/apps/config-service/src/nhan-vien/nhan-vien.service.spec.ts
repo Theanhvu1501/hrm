@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { NhanVien_Service } from './nhan-vien.service';
 import { Employee, EmployeeCounter } from '@app/entities';
 import { TenantContextService } from '@app/core';
@@ -240,6 +240,41 @@ describe('NhanVien_Service', () => {
       expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ isActive: false }),
       );
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // resolveEmployeeFromUser
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('resolveEmployeeFromUser', () => {
+    it('trả về hồ sơ NV khi userId đã liên kết', async () => {
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        _id: 'emp-1',
+        hoTen: 'Nguyễn Văn Hải',
+        employeeId: 'NV0001',
+        userId: 'sso-sub-123',
+      });
+
+      const emp = await service.resolveEmployeeFromUser({ id: 'sso-sub-123' });
+
+      expect(emp.hoTen).toBe('Nguyễn Văn Hải');
+      expect(mockEmployeeRepo.findOne).toHaveBeenCalledWith({
+        where: { userId: 'sso-sub-123', isActive: true },
+      });
+    });
+
+    it('ném NotFoundException khi tài khoản chưa liên kết hồ sơ', async () => {
+      mockEmployeeRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.resolveEmployeeFromUser({ id: 'sso-sub-999' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('ném NotFoundException khi user không có id', async () => {
+      await expect(
+        service.resolveEmployeeFromUser({ id: '' }),
+      ).rejects.toThrow(NotFoundException);
     });
   });
 });

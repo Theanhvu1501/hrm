@@ -6,6 +6,9 @@ import {
   IsIn,
   IsArray,
   IsObject,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 import type { BangCap, NguoiPhuThuoc, LienHeKhanCap } from '@app/entities';
 
@@ -77,4 +80,19 @@ export class CreateEmployeeDto {
   @IsOptional()
   @IsObject()
   lienHeKhanCap?: LienHeKhanCap;
+
+  @IsOptional()
+  @IsString()
+  userId?: string;
+
+  @IsOptional()
+  @IsString()
+  workShiftId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(0, { each: true })
+  @Max(6, { each: true })
+  ngayLamViecTrongTuan?: number[];
 }
