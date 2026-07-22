@@ -237,9 +237,9 @@ describe('DiaDiemChamCong_Service', () => {
     it('throws NotFoundException', async () => {
       mockRepo.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.findOne('507f1f77bcf86cd799439011'),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.findOne('507f1f77bcf86cd799439011')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

@@ -22,8 +22,8 @@ export class EmployeeDevice extends BaseEntity {
   @Column({ nullable: true }) tenThietBi?: string;
   @Column({ nullable: true }) userAgent?: string;
   @Column({ default: 'cho_duyet' }) trangThai: string; // cho_duyet|da_duyet|tu_choi|thu_hoi
-  @Column({ nullable: true }) lanDauDangKy?: string;   // ISO
-  @Column({ nullable: true }) lanDuyet?: string;       // ISO
+  @Column({ nullable: true }) lanDauDangKy?: string; // ISO
+  @Column({ nullable: true }) lanDuyet?: string; // ISO
   @Column({ nullable: true }) nguoiDuyet?: string;
   @Column({ nullable: true }) lyDoThuHoi?: string;
   @Column({ default: true }) isActive: boolean;

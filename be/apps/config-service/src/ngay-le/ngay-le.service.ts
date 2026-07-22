@@ -27,9 +27,7 @@ export class NgayLe_Service {
    */
   private validateKhoang(tuNgay: string, denNgay: string): number {
     if (denNgay < tuNgay) {
-      throw new BadRequestException(
-        'Đến ngày không được nhỏ hơn từ ngày',
-      );
+      throw new BadRequestException('Đến ngày không được nhỏ hơn từ ngày');
     }
     const nam = Number(tuNgay.slice(0, 4));
     if (!Number.isInteger(nam)) {
@@ -94,9 +92,7 @@ export class NgayLe_Service {
     const dsTrongNam = await this.repo.find({
       where: { nam: In([nam - 1, nam]), isActive: true },
     });
-    const khop = dsTrongNam.find(
-      (h) => h.tuNgay <= ngay && ngay <= h.denNgay,
-    );
+    const khop = dsTrongNam.find((h) => h.tuNgay <= ngay && ngay <= h.denNgay);
     return khop ?? null;
   }
 

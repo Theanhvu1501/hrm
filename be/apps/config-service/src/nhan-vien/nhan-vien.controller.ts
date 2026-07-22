@@ -38,9 +38,7 @@ export class NhanVien_Controller {
    */
   @Get('me')
   async me(@Req() req: any) {
-    const data = await this.nhanVien_Service.resolveEmployeeFromUser(
-      req.user,
-    );
+    const data = await this.nhanVien_Service.resolveEmployeeFromUser(req.user);
     return { success: true, data };
   }
 

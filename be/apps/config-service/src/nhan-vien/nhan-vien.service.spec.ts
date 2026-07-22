@@ -36,7 +36,9 @@ describe('NhanVien_Service', () => {
       find: jest.fn().mockResolvedValue([]),
       findOne: jest.fn().mockResolvedValue(null),
       create: jest.fn((v) => v),
-      save: jest.fn((v) => Promise.resolve({ ...v, _id: v._id ?? 'generated-id' })),
+      save: jest.fn((v) =>
+        Promise.resolve({ ...v, _id: v._id ?? 'generated-id' }),
+      ),
     };
 
     // Simulates MongoDB's atomic findOneAndUpdate($inc, upsert) — the real
@@ -74,7 +76,10 @@ describe('NhanVien_Service', () => {
       providers: [
         NhanVien_Service,
         { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
-        { provide: getRepositoryToken(EmployeeCounter), useValue: mockCounterRepo },
+        {
+          provide: getRepositoryToken(EmployeeCounter),
+          useValue: mockCounterRepo,
+        },
         { provide: TenantContextService, useValue: mockTenantContext },
       ],
     }).compile();
@@ -87,10 +92,16 @@ describe('NhanVien_Service', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('create — employeeId generation', () => {
     it('generates sequential employeeId NV0001 then NV0002', async () => {
-      const first = await service.create({ hoTen: 'Nguyen Van A', cccd: '001111111111' } as any);
+      const first = await service.create({
+        hoTen: 'Nguyen Van A',
+        cccd: '001111111111',
+      } as any);
       expect(first.employeeId).toBe('NV0001');
 
-      const second = await service.create({ hoTen: 'Tran Thi B', cccd: '002222222222' } as any);
+      const second = await service.create({
+        hoTen: 'Tran Thi B',
+        cccd: '002222222222',
+      } as any);
       expect(second.employeeId).toBe('NV0002');
     });
   });
@@ -103,7 +114,9 @@ describe('NhanVien_Service', () => {
       const id = await service.generateEmployeeId(TENANT_ID);
 
       expect(id).toBe('NV0001');
-      expect(mockCounterRepo.manager.getMongoRepository).toHaveBeenCalledWith(EmployeeCounter);
+      expect(mockCounterRepo.manager.getMongoRepository).toHaveBeenCalledWith(
+        EmployeeCounter,
+      );
       expect(mockMongoCounterRepo.findOneAndUpdate).toHaveBeenCalledWith(
         { tenantId: TENANT_ID },
         { $inc: { seq: 1 } },
@@ -241,7 +254,12 @@ describe('NhanVien_Service', () => {
     const id = '507f1f77bcf86cd799439011';
 
     it('throws ConflictException when the new userId already belongs to another employee', async () => {
-      const existingItem = { _id: id, hoTen: 'Nguyen Van A', cccd: '001111111111', userId: undefined };
+      const existingItem = {
+        _id: id,
+        hoTen: 'Nguyen Van A',
+        cccd: '001111111111',
+        userId: undefined,
+      };
       // findOne(id) via service.findOne, then the userId dedup lookup
       mockEmployeeRepo.findOne
         .mockResolvedValueOnce(existingItem)
@@ -284,7 +302,9 @@ describe('NhanVien_Service', () => {
       const result = await service.findAll();
 
       expect(result).toEqual(list);
-      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({ where: { isActive: true } });
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({
+        where: { isActive: true },
+      });
     });
 
     it('includes trangThai in the where clause when provided, alongside the isActive default', async () => {
@@ -302,19 +322,25 @@ describe('NhanVien_Service', () => {
     it('coerces the string "false" query param to boolean false', async () => {
       await service.findAll({ isActive: 'false' as any });
 
-      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({ where: { isActive: false } });
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({
+        where: { isActive: false },
+      });
     });
 
     it('coerces the string "true" query param to boolean true', async () => {
       await service.findAll({ isActive: 'true' as any });
 
-      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({ where: { isActive: true } });
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({
+        where: { isActive: true },
+      });
     });
 
     it('honors a real boolean false (non-HTTP callers)', async () => {
       await service.findAll({ isActive: false });
 
-      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({ where: { isActive: false } });
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({
+        where: { isActive: false },
+      });
     });
   });
 
@@ -364,9 +390,9 @@ describe('NhanVien_Service', () => {
     });
 
     it('ném NotFoundException khi user không có id', async () => {
-      await expect(
-        service.resolveEmployeeFromUser({ id: '' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.resolveEmployeeFromUser({ id: '' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

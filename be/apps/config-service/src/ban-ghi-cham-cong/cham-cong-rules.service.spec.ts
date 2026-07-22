@@ -461,7 +461,12 @@ describe('ChamCongRules_Service', () => {
     // Đảo cả hai thứ tự: một cài đặt sai kiểu "luôn lấy phần tử cuối" hay
     // "luôn lấy phần tử đầu" đều phải trượt ít nhất một trong hai ca này.
     it('chọn địa điểm gần nhất khi có nhiều địa điểm — [xa, gần]', () => {
-      const xa = { ...VAN_PHONG, _id: 'loc-2', ten: 'Chi nhánh xa', latitude: 21.1 };
+      const xa = {
+        ...VAN_PHONG,
+        _id: 'loc-2',
+        ten: 'Chi nhánh xa',
+        latitude: 21.1,
+      };
       const kq = service.tinhKetQua({
         thoiDiem: gioVN(8, 0),
         loai: 'vao',
@@ -475,7 +480,12 @@ describe('ChamCongRules_Service', () => {
     });
 
     it('chọn địa điểm gần nhất khi có nhiều địa điểm — [gần, xa]', () => {
-      const xa = { ...VAN_PHONG, _id: 'loc-2', ten: 'Chi nhánh xa', latitude: 21.1 };
+      const xa = {
+        ...VAN_PHONG,
+        _id: 'loc-2',
+        ten: 'Chi nhánh xa',
+        latitude: 21.1,
+      };
       const kq = service.tinhKetQua({
         thoiDiem: gioVN(8, 0),
         loai: 'vao',
@@ -721,7 +731,7 @@ describe('ChamCongRules_Service', () => {
           loai: 'vao',
           ca: CA_HANH_CHINH,
           phuongThuc: 'gps',
-          viTri: viTri as any,
+          viTri: viTri,
           diaDiemList: [VAN_PHONG as any],
           laNgayNghi: false,
         }),

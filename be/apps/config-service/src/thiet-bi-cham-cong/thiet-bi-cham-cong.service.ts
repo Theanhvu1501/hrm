@@ -112,7 +112,9 @@ export class ThietBiChamCong_Service {
     if (dsDaDuyet.length > 1) {
       this.logger.warn(
         `Nhân viên ${employeeId} (${emp.employeeId ?? '—'}) có ${dsDaDuyet.length} thiết bị da_duyet cùng lúc: ` +
-          dsDaDuyet.map((d) => `${String((d as any)._id)}/${d.deviceId}`).join(', '),
+          dsDaDuyet
+            .map((d) => `${String((d as any)._id)}/${d.deviceId}`)
+            .join(', '),
       );
       this.nem(
         MA_LOI_THIET_BI.DU_LIEU_BAT_NHAT,

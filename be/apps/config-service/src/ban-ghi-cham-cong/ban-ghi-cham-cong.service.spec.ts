@@ -10,11 +10,7 @@ import { ChamCongRules_Service } from './cham-cong-rules.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { ThietBiChamCong_Service } from '../thiet-bi-cham-cong/thiet-bi-cham-cong.service';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
-import {
-  AttendanceRecord,
-  WorkShift,
-  AttendanceLocation,
-} from '@app/entities';
+import { AttendanceRecord, WorkShift, AttendanceLocation } from '@app/entities';
 
 const USER = { id: 'sso-1', email: 'hai@cty.vn' };
 
@@ -659,7 +655,12 @@ describe('BanGhiChamCong_Service', () => {
     it('ngày không tồn tại trên lịch → BadRequestException', async () => {
       await expect(
         service.hrNhap(
-          { employeeId: 'emp-1', ngay: '2026-02-30', loai: 'vao', gio: '08:00' },
+          {
+            employeeId: 'emp-1',
+            ngay: '2026-02-30',
+            loai: 'vao',
+            gio: '08:00',
+          },
           'HR Lan',
         ),
       ).rejects.toThrow(BadRequestException);

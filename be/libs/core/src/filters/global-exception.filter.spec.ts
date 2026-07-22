@@ -330,7 +330,9 @@ describe('GlobalExceptionFilter — ưu tiên mã lỗi miền', () => {
     });
 
     it('object không có trường `code` → vẫn suy mã từ status', () => {
-      const { status, body } = batLoi(new BadRequestException({ message: 'x' }));
+      const { status, body } = batLoi(
+        new BadRequestException({ message: 'x' }),
+      );
 
       expect(body.error.code).toBe('VALIDATION_ERROR');
       expect(body.error.message).toBe('x');

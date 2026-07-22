@@ -74,9 +74,7 @@ export class DiaDiemChamCong_Service {
     return value !== 'false';
   }
 
-  async findAll(
-    filter?: DiaDiemChamCongFilter,
-  ): Promise<AttendanceLocation[]> {
+  async findAll(filter?: DiaDiemChamCongFilter): Promise<AttendanceLocation[]> {
     const where: Record<string, any> = {
       isActive: this.coerceIsActive(filter?.isActive),
     };
@@ -91,7 +89,9 @@ export class DiaDiemChamCong_Service {
     });
 
     if (!item) {
-      throw new NotFoundException(`Không tìm thấy địa điểm chấm công với ID ${id}`);
+      throw new NotFoundException(
+        `Không tìm thấy địa điểm chấm công với ID ${id}`,
+      );
     }
 
     return item;

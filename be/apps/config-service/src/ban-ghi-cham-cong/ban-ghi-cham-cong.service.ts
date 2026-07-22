@@ -413,8 +413,8 @@ export class BanGhiChamCong_Service {
     if (filter?.tuNgay || filter?.denNgay) {
       // Chuỗi "YYYY-MM-DD" so sánh từ điển trùng với so sánh thời gian.
       where.ngay = {} as Record<string, string>;
-      if (filter.tuNgay) (where.ngay as any).$gte = filter.tuNgay;
-      if (filter.denNgay) (where.ngay as any).$lte = filter.denNgay;
+      if (filter.tuNgay) where.ngay.$gte = filter.tuNgay;
+      if (filter.denNgay) where.ngay.$lte = filter.denNgay;
     }
 
     return this.repo.find({

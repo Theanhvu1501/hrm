@@ -497,7 +497,11 @@ describe('ThietBiChamCong_Service', () => {
         trangThai: 'da_duyet',
       });
 
-      await service.thuHoi('507f1f77bcf86cd799439011', 'HR Lan', 'NV nghỉ việc');
+      await service.thuHoi(
+        '507f1f77bcf86cd799439011',
+        'HR Lan',
+        'NV nghỉ việc',
+      );
 
       expect(mockRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({

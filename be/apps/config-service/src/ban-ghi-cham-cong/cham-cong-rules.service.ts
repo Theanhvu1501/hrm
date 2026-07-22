@@ -144,9 +144,7 @@ export class ChamCongRules_Service {
     ngoaiVung: boolean;
   } {
     if (!input.viTri) {
-      throw new BadRequestException(
-        'Thiếu toạ độ khi chấm công bằng GPS',
-      );
+      throw new BadRequestException('Thiếu toạ độ khi chấm công bằng GPS');
     }
 
     // Object rỗng/thiếu trường vẫn lọt qua `!input.viTri`. Khi đó

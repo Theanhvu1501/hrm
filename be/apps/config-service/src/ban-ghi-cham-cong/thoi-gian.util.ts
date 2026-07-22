@@ -59,9 +59,7 @@ function mocUtcCuaNgay(ngay: string): Date {
     d.getUTCMonth() !== thang - 1 ||
     d.getUTCDate() !== ngayTrongThang
   ) {
-    throw new BadRequestException(
-      `Ngày "${ngay}" không tồn tại trên lịch`,
-    );
+    throw new BadRequestException(`Ngày "${ngay}" không tồn tại trên lịch`);
   }
   return d;
 }
