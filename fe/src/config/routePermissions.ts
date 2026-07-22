@@ -14,6 +14,7 @@ export const routePermissions: Record<string, string> = {
   '/cham-cong/bang-cong': '/cham-cong/bang-cong:xem',
   '/cham-cong/ngay-le': '/cham-cong/ngay-le:xem',
   '/cham-cong/thiet-bi': '/cham-cong/thiet-bi:xem',
+  '/cham-cong/ban-ghi': '/cham-cong/ban-ghi:xem',
 };
 
 export const getRoutePermission = (path: string): string | undefined => {

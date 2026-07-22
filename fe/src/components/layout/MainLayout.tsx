@@ -32,6 +32,7 @@ import {
   TableOutlined,
   CalendarOutlined,
   TabletOutlined,
+  AuditOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
@@ -169,7 +170,8 @@ const MainLayout: React.FC = () => {
   const canViewBangCong = hasPermission('/cham-cong/bang-cong:xem') || user?.isSuperAdmin;
   const canViewNgayLe = hasPermission('/cham-cong/ngay-le:xem') || user?.isSuperAdmin;
   const canViewThietBi = hasPermission('/cham-cong/thiet-bi:xem') || user?.isSuperAdmin;
-  const canViewChamCongGroup = canViewCaLamViec || canViewDiaDiemChamCong || canViewDonChamCong || canViewBangCong || canViewNgayLe || canViewThietBi;
+  const canViewBanGhi = hasPermission('/cham-cong/ban-ghi:xem') || user?.isSuperAdmin;
+  const canViewChamCongGroup = canViewCaLamViec || canViewDiaDiemChamCong || canViewDonChamCong || canViewBangCong || canViewNgayLe || canViewThietBi || canViewBanGhi;
 
   // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" + section "CHẤM CÔNG" (Phase 2+), thêm dần theo module.
   const siderMenuItems: MenuItem[] = [
@@ -239,6 +241,11 @@ const MainLayout: React.FC = () => {
           key: "/cham-cong/thiet-bi",
           icon: <TabletOutlined />,
           label: "Thiết bị chấm công",
+        }] : []),
+        ...(canViewBanGhi ? [{
+          key: "/cham-cong/ban-ghi",
+          icon: <AuditOutlined />,
+          label: "Bản ghi chấm công",
         }] : []),
       ],
     }] : []),

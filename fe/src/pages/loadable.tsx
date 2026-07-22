@@ -72,6 +72,10 @@ export const ThietBiPage = loadable(() => import('./cham-cong/thiet-bi/ThietBiPa
   fallback: <PageLoader />
 });
 
+export const BanGhiPage = loadable(() => import('./cham-cong/ban-ghi/BanGhiPage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const PlaceholderPage = loadable(() => import('./PlaceholderPage'), {
   fallback: <PageLoader />
