@@ -1,5 +1,7 @@
+import { message } from "antd";
 import { HandlerDecorator, RegisterHandler } from "@/common";
 import { CSubHanlder } from "@/common/c-handler/core/sub-handler.ts/sub-handler";
+import { apiErrorMessage } from "@/config/api";
 import { employeeDeviceService } from "@/services/employeeDeviceService";
 import "./init.event";
 
@@ -27,6 +29,9 @@ export class InitHandler extends CSubHanlder {
     } catch (error) {
       console.error("Tải danh sách thiết bị lỗi:", error);
       this.setState("deviceList", []);
+      message.error(
+        apiErrorMessage(error, "Không thể tải danh sách thiết bị. Vui lòng thử lại.")
+      );
     } finally {
       this.setState("loading", false);
     }

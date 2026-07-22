@@ -1,5 +1,7 @@
+import { message } from "antd";
 import { HandlerDecorator, RegisterHandler } from "@/common";
 import { CSubHanlder } from "@/common/c-handler/core/sub-handler.ts/sub-handler";
+import { apiErrorMessage } from "@/config/api";
 import { holidayService } from "@/services/holidayService";
 import { homNayVN } from "@/ultils/thoiGianVN";
 import "./init.event";
@@ -33,6 +35,9 @@ export class InitHandler extends CSubHanlder {
     } catch (error) {
       console.error("Tải danh sách ngày lễ lỗi:", error);
       this.setState("holidayList", []);
+      message.error(
+        apiErrorMessage(error, "Không thể tải danh sách ngày lễ. Vui lòng thử lại.")
+      );
     } finally {
       this.setState("loading", false);
     }
