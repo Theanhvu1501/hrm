@@ -51,6 +51,24 @@ export class GlobalExceptionFilter implements ExceptionFilter {
           message = 'Validation failed';
           details = { validation: resp.message };
         }
+
+        // Mã lỗi miền (nếu service có ném kèm) được ưu tiên hơn mã suy từ
+        // HTTP status.
+        //
+        // Lý do: nhiều tình huống nghiệp vụ khác nhau cùng dùng chung một
+        // status. Ví dụ module `thiet-bi-cham-cong` phát ra 7 mã đều là HTTP
+        // 403 (THIET_BI_CHO_DUYET, THIET_BI_BI_TU_CHOI, THIET_BI_BI_THU_HOI,
+        // ...) mà FE phải hiện màn hình khác nhau cho từng mã. Nếu ghi đè hết
+        // thành 'FORBIDDEN' thì FE chỉ còn cách so khớp chuỗi tiếng Việt —
+        // đúng thứ mã lỗi sinh ra để tránh, và sẽ hỏng im lặng ngay khi ai đó
+        // sửa câu chữ thông báo.
+        //
+        // Chỉ nhận chuỗi không rỗng: `code` kiểu số/null/object có thể tới từ
+        // thư viện ngoài hoặc payload do client nặn ra, không phải hợp đồng
+        // lỗi của mình — gặp thì bỏ qua và giữ nguyên mã suy từ status.
+        if (typeof resp.code === 'string' && resp.code.trim().length > 0) {
+          code = resp.code;
+        }
       }
     }
 
