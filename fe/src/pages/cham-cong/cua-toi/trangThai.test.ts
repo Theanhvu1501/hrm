@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   phanLoaiLoi,
-  thongDiepBackend,
   thongDiepChoTrangThai,
   CHAN_CHAM_CONG,
   THONG_DIEP,
@@ -21,17 +20,14 @@ function loi403(code: string) {
 
 /**
  * Dạng THẬT mà backend trả về (GlobalExceptionFilter):
- * { success:false, error:{ code, message }, requestId }.
+ * { success:false, error:{ code, message }, requestId } — và message ở đây
+ * là chính `message`, khớp với những gì `ServiceBase.handleError()` (đã vá,
+ * xem fe/src/services/base/service-base.ts) thật sự đặt vào `ApiError.message`.
  */
 function loiThat(status: number, code: string, message: string) {
-  return new ApiError(
-    // ServiceBase.handleError() đọc data.message — backend KHÔNG có trường
-    // đó ở gốc, nên ApiError.message là chuỗi chung chung của axios.
-    `Request failed with status code ${status}`,
-    ApiErrorType.FORBIDDEN,
-    status,
-    { response: { status, data: { success: false, error: { code, message } } } },
-  );
+  return new ApiError(message, ApiErrorType.FORBIDDEN, status, {
+    response: { status, data: { success: false, error: { code, message } } },
+  });
 }
 
 describe('phanLoaiLoi', () => {
@@ -116,26 +112,6 @@ describe('phanLoaiLoi', () => {
   });
 });
 
-describe('thongDiepBackend', () => {
-  it('lấy được câu tiếng Việt từ error.message của backend', () => {
-    const err = loiThat(403, 'FORBIDDEN', 'Hồ sơ nhân viên đã nghỉ việc.');
-    expect(thongDiepBackend(err)).toBe('Hồ sơ nhân viên đã nghỉ việc.');
-  });
-
-  it('vẫn đọc được dạng phẳng { message }', () => {
-    const err = new ApiError('x', ApiErrorType.UNKNOWN_ERROR, 409, {
-      response: { status: 409, data: { message: 'Bạn đã check-in rồi' } },
-    });
-    expect(thongDiepBackend(err)).toBe('Bạn đã check-in rồi');
-  });
-
-  it('không có gì để đọc → undefined, không ném', () => {
-    expect(thongDiepBackend(new Error('mất mạng'))).toBeUndefined();
-    expect(thongDiepBackend(undefined)).toBeUndefined();
-    expect(thongDiepBackend({ response: { data: { error: { message: '  ' } } } })).toBeUndefined();
-  });
-});
-
 describe('thongDiepChoTrangThai', () => {
   it('BI_CHAN dùng NGUYÊN VĂN câu của backend — FE không biết lý do bị chặn', () => {
     const err = loiThat(
@@ -149,18 +125,11 @@ describe('thongDiepChoTrangThai', () => {
   });
 
   it('SAI_THU_TU dùng câu của backend (nêu đích danh ngày cần HR nhập bù)', () => {
-    const err = new ApiError('x', ApiErrorType.UNKNOWN_ERROR, 409, {
-      response: {
-        status: 409,
-        data: {
-          success: false,
-          error: {
-            code: 'CONFLICT',
-            message: 'Lượt check-in ngày 2026-07-20 chưa được đóng…',
-          },
-        },
-      },
-    });
+    const err = loiThat(
+      409,
+      'CONFLICT',
+      'Lượt check-in ngày 2026-07-20 chưa được đóng…',
+    );
     expect(thongDiepChoTrangThai(TrangThai.SAI_THU_TU, err)).toBe(
       'Lượt check-in ngày 2026-07-20 chưa được đóng…',
     );

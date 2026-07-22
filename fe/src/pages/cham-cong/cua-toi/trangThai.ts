@@ -1,4 +1,4 @@
-import { ApiError } from '@/config/api';
+import { ApiError, apiErrorMessage } from '@/config/api';
 import { maLoiChamCong, MA_LOI_THIET_BI } from '@/services/attendanceRecordService';
 
 /**
@@ -76,26 +76,6 @@ export function phanLoaiLoi(err: unknown): TrangThai {
 }
 
 /**
- * Câu tiếng Việt do backend gửi kèm lỗi.
- *
- * Bắt buộc phải tự bóc, KHÔNG dùng `error.message`: GlobalExceptionFilter
- * trả `{ success:false, error:{ code, message } }` — không có `message` ở
- * gốc — trong khi ServiceBase.handleError() chỉ đọc `data.message`. Kết quả
- * là `ApiError.message` chỉ còn chuỗi "Request failed with status code 409"
- * của axios. Hiện chuỗi đó cho nhân viên là vô nghĩa.
- */
-export function thongDiepBackend(err: unknown): string | undefined {
-  const goc = err instanceof ApiError ? (err.originalError as unknown) : err;
-  const data = (
-    goc as {
-      response?: { data?: { error?: { message?: string }; message?: string } };
-    }
-  )?.response?.data;
-  const msg = data?.error?.message ?? data?.message;
-  return typeof msg === 'string' && msg.trim().length > 0 ? msg : undefined;
-}
-
-/**
  * Trạng thái chặn hẳn việc chấm công: KHÔNG hiện nút chấm, chỉ hiện lối ra.
  * Các lỗi tạm thời (vị trí, mạng, sai thứ tự) cố ý KHÔNG nằm ở đây — người
  * dùng phải còn nút để thử lại ngay.
@@ -159,9 +139,14 @@ export const THONG_DIEP: Record<TrangThai, string> = {
  * Câu hiển thị cuối cùng cho một trạng thái. Không bao giờ trả chuỗi rỗng
  * cho trạng thái cần nói gì đó — màn hình câm là màn hình người dùng bấm lại
  * vô hạn.
+ *
+ * Câu backend dùng chung `apiErrorMessage()` (fe/src/config/api.ts) — kể từ
+ * khi `ServiceBase.handleError()` đọc đúng `data.error.message` của
+ * GlobalExceptionFilter, `ApiError.message` đã là câu tiếng Việt thật, không
+ * cần tự bóc lại `originalError` ở đây nữa.
  */
 export function thongDiepChoTrangThai(tt: TrangThai, err?: unknown): string {
-  const cuaBackend = thongDiepBackend(err);
+  const cuaBackend = apiErrorMessage(err, '');
   if (UU_TIEN_CAU_BACKEND.has(tt) && cuaBackend) return cuaBackend;
   return THONG_DIEP[tt] || cuaBackend || THONG_DIEP[TrangThai.LOI_KHAC];
 }

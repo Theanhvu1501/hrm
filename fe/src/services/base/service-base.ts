@@ -66,6 +66,31 @@ export function clearAuthToken(): void {
   localStorage.removeItem(API_CONFIG.AUTH_TOKEN_KEY);
 }
 
+/**
+ * Rút câu tiếng Việt mà backend soạn sẵn ra khỏi body lỗi HTTP.
+ *
+ * `GlobalExceptionFilter` (be/libs/core/src/filters/global-exception.filter.ts)
+ * bọc MỌI lỗi thành `{ success:false, error:{ code, message }, requestId }` —
+ * KHÔNG có `message` ở gốc. Đọc `data.error.message` trước; `data.message`
+ * (dạng phẳng cũ) chỉ là đường dự phòng, không phải đường chính, cho các
+ * phản hồi còn ở dạng cũ. `message` đôi khi là mảng (lỗi validate dạng thô,
+ * trước khi qua GlobalExceptionFilter) — nối lại thành một câu thay vì để
+ * axios/JSON.stringify hiện "[object Object]" hay tương tự.
+ */
+export function resolveBackendMessage(data: unknown): string | undefined {
+  const body = data as
+    | {
+        message?: string | string[];
+        error?: { message?: string | string[] };
+      }
+    | undefined;
+  const raw = body?.error?.message ?? body?.message;
+  if (Array.isArray(raw)) {
+    return raw.length > 0 ? raw.join('; ') : undefined;
+  }
+  return raw || undefined;
+}
+
 // Tenant management
 const TENANT_STORAGE_KEY = 'current_tenant';
 
@@ -198,8 +223,8 @@ export class ServiceBase {
     }
 
     const status = error.response.status;
-    const data = error.response.data as { message?: string; success?: boolean };
-    const message = data?.message || error.message || 'An error occurred';
+    const data = error.response.data;
+    const message = resolveBackendMessage(data) || error.message || 'An error occurred';
 
     switch (status) {
       case 401:

@@ -33,14 +33,16 @@ beforeAll(() => {
     }));
 });
 
-/** Lỗi đúng hình dạng GlobalExceptionFilter trả về qua gateway. */
+/**
+ * Lỗi đúng hình dạng GlobalExceptionFilter trả về qua gateway. `message` ở
+ * đây khớp với những gì `ServiceBase.handleError()` (đã vá, đọc
+ * `data.error.message`) thật sự đặt vào `ApiError.message` — không còn là
+ * chuỗi chung chung "Request failed with status code ..." của axios.
+ */
 function loiBackend(status: number, code: string, message: string) {
-  return new ApiError(
-    `Request failed with status code ${status}`,
-    ApiErrorType.FORBIDDEN,
-    status,
-    { response: { status, data: { success: false, error: { code, message } } } },
-  );
+  return new ApiError(message, ApiErrorType.FORBIDDEN, status, {
+    response: { status, data: { success: false, error: { code, message } } },
+  });
 }
 
 function homNayMau(over: Partial<TrangThaiHomNay> = {}): TrangThaiHomNay {
@@ -282,7 +284,7 @@ describe('Chấm công của tôi — vị trí và sai thứ tự', () => {
       'Lượt check-in ngày 2026-07-20 chưa được đóng và đã quá hạn để tự check-out.';
     vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
     vi.spyOn(attendanceRecordService, 'checkIn').mockRejectedValue(
-      new ApiError('Request failed with status code 409', ApiErrorType.UNKNOWN_ERROR, 409, {
+      new ApiError(cau, ApiErrorType.UNKNOWN_ERROR, 409, {
         response: {
           status: 409,
           data: { success: false, error: { code: 'CONFLICT', message: cau } },
