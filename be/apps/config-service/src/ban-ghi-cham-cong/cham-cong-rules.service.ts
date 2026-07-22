@@ -125,22 +125,41 @@ export class ChamCongRules_Service {
       );
     }
 
+    // Object rỗng/thiếu trường vẫn lọt qua `!input.viTri`. Khi đó
+    // khoangCachMet(undefined, …) ra NaN, mà `NaN > banKinh` là false nên
+    // hệ thống coi như trong vùng — ngồi nhà cũng chấm được. Bắt buộc phải
+    // là số hữu hạn thì mới cho đi tiếp.
+    if (
+      !Number.isFinite(input.viTri.latitude) ||
+      !Number.isFinite(input.viTri.longitude)
+    ) {
+      throw new BadRequestException(
+        'Toạ độ chấm công GPS không hợp lệ — latitude và longitude phải là số',
+      );
+    }
+
     let gan: { d: any; kc: number } | null = null;
+    const hong: string[] = [];
 
     for (const d of ds as any[]) {
-      // Không tự đoán giá trị thiếu: bán kính trống từng làm mọi vị trí
-      // đều lọt (so sánh với undefined cho NaN). Thà báo lỗi để HR sửa.
+      // Không tự đoán giá trị thiếu: bán kính trống từng làm mọi vị trí đều
+      // lọt (so sánh với undefined cho NaN). Nhưng cũng KHÔNG ném ngay giữa
+      // vòng lặp: một bản ghi rác cách 1.500 km từng làm cả công ty không
+      // chấm công được. Bỏ qua địa điểm hỏng, chỉ báo lỗi nếu không còn
+      // địa điểm gps hợp lệ nào.
       if (
-        d.latitude === undefined ||
-        d.latitude === null ||
-        d.longitude === undefined ||
-        d.longitude === null ||
-        d.banKinh === undefined ||
-        d.banKinh === null
+        !Number.isFinite(d.latitude) ||
+        !Number.isFinite(d.longitude) ||
+        !Number.isFinite(d.banKinh)
       ) {
-        throw new BadRequestException(
-          `Địa điểm "${d.ten}" thiếu toạ độ hoặc bán kính — HR cần bổ sung trước khi chấm công`,
+        // Kèm cả id lẫn tên: hai địa điểm trùng tên thì HR phải biết sửa
+        // bản ghi nào.
+        const mo = `[${docId(d) || 'không rõ id'}] "${d.ten}"`;
+        hong.push(mo);
+        console.warn(
+          `[ChamCongRules] Bỏ qua địa điểm ${mo} vì thiếu toạ độ hoặc bán kính — HR cần bổ sung`,
         );
+        continue;
       }
 
       const kc = khoangCachMet(
@@ -149,20 +168,40 @@ export class ChamCongRules_Service {
         d.latitude,
         d.longitude,
       );
-      if (!gan || kc < gan.kc) gan = { d, kc };
+      // Tie-break theo id để hai địa điểm cách đều nhau luôn cho cùng một
+      // kết quả, không phụ thuộc thứ tự Mongo trả về.
+      if (!gan || kc < gan.kc || (kc === gan.kc && docId(d) < docId(gan.d))) {
+        gan = { d, kc };
+      }
     }
 
-    if (!gan) return { ngoaiVung: true };
+    if (!gan) {
+      if (hong.length) {
+        throw new BadRequestException(
+          `Không có địa điểm GPS nào hợp lệ để đối chiếu — các địa điểm sau thiếu toạ độ hoặc bán kính, HR cần sửa: ${hong.join(', ')}`,
+        );
+      }
+      return { ngoaiVung: true };
+    }
 
-    const bienChoPhep =
-      gan.d.banKinh +
-      Math.min(input.viTri.doChinhXacMet ?? 0, TRAN_SAI_SO_GPS_MET);
+    // Sai số GPS chỉ được NỚI vùng, không được làm hẹp: doChinhXacMet âm
+    // (client gửi rác) từng khiến người đứng đúng tâm bị đánh ngoài vùng.
+    const doChinhXac = input.viTri.doChinhXacMet;
+    const saiSo = Number.isFinite(doChinhXac)
+      ? Math.min(Math.max(doChinhXac as number, 0), TRAN_SAI_SO_GPS_MET)
+      : 0;
+    const bienChoPhep = gan.d.banKinh + saiSo;
+    const ngoaiVung = gan.kc > bienChoPhep;
 
     return {
       locationId: docId(gan.d),
       locationTen: gan.d.ten,
-      khoangCachMet: Math.round(gan.kc),
-      ngoaiVung: gan.kc > bienChoPhep,
+      // Làm tròn LÊN khi ngoài vùng, XUỐNG khi trong vùng: Math.round từng
+      // trả "cách 100m" cho khoảng cách 100.05m với bán kính 100m, HR đọc
+      // báo cáo thấy con số mâu thuẫn với kết luận. Cách này bảo đảm số
+      // hiển thị luôn nằm cùng phía biên với kết luận.
+      khoangCachMet: ngoaiVung ? Math.ceil(gan.kc) : Math.floor(gan.kc),
+      ngoaiVung,
     };
   }
 
@@ -177,8 +216,18 @@ export class ChamCongRules_Service {
 
     const phutHienTai = phutTrongNgayVN(thoiDiem);
 
+    const phutBatDau = hhmmSangPhut(ca.gioBatDau);
+    const phutKetThuc = hhmmSangPhut(ca.gioKetThuc);
+
     if (loai === 'vao') {
-      let muon = phutHienTai - hhmmSangPhut(ca.gioBatDau);
+      let phutVao = phutHienTai;
+      // Ca qua đêm (22:00–06:00): bấm vào lúc 00:30 là đã sang ngày lịch kế
+      // tiếp, phải cộng 1440 rồi mới trừ mốc vào ca — nếu không thì
+      // 30 - 1320 < 0 và Math.max kẹp về 0: càng vào muộn càng "sạch".
+      if (ca.laCaQuaDem && phutVao < phutKetThuc) {
+        phutVao += 1440;
+      }
+      let muon = phutVao - phutBatDau;
       if (ca.laLinhHoat) muon -= ca.soPhutLinhHoat ?? 0;
       return { soPhutDiMuon: Math.max(0, muon), soPhutVeSom: 0 };
     }
@@ -187,13 +236,22 @@ export class ChamCongRules_Service {
     // Ca qua đêm kết thúc ở ngày lịch kế tiếp. Nếu người ta bấm ra khi vẫn
     // còn ở buổi tối cùng ngày với giờ vào, quy về trục âm để "ra lúc 23:00
     // của ca 22:00–06:00" ra đúng 7 tiếng về sớm thay vì 0.
-    if (ca.laCaQuaDem && phut >= hhmmSangPhut(ca.gioBatDau)) {
+    if (ca.laCaQuaDem && phut >= phutBatDau) {
       phut -= 1440;
+    } else if (!ca.laCaQuaDem && phut < phutBatDau) {
+      // Ca KHÔNG qua đêm (08:00–17:00) mà bấm ra lúc 01:00 thì người này đã
+      // ở lại làm thêm qua nửa đêm, không phải về sớm 16 tiếng.
+      //
+      // Đánh đổi: một ca hiếm — bấm ra trước cả giờ vào ca trong cùng buổi
+      // sáng (ví dụ ra lúc 06:00 của ca 08:00–17:00) — sẽ ra 0 thay vì
+      // "về sớm rất nhiều". Chấp nhận: ghi nhầm 16 tiếng về sớm cho người
+      // làm thêm là tai hại hơn nhiều so với bỏ sót một ca dị thường.
+      phut += 1440;
     }
 
     return {
       soPhutDiMuon: 0,
-      soPhutVeSom: Math.max(0, hhmmSangPhut(ca.gioKetThuc) - phut),
+      soPhutVeSom: Math.max(0, phutKetThuc - phut),
     };
   }
 }

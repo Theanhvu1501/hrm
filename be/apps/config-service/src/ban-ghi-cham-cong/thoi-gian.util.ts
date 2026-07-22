@@ -6,6 +6,8 @@
  * TZ của tiến trình, và mọi ca sau 17:00 sẽ bị gán sai ngày khi chạy trên
  * máy chủ UTC.
  */
+import { BadRequestException } from '@nestjs/common';
+
 export const TZ_VN = 'Asia/Ho_Chi_Minh';
 
 /** Ngày lịch theo giờ VN, dạng "YYYY-MM-DD". */
@@ -40,8 +42,22 @@ export function thuTrongTuanVN(d: Date): number {
   return new Date(Date.UTC(nam, thang - 1, ngay)).getUTCDay();
 }
 
-/** "08:30" → 510. */
+/** Chỉ chấp nhận đúng dạng "HH:mm" 24h: 00:00 … 23:59. */
+const RE_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/**
+ * "08:30" → 510.
+ *
+ * Ném lỗi thay vì trả NaN: `Math.max(0, NaN)` là NaN chứ không phải 0, nên
+ * một ca có gioBatDau hỏng (dữ liệu cũ, import Excel) sẽ đẩy NaN thẳng vào
+ * soPhutDiMuon rồi xuống MongoDB. Thà chặn ngay để HR sửa dữ liệu ca.
+ */
 export function hhmmSangPhut(hhmm: string): number {
+  if (typeof hhmm !== 'string' || !RE_HHMM.test(hhmm)) {
+    throw new BadRequestException(
+      `Giờ "${hhmm}" không hợp lệ — cần đúng dạng HH:mm (00:00 đến 23:59)`,
+    );
+  }
   const [h, m] = hhmm.split(':').map(Number);
   return h * 60 + m;
 }

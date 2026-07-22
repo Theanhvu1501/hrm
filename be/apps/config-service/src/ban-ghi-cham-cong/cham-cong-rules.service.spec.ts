@@ -3,6 +3,7 @@ import {
   ChamCongRules_Service,
   TRAN_SAI_SO_GPS_MET,
   CaSnapshot,
+  khoangCachMet,
 } from './cham-cong-rules.service';
 
 // VN = UTC+7. Dựng Date bằng UTC để test không phụ thuộc TZ máy chạy.
@@ -37,11 +38,49 @@ const VAN_PHONG = {
 /** Điểm cách VAN_PHONG khoảng 111m về phía bắc (0.001 độ vĩ ≈ 111m). */
 const CACH_111M = { latitude: 21.0288, longitude: 105.8342 };
 
+describe('khoangCachMet', () => {
+  it('cùng một điểm → 0 mét', () => {
+    expect(khoangCachMet(21.0278, 105.8342, 21.0278, 105.8342)).toBe(0);
+  });
+
+  it('lệch 0.001 độ vĩ ≈ 111m', () => {
+    const d = khoangCachMet(21.0278, 105.8342, 21.0288, 105.8342);
+    expect(d).toBeGreaterThan(110);
+    expect(d).toBeLessThan(112);
+  });
+
+  it('đối xứng: đo xuôi hay ngược đều bằng nhau', () => {
+    expect(khoangCachMet(21.0278, 105.8342, 21.0288, 105.8352)).toBe(
+      khoangCachMet(21.0288, 105.8352, 21.0278, 105.8342),
+    );
+  });
+
+  it('Hà Nội – TP.HCM ≈ 1.140 km (sai số dưới 3%)', () => {
+    const d = khoangCachMet(21.0278, 105.8342, 10.8231, 106.6297);
+    expect(d).toBeGreaterThan(1_110_000);
+    expect(d).toBeLessThan(1_170_000);
+  });
+
+  it('vượt kinh tuyến gốc và xích đạo vẫn cho số dương hữu hạn', () => {
+    const d = khoangCachMet(-1, -1, 1, 1);
+    expect(Number.isFinite(d)).toBe(true);
+    expect(d).toBeGreaterThan(0);
+  });
+});
+
 describe('ChamCongRules_Service', () => {
   let service: ChamCongRules_Service;
+  // Địa điểm hỏng được ghi console.warn có chủ đích — nuốt để log test sạch,
+  // đồng thời cho các test bên dưới kiểm tra nội dung cảnh báo.
+  let canhBao: jest.SpyInstance;
 
   beforeEach(() => {
     service = new ChamCongRules_Service();
+    canhBao = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    canhBao.mockRestore();
   });
 
   // ────────────────────────────────────────────────────────────────────
@@ -134,6 +173,55 @@ describe('ChamCongRules_Service', () => {
       expect(kq.soPhutVeSom).toBe(0);
     });
 
+    // ── Critical 3: ca qua đêm, check-in sau nửa đêm ────────────────────
+    it('ca đêm 22:00–06:00: vào 00:30 (sau nửa đêm) → 150 phút muộn, không phải 0', () => {
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(0, 30, 23),
+        loai: 'vao',
+        ca: CA_DEM,
+        phuongThuc: 'qr',
+        diaDiemList: [],
+        laNgayNghi: false,
+      });
+      expect(kq.soPhutDiMuon).toBe(150);
+    });
+
+    it('ca đêm: vào 22:05 → 5 phút muộn', () => {
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(22, 5),
+        loai: 'vao',
+        ca: CA_DEM,
+        phuongThuc: 'qr',
+        diaDiemList: [],
+        laNgayNghi: false,
+      });
+      expect(kq.soPhutDiMuon).toBe(5);
+    });
+
+    it('ca đêm: vào sớm 21:50 → 0 phút muộn', () => {
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(21, 50),
+        loai: 'vao',
+        ca: CA_DEM,
+        phuongThuc: 'qr',
+        diaDiemList: [],
+        laNgayNghi: false,
+      });
+      expect(kq.soPhutDiMuon).toBe(0);
+    });
+
+    it('ca đêm: vào 05:30 (gần hết ca) → 450 phút muộn', () => {
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(5, 30, 23),
+        loai: 'vao',
+        ca: CA_DEM,
+        phuongThuc: 'qr',
+        diaDiemList: [],
+        laNgayNghi: false,
+      });
+      expect(kq.soPhutDiMuon).toBe(450);
+    });
+
     it('ngày nghỉ/lễ → không đánh giá muộn dù vào trễ', () => {
       const kq = service.tinhKetQua({
         thoiDiem: gioVN(11, 0),
@@ -166,6 +254,31 @@ describe('ChamCongRules_Service', () => {
     it('ca hành chính: ra 17:30 → 0 phút về sớm', () => {
       const kq = service.tinhKetQua({
         thoiDiem: gioVN(17, 30),
+        loai: 'ra',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'qr',
+        diaDiemList: [],
+        laNgayNghi: false,
+      });
+      expect(kq.soPhutVeSom).toBe(0);
+    });
+
+    // ── Critical 2: ca KHÔNG qua đêm, bấm ra sau nửa đêm ────────────────
+    it('ca hành chính: làm thêm rồi ra 01:00 sáng hôm sau → 0 phút về sớm, không phải 960', () => {
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(1, 0, 23),
+        loai: 'ra',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'qr',
+        diaDiemList: [],
+        laNgayNghi: false,
+      });
+      expect(kq.soPhutVeSom).toBe(0);
+    });
+
+    it('ca hành chính: ra 23:30 cùng ngày → 0 phút về sớm', () => {
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(23, 30),
         loai: 'ra',
         ca: CA_HANH_CHINH,
         phuongThuc: 'qr',
@@ -278,7 +391,9 @@ describe('ChamCongRules_Service', () => {
       expect(kq.ngoaiVung).toBe(true);
     });
 
-    it('chọn địa điểm gần nhất khi có nhiều địa điểm', () => {
+    // Đảo cả hai thứ tự: một cài đặt sai kiểu "luôn lấy phần tử cuối" hay
+    // "luôn lấy phần tử đầu" đều phải trượt ít nhất một trong hai ca này.
+    it('chọn địa điểm gần nhất khi có nhiều địa điểm — [xa, gần]', () => {
       const xa = { ...VAN_PHONG, _id: 'loc-2', ten: 'Chi nhánh xa', latitude: 21.1 };
       const kq = service.tinhKetQua({
         thoiDiem: gioVN(8, 0),
@@ -290,6 +405,127 @@ describe('ChamCongRules_Service', () => {
         laNgayNghi: false,
       });
       expect(kq.locationTen).toBe('Văn phòng Hà Nội');
+    });
+
+    it('chọn địa điểm gần nhất khi có nhiều địa điểm — [gần, xa]', () => {
+      const xa = { ...VAN_PHONG, _id: 'loc-2', ten: 'Chi nhánh xa', latitude: 21.1 };
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(8, 0),
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'gps',
+        viTri: { latitude: 21.0278, longitude: 105.8342 },
+        diaDiemList: [VAN_PHONG as any, xa as any],
+        laNgayNghi: false,
+      });
+      expect(kq.locationTen).toBe('Văn phòng Hà Nội');
+      expect(kq.locationId).toBe('loc-1');
+    });
+
+    // Ca phân biệt thật cho trần sai số: nếu cài đặt BỎ QUA hẳn
+    // doChinhXacMet thì 120m > 100m sẽ ra ngoài vùng và test này đỏ.
+    it('cách ~120m, khai sai số 99999 → trong vùng vì được cộng trần 50m (100+50=150)', () => {
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(8, 0),
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'gps',
+        viTri: {
+          latitude: 21.0278 + 0.00108,
+          longitude: 105.8342,
+          doChinhXacMet: 99999,
+        },
+        diaDiemList: [VAN_PHONG as any],
+        laNgayNghi: false,
+      });
+      expect(kq.khoangCachMet).toBeGreaterThan(115);
+      expect(kq.khoangCachMet).toBeLessThan(125);
+      expect(kq.ngoaiVung).toBe(false);
+    });
+
+    it('khoảng cách đúng bằng bán kính → vẫn trong vùng (biên tính cả mốc)', () => {
+      const kcDung = khoangCachMet(21.0278, 105.8342, 21.0288, 105.8342);
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(8, 0),
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'gps',
+        viTri: { latitude: 21.0288, longitude: 105.8342 },
+        diaDiemList: [{ ...VAN_PHONG, banKinh: kcDung } as any],
+        laNgayNghi: false,
+      });
+      expect(kq.ngoaiVung).toBe(false);
+    });
+
+    it('doChinhXacMet âm không được làm HẸP vùng: đứng đúng tâm vẫn trong vùng', () => {
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(8, 0),
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'gps',
+        viTri: {
+          latitude: 21.0278,
+          longitude: 105.8342,
+          doChinhXacMet: -100000,
+        },
+        diaDiemList: [VAN_PHONG as any],
+        laNgayNghi: false,
+      });
+      expect(kq.ngoaiVung).toBe(false);
+    });
+
+    it('doChinhXacMet không phải số hữu hạn → coi như 0, không sinh NaN', () => {
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(8, 0),
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'gps',
+        viTri: {
+          latitude: 21.0278,
+          longitude: 105.8342,
+          doChinhXacMet: NaN,
+        },
+        diaDiemList: [VAN_PHONG as any],
+        laNgayNghi: false,
+      });
+      expect(kq.ngoaiVung).toBe(false);
+      expect(Number.isNaN(kq.khoangCachMet as number)).toBe(false);
+    });
+
+    it('khoảng cách hiển thị không được mâu thuẫn với kết luận ngoài vùng', () => {
+      // Đứng cách tâm đúng d mét, bán kính d - 0.05 → ngoài vùng.
+      // Math.round(d) sẽ trả đúng bằng bán kính làm tròn → HR đọc báo cáo
+      // thấy "cách 100m, bán kính 100m" mà lại bị đánh ngoài vùng.
+      const d = khoangCachMet(21.0278, 105.8342, 21.0278 + 0.0009, 105.8342);
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(8, 0),
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'gps',
+        viTri: { latitude: 21.0278 + 0.0009, longitude: 105.8342 },
+        diaDiemList: [{ ...VAN_PHONG, banKinh: d - 0.05 } as any],
+        laNgayNghi: false,
+      });
+      expect(kq.ngoaiVung).toBe(true);
+      expect(kq.khoangCachMet as number).toBeGreaterThan(d - 0.05);
+    });
+
+    it('hai địa điểm cách đều nhau → luôn chọn cùng một địa điểm, không phụ thuộc thứ tự mảng', () => {
+      // Cùng toạ độ (hai bản ghi cho cùng một toà nhà) → khoảng cách bằng
+      // nhau tuyệt đối, kết quả không được phụ thuộc thứ tự Mongo trả về.
+      const bac = { ...VAN_PHONG, _id: 'loc-bac', ten: 'Cổng Bắc' };
+      const nam = { ...VAN_PHONG, _id: 'loc-nam', ten: 'Cổng Nam' };
+      const gọi = (ds: any[]) =>
+        service.tinhKetQua({
+          thoiDiem: gioVN(8, 0),
+          loai: 'vao',
+          ca: CA_HANH_CHINH,
+          phuongThuc: 'gps',
+          viTri: { latitude: 21.0278, longitude: 105.8342 },
+          diaDiemList: ds,
+          laNgayNghi: false,
+        });
+      expect(gọi([bac, nam]).locationId).toBe(gọi([nam, bac]).locationId);
     });
 
     it('địa điểm gps thiếu bán kính → báo lỗi rõ, KHÔNG im lặng cho qua', () => {
@@ -307,6 +543,85 @@ describe('ChamCongRules_Service', () => {
       ).toThrow(BadRequestException);
     });
 
+    it('thông báo địa điểm hỏng nêu cả id lẫn tên để HR biết sửa bản ghi nào', () => {
+      const hong = { ...VAN_PHONG, _id: 'loc-hong', banKinh: undefined };
+      expect(() =>
+        service.tinhKetQua({
+          thoiDiem: gioVN(8, 0),
+          loai: 'vao',
+          ca: CA_HANH_CHINH,
+          phuongThuc: 'gps',
+          viTri: { latitude: 21.0278, longitude: 105.8342 },
+          diaDiemList: [hong as any],
+          laNgayNghi: false,
+        }),
+      ).toThrow(/loc-hong/);
+    });
+
+    // ── Important 2: một địa điểm hỏng không được chặn cả công ty ────────
+    it('một địa điểm hỏng KHÔNG chặn chấm công ở địa điểm hợp lệ khác', () => {
+      const khoCaMau = {
+        _id: 'loc-cm',
+        ten: 'Kho Cà Mau',
+        loai: 'gps',
+        latitude: 9.1769,
+        longitude: 105.1524,
+        banKinh: undefined,
+        isActive: true,
+      };
+      const kq = service.tinhKetQua({
+        thoiDiem: gioVN(8, 0),
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'gps',
+        viTri: { latitude: 21.0278, longitude: 105.8342 },
+        diaDiemList: [VAN_PHONG as any, khoCaMau as any],
+        laNgayNghi: false,
+      });
+      expect(kq.ngoaiVung).toBe(false);
+      expect(kq.locationTen).toBe('Văn phòng Hà Nội');
+    });
+
+    it('địa điểm hỏng bị bỏ qua được ghi cảnh báo kèm cả id lẫn tên', () => {
+      const khoCaMau = {
+        _id: 'loc-cm',
+        ten: 'Kho Cà Mau',
+        loai: 'gps',
+        latitude: 9.1769,
+        longitude: 105.1524,
+        isActive: true,
+      };
+      service.tinhKetQua({
+        thoiDiem: gioVN(8, 0),
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'gps',
+        viTri: { latitude: 21.0278, longitude: 105.8342 },
+        diaDiemList: [VAN_PHONG as any, khoCaMau as any],
+        laNgayNghi: false,
+      });
+      expect(canhBao).toHaveBeenCalledTimes(1);
+      const noiDung = String(canhBao.mock.calls[0][0]);
+      expect(noiDung).toContain('loc-cm');
+      expect(noiDung).toContain('Kho Cà Mau');
+    });
+
+    it('khi TẤT CẢ địa điểm gps đều hỏng → mới báo lỗi để HR đi sửa', () => {
+      const hong1 = { ...VAN_PHONG, _id: 'loc-h1', banKinh: undefined };
+      const hong2 = { ...VAN_PHONG, _id: 'loc-h2', ten: 'Kho', latitude: null };
+      expect(() =>
+        service.tinhKetQua({
+          thoiDiem: gioVN(8, 0),
+          loai: 'vao',
+          ca: CA_HANH_CHINH,
+          phuongThuc: 'gps',
+          viTri: { latitude: 21.0278, longitude: 105.8342 },
+          diaDiemList: [hong1 as any, hong2 as any],
+          laNgayNghi: false,
+        }),
+      ).toThrow(/loc-h1.*loc-h2/);
+    });
+
     it('chấm gps mà không gửi toạ độ → báo lỗi', () => {
       expect(() =>
         service.tinhKetQua({
@@ -314,6 +629,32 @@ describe('ChamCongRules_Service', () => {
           loai: 'vao',
           ca: CA_HANH_CHINH,
           phuongThuc: 'gps',
+          diaDiemList: [VAN_PHONG as any],
+          laNgayNghi: false,
+        }),
+      ).toThrow(BadRequestException);
+    });
+
+    // ── Critical 1: viTri tồn tại nhưng thiếu trường số ─────────────────
+    // `if (!input.viTri)` chỉ chặn null/undefined. Với viTri = {} thì
+    // khoangCachMet(undefined, …) ra NaN, `NaN > banKinh` là false → coi
+    // như trong vùng. Ngồi nhà cũng chấm được.
+    it.each<[any, string]>([
+      [{}, 'thiếu cả latitude lẫn longitude'],
+      [{ latitude: 21.0278 }, 'thiếu longitude'],
+      [{ longitude: 105.8342 }, 'thiếu latitude'],
+      [{ latitude: null, longitude: null }, 'toạ độ null'],
+      [{ latitude: '21.0278', longitude: '105.8342' }, 'toạ độ là chuỗi'],
+      [{ latitude: NaN, longitude: 105.8342 }, 'latitude là NaN'],
+      [{ latitude: Infinity, longitude: 105.8342 }, 'latitude vô cực'],
+    ])('viTri %s (%s) → báo lỗi, KHÔNG coi là trong vùng', (viTri) => {
+      expect(() =>
+        service.tinhKetQua({
+          thoiDiem: gioVN(8, 0),
+          loai: 'vao',
+          ca: CA_HANH_CHINH,
+          phuongThuc: 'gps',
+          viTri: viTri as any,
           diaDiemList: [VAN_PHONG as any],
           laNgayNghi: false,
         }),
