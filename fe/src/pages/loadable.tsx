@@ -64,6 +64,10 @@ export const BangCongPage = loadable(() => import('./cham-cong/bang-cong/BangCon
   fallback: <PageLoader />
 });
 
+export const NgayLePage = loadable(() => import('./cham-cong/ngay-le/NgayLePage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const PlaceholderPage = loadable(() => import('./PlaceholderPage'), {
   fallback: <PageLoader />
