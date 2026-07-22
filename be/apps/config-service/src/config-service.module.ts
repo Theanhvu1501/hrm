@@ -19,6 +19,7 @@ import { DiaDiemChamCong_Module } from './dia-diem-cham-cong/dia-diem-cham-cong.
 import { DonChamCong_Module } from './don-cham-cong/don-cham-cong.module';
 import { BangCong_Module } from './bang-cong/bang-cong.module';
 import { NgayLe_Module } from './ngay-le/ngay-le.module';
+import { ThietBiChamCong_Module } from './thiet-bi-cham-cong/thiet-bi-cham-cong.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { NgayLe_Module } from './ngay-le/ngay-le.module';
     DonChamCong_Module,
     BangCong_Module,
     NgayLe_Module,
+    ThietBiChamCong_Module,
   ],
 })
 export class ConfigServiceModule {}
