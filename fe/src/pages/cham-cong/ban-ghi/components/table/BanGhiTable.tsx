@@ -39,8 +39,13 @@ export function BanGhiTable() {
     {
       title: "Nhân viên",
       key: "nhanVien",
+      // Chỉ ghép ngoặc khi THỰC SỰ có mã: ghép vô điều kiện sẽ hiện
+      // "Nguyễn Văn Hải ()" ở mọi bản ghi thiếu employeeCode. Giống hệt cách
+      // ThietBiTable đang làm — đây là chỗ bị bỏ sót ở lượt dọn trước.
       render: (_: unknown, r: AttendanceRecord) =>
-        `${r.employeeName ?? ""} (${r.employeeCode ?? ""})`,
+        r.employeeCode
+          ? `${r.employeeName ?? ""} (${r.employeeCode})`
+          : r.employeeName ?? "",
     },
     {
       title: "Vào/Ra",
