@@ -61,4 +61,18 @@ describe('deviceIdentity', () => {
 
     Storage.prototype.setItem = goc;
   });
+
+  it('giữ nguyên cùng một id trong phiên khi localStorage bị chặn ghi (không sinh id mới mỗi lần gọi)', async () => {
+    const goc = Storage.prototype.setItem;
+    Storage.prototype.setItem = vi.fn(() => {
+      throw new Error('QuotaExceededError');
+    });
+
+    const lan1 = await getDeviceId();
+    const lan2 = await getDeviceId();
+
+    expect(lan2).toBe(lan1);
+
+    Storage.prototype.setItem = goc;
+  });
 });

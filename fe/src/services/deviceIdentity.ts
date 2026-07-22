@@ -25,6 +25,14 @@ function sinhId(): string {
   return `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// Khi localStorage bị chặn (chế độ riêng tư), id sinh ra không lưu được và
+// mỗi lần gọi getDeviceId() sẽ sinh một id khác — check-in rồi check-out
+// trong cùng phiên gửi hai deviceId khác nhau, khiến backend coi mỗi lần
+// gọi là một thiết bị lạ và tạo thêm một dòng chờ HR duyệt. Nhớ tạm id
+// trong biến module để cùng một phiên trang luôn trả cùng một giá trị,
+// kể cả khi không ghi được localStorage.
+let idPhienTamThoi: string | null = null;
+
 const providerWeb: DeviceIdProvider = {
   async getDeviceId(): Promise<string> {
     let id: string | null = null;
@@ -36,13 +44,16 @@ const providerWeb: DeviceIdProvider = {
 
     if (id) return id;
 
+    if (idPhienTamThoi) return idPhienTamThoi;
+
     const moi = sinhId();
     try {
       localStorage.setItem(KHOA_LUU_TRU, moi);
     } catch {
-      // Không lưu được thì vẫn trả id cho phiên hiện tại; lần sau sẽ sinh
-      // id khác và người dùng phải xin HR duyệt lại — chấp nhận được, vì
-      // thà bất tiện còn hơn cho chấm công không kiểm soát.
+      // Không lưu được thì vẫn trả id cho phiên hiện tại; nhớ tạm trong biến
+      // module để các lần gọi tiếp theo trong cùng phiên trả cùng giá trị
+      // thay vì sinh id mới mỗi lần. Chấp nhận mất id khi tải lại trang.
+      idPhienTamThoi = moi;
     }
     return moi;
   },
@@ -61,4 +72,5 @@ export function getDeviceId(): Promise<string> {
 /** Chỉ dùng trong test. */
 export function __resetProviderChoTest(): void {
   provider = providerWeb;
+  idPhienTamThoi = null;
 }
