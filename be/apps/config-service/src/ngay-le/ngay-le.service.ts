@@ -4,7 +4,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Holiday } from '@app/entities';
 import { CreateNgayLeDto, UpdateNgayLeDto } from './dto';
 
@@ -82,10 +82,18 @@ export class NgayLe_Service {
   /**
    * Dùng bởi ban-ghi-cham-cong để suy cờ laNgayNghi. Trả về bản ghi lễ đầu
    * tiên chứa `ngay`, hoặc null.
+   *
+   * Cột `nam` được suy từ `tuNgay`, nên một kỳ nghỉ vắt qua năm mới (vd.
+   * tuNgay '2026-12-31', denNgay '2027-01-01') mang nam = 2026 dù `ngay`
+   * truyền vào có thể là '2027-01-01'. Vì một kỳ nghỉ không thể dài hơn một
+   * năm, bản ghi chứa `ngay` chỉ có thể bắt đầu ở năm của `ngay` hoặc năm
+   * liền trước — nên quét cả hai năm rồi mới lọc theo khoảng ngày thực tế.
    */
   async timTheoNgay(ngay: string): Promise<Holiday | null> {
     const nam = Number(ngay.slice(0, 4));
-    const dsTrongNam = await this.repo.find({ where: { nam, isActive: true } });
+    const dsTrongNam = await this.repo.find({
+      where: { nam: In([nam - 1, nam]), isActive: true },
+    });
     const khop = dsTrongNam.find(
       (h) => h.tuNgay <= ngay && ngay <= h.denNgay,
     );

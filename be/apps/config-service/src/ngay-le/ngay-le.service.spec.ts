@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
+import { In } from 'typeorm';
 import { NgayLe_Service } from './ngay-le.service';
 import { Holiday } from '@app/entities';
 
@@ -100,6 +101,44 @@ describe('NgayLe_Service', () => {
 
       expect(await service.timTheoNgay('2027-02-05')).toBeNull();
       expect(await service.timTheoNgay('2027-02-13')).toBeNull();
+    });
+
+    it('tìm thấy ngày lễ vắt qua năm mới khi hỏi từ phía năm mới', async () => {
+      mockRepo.find.mockResolvedValue([
+        {
+          ten: 'Nghỉ bù Tết Dương lịch',
+          tuNgay: '2026-12-31',
+          denNgay: '2027-01-01',
+          loai: 'le',
+          isActive: true,
+        },
+      ]);
+
+      const ket = await service.timTheoNgay('2027-01-01');
+
+      expect(ket?.ten).toBe('Nghỉ bù Tết Dương lịch');
+      expect(mockRepo.find).toHaveBeenCalledWith({
+        where: { nam: In([2026, 2027]), isActive: true },
+      });
+    });
+
+    it('tìm thấy ngày lễ vắt qua năm mới khi hỏi từ phía năm cũ', async () => {
+      mockRepo.find.mockResolvedValue([
+        {
+          ten: 'Nghỉ bù Tết Dương lịch',
+          tuNgay: '2026-12-31',
+          denNgay: '2027-01-01',
+          loai: 'le',
+          isActive: true,
+        },
+      ]);
+
+      const ket = await service.timTheoNgay('2026-12-31');
+
+      expect(ket?.ten).toBe('Nghỉ bù Tết Dương lịch');
+      expect(mockRepo.find).toHaveBeenCalledWith({
+        where: { nam: In([2025, 2026]), isActive: true },
+      });
     });
   });
 });
