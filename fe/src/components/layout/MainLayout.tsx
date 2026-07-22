@@ -33,6 +33,7 @@ import {
   CalendarOutlined,
   TabletOutlined,
   AuditOutlined,
+  CheckCircleOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
@@ -171,7 +172,9 @@ const MainLayout: React.FC = () => {
   const canViewNgayLe = hasPermission('/cham-cong/ngay-le:xem') || user?.isSuperAdmin;
   const canViewThietBi = hasPermission('/cham-cong/thiet-bi:xem') || user?.isSuperAdmin;
   const canViewBanGhi = hasPermission('/cham-cong/ban-ghi:xem') || user?.isSuperAdmin;
-  const canViewChamCongGroup = canViewCaLamViec || canViewDiaDiemChamCong || canViewDonChamCong || canViewBangCong || canViewNgayLe || canViewThietBi || canViewBanGhi;
+  // Nhóm CHẤM CÔNG luôn hiện vì "Chấm công của tôi" là mục tự phục vụ, hiển
+  // thị vô điều kiện (xem ngay dưới). Cố ý KHÔNG gộp điều kiện quyền vào đây.
+  const canViewChamCongGroup = true;
 
   // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" + section "CHẤM CÔNG" (Phase 2+), thêm dần theo module.
   const siderMenuItems: MenuItem[] = [
@@ -212,6 +215,16 @@ const MainLayout: React.FC = () => {
       type: "group" as const,
       label: "CHẤM CÔNG",
       children: [
+        // "Chấm công của tôi" đứng ĐẦU nhóm và hiển thị VÔ ĐIỀU KIỆN: đây là
+        // mục duy nhất mọi nhân viên dùng, mỗi ngày hai lần. Các mục còn lại
+        // chỉ HR thấy. CỐ Ý không bọc `hasPermission` — thêm điều kiện quyền
+        // vào đây là khoá đường chấm công của cả công ty, và route
+        // /cham-cong/cua-toi cũng cố ý không có trong routePermissions.ts.
+        {
+          key: "/cham-cong/cua-toi",
+          icon: <CheckCircleOutlined />,
+          label: "Chấm công của tôi",
+        },
         ...(canViewCaLamViec ? [{
           key: "/cham-cong/ca-lam-viec",
           icon: <ClockCircleOutlined />,

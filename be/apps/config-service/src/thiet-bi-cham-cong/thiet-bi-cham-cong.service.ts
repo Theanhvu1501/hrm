@@ -136,7 +136,29 @@ export class ThietBiChamCong_Service {
       );
     }
 
-    if (dsKhop.some((d) => d.trangThai === 'cho_duyet')) {
+    const dsChoDuyet = dsKhop.filter((d) => d.trangThai === 'cho_duyet');
+    if (dsChoDuyet.length > 0) {
+      // Nhân viên đặt lại tên máy từ màn hình "Chấm công của tôi" thì ghi đè
+      // tên trên dòng đang chờ.
+      //
+      // Không có bước này thì ô đặt tên ở FE là vô nghĩa: dòng `cho_duyet`
+      // được TỰ tạo ở nhánh dưới ngay lần chấm công đầu tiên — tức trước khi
+      // người dùng kịp nhìn thấy màn hình nào để nhập tên — nên mọi lần gửi
+      // sau đó đều rơi đúng vào đây và tên bị vứt đi im lặng. HR mở hàng chờ
+      // ra chỉ thấy một UUID không biết của ai.
+      //
+      // Không mở thêm quyền gì: `dsCuaNv` đã lọc theo employeeId nên chỉ sửa
+      // được dòng của chính mình, và chỉ khi dòng đó đang `cho_duyet` —
+      // không đụng tới `da_duyet`/`tu_choi`/`thu_hoi`, không đổi `trangThai`.
+      const tenMoi = String(tenThietBi ?? '').trim();
+      if (tenMoi) {
+        for (const d of dsChoDuyet) {
+          if (d.tenThietBi === tenMoi) continue;
+          d.tenThietBi = tenMoi;
+          await this.repo.save(d);
+        }
+      }
+
       this.nem(
         MA_LOI_THIET_BI.CHO_DUYET,
         'Thiết bị đang chờ HR duyệt. Liên hệ HR để được kích hoạt.',

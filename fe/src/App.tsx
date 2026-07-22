@@ -30,6 +30,7 @@ import {
   NgayLePage,
   ThietBiPage,
   BanGhiPage,
+  ChamCongCuaToiPage,
   NotFound
 } from "./pages/loadable";
 
@@ -150,6 +151,18 @@ const App = () => (
 
                 {/* Chấm công */}
                 <Route path="cham-cong">
+                  {/*
+                    Tự phục vụ: MỌI nhân viên đăng nhập đều phải chấm công
+                    được. CỐ Ý không bọc `requiredPermission` và CỐ Ý không
+                    có mặt trong `routePermissions.ts` — gắn quyền vào đây sẽ
+                    khiến người mới không chấm công được đúng ngày đầu tiên
+                    đi làm, trong khi HR còn chưa kịp gán vai trò.
+                    Đừng "sửa cho nhất quán" với các route bên dưới.
+                    Backend cũng chỉ đặt JwtGuard cho check-in/check-out/
+                    hom-nay (xem ban-ghi-cham-cong.controller.ts) — phạm vi
+                    dữ liệu được khoá bằng employeeId suy từ token.
+                  */}
+                  <Route path="cua-toi" element={<ChamCongCuaToiPage />} />
                   <Route
                     path="ca-lam-viec"
                     element={

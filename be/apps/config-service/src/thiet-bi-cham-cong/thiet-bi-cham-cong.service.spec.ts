@@ -113,6 +113,70 @@ describe('ThietBiChamCong_Service', () => {
       expect(mockRepo.save).not.toHaveBeenCalled();
     });
 
+    it('deviceId đang cho_duyet + NV gửi tên máy → ghi đè tên trên dòng đang chờ', async () => {
+      // Dòng cho_duyet được tạo tự động ở lần chấm ĐẦU TIÊN nên nhân viên chỉ
+      // đặt tên được ở những lần gửi sau — nếu tên bị bỏ qua thì ô nhập tên
+      // trên màn hình "Chấm công của tôi" chỉ là trang trí.
+      const dong: any = {
+        deviceId: 'dev-B',
+        trangThai: 'cho_duyet',
+        employeeId: 'emp-1',
+        tenThietBi: 'Android · Chrome',
+      };
+      mockRepo.find.mockResolvedValue([dong]);
+
+      const code = await batMaLoi(() =>
+        service.kiemTraThietBi(NV, 'dev-B', 'UA/1.0', 'Điện thoại của Hải'),
+      );
+
+      expect(code).toBe(MA_LOI_THIET_BI.CHO_DUYET);
+      expect(mockRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceId: 'dev-B',
+          tenThietBi: 'Điện thoại của Hải',
+          // Ghi đè tên KHÔNG được kéo theo đổi trạng thái — nếu không thì
+          // nhân viên tự "duyệt" máy mình chỉ bằng cách đổi tên.
+          trangThai: 'cho_duyet',
+        }),
+      );
+    });
+
+    it('deviceId đang cho_duyet + tên gửi lên trùng tên cũ → không ghi thừa', async () => {
+      mockRepo.find.mockResolvedValue([
+        {
+          deviceId: 'dev-B',
+          trangThai: 'cho_duyet',
+          employeeId: 'emp-1',
+          tenThietBi: 'iPhone · Safari',
+        },
+      ]);
+
+      const code = await batMaLoi(() =>
+        service.kiemTraThietBi(NV, 'dev-B', 'UA/1.0', '  iPhone · Safari  '),
+      );
+
+      expect(code).toBe(MA_LOI_THIET_BI.CHO_DUYET);
+      expect(mockRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('deviceId đang cho_duyet + tên rỗng/khoảng trắng → giữ nguyên tên cũ', async () => {
+      mockRepo.find.mockResolvedValue([
+        {
+          deviceId: 'dev-B',
+          trangThai: 'cho_duyet',
+          employeeId: 'emp-1',
+          tenThietBi: 'iPhone · Safari',
+        },
+      ]);
+
+      const code = await batMaLoi(() =>
+        service.kiemTraThietBi(NV, 'dev-B', 'UA/1.0', '   '),
+      );
+
+      expect(code).toBe(MA_LOI_THIET_BI.CHO_DUYET);
+      expect(mockRepo.save).not.toHaveBeenCalled();
+    });
+
     it('deviceId đã bị từ chối → THIET_BI_BI_TU_CHOI, không tạo lại', async () => {
       mockRepo.find.mockResolvedValue([
         { deviceId: 'dev-C', trangThai: 'tu_choi', employeeId: 'emp-1' },

@@ -15,6 +15,13 @@ export const routePermissions: Record<string, string> = {
   '/cham-cong/ngay-le': '/cham-cong/ngay-le:xem',
   '/cham-cong/thiet-bi': '/cham-cong/thiet-bi:xem',
   '/cham-cong/ban-ghi': '/cham-cong/ban-ghi:xem',
+  // CỐ Ý KHÔNG khai '/cham-cong/cua-toi' ở đây, và route đó cũng cố ý không
+  // bọc `requiredPermission` trong App.tsx: mọi nhân viên đăng nhập đều phải
+  // chấm công được ngay ngày đầu tiên đi làm, trước khi HR kịp gán vai trò.
+  // BE cũng chỉ đặt JwtGuard cho check-in/check-out/hom-nay (xem
+  // ban-ghi-cham-cong.controller.ts) — phạm vi dữ liệu khoá bằng employeeId
+  // suy từ token, không bằng quyền. Đừng "bổ sung cho đủ bộ": thêm một dòng
+  // ở đây là khoá đường chấm công của cả công ty.
 };
 
 export const getRoutePermission = (path: string): string | undefined => {
