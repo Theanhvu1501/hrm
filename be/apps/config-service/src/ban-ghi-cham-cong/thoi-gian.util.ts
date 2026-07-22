@@ -36,10 +36,28 @@ export function phutTrongNgayVN(d: Date): number {
   return gio * 60 + phut;
 }
 
+/** Chỉ chấp nhận đúng dạng "YYYY-MM-DD". */
+const RE_NGAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * 0=CN, 1=T2 … 6=T7 cho một chuỗi ngày "YYYY-MM-DD".
+ *
+ * Dựng bằng `Date.UTC` chứ không `new Date("YYYY-MM-DD")` cộng getDay():
+ * cách sau đọc theo TZ tiến trình nên máy chủ ở UTC-5 sẽ lùi một ngày.
+ */
+export function thuTrongTuanCuaNgay(ngay: string): number {
+  if (typeof ngay !== 'string' || !RE_NGAY.test(ngay)) {
+    throw new BadRequestException(
+      `Ngày "${ngay}" không hợp lệ — cần đúng dạng YYYY-MM-DD`,
+    );
+  }
+  const [nam, thang, ngayTrongThang] = ngay.split('-').map(Number);
+  return new Date(Date.UTC(nam, thang - 1, ngayTrongThang)).getUTCDay();
+}
+
 /** 0=CN, 1=T2 … 6=T7 — khớp Date.getDay(), tính theo ngày ở VN. */
 export function thuTrongTuanVN(d: Date): number {
-  const [nam, thang, ngay] = ngayVN(d).split('-').map(Number);
-  return new Date(Date.UTC(nam, thang - 1, ngay)).getUTCDay();
+  return thuTrongTuanCuaNgay(ngayVN(d));
 }
 
 /** Chỉ chấp nhận đúng dạng "HH:mm" 24h: 00:00 … 23:59. */
