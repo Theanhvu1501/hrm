@@ -176,6 +176,98 @@ describe('NhanVien_Service', () => {
       // Only the cccd lookup should have happened, not an mst lookup
       expect(mockEmployeeRepo.findOne).toHaveBeenCalledTimes(1);
     });
+
+    // ──────────────────────────────────────────────────────────────────────
+    // userId dedup — same shape as cccd, but userId is optional: only
+    // enforced when a real value is provided.
+    // ──────────────────────────────────────────────────────────────────────
+    it('throws ConflictException when userId already belongs to another employee', async () => {
+      // First findOne call = cccd check (no dup), second = userId check (dup found)
+      mockEmployeeRepo.findOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ _id: 'existing-id', userId: 'sso-sub-123' });
+
+      await expect(
+        service.create({
+          hoTen: 'Nguyen Van A',
+          cccd: '005555555555',
+          userId: 'sso-sub-123',
+        } as any),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('succeeds when userId is provided and not yet used by anyone', async () => {
+      const result = await service.create({
+        hoTen: 'Nguyen Van A',
+        cccd: '006666666666',
+        userId: 'sso-sub-456',
+      } as any);
+
+      expect(result.employeeId).toBe('NV0001');
+      expect(result.userId).toBe('sso-sub-456');
+    });
+
+    it('succeeds without checking userId duplication when userId is not provided', async () => {
+      const result = await service.create({
+        hoTen: 'Nguyen Van A',
+        cccd: '007777777777',
+      } as any);
+
+      expect(result.employeeId).toBe('NV0001');
+      // Only the cccd lookup should have happened, not a userId lookup
+      expect(mockEmployeeRepo.findOne).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows two employees to both have an empty userId', async () => {
+      // Neither create() call supplies userId — the dedup check must be
+      // skipped both times, so cccd is the only lookup performed each time.
+      await service.create({
+        hoTen: 'Nguyen Van A',
+        cccd: '008888888888',
+      } as any);
+      await service.create({
+        hoTen: 'Tran Thi B',
+        cccd: '009999999999',
+      } as any);
+
+      expect(mockEmployeeRepo.findOne).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // update — userId dedup
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('update — userId dedup', () => {
+    const id = '507f1f77bcf86cd799439011';
+
+    it('throws ConflictException when the new userId already belongs to another employee', async () => {
+      const existingItem = { _id: id, hoTen: 'Nguyen Van A', cccd: '001111111111', userId: undefined };
+      // findOne(id) via service.findOne, then the userId dedup lookup
+      mockEmployeeRepo.findOne
+        .mockResolvedValueOnce(existingItem)
+        .mockResolvedValueOnce({ _id: 'other-id', userId: 'sso-sub-123' });
+
+      await expect(
+        service.update(id, { userId: 'sso-sub-123' } as any),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('does not treat the current employee own userId as a duplicate of itself', async () => {
+      const existingItem = {
+        _id: id,
+        hoTen: 'Nguyen Van A',
+        cccd: '001111111111',
+        userId: 'sso-sub-123',
+      };
+      // Only the findOne(id) lookup should occur — since dto.userId ===
+      // item.userId, the dedup check is skipped entirely.
+      mockEmployeeRepo.findOne.mockResolvedValueOnce(existingItem);
+
+      const result = await service.update(id, { userId: 'sso-sub-123' } as any);
+
+      expect(result.userId).toBe('sso-sub-123');
+      expect(mockEmployeeRepo.findOne).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────

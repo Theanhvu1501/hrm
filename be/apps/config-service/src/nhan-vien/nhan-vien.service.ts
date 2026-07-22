@@ -71,6 +71,17 @@ export class NhanVien_Service {
       }
     }
 
+    if (dto.userId) {
+      const existingUserId = await this.repo.findOne({
+        where: { userId: dto.userId },
+      });
+      if (existingUserId) {
+        throw new ConflictException(
+          'Tài khoản này đã được liên kết với một nhân viên khác',
+        );
+      }
+    }
+
     const tenantId = this.tenantContext.getCurrentTenantId();
     const employeeId = await this.generateEmployeeId(tenantId);
 
@@ -134,6 +145,17 @@ export class NhanVien_Service {
       const existing = await this.repo.findOne({ where: { mst: dto.mst } });
       if (existing) {
         throw new ConflictException('MST đã tồn tại trong hệ thống');
+      }
+    }
+
+    if (dto.userId && dto.userId !== item.userId) {
+      const existing = await this.repo.findOne({
+        where: { userId: dto.userId },
+      });
+      if (existing) {
+        throw new ConflictException(
+          'Tài khoản này đã được liên kết với một nhân viên khác',
+        );
       }
     }
 
