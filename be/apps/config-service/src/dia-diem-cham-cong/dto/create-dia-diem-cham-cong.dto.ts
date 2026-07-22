@@ -4,6 +4,9 @@ import {
   IsOptional,
   IsBoolean,
   IsNumber,
+  IsIn,
+  Min,
+  Max,
 } from 'class-validator';
 
 export class CreateDiaDiemChamCongDto {
@@ -11,8 +14,9 @@ export class CreateDiaDiemChamCongDto {
   @IsNotEmpty({ message: 'Tên địa điểm không được để trống' })
   ten: string;
 
-  @IsString()
-  @IsNotEmpty({ message: 'Loại địa điểm không được để trống' })
+  @IsIn(['gps', 'wifi', 'qr'], {
+    message: 'Loại địa điểm phải là gps, wifi hoặc qr',
+  })
   loai: string; // gps|wifi|qr
 
   @IsOptional()
@@ -25,6 +29,11 @@ export class CreateDiaDiemChamCongDto {
 
   @IsOptional()
   @IsNumber()
+  @Min(20, {
+    message:
+      'Bán kính tối thiểu 20m — nhỏ hơn thì sai số GPS đời thường sẽ gắn cờ nhầm người đi làm thật',
+  })
+  @Max(5000, { message: 'Bán kính tối đa 5000m' })
   banKinh?: number;
 
   @IsOptional()

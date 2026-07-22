@@ -21,7 +21,12 @@ export class DiaDiemChamCong_Service {
     private readonly repo: Repository<AttendanceLocation>,
   ) {}
 
-  private validate(dto: {
+  /**
+   * Bắt buộc theo loại. Thiếu banKinh ở địa điểm gps là lỗi âm thầm nguy
+   * hiểm nhất: so sánh `khoangCach > undefined` cho NaN → false → mọi
+   * người ở bất kỳ đâu đều được coi là trong vùng.
+   */
+  private validateTheoLoai(d: {
     loai?: string;
     latitude?: number;
     longitude?: number;
@@ -29,32 +34,31 @@ export class DiaDiemChamCong_Service {
     ipWifi?: string;
     maQr?: string;
   }): void {
-    if (dto.loai === 'gps') {
+    if (d.loai === 'gps') {
       if (
-        dto.latitude === undefined ||
-        dto.latitude === null ||
-        dto.longitude === undefined ||
-        dto.longitude === null ||
-        dto.banKinh === undefined ||
-        dto.banKinh === null
+        d.latitude === undefined ||
+        d.latitude === null ||
+        d.longitude === undefined ||
+        d.longitude === null
       ) {
         throw new BadRequestException(
-          'Địa điểm GPS cần toạ độ và bán kính',
+          'Địa điểm GPS phải có đủ vĩ độ và kinh độ',
         );
       }
-    } else if (dto.loai === 'wifi') {
-      if (!dto.ipWifi) {
-        throw new BadRequestException('Địa điểm Wifi cần địa chỉ IP');
+      if (d.banKinh === undefined || d.banKinh === null) {
+        throw new BadRequestException('Địa điểm GPS phải có bán kính');
       }
-    } else if (dto.loai === 'qr') {
-      if (!dto.maQr) {
-        throw new BadRequestException('Địa điểm QR cần mã QR');
-      }
+    }
+    if (d.loai === 'wifi' && !d.ipWifi) {
+      throw new BadRequestException('Địa điểm Wifi phải có IP');
+    }
+    if (d.loai === 'qr' && !d.maQr) {
+      throw new BadRequestException('Địa điểm QR phải có mã QR');
     }
   }
 
   async create(dto: CreateDiaDiemChamCongDto): Promise<AttendanceLocation> {
-    this.validate(dto);
+    this.validateTheoLoai(dto);
 
     const entity = this.repo.create({
       ...dto,
@@ -100,7 +104,7 @@ export class DiaDiemChamCong_Service {
     const item = await this.findOne(id);
 
     const merged = { ...item, ...dto };
-    this.validate(merged);
+    this.validateTheoLoai(merged);
 
     Object.assign(item, dto);
     return this.repo.save(item);

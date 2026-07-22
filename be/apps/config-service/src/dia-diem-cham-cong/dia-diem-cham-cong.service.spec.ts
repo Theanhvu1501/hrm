@@ -111,6 +111,49 @@ describe('DiaDiemChamCong_Service', () => {
     });
   });
 
+  describe('create — validate theo loai', () => {
+    it('từ chối địa điểm gps thiếu banKinh', async () => {
+      await expect(
+        service.create({
+          ten: 'Văn phòng',
+          loai: 'gps',
+          latitude: 21.0278,
+          longitude: 105.8342,
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('từ chối địa điểm gps thiếu toạ độ', async () => {
+      await expect(
+        service.create({ ten: 'Văn phòng', loai: 'gps', banKinh: 100 } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('từ chối địa điểm wifi thiếu ipWifi', async () => {
+      await expect(
+        service.create({ ten: 'Văn phòng', loai: 'wifi' } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('từ chối địa điểm qr thiếu maQr', async () => {
+      await expect(
+        service.create({ ten: 'Cổng', loai: 'qr' } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('chấp nhận địa điểm gps đầy đủ', async () => {
+      const result = await service.create({
+        ten: 'Văn phòng',
+        loai: 'gps',
+        latitude: 21.0278,
+        longitude: 105.8342,
+        banKinh: 100,
+      } as any);
+
+      expect(result.banKinh).toBe(100);
+    });
+  });
+
   // ──────────────────────────────────────────────────────────────────────────
   // findAll
   // ──────────────────────────────────────────────────────────────────────────
