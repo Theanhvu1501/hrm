@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Post,
@@ -11,8 +12,17 @@ import {
 import { ThietBiChamCong_Service } from './thiet-bi-cham-cong.service';
 import type { ThietBiFilter } from './thiet-bi-cham-cong.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
-import { JwtGuard } from '@app/auth';
+import { AdminGuard, JwtGuard } from '@app/auth';
 
+/**
+ * Đây là cơ chế chống chấm công hộ của cả hệ thống: mỗi nhân viên chỉ chấm
+ * được từ đúng một thiết bị đã được HR duyệt. `deviceId` do client sinh nên
+ * toàn bộ độ an toàn nằm ở luật "thiết bị lạ phải được HR duyệt" — nghĩa là
+ * nằm ở hàng rào phân quyền của chính controller này.
+ *
+ * Dùng `AdminGuard` (kiểm `vaiTro`), KHÔNG dùng `@Roles(...)`: `RoleGuard`
+ * trong repo hiện chỉ `return true` nên mọi `@Roles` đều vô hiệu.
+ */
 @Controller('thiet-bi-cham-cong')
 @UseGuards(JwtGuard)
 export class ThietBiChamCong_Controller {
@@ -22,9 +32,25 @@ export class ThietBiChamCong_Controller {
   ) {}
 
   /**
-   * Tự phục vụ — chỉ JwtGuard, CỐ Ý không gắn kiểm tra quyền: mọi nhân
-   * viên (không riêng gì HR) đều phải xem được danh sách thiết bị của
-   * chính mình để biết máy đang chờ duyệt hay đã được duyệt.
+   * Vết audit của thao tác bảo mật quan trọng nhất trong hệ thống không được
+   * phép là chuỗi rỗng — không biết ai duyệt thì không có gì để truy vết.
+   */
+  private nguoiThucHien(req: any): string {
+    const email = String(req?.user?.email ?? '').trim();
+    if (email) return email;
+    const id = String(req?.user?.id ?? '').trim();
+    if (id) return id;
+    throw new BadRequestException(
+      'Không xác định được người thực hiện thao tác thiết bị chấm công',
+    );
+  }
+
+  /**
+   * Tự phục vụ — route DUY NHẤT trong controller này chỉ cần `JwtGuard`:
+   * mọi nhân viên (không riêng gì HR) đều phải xem được danh sách thiết bị
+   * của CHÍNH MÌNH để biết máy đang chờ duyệt hay đã được duyệt. Dữ liệu đã
+   * được lọc theo nhân viên đang đăng nhập nên không lộ thiết bị của người
+   * khác. Toàn bộ route còn lại đều gắn thêm `AdminGuard`.
    *
    * Phải đặt TRƯỚC các route có tham số (":id"), nếu không NestJS sẽ
    * khớp "cua-toi" thành :id.
@@ -36,25 +62,36 @@ export class ThietBiChamCong_Controller {
     return { success: true, data };
   }
 
+  // Danh sách toàn tenant chứa employeeName/employeeCode/userAgent của mọi
+  // nhân viên → chỉ quản trị được đọc.
   @Get()
+  @UseGuards(AdminGuard)
   async findAll(@Query() query: ThietBiFilter) {
     const data = await this.thietBi_Service.findAll(query);
     return { success: true, data };
   }
 
+  // Nếu nhân viên tự duyệt được máy của chính mình thì luật chống chấm hộ
+  // biến mất hoàn toàn: mở app trên máy đồng nghiệp → tự tạo dòng cho_duyet
+  // → tự duyệt → đồng nghiệp chấm hộ hợp lệ.
   @Post(':id/duyet')
+  @UseGuards(AdminGuard)
   async duyet(@Param('id') id: string, @Req() req: any) {
-    const data = await this.thietBi_Service.duyet(id, req.user?.email ?? '');
+    const data = await this.thietBi_Service.duyet(id, this.nguoiThucHien(req));
     return { success: true, data };
   }
 
   @Post(':id/tu-choi')
+  @UseGuards(AdminGuard)
   async tuChoi(@Param('id') id: string, @Req() req: any) {
-    const data = await this.thietBi_Service.tuChoi(id, req.user?.email ?? '');
+    const data = await this.thietBi_Service.tuChoi(id, this.nguoiThucHien(req));
     return { success: true, data };
   }
 
+  // Thu hồi là thao tác khoá chấm công — để hở thì bất kỳ ai cũng khoá được
+  // cả công ty bằng vài request.
   @Post(':id/thu-hoi')
+  @UseGuards(AdminGuard)
   async thuHoi(
     @Param('id') id: string,
     @Body() body: { lyDo?: string },
@@ -62,7 +99,7 @@ export class ThietBiChamCong_Controller {
   ) {
     const data = await this.thietBi_Service.thuHoi(
       id,
-      req.user?.email ?? '',
+      this.nguoiThucHien(req),
       body?.lyDo,
     );
     return { success: true, data };
