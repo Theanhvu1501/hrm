@@ -18,6 +18,13 @@ export const PERMISSION_MODULES = [
   '/cham-cong/dia-diem',
   '/cham-cong/don-tu',
   '/cham-cong/bang-cong',
+  '/cham-cong/ngay-le',
+  '/cham-cong/thiet-bi',
+  '/cham-cong/ban-ghi',
+  // CỐ Ý KHÔNG khai '/cham-cong/cua-toi' ở đây: đó là màn hình tự phục vụ
+  // (mọi nhân viên đăng nhập xem thiết bị/bản ghi CỦA CHÍNH MÌNH), không gắn
+  // quyền theo vai trò — route GET .../cua-toi chỉ có JwtGuard (không
+  // AdminGuard). Đừng "bổ sung cho đủ bộ" ở đây, route đó không nhận quyền.
 ];
 
 const PERMISSION_ACTIONS = ['xem', 'them', 'sua', 'xoa', 'xuat'];

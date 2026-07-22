@@ -50,6 +50,14 @@ export const permissionModules: PermissionModule[] = [
       { key: '/cham-cong/dia-diem', label: 'Địa điểm chấm công' },
       { key: '/cham-cong/don-tu', label: 'Đơn chấm công' },
       { key: '/cham-cong/bang-cong', label: 'Bảng công' },
+      { key: '/cham-cong/ngay-le', label: 'Ngày nghỉ lễ' },
+      { key: '/cham-cong/thiet-bi', label: 'Thiết bị chấm công' },
+      { key: '/cham-cong/ban-ghi', label: 'Bản ghi chấm công' },
+      // CỐ Ý KHÔNG khai '/cham-cong/cua-toi' ở đây: đó là màn hình tự phục vụ
+      // (mọi nhân viên đăng nhập xem thiết bị/bản ghi CỦA CHÍNH MÌNH), không
+      // gắn quyền theo vai trò — BE route GET .../cua-toi chỉ có JwtGuard
+      // (không AdminGuard), xem thiet-bi-cham-cong.controller.ts. Đừng "bổ
+      // sung cho đủ bộ" ở đây, route đó không nhận quyền.
     ],
   },
 ];
