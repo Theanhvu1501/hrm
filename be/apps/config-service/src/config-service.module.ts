@@ -18,6 +18,7 @@ import { CaLamViec_Module } from './ca-lam-viec/ca-lam-viec.module';
 import { DiaDiemChamCong_Module } from './dia-diem-cham-cong/dia-diem-cham-cong.module';
 import { DonChamCong_Module } from './don-cham-cong/don-cham-cong.module';
 import { BangCong_Module } from './bang-cong/bang-cong.module';
+import { NgayLe_Module } from './ngay-le/ngay-le.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { BangCong_Module } from './bang-cong/bang-cong.module';
     DiaDiemChamCong_Module,
     DonChamCong_Module,
     BangCong_Module,
+    NgayLe_Module,
   ],
 })
 export class ConfigServiceModule {}
