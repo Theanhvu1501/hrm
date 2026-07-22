@@ -11,6 +11,7 @@ import { BangCapGiaCanhTab } from "./tabs/BangCapGiaCanhTab";
 import { CongViecTab } from "./tabs/CongViecTab";
 import { ChamCongTab } from "./tabs/ChamCongTab";
 import { HoSoNhanVienFormValues } from "./HoSoNhanVienForm.state";
+import { toCreateEmployeeDto } from "./hoSoNhanVienForm.convert";
 import "./HoSoNhanVienForm.state";
 
 const DEFAULT_VALUES: HoSoNhanVienFormValues = {
@@ -86,31 +87,10 @@ export function HoSoNhanVienForm() {
   };
 
   const onSubmit = (values: HoSoNhanVienFormValues) => {
-    const dto: CreateEmployeeDto = {
-      hoTen: values.hoTen,
-      cccd: values.cccd,
-      ngaySinh: values.ngaySinh || undefined,
-      gioiTinh: values.gioiTinh || undefined,
-      mst: values.mst || undefined,
-      soDienThoai: values.soDienThoai || undefined,
-      email: values.email || undefined,
-      diaChi: values.diaChi || undefined,
-      phongBan: values.phongBan || undefined,
-      chucDanh: values.chucDanh || undefined,
-      ngayVaoLam: values.ngayVaoLam || undefined,
-      loaiHopDong: values.loaiHopDong,
-      trangThai: values.trangThai,
-      bangCap: (values.bangCap || []).filter((b) => b.ten?.trim()),
-      nguoiPhuThuoc: (values.nguoiPhuThuoc || []).filter((n) => n.hoTen?.trim()),
-      userId: values.userId || undefined,
-      workShiftId: values.workShiftId || undefined,
-      // Luôn gửi mảng (kể cả rỗng) — khác với các trường chuỗi tuỳ chọn ở
-      // trên, nếu gửi `undefined` thì JSON.stringify sẽ bỏ hẳn khoá này và
-      // BE sẽ không cập nhật gì (merge-on-update), nên bỏ tick hết ngày rồi
-      // lưu sẽ không xoá được cấu hình cũ. Gửi `[]` để đúng nghĩa "chưa cấu
-      // hình" mà brief yêu cầu, cùng cách bangCap/nguoiPhuThuoc đang làm.
-      ngayLamViecTrongTuan: values.ngayLamViecTrongTuan || [],
-    };
+    // Việc dựng DTO nằm ở `hoSoNhanVienForm.convert.ts` để test được — quy
+    // tắc "trường xoá trắng phải gửi giá trị rỗng thật, không `undefined`"
+    // hoàn toàn vô hình trên màn hình nếu làm sai.
+    const dto: CreateEmployeeDto = toCreateEmployeeDto(values);
 
     if (isEditing && editingEmployee) {
       handler.executeEvent("updateEmployee", { id: editingEmployee.id, dto });

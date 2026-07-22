@@ -245,6 +245,22 @@ describe('NhanVien_Service', () => {
 
       expect(mockEmployeeRepo.findOne).toHaveBeenCalledTimes(2);
     });
+
+    /**
+     * Cùng lý do như ở `update`: hồ sơ xoá mềm phải nhả tài khoản ra, nếu
+     * không thì tạo hồ sơ mới cho đúng người đó cũng bị chặn 409 vĩnh viễn.
+     */
+    it('truy vấn kiểm trùng userId chỉ xét hồ sơ còn hiệu lực (isActive: true)', async () => {
+      await service.create({
+        hoTen: 'Nguyen Van A',
+        cccd: '004444444444',
+        userId: 'sso-sub-789',
+      } as any);
+
+      expect(mockEmployeeRepo.findOne).toHaveBeenNthCalledWith(2, {
+        where: { userId: 'sso-sub-789', isActive: true },
+      });
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -284,6 +300,57 @@ describe('NhanVien_Service', () => {
       const result = await service.update(id, { userId: 'sso-sub-123' } as any);
 
       expect(result.userId).toBe('sso-sub-123');
+      expect(mockEmployeeRepo.findOne).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * Hồ sơ xoá mềm (`isActive: false`) PHẢI nhả tài khoản ra. Nếu truy vấn
+     * kiểm trùng không lọc `isActive` thì `userId` bị giam vĩnh viễn ở một
+     * hồ sơ đã xoá: HR không gán lại được cho ai, và người đó mất hẳn đường
+     * chấm công cho tới khi có người sửa thẳng MongoDB.
+     */
+    it('truy vấn kiểm trùng userId chỉ xét hồ sơ còn hiệu lực (isActive: true)', async () => {
+      const existingItem = {
+        _id: id,
+        hoTen: 'Nguyen Van B',
+        cccd: '001111111112',
+        userId: undefined,
+      };
+      mockEmployeeRepo.findOne
+        .mockResolvedValueOnce(existingItem)
+        .mockResolvedValueOnce(null);
+
+      await service.update(id, { userId: 'sso-sub-123' } as any);
+
+      expect(mockEmployeeRepo.findOne).toHaveBeenNthCalledWith(2, {
+        where: { userId: 'sso-sub-123', isActive: true },
+      });
+    });
+
+    /**
+     * Đường thoát khi HR gán nhầm tài khoản: FE gửi chuỗi rỗng (không phải
+     * `undefined` — `JSON.stringify` sẽ loại hẳn khoá `undefined` khỏi body
+     * và `Object.assign` không đổi gì). Chuỗi rỗng phải đi thẳng vào bản ghi
+     * và KHÔNG được kích hoạt nhánh kiểm trùng.
+     */
+    it('gửi userId chuỗi rỗng thì gỡ liên kết, không kiểm trùng', async () => {
+      const existingItem = {
+        _id: id,
+        hoTen: 'Nguyen Van A',
+        cccd: '001111111111',
+        userId: 'sso-sub-123',
+        workShiftId: 'shift-1',
+      };
+      mockEmployeeRepo.findOne.mockResolvedValueOnce(existingItem);
+
+      const result = await service.update(id, {
+        userId: '',
+        workShiftId: '',
+      } as any);
+
+      expect(result.userId).toBe('');
+      expect(result.workShiftId).toBe('');
+      // Chỉ findOne(id); nhánh `if (dto.userId && ...)` bỏ qua chuỗi rỗng.
       expect(mockEmployeeRepo.findOne).toHaveBeenCalledTimes(1);
     });
   });

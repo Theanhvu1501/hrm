@@ -73,7 +73,12 @@ export class NhanVien_Service {
 
     if (dto.userId) {
       const existingUserId = await this.repo.findOne({
-        where: { userId: dto.userId },
+        // `isActive: true` là bắt buộc, không phải tuỳ chọn: thiếu nó thì
+        // một hồ sơ ĐÃ XOÁ MỀM vẫn giam `userId` vĩnh viễn — HR không gán
+        // lại tài khoản đó cho ai được nữa và người dùng mất hẳn đường chấm
+        // công, chỉ gỡ được bằng cách sửa thẳng MongoDB. Lọc trùng khớp
+        // `resolveEmployeeFromUser()`, nơi cũng chỉ tra hồ sơ còn hiệu lực.
+        where: { userId: dto.userId, isActive: true },
       });
       if (existingUserId) {
         throw new ConflictException(
@@ -150,7 +155,11 @@ export class NhanVien_Service {
 
     if (dto.userId && dto.userId !== item.userId) {
       const existing = await this.repo.findOne({
-        where: { userId: dto.userId },
+        // Xem chú thích cùng nhánh trong create(): thiếu `isActive: true`
+        // thì hồ sơ xoá mềm giam luôn tài khoản, không có đường gỡ từ giao
+        // diện. Nhánh `dto.userId &&` cố ý bỏ qua chuỗi rỗng — FE gửi ''
+        // để GỠ liên kết, và gỡ liên kết thì không có gì để kiểm trùng.
+        where: { userId: dto.userId, isActive: true },
       });
       if (existing) {
         throw new ConflictException(
