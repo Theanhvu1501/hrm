@@ -1,4 +1,10 @@
-import { Injectable, Logger, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ConflictException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -11,11 +17,35 @@ import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { ThietBiChamCong_Service } from '../thiet-bi-cham-cong/thiet-bi-cham-cong.service';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { ChamCongRules_Service, CaSnapshot } from './cham-cong-rules.service';
-import { ngayVN, hhmmSangPhut, thuTrongTuanCuaNgay } from './thoi-gian.util';
+import {
+  ngayVN,
+  hhmmSangPhut,
+  thuTrongTuanCuaNgay,
+  ngayKeTiep,
+  kiemTraNgay,
+} from './thoi-gian.util';
 import { chuanHoaIp } from './ip.util';
 import { ChamCongDto, HrNhapChamCongDto } from './dto';
 
 const NGUONG_TRUNG_LAP_MS = 60_000;
+const MOT_NGAY_MS = 86_400_000;
+
+/** Trạng thái hồ sơ không còn được tự chấm công. */
+const TRANG_THAI_DA_NGHI = 'da_nghi';
+
+/**
+ * Ca dùng cho MỘT bản ghi cụ thể: vừa là phần snapshot ghi xuống DB, vừa là
+ * đầu vào cho luật tính. Gói chung để lượt `ra` kế thừa nguyên vẹn ca của
+ * lượt `vao` đang mở, không lẫn với ca hiện tại của hồ sơ.
+ */
+interface CaChoBanGhi {
+  workShiftId?: string;
+  ten?: string;
+  gioBatDau: string;
+  gioKetThuc: string;
+  laCaQuaDem: boolean;
+  snapshot: CaSnapshot;
+}
 
 export interface BanGhiFilter {
   tuNgay?: string;
@@ -73,6 +103,7 @@ export class BanGhiChamCong_Service {
   ): Promise<AttendanceRecord> {
     // 1–2. Hồ sơ NV
     const emp = await this.nhanVien_Service.resolveEmployeeFromUser(user);
+    this.chanNeuDaNghiViec(emp);
     const employeeId = String((emp as any)._id);
 
     // 3. Thiết bị — chặn cứng, không tạo bản ghi
@@ -90,15 +121,20 @@ export class BanGhiChamCong_Service {
     // 4. Thứ tự vào/ra (kèm chống bấm nhầm hai lần)
     const cuoi = await this.banGhiCuoiCung(employeeId);
     let ngay = homNay;
+    let caBanGhi: CaChoBanGhi | null = null;
 
     if (loai === 'vao') {
-      if (cuoi?.loai === 'vao' && cuoi.ngay === homNay) {
-        // Kiểm tra bấm trùng phải đứng TRƯỚC lỗi sai thứ tự, nếu không cú
-        // chạm thứ hai của một lần bấm nhầm sẽ trả 409 thay vì im lặng bỏ qua.
+      if (cuoi?.loai === 'vao') {
+        // Kiểm tra bấm trùng phải đứng TRƯỚC lỗi sai thứ tự (nếu không cú
+        // chạm thứ hai của một lần bấm nhầm sẽ trả 409 thay vì im lặng bỏ
+        // qua) VÀ độc lập với so sánh `ngay`: hai cú chạm cách 20 giây quanh
+        // nửa đêm rơi vào hai ngày lịch khác nhau nhưng vẫn là một lần bấm.
         if (this.vuaMoiBam(cuoi, thoiDiem)) return cuoi;
-        throw new ConflictException(
-          'Bạn đã check-in rồi. Cần check-out trước khi check-in lần nữa.',
-        );
+        if (cuoi.ngay === homNay) {
+          throw new ConflictException(
+            'Bạn đã check-in rồi. Cần check-out trước khi check-in lần nữa.',
+          );
+        }
       }
     } else {
       if (cuoi?.loai === 'ra' && this.vuaMoiBam(cuoi, thoiDiem)) return cuoi;
@@ -107,13 +143,27 @@ export class BanGhiChamCong_Service {
           'Chưa có lượt check-in nào đang mở để check-out.',
         );
       }
+      if (!this.luotVaoConHieuLuc(cuoi, thoiDiem)) {
+        throw new ConflictException(
+          `Lượt check-in ngày ${cuoi.ngay} chưa được đóng và đã quá hạn để tự check-out. ` +
+            `Nếu vẫn bấm ra, ngày ${cuoi.ngay} sẽ bị ghi sai giờ về. ` +
+            `Vui lòng liên hệ HR nhập bù giờ ra cho ngày ${cuoi.ngay}, sau đó check-in lại.`,
+        );
+      }
       // Ca qua đêm tự đúng nhờ dòng này: bản ghi ra thừa hưởng ngay của
       // bản ghi vao đang mở, không lấy ngày lịch hiện tại.
       ngay = cuoi.ngay;
+      // Lượt ra phải mang ĐÚNG ca của lượt vào đang mở. HR đổi ca giữa lúc
+      // vào và lúc ra thì hai nửa một phiên sẽ mang hai ca khác nhau — ngược
+      // với chính lý do snapshot tồn tại.
+      caBanGhi = this.caTuLuotVao(cuoi);
     }
 
     // 5–6. Ca, ngày nghỉ, luật tính
-    const ca = await this.layCa(emp);
+    if (!caBanGhi) {
+      const ca = await this.layCa(emp);
+      caBanGhi = ca ? this.caChoBanGhi(ca) : null;
+    }
     const laNgayNghi = await this.suyNgayNghi(emp, ngay);
     const diaDiemList = await this.locationRepo.find({
       where: { isActive: true },
@@ -127,7 +177,7 @@ export class BanGhiChamCong_Service {
     const kq = this.rules.tinhKetQua({
       thoiDiem,
       loai,
-      ca: ca ? this.snapshotCa(ca) : null,
+      ca: caBanGhi?.snapshot ?? null,
       viTri:
         dto.latitude !== undefined && dto.longitude !== undefined
           ? {
@@ -152,11 +202,11 @@ export class BanGhiChamCong_Service {
         ngay,
         loai,
         thoiDiem: thoiDiem.toISOString(),
-        workShiftId: ca ? String((ca as any)._id) : undefined,
-        caTen: ca?.ten,
-        caGioBatDau: ca?.gioBatDau,
-        caGioKetThuc: ca?.gioKetThuc,
-        laCaQuaDem: ca?.laCaQuaDem ?? false,
+        workShiftId: caBanGhi?.workShiftId,
+        caTen: caBanGhi?.ten,
+        caGioBatDau: caBanGhi?.gioBatDau,
+        caGioKetThuc: caBanGhi?.gioKetThuc,
+        laCaQuaDem: caBanGhi?.laCaQuaDem ?? false,
         locationId: kq.locationId,
         locationTen: kq.locationTen,
         phuongThuc: dto.phuongThuc,
@@ -178,11 +228,77 @@ export class BanGhiChamCong_Service {
     );
   }
 
+  /**
+   * Nhân viên đã nghỉ việc thì không còn được tự chấm công.
+   *
+   * Chặn Ở ĐÂY chứ không trong `resolveEmployeeFromUser`: hàm đó dùng chung
+   * cho cả việc xem hồ sơ / lịch sử chấm công của chính mình, mà người đã
+   * nghỉ vẫn có quyền xem. Chỉ hành vi tạo dữ liệu công mới bị chặn.
+   *
+   * `tam_nghi` (nghỉ thai sản, nghỉ không lương…) KHÔNG chặn: nhiều nơi vẫn
+   * cho quay lại làm nửa buổi, chặn cứng sẽ khoá nhầm người đang đi làm.
+   */
+  private chanNeuDaNghiViec(emp: Employee): void {
+    if (emp?.trangThai === TRANG_THAI_DA_NGHI) {
+      throw new ForbiddenException(
+        'Hồ sơ nhân viên đã ở trạng thái nghỉ việc nên không thể chấm công. ' +
+          'Nếu bạn vẫn đang làm việc, liên hệ HR để cập nhật lại trạng thái hồ sơ.',
+      );
+    }
+  }
+
   private vuaMoiBam(banGhi: AttendanceRecord, bayGio: Date): boolean {
     const truoc = new Date(banGhi.thoiDiem).getTime();
+    const hieu = bayGio.getTime() - truoc;
+    // Bắt buộc KHÔNG ÂM: bản ghi ở tương lai (HR nhập trước hộ nhân viên)
+    // cho hiệu âm, mà số âm cũng nhỏ hơn ngưỡng — cú chấm công thật sẽ bị
+    // coi là "bấm trùng" và biến mất không dấu vết.
     // NaN (thoiDiem hỏng) cho false ở mọi so sánh → rơi xuống nhánh lỗi
     // thứ tự thay vì âm thầm trả về bản ghi rác.
-    return bayGio.getTime() - truoc < NGUONG_TRUNG_LAP_MS;
+    return hieu >= 0 && hieu < NGUONG_TRUNG_LAP_MS;
+  }
+
+  /**
+   * Lượt `vao` đang mở này còn được phép đóng bằng một cú check-out không?
+   *
+   * NGUỒN SỰ THẬT DUY NHẤT cho cả `checkOut` lẫn `homNay` — nếu hai chỗ tự
+   * quyết riêng thì giao diện sẽ hiện nút "Check-out" dẫn thẳng vào lỗi 409.
+   *
+   * Ngưỡng tính theo `ngay` (hôm nay hoặc hôm qua) chứ không theo số giờ:
+   * `ngay` chính là ngày công sẽ bị ghi, và một phiên làm việc hợp lệ dài
+   * nhất — ca qua đêm — chỉ tràn sang đúng một ngày lịch. Quá mốc đó thì
+   * lượt vao là rác treo lại: gán bản ghi ra vào ngày cũ sẽ đẻ ra "về sớm"
+   * hàng tiếng đồng hồ cho một ngày công vốn đã đủ.
+   */
+  private luotVaoConHieuLuc(
+    cuoi: AttendanceRecord | null | undefined,
+    bayGio: Date,
+  ): boolean {
+    if (cuoi?.loai !== 'vao') return false;
+    const homNay = ngayVN(bayGio);
+    // VN không có DST nên trừ đúng 24h luôn ra ngày lịch liền trước.
+    const homQua = ngayVN(new Date(bayGio.getTime() - MOT_NGAY_MS));
+    return cuoi.ngay === homNay || cuoi.ngay === homQua;
+  }
+
+  /** Ca ghi trên bản ghi `vao` đang mở — dùng lại cho lượt `ra` của cùng phiên. */
+  private caTuLuotVao(cuoi: AttendanceRecord): CaChoBanGhi | null {
+    if (!cuoi.caGioBatDau || !cuoi.caGioKetThuc) return null;
+    return {
+      workShiftId: cuoi.workShiftId,
+      ten: cuoi.caTen,
+      gioBatDau: cuoi.caGioBatDau,
+      gioKetThuc: cuoi.caGioKetThuc,
+      laCaQuaDem: cuoi.laCaQuaDem ?? false,
+      snapshot: {
+        gioBatDau: cuoi.caGioBatDau,
+        gioKetThuc: cuoi.caGioKetThuc,
+        laCaQuaDem: cuoi.laCaQuaDem ?? false,
+        // Bản ghi không lưu cấu hình linh hoạt, nhưng nhánh linh hoạt chỉ
+        // ảnh hưởng đi muộn (lượt `vao`) nên lượt `ra` không cần đến.
+        laLinhHoat: false,
+      },
+    };
   }
 
   private async banGhiCuoiCung(
@@ -213,13 +329,20 @@ export class BanGhiChamCong_Service {
     });
   }
 
-  private snapshotCa(ca: WorkShift): CaSnapshot {
+  private caChoBanGhi(ca: WorkShift): CaChoBanGhi {
     return {
+      workShiftId: String((ca as any)._id),
+      ten: ca.ten,
       gioBatDau: ca.gioBatDau,
       gioKetThuc: ca.gioKetThuc,
       laCaQuaDem: ca.laCaQuaDem ?? false,
-      laLinhHoat: ca.laLinhHoat ?? false,
-      soPhutLinhHoat: ca.soPhutLinhHoat,
+      snapshot: {
+        gioBatDau: ca.gioBatDau,
+        gioKetThuc: ca.gioKetThuc,
+        laCaQuaDem: ca.laCaQuaDem ?? false,
+        laLinhHoat: ca.laLinhHoat ?? false,
+        soPhutLinhHoat: ca.soPhutLinhHoat,
+      },
     };
   }
 
@@ -243,7 +366,8 @@ export class BanGhiChamCong_Service {
   async homNay(user: { id: string }) {
     const emp = await this.nhanVien_Service.resolveEmployeeFromUser(user);
     const employeeId = String((emp as any)._id);
-    const ngay = ngayVN(new Date());
+    const bayGio = new Date();
+    const ngay = ngayVN(bayGio);
     const ca = await this.layCa(emp);
 
     const banGhi = await this.repo.find({
@@ -269,8 +393,10 @@ export class BanGhiChamCong_Service {
             laCaQuaDem: ca.laCaQuaDem ?? false,
           }
         : null,
-      // Hành động kế tiếp mà FE nên hiện trên nút lớn.
-      hanhDongKeTiep: cuoi?.loai === 'vao' ? 'ra' : 'vao',
+      // Hành động kế tiếp mà FE nên hiện trên nút lớn. Dùng CHUNG hàm với
+      // checkOut: một lượt vao treo từ tuần trước không được phép làm nút
+      // hiện "Check-out", vì cú bấm đó sẽ bị chặn ngay bằng 409.
+      hanhDongKeTiep: this.luotVaoConHieuLuc(cuoi, bayGio) ? 'ra' : 'vao',
       banGhi,
     };
   }
@@ -306,40 +432,67 @@ export class BanGhiChamCong_Service {
     dto: HrNhapChamCongDto,
     nguoiThucHien: string,
   ): Promise<AttendanceRecord> {
+    // DTO chỉ regex được ĐỊNH DẠNG; "2026-02-30" lọt qua rồi bị Date cuộn
+    // sang 02/03 khiến `ngay` và `thoiDiem` lệch hai ngày mà không báo lỗi.
+    kiemTraNgay(dto.ngay);
+    const phutGio = hhmmSangPhut(dto.gio);
+
     // Dùng API công khai của NhanVien_Service (tự ném NotFoundException khi
     // không có) thay vì thò tay vào repo private của service khác.
     const emp = await this.nhanVien_Service.findOne(dto.employeeId);
 
     const ca = await this.layCa(emp);
+    const caBanGhi = ca ? this.caChoBanGhi(ca) : null;
     const laNgayNghi = await this.suyNgayNghi(emp, dto.ngay);
 
-    let soPhutDiMuon = 0;
-    let soPhutVeSom = 0;
-    if (ca && !laNgayNghi) {
-      const phut = hhmmSangPhut(dto.gio);
-      if (dto.loai === 'vao') {
-        soPhutDiMuon = Math.max(0, phut - hhmmSangPhut(ca.gioBatDau));
-      } else {
-        let p = phut;
-        if (ca.laCaQuaDem && p >= hhmmSangPhut(ca.gioBatDau)) p -= 1440;
-        soPhutVeSom = Math.max(0, hhmmSangPhut(ca.gioKetThuc) - p);
-      }
+    // KHÔNG chép lại phép tính muộn/sớm: gọi đúng hàm mà đường tự chấm dùng.
+    // Bản chép trước đây thiếu hai nhánh qua nửa đêm nên HR nhập bù cho ca
+    // đêm sẽ xoá sạch số phút đi muộn.
+    const { soPhutDiMuon, soPhutVeSom } = this.rules.tinhMuonSom({
+      phutTrongNgay: phutGio,
+      loai: dto.loai,
+      ca: caBanGhi?.snapshot ?? null,
+      laNgayNghi,
+    });
+
+    // Lượt `ra` của ca qua đêm xảy ra ở ngày lịch KẾ TIẾP. `ngay` (ngày công)
+    // vẫn là dto.ngay, chỉ `thoiDiem` phải cộng một ngày — nếu không, bản ghi
+    // ra sẽ sớm hơn bản ghi vao 16 tiếng, không bao giờ là bản ghi cuối cùng
+    // và phiên vĩnh viễn bị coi là đang mở.
+    const ngayThoiDiem =
+      dto.loai === 'ra' &&
+      caBanGhi?.laCaQuaDem &&
+      phutGio < hhmmSangPhut(caBanGhi.gioBatDau)
+        ? ngayKeTiep(dto.ngay)
+        : dto.ngay;
+
+    // Giờ VN → ISO: VN = UTC+7 quanh năm.
+    const thoiDiem = new Date(`${ngayThoiDiem}T${dto.gio}:00+07:00`);
+
+    // Nhập bù là việc của QUÁ KHỨ. Một bản ghi ở tương lai luôn đứng đầu danh
+    // sách theo thoiDiem DESC nên sẽ chặn mọi cú chấm công thật sau đó.
+    if (thoiDiem.getTime() > Date.now()) {
+      throw new BadRequestException(
+        `Không thể nhập bù chấm công cho thời điểm ở tương lai (${dto.ngay} ${dto.gio}).`,
+      );
     }
 
     return this.repo.save(
       this.repo.create({
-        employeeId: dto.employeeId,
+        // Lấy _id của hồ sơ, không lấy chuỗi client gửi: hex viết hoa vẫn hợp
+        // lệ với ObjectId nhưng lưu xuống là chuỗi khác, mọi phép gom nhóm
+        // sau này sẽ tách đôi cùng một người.
+        employeeId: String((emp as any)._id),
         employeeName: emp.hoTen,
         employeeCode: emp.employeeId,
         ngay: dto.ngay,
         loai: dto.loai,
-        // Giờ VN → ISO: VN = UTC+7 quanh năm.
-        thoiDiem: new Date(`${dto.ngay}T${dto.gio}:00+07:00`).toISOString(),
-        workShiftId: ca ? String((ca as any)._id) : undefined,
-        caTen: ca?.ten,
-        caGioBatDau: ca?.gioBatDau,
-        caGioKetThuc: ca?.gioKetThuc,
-        laCaQuaDem: ca?.laCaQuaDem ?? false,
+        thoiDiem: thoiDiem.toISOString(),
+        workShiftId: caBanGhi?.workShiftId,
+        caTen: caBanGhi?.ten,
+        caGioBatDau: caBanGhi?.gioBatDau,
+        caGioKetThuc: caBanGhi?.gioKetThuc,
+        laCaQuaDem: caBanGhi?.laCaQuaDem ?? false,
         ngoaiVung: false,
         soPhutDiMuon,
         soPhutVeSom,

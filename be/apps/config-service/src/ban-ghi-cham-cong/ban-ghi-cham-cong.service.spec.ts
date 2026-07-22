@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { BanGhiChamCong_Service } from './ban-ghi-cham-cong.service';
 import { ChamCongRules_Service } from './cham-cong-rules.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
@@ -31,14 +35,29 @@ const CA: any = {
   laLinhHoat: false,
 };
 
-/** Ngày hôm nay theo giờ VN — không phụ thuộc TZ của tiến trình test. */
-const homNayVN = () =>
+const CA_DEM: any = {
+  _id: '507f1f77bcf86cd799439022',
+  ten: 'Ca đêm',
+  gioBatDau: '22:00',
+  gioKetThuc: '06:00',
+  laCaQuaDem: true,
+  laLinhHoat: false,
+};
+
+/** Ngày lịch VN của một mốc thời gian — không phụ thuộc TZ của tiến trình test. */
+const ngayVNCua = (d: Date) =>
   new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Ho_Chi_Minh',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date());
+  }).format(d);
+
+/** Ngày hôm nay theo giờ VN — không phụ thuộc TZ của tiến trình test. */
+const homNayVN = () => ngayVNCua(new Date());
+
+/** Ngày hôm qua theo giờ VN (VN không có DST nên trừ đúng 24h là chính xác). */
+const homQuaVN = () => ngayVNCua(new Date(Date.now() - 86_400_000));
 
 describe('BanGhiChamCong_Service', () => {
   let service: BanGhiChamCong_Service;
@@ -164,6 +183,65 @@ describe('BanGhiChamCong_Service', () => {
       expect(recordRepo.save).not.toHaveBeenCalled();
     });
 
+    it('bấm hai lần cách 20 giây qua ranh giới nửa đêm → không tạo dòng vao thứ hai', async () => {
+      // Chạm lúc 23:59:50 (ngay = hôm qua), chạm lại lúc 00:00:10 hôm nay.
+      const banGhiCu = {
+        _id: 'rec-1',
+        loai: 'vao',
+        ngay: homQuaVN(),
+        thoiDiem: new Date(Date.now() - 20_000).toISOString(),
+      };
+      recordRepo.find.mockResolvedValue([banGhiCu]);
+
+      const rec = await service.checkIn(USER, DTO);
+
+      expect(rec).toBe(banGhiCu);
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('bản ghi cuối ở TƯƠNG LAI không được coi là bấm trùng — không nuốt cú chấm thật', async () => {
+      // HR nhập trước lượt vao 12:00 hôm nay, nhân viên chấm thật lúc 08:05.
+      const banGhiTuongLai = {
+        _id: 'rec-hr',
+        loai: 'vao',
+        ngay: homNayVN(),
+        thoiDiem: new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
+      };
+      recordRepo.find.mockResolvedValue([banGhiTuongLai]);
+
+      // Phải báo lỗi rõ ràng, tuyệt đối không im lặng trả về bản của HR.
+      await expect(service.checkIn(USER, DTO)).rejects.toThrow(
+        ConflictException,
+      );
+    });
+
+    it('nhân viên đã nghỉ việc không được chấm công', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue({
+        ...NV,
+        trangThai: 'da_nghi',
+      });
+
+      await expect(service.checkIn(USER, DTO)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('workShiftId không phải ObjectId → bỏ snapshot ca, không chặn chấm công', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue({
+        ...NV,
+        workShiftId: 'ca-hanh-chinh',
+      });
+
+      const rec = await service.checkIn(USER, DTO);
+
+      expect(rec.loai).toBe('vao');
+      expect(rec.workShiftId).toBeUndefined();
+      expect(rec.caTen).toBeUndefined();
+      expect(rec.soPhutDiMuon).toBe(0);
+      expect(shiftRepo.findOne).not.toHaveBeenCalled();
+    });
+
     it('lượt vao còn mở từ HÔM QUA không chặn check-in hôm nay', async () => {
       recordRepo.find.mockResolvedValue([
         {
@@ -273,18 +351,91 @@ describe('BanGhiChamCong_Service', () => {
     });
 
     it('lấy ngay từ bản ghi vao đang mở — ca qua đêm tự đúng', async () => {
+      // Lượt vao tối HÔM QUA (ca 22:00–06:00) vẫn còn hiệu lực sáng nay.
       recordRepo.find.mockResolvedValue([
         {
           loai: 'vao',
-          ngay: '2026-07-15',
-          thoiDiem: '2026-07-15T15:00:00.000Z', // 22:00 giờ VN ngày 15
+          ngay: homQuaVN(),
+          thoiDiem: new Date(Date.now() - 8 * 3600 * 1000).toISOString(),
         },
       ]);
 
       const rec = await service.checkOut(USER, DTO);
 
       expect(rec.loai).toBe('ra');
-      expect(rec.ngay).toBe('2026-07-15');
+      expect(rec.ngay).toBe(homQuaVN());
+    });
+
+    it('lượt vao mở đã quá hạn → 409, không gán bản ghi ra về ngày cũ', async () => {
+      // NV vao ngày 20/07 rồi quên bấm ra, 21–24/07 nghỉ phép, sáng 25/07 bấm ra.
+      recordRepo.find.mockResolvedValue([
+        {
+          _id: 'rec-treo',
+          loai: 'vao',
+          ngay: '2026-07-20',
+          thoiDiem: '2026-07-20T01:00:00.000Z',
+        },
+      ]);
+
+      await expect(service.checkOut(USER, DTO)).rejects.toThrow(
+        ConflictException,
+      );
+      // Thông báo phải nêu rõ ngày của lượt chưa đóng để NV biết báo HR.
+      await expect(service.checkOut(USER, DTO)).rejects.toThrow(/2026-07-20/);
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('bản ghi ra ở TƯƠNG LAI không được coi là bấm trùng', async () => {
+      recordRepo.find.mockResolvedValue([
+        {
+          _id: 'rec-tuong-lai',
+          loai: 'ra',
+          ngay: homNayVN(),
+          thoiDiem: new Date(Date.now() + 4 * 3600 * 1000).toISOString(),
+        },
+      ]);
+
+      await expect(service.checkOut(USER, DTO)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('bản ghi ra kế thừa snapshot ca của lượt vao đang mở, không lấy ca hiện tại', async () => {
+      // HR đổi ca của NV giữa lúc vào và lúc ra: hai nửa một phiên phải cùng ca.
+      recordRepo.find.mockResolvedValue([
+        {
+          loai: 'vao',
+          ngay: homQuaVN(),
+          thoiDiem: new Date(Date.now() - 8 * 3600 * 1000).toISOString(),
+          workShiftId: CA_DEM._id,
+          caTen: CA_DEM.ten,
+          caGioBatDau: CA_DEM.gioBatDau,
+          caGioKetThuc: CA_DEM.gioKetThuc,
+          laCaQuaDem: true,
+        },
+      ]);
+      shiftRepo.findOne.mockResolvedValue(CA); // ca hiện tại đã bị đổi
+
+      const rec = await service.checkOut(USER, DTO);
+
+      expect(rec.caTen).toBe('Ca đêm');
+      expect(rec.caGioBatDau).toBe('22:00');
+      expect(rec.caGioKetThuc).toBe('06:00');
+      expect(rec.laCaQuaDem).toBe(true);
+      expect(rec.workShiftId).toBe(CA_DEM._id);
+    });
+
+    it('nhân viên đã nghỉ việc không được check-out', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue({
+        ...NV,
+        trangThai: 'da_nghi',
+      });
+
+      await expect(service.checkOut(USER, DTO)).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(recordRepo.save).not.toHaveBeenCalled();
     });
 
     it('bấm ra hai lần trong 60 giây → trả về bản ghi cũ', async () => {
@@ -352,6 +503,32 @@ describe('BanGhiChamCong_Service', () => {
       const kq = await service.homNay(USER);
       expect(kq.hanhDongKeTiep).toBe('vao');
     });
+
+    it('hanhDongKeTiep là ra khi lượt vao mở từ hôm qua vẫn còn hiệu lực', async () => {
+      recordRepo.find.mockResolvedValue([
+        {
+          loai: 'vao',
+          ngay: homQuaVN(),
+          thoiDiem: new Date(Date.now() - 8 * 3600 * 1000).toISOString(),
+        },
+      ]);
+
+      const kq = await service.homNay(USER);
+      expect(kq.hanhDongKeTiep).toBe('ra');
+    });
+
+    it('hanhDongKeTiep là vao khi lượt vao mở đã quá hạn — không dẫn NV vào cái bẫy check-out', async () => {
+      recordRepo.find.mockResolvedValue([
+        {
+          loai: 'vao',
+          ngay: '2026-07-20',
+          thoiDiem: '2026-07-20T01:00:00.000Z',
+        },
+      ]);
+
+      const kq = await service.homNay(USER);
+      expect(kq.hanhDongKeTiep).toBe('vao');
+    });
   });
 
   describe('hrNhap', () => {
@@ -404,15 +581,108 @@ describe('BanGhiChamCong_Service', () => {
     });
 
     it('ngày lễ thì không đánh giá muộn/sớm', async () => {
-      ngayLe.timTheoNgay.mockResolvedValue({ ten: 'Quốc khánh', loai: 'le' });
+      ngayLe.timTheoNgay.mockResolvedValue({ ten: 'Giải phóng', loai: 'le' });
 
       const rec = await service.hrNhap(
-        { employeeId: 'emp-1', ngay: '2026-09-02', loai: 'vao', gio: '10:00' },
+        { employeeId: 'emp-1', ngay: '2026-04-30', loai: 'vao', gio: '10:00' },
         'HR Lan',
       );
 
       expect(rec.laNgayNghi).toBe(true);
       expect(rec.soPhutDiMuon).toBe(0);
+    });
+
+    it('dùng CHUNG công thức đi muộn với đường tự chấm — ca qua đêm, vao lúc 00:45', async () => {
+      shiftRepo.findOne.mockResolvedValue(CA_DEM);
+      nhanVien.findOne.mockResolvedValue({
+        ...NV,
+        workShiftId: CA_DEM._id,
+      });
+
+      const rec = await service.hrNhap(
+        { employeeId: 'emp-1', ngay: '2026-07-20', loai: 'vao', gio: '00:45' },
+        'HR Lan',
+      );
+
+      // 00:45 của ca 22:00–06:00 là đi muộn 2h45, không phải 0.
+      expect(rec.soPhutDiMuon).toBe(165);
+    });
+
+    it('dùng CHUNG công thức về sớm với đường tự chấm — ca hành chính, ra lúc 06:00', async () => {
+      const rec = await service.hrNhap(
+        { employeeId: 'emp-1', ngay: '2026-07-20', loai: 'ra', gio: '06:00' },
+        'HR Lan',
+      );
+
+      // Ca 08:00–17:00 mà bấm ra lúc 06:00 là làm thêm qua đêm → không về sớm.
+      expect(rec.soPhutVeSom).toBe(0);
+    });
+
+    it('ca qua đêm: lượt ra thuộc ngày kế tiếp nên thoiDiem phải muộn hơn lượt vao', async () => {
+      shiftRepo.findOne.mockResolvedValue(CA_DEM);
+      nhanVien.findOne.mockResolvedValue({ ...NV, workShiftId: CA_DEM._id });
+
+      const vao = await service.hrNhap(
+        { employeeId: 'emp-1', ngay: '2026-07-20', loai: 'vao', gio: '22:00' },
+        'HR Lan',
+      );
+      const ra = await service.hrNhap(
+        { employeeId: 'emp-1', ngay: '2026-07-20', loai: 'ra', gio: '06:00' },
+        'HR Lan',
+      );
+
+      // ngay (ngày công) vẫn là 20/07, chỉ thoiDiem sang ngày lịch kế tiếp.
+      expect(ra.ngay).toBe('2026-07-20');
+      expect(ra.thoiDiem).toBe('2026-07-20T23:00:00.000Z'); // 06:00 ngày 21/07 giờ VN
+      expect(new Date(ra.thoiDiem).getTime()).toBeGreaterThan(
+        new Date(vao.thoiDiem).getTime(),
+      );
+    });
+
+    it('chặn nhập thời điểm ở TƯƠNG LAI', async () => {
+      const mai = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date(Date.now() + 86_400_000));
+
+      await expect(
+        service.hrNhap(
+          { employeeId: 'emp-1', ngay: mai, loai: 'vao', gio: '08:00' },
+          'HR Lan',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('ngày không tồn tại trên lịch → BadRequestException', async () => {
+      await expect(
+        service.hrNhap(
+          { employeeId: 'emp-1', ngay: '2026-02-30', loai: 'vao', gio: '08:00' },
+          'HR Lan',
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('lưu employeeId theo _id của hồ sơ, không theo chuỗi client gửi', async () => {
+      nhanVien.findOne.mockResolvedValue({
+        ...NV,
+        _id: '507f1f77bcf86cd799439aaa',
+      });
+
+      const rec = await service.hrNhap(
+        {
+          employeeId: '507F1F77BCF86CD799439AAA',
+          ngay: '2026-07-20',
+          loai: 'vao',
+          gio: '08:00',
+        },
+        'HR Lan',
+      );
+
+      expect(rec.employeeId).toBe('507f1f77bcf86cd799439aaa');
     });
 
     it('ghi lại người thực hiện trong ghiChu', async () => {

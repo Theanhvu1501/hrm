@@ -37,6 +37,25 @@ export interface TinhKetQuaInput {
   laNgayNghi: boolean;
 }
 
+/**
+ * Đầu vào tối thiểu của phép tính đi muộn/về sớm.
+ *
+ * Nhận `phutTrongNgay` (phút tính từ 00:00 giờ VN) chứ không nhận `Date`: HR
+ * nhập bù chỉ có chuỗi "HH:mm", còn đường tự chấm có `Date` — quy về cùng một
+ * đơn vị để hai đường dùng CHUNG một công thức, không ai chép lại.
+ */
+export interface MuonSomInput {
+  phutTrongNgay: number;
+  loai: 'vao' | 'ra';
+  ca?: CaSnapshot | null;
+  laNgayNghi: boolean;
+}
+
+export interface MuonSomKetQua {
+  soPhutDiMuon: number;
+  soPhutVeSom: number;
+}
+
 export interface KetQuaChamCong {
   locationId?: string;
   locationTen?: string;
@@ -77,7 +96,12 @@ function docId(d: any): string {
 export class ChamCongRules_Service {
   tinhKetQua(input: TinhKetQuaInput): KetQuaChamCong {
     const viTriKq = this.doiChieuViTri(input);
-    const muonSom = this.tinhMuonSom(input);
+    const muonSom = this.tinhMuonSom({
+      phutTrongNgay: phutTrongNgayVN(input.thoiDiem),
+      loai: input.loai,
+      ca: input.ca,
+      laNgayNghi: input.laNgayNghi,
+    });
     return { ...viTriKq, ...muonSom };
   }
 
@@ -205,16 +229,18 @@ export class ChamCongRules_Service {
     };
   }
 
-  private tinhMuonSom(input: TinhKetQuaInput): {
-    soPhutDiMuon: number;
-    soPhutVeSom: number;
-  } {
-    const { ca, laNgayNghi, thoiDiem, loai } = input;
+  /**
+   * Đi muộn / về sớm — NGUỒN SỰ THẬT DUY NHẤT.
+   *
+   * Công khai để đường "HR nhập bù" gọi lại thay vì chép công thức: bản chép
+   * trước đây thiếu hai nhánh qua nửa đêm nên cùng một tình huống cho hai kết
+   * quả trái ngược (ca đêm vào 00:45 ra 0 phút muộn thay vì 165).
+   */
+  tinhMuonSom(input: MuonSomInput): MuonSomKetQua {
+    const { ca, laNgayNghi, phutTrongNgay: phutHienTai, loai } = input;
 
     // Không gán ca hoặc ngày nghỉ/lễ thì không có mốc để so → không đánh giá.
     if (!ca || laNgayNghi) return { soPhutDiMuon: 0, soPhutVeSom: 0 };
-
-    const phutHienTai = phutTrongNgayVN(thoiDiem);
 
     const phutBatDau = hhmmSangPhut(ca.gioBatDau);
     const phutKetThuc = hhmmSangPhut(ca.gioKetThuc);

@@ -40,24 +40,66 @@ export function phutTrongNgayVN(d: Date): number {
 const RE_NGAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
- * 0=CN, 1=T2 … 6=T7 cho một chuỗi ngày "YYYY-MM-DD".
+ * Dựng mốc UTC 00:00 của một chuỗi ngày, ném lỗi nếu ngày không có thật.
  *
- * Dựng bằng `Date.UTC` chứ không `new Date("YYYY-MM-DD")` cộng getDay():
- * cách sau đọc theo TZ tiến trình nên máy chủ ở UTC-5 sẽ lùi một ngày.
+ * Regex định dạng KHÔNG đủ: "2026-02-30" đúng dạng nhưng `Date.UTC` âm thầm
+ * cuộn sang 02/03 — bản ghi sẽ có `ngay` và `thoiDiem` lệch nhau hai ngày mà
+ * không có lỗi nào. Đối chiếu lại từng thành phần là cách duy nhất bắt được.
  */
-export function thuTrongTuanCuaNgay(ngay: string): number {
+function mocUtcCuaNgay(ngay: string): Date {
   if (typeof ngay !== 'string' || !RE_NGAY.test(ngay)) {
     throw new BadRequestException(
       `Ngày "${ngay}" không hợp lệ — cần đúng dạng YYYY-MM-DD`,
     );
   }
   const [nam, thang, ngayTrongThang] = ngay.split('-').map(Number);
-  return new Date(Date.UTC(nam, thang - 1, ngayTrongThang)).getUTCDay();
+  const d = new Date(Date.UTC(nam, thang - 1, ngayTrongThang));
+  if (
+    d.getUTCFullYear() !== nam ||
+    d.getUTCMonth() !== thang - 1 ||
+    d.getUTCDate() !== ngayTrongThang
+  ) {
+    throw new BadRequestException(
+      `Ngày "${ngay}" không tồn tại trên lịch`,
+    );
+  }
+  return d;
 }
 
-/** 0=CN, 1=T2 … 6=T7 — khớp Date.getDay(), tính theo ngày ở VN. */
-export function thuTrongTuanVN(d: Date): number {
-  return thuTrongTuanCuaNgay(ngayVN(d));
+/**
+ * Kiểm tra một chuỗi ngày là ngày CÓ THẬT, trả lại chính chuỗi đó.
+ *
+ * Dùng ở đầu các luồng nhận `ngay` từ client (DTO chỉ regex được định dạng,
+ * không biết tháng 2 có bao nhiêu ngày).
+ */
+export function kiemTraNgay(ngay: string): string {
+  mocUtcCuaNgay(ngay);
+  return ngay;
+}
+
+/**
+ * 0=CN, 1=T2 … 6=T7 cho một chuỗi ngày "YYYY-MM-DD".
+ *
+ * Dựng bằng `Date.UTC` chứ không `new Date("YYYY-MM-DD")` cộng getDay():
+ * cách sau đọc theo TZ tiến trình nên máy chủ ở UTC-5 sẽ lùi một ngày.
+ */
+export function thuTrongTuanCuaNgay(ngay: string): number {
+  return mocUtcCuaNgay(ngay).getUTCDay();
+}
+
+/**
+ * Ngày lịch kế tiếp, dạng "YYYY-MM-DD".
+ *
+ * Cộng trên trục UTC nên không dính DST của TZ tiến trình; VN cũng không có
+ * DST nên "ngày kế tiếp ở UTC" luôn là "ngày kế tiếp ở VN".
+ */
+export function ngayKeTiep(ngay: string): string {
+  const d = mocUtcCuaNgay(ngay);
+  d.setUTCDate(d.getUTCDate() + 1);
+  // Ghép tay từ các thành phần UTC thay vì toISOString().slice(0,10): ở đây
+  // `d` là mốc lịch thuần, không phải một thời điểm cần quy đổi múi giờ.
+  const hai = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${hai(d.getUTCMonth() + 1)}-${hai(d.getUTCDate())}`;
 }
 
 /** Chỉ chấp nhận đúng dạng "HH:mm" 24h: 00:00 … 23:59. */

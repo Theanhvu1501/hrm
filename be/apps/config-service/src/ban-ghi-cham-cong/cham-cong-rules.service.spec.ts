@@ -84,6 +84,73 @@ describe('ChamCongRules_Service', () => {
   });
 
   // ────────────────────────────────────────────────────────────────────
+  // API công khai tinhMuonSom — đường HR nhập bù dùng chung công thức này
+  // ────────────────────────────────────────────────────────────────────
+  describe('tinhMuonSom (API công khai cho HR nhập bù)', () => {
+    it('cho cùng kết quả với tinhKetQua khi cùng phút trong ngày', () => {
+      const quaTinhKetQua = service.tinhKetQua({
+        thoiDiem: gioVN(8, 25),
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        phuongThuc: 'qr',
+        maQr: 'x',
+        diaDiemList: [],
+        laNgayNghi: false,
+      });
+      const truTiep = service.tinhMuonSom({
+        phutTrongNgay: 8 * 60 + 25,
+        loai: 'vao',
+        ca: CA_HANH_CHINH,
+        laNgayNghi: false,
+      });
+
+      expect(truTiep.soPhutDiMuon).toBe(quaTinhKetQua.soPhutDiMuon);
+      expect(truTiep.soPhutDiMuon).toBe(25);
+    });
+
+    it('ca qua đêm, vao lúc 00:45 → 165 phút muộn (không phải 0)', () => {
+      expect(
+        service.tinhMuonSom({
+          phutTrongNgay: 45,
+          loai: 'vao',
+          ca: CA_DEM,
+          laNgayNghi: false,
+        }).soPhutDiMuon,
+      ).toBe(165);
+    });
+
+    it('ca KHÔNG qua đêm, ra lúc 06:00 → 0 phút về sớm (làm thêm qua đêm)', () => {
+      expect(
+        service.tinhMuonSom({
+          phutTrongNgay: 6 * 60,
+          loai: 'ra',
+          ca: CA_HANH_CHINH,
+          laNgayNghi: false,
+        }).soPhutVeSom,
+      ).toBe(0);
+    });
+
+    it('không có ca hoặc ngày nghỉ → 0/0', () => {
+      expect(
+        service.tinhMuonSom({
+          phutTrongNgay: 700,
+          loai: 'vao',
+          ca: null,
+          laNgayNghi: false,
+        }),
+      ).toEqual({ soPhutDiMuon: 0, soPhutVeSom: 0 });
+      expect(
+        service.tinhMuonSom({
+          phutTrongNgay: 700,
+          loai: 'vao',
+          ca: CA_HANH_CHINH,
+          laNgayNghi: true,
+        }),
+      ).toEqual({ soPhutDiMuon: 0, soPhutVeSom: 0 });
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
   // Đi muộn
   // ────────────────────────────────────────────────────────────────────
   describe('đi muộn — ca hành chính 08:00–17:00', () => {

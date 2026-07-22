@@ -2,7 +2,9 @@ import { BadRequestException } from '@nestjs/common';
 import {
   ngayVN,
   phutTrongNgayVN,
-  thuTrongTuanVN,
+  thuTrongTuanCuaNgay,
+  ngayKeTiep,
+  kiemTraNgay,
   hhmmSangPhut,
 } from './thoi-gian.util';
 
@@ -39,14 +41,96 @@ describe('thoi-gian.util', () => {
     });
   });
 
-  describe('thuTrongTuanVN', () => {
+  describe('thuTrongTuanCuaNgay', () => {
     it('22/07/2026 là thứ Tư → 3', () => {
-      expect(thuTrongTuanVN(utc(2026, 7, 22, 3, 0))).toBe(3);
+      expect(thuTrongTuanCuaNgay('2026-07-22')).toBe(3);
     });
 
-    it('dùng ngày VN chứ không dùng ngày UTC', () => {
-      // 25/07/2026 18:00 UTC = 26/07/2026 (Chủ nhật) giờ VN
-      expect(thuTrongTuanVN(utc(2026, 7, 25, 18, 0))).toBe(0);
+    it('26/07/2026 là Chủ nhật → 0', () => {
+      expect(thuTrongTuanCuaNgay('2026-07-26')).toBe(0);
+    });
+
+    it('không phụ thuộc TZ tiến trình — 01/01/2026 luôn là thứ Năm', () => {
+      expect(thuTrongTuanCuaNgay('2026-01-01')).toBe(4);
+    });
+
+    // Nhánh ném lỗi là lý do duy nhất hàm này được tách riêng — phải có test.
+    it.each([
+      ['2026-7-22', 'thiếu số 0 ở tháng'],
+      ['22-07-2026', 'sai thứ tự'],
+      ['2026/07/22', 'sai dấu phân cách'],
+      ['', 'chuỗi rỗng'],
+      ['hôm nay', 'không phải ngày'],
+      ['2026-07-22T00:00:00Z', 'thừa phần giờ'],
+    ])('chuỗi dị dạng "%s" (%s) → ném BadRequestException', (xau) => {
+      expect(() => thuTrongTuanCuaNgay(xau)).toThrow(BadRequestException);
+    });
+
+    it('null/undefined → ném BadRequestException', () => {
+      expect(() => thuTrongTuanCuaNgay(undefined as any)).toThrow(
+        BadRequestException,
+      );
+      expect(() => thuTrongTuanCuaNgay(null as any)).toThrow(
+        BadRequestException,
+      );
+    });
+
+    // Đúng định dạng nhưng không tồn tại trên lịch: `Date.UTC` âm thầm cuộn
+    // sang tháng sau, ngày công sẽ lệch mà không ai biết.
+    it.each([
+      ['2026-02-30', '30/02 không tồn tại'],
+      ['2026-02-29', '2026 không phải năm nhuận'],
+      ['2026-04-31', 'tháng 4 chỉ có 30 ngày'],
+      ['2026-13-01', 'tháng 13'],
+      ['2026-00-10', 'tháng 0'],
+      ['2026-07-00', 'ngày 0'],
+      ['2026-07-32', 'ngày 32'],
+    ])('ngày không có thật "%s" (%s) → ném BadRequestException', (xau) => {
+      expect(() => thuTrongTuanCuaNgay(xau)).toThrow(BadRequestException);
+    });
+
+    it('29/02/2024 (năm nhuận thật) vẫn hợp lệ', () => {
+      expect(thuTrongTuanCuaNgay('2024-02-29')).toBe(4);
+    });
+
+    it('thông báo lỗi nêu rõ giá trị không hợp lệ', () => {
+      expect(() => thuTrongTuanCuaNgay('2026-02-30')).toThrow(/2026-02-30/);
+    });
+  });
+
+  describe('kiemTraNgay', () => {
+    it('trả lại chính chuỗi ngày khi hợp lệ', () => {
+      expect(kiemTraNgay('2026-07-22')).toBe('2026-07-22');
+    });
+
+    it('ném BadRequestException với ngày không có thật', () => {
+      expect(() => kiemTraNgay('2026-02-30')).toThrow(BadRequestException);
+    });
+  });
+
+  describe('ngayKeTiep', () => {
+    it('cộng một ngày trong cùng tháng', () => {
+      expect(ngayKeTiep('2026-07-20')).toBe('2026-07-21');
+    });
+
+    it('vượt ranh giới tháng', () => {
+      expect(ngayKeTiep('2026-07-31')).toBe('2026-08-01');
+    });
+
+    it('vượt ranh giới năm', () => {
+      expect(ngayKeTiep('2026-12-31')).toBe('2027-01-01');
+    });
+
+    it('28/02 của năm nhuận ra 29/02', () => {
+      expect(ngayKeTiep('2024-02-28')).toBe('2024-02-29');
+    });
+
+    it('28/02 của năm KHÔNG nhuận ra 01/03', () => {
+      expect(ngayKeTiep('2026-02-28')).toBe('2026-03-01');
+    });
+
+    it('ngày không hợp lệ → ném BadRequestException', () => {
+      expect(() => ngayKeTiep('2026-02-30')).toThrow(BadRequestException);
     });
   });
 
