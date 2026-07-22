@@ -17,6 +17,9 @@ export interface HoSoNhanVienFormValues {
   ngayVaoLam?: string;
   loaiHopDong: string;
   trangThai: string;
+  userId?: string;
+  workShiftId?: string;
+  ngayLamViecTrongTuan?: number[];
 }
 
 export interface FormStates extends BaseStates {

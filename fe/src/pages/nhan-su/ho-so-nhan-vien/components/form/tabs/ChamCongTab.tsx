@@ -1,0 +1,122 @@
+import { useEffect, useMemo, useState } from "react";
+import { Controller, useFormContext } from "react-hook-form";
+import { Select, Checkbox, Alert } from "antd";
+import { workShiftService, WorkShift } from "@/services/workShiftService";
+import { nguoiDungService } from "@/services/nguoiDungService";
+import type { NguoiDung } from "@/types";
+import { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
+import {
+  NGAY_TRONG_TUAN_OPTIONS,
+  nguoiDungToUserOptions,
+  workShiftToOptions,
+} from "./chamCongTab.convert";
+
+export function ChamCongTab() {
+  const { control } = useFormContext<HoSoNhanVienFormValues>();
+
+  const [shiftList, setShiftList] = useState<WorkShift[]>([]);
+  const [userList, setUserList] = useState<NguoiDung[]>([]);
+
+  useEffect(() => {
+    workShiftService
+      .getList()
+      .then(setShiftList)
+      .catch((e) => {
+        console.error("Tải ca làm việc lỗi:", e);
+        setShiftList([]);
+      });
+
+    // Không có API "lấy tất cả tài khoản" — lấy một trang lớn để phủ hầu hết
+    // công ty vừa và nhỏ. Nếu công ty vượt quá con số này, ô chọn cần thêm
+    // tìm kiếm phía server ở một task sau.
+    nguoiDungService
+      .getAll({ limit: 500 })
+      .then((res) => setUserList(res.data))
+      .catch((e) => {
+        console.error("Tải danh sách tài khoản lỗi:", e);
+        setUserList([]);
+      });
+  }, []);
+
+  const userOptions = useMemo(() => nguoiDungToUserOptions(userList), [userList]);
+  const shiftOptions = useMemo(() => workShiftToOptions(shiftList), [shiftList]);
+
+  return (
+    <div>
+      <Alert
+        type="info"
+        showIcon
+        className="mb-3"
+        message="Thiếu một trong ba mục dưới đây thì nhân viên sẽ không chấm công được."
+      />
+
+      <div className="mb-3">
+        <label className="block mb-1 text-sm font-medium">Tài khoản đăng nhập</label>
+        <Controller
+          name="userId"
+          control={control}
+          render={({ field }) => (
+            <Select
+              {...field}
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              className="w-full"
+              placeholder="Chọn tài khoản trong công ty"
+              options={userOptions}
+              value={field.value || undefined}
+            />
+          )}
+        />
+        <div className="mt-1 text-xs text-gray-500">
+          Bắt buộc để nhân viên tự chấm công và xem bảng công của mình. Hệ thống
+          không tự khớp theo email — phải gán tay. Không gán tài khoản thì nhân
+          viên không tự chấm công được.
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <label className="block mb-1 text-sm font-medium">Ca làm việc</label>
+        <Controller
+          name="workShiftId"
+          control={control}
+          render={({ field }) => (
+            <Select
+              {...field}
+              allowClear
+              className="w-full"
+              placeholder="Chọn ca"
+              options={shiftOptions}
+              value={field.value || undefined}
+            />
+          )}
+        />
+        <div className="mt-1 text-xs text-gray-500">
+          Không gán ca thì vẫn chấm công được nhưng hệ thống không tính đi muộn
+          / về sớm.
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <label className="block mb-1 text-sm font-medium">
+          Ngày làm việc trong tuần
+        </label>
+        <Controller
+          name="ngayLamViecTrongTuan"
+          control={control}
+          render={({ field }) => (
+            <Checkbox.Group
+              options={NGAY_TRONG_TUAN_OPTIONS}
+              value={field.value || []}
+              onChange={field.onChange}
+            />
+          )}
+        />
+        <div className="mt-1 text-xs text-gray-500">
+          Bỏ trống nghĩa là chưa cấu hình — hệ thống sẽ không coi ngày nào là
+          ngày nghỉ (không phải nghỉ tất cả các ngày).
+        </div>
+      </div>
+    </div>
+  );
+}

@@ -39,6 +39,9 @@ export interface Employee {
   nguoiPhuThuoc?: NguoiPhuThuoc[];
   lienHeKhanCap?: LienHeKhanCap;
   isActive: boolean;
+  userId?: string;
+  workShiftId?: string;
+  ngayLamViecTrongTuan?: number[];
 }
 
 export interface EmployeeFilter {
@@ -65,6 +68,9 @@ export interface CreateEmployeeDto {
   bangCap?: BangCap[];
   nguoiPhuThuoc?: NguoiPhuThuoc[];
   lienHeKhanCap?: LienHeKhanCap;
+  userId?: string;
+  workShiftId?: string;
+  ngayLamViecTrongTuan?: number[];
 }
 
 export type UpdateEmployeeDto = Partial<CreateEmployeeDto>;
@@ -129,6 +135,9 @@ class EmployeeService extends ServiceBase {
       nguoiPhuThuoc: (x.nguoiPhuThuoc as NguoiPhuThuoc[]) ?? undefined,
       lienHeKhanCap: (x.lienHeKhanCap as LienHeKhanCap) ?? undefined,
       isActive: (x.isActive as boolean) ?? true,
+      userId: x.userId as string | undefined,
+      workShiftId: x.workShiftId as string | undefined,
+      ngayLamViecTrongTuan: x.ngayLamViecTrongTuan as number[] | undefined,
     };
   }
 }

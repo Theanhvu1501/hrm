@@ -9,6 +9,7 @@ import { CreateEmployeeDto, Employee } from "@/services/employeeService";
 import { CaNhanTab } from "./tabs/CaNhanTab";
 import { BangCapGiaCanhTab } from "./tabs/BangCapGiaCanhTab";
 import { CongViecTab } from "./tabs/CongViecTab";
+import { ChamCongTab } from "./tabs/ChamCongTab";
 import { HoSoNhanVienFormValues } from "./HoSoNhanVienForm.state";
 import "./HoSoNhanVienForm.state";
 
@@ -28,6 +29,9 @@ const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   ngayVaoLam: "",
   loaiHopDong: "thu_viec",
   trangThai: "dang_lam_viec",
+  userId: undefined,
+  workShiftId: undefined,
+  ngayLamViecTrongTuan: [],
 };
 
 function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
@@ -49,6 +53,9 @@ function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
     ngayVaoLam: employee.ngayVaoLam || "",
     loaiHopDong: employee.loaiHopDong || "thu_viec",
     trangThai: employee.trangThai || "dang_lam_viec",
+    userId: employee.userId,
+    workShiftId: employee.workShiftId,
+    ngayLamViecTrongTuan: employee.ngayLamViecTrongTuan || [],
   };
 }
 
@@ -95,6 +102,14 @@ export function HoSoNhanVienForm() {
       trangThai: values.trangThai,
       bangCap: (values.bangCap || []).filter((b) => b.ten?.trim()),
       nguoiPhuThuoc: (values.nguoiPhuThuoc || []).filter((n) => n.hoTen?.trim()),
+      userId: values.userId || undefined,
+      workShiftId: values.workShiftId || undefined,
+      // Luôn gửi mảng (kể cả rỗng) — khác với các trường chuỗi tuỳ chọn ở
+      // trên, nếu gửi `undefined` thì JSON.stringify sẽ bỏ hẳn khoá này và
+      // BE sẽ không cập nhật gì (merge-on-update), nên bỏ tick hết ngày rồi
+      // lưu sẽ không xoá được cấu hình cũ. Gửi `[]` để đúng nghĩa "chưa cấu
+      // hình" mà brief yêu cầu, cùng cách bangCap/nguoiPhuThuoc đang làm.
+      ngayLamViecTrongTuan: values.ngayLamViecTrongTuan || [],
     };
 
     if (isEditing && editingEmployee) {
@@ -112,6 +127,7 @@ export function HoSoNhanVienForm() {
       children: <BangCapGiaCanhTab />,
     },
     { key: "cong-viec", label: "Công việc", children: <CongViecTab /> },
+    { key: "cham-cong", label: "Chấm công", children: <ChamCongTab /> },
   ];
 
   return (
