@@ -48,6 +48,7 @@ function loiBackend(status: number, code: string, message: string) {
 function homNayMau(over: Partial<TrangThaiHomNay> = {}): TrangThaiHomNay {
   return {
     ngay: '2026-07-22',
+    ngayCong: '2026-07-22',
     nhanVien: { id: 'emp-1', hoTen: 'Nguyễn Văn Hải', employeeCode: 'NV0001' },
     ca: {
       id: 'ca-1',
@@ -155,6 +156,50 @@ describe('Chấm công của tôi — đường hạnh phúc', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Chấm công RA/ }));
 
     await waitFor(() => expect(checkOut).toHaveBeenCalledTimes(1));
+  });
+});
+
+/**
+ * Ca 22:00–06:00, nhân viên mở app lúc 00:30. Trước đây danh sách lọc theo
+ * ngày lịch hôm nay còn nút suy từ bản ghi cuối bất kể ngày, nên màn hình tự
+ * mâu thuẫn: nút "Chấm công RA" nằm ngay trên dòng "Chưa có lượt chấm công
+ * nào" — đọc như hệ thống vừa mất dữ liệu. Hai phần phải kể cùng một câu
+ * chuyện.
+ */
+describe('Chấm công của tôi — ca qua đêm', () => {
+  it('lượt vào mở từ hôm trước: hiện đúng lượt đó, KHÔNG báo rỗng', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
+      homNayMau({
+        ngay: '2026-07-23',
+        ngayCong: '2026-07-22',
+        hanhDongKeTiep: 'ra',
+        banGhi: [
+          banGhiMau({
+            ngay: '2026-07-22',
+            loai: 'vao',
+            thoiDiem: '2026-07-22T15:02:00.000Z', // 22:02 giờ VN
+            soPhutDiMuon: 2,
+          }),
+        ],
+      }),
+    );
+
+    render(<ChamCongCuaToiPage />);
+
+    expect(await screen.findByRole('button', { name: /Chấm công RA/ })).toBeTruthy();
+    expect(screen.queryByText('Chưa có lượt chấm công nào')).toBeNull();
+    // Tiêu đề nói rõ đây là ca của ngày công hôm trước, không đề "Hôm nay".
+    expect(screen.getByText(/Ca ngày 2026-07-22 \(chưa kết thúc\)/)).toBeTruthy();
+  });
+
+  it('ngày thường vẫn đề "Hôm nay"', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
+      homNayMau({ banGhi: [banGhiMau()] }),
+    );
+
+    render(<ChamCongCuaToiPage />);
+
+    expect(await screen.findByText(/Hôm nay 2026-07-22/)).toBeTruthy();
   });
 });
 

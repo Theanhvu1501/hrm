@@ -61,7 +61,14 @@ export interface AttendanceRecord {
 }
 
 export interface TrangThaiHomNay {
+  /** Ngày lịch hôm nay theo giờ VN. */
   ngay: string;
+  /**
+   * NGÀY CÔNG mà `hanhDongKeTiep` và `banGhi` đang nói tới — khác `ngay` khi
+   * đang có một lượt vào của ca qua đêm mở từ ngày hôm trước. Xem
+   * `BanGhiChamCong_Service.homNay()`.
+   */
+  ngayCong: string;
   nhanVien: { id: string; hoTen: string; employeeCode?: string };
   ca: {
     id: string;
@@ -115,6 +122,9 @@ class AttendanceRecordService extends ServiceBase {
     const res = await super.get<Record<string, any>>({ endpoint: '/hom-nay' });
     return {
       ngay: res.ngay,
+      // Lùi về `ngay` để màn hình không vỡ nếu chạy với backend cũ chưa có
+      // trường này (giao diện chỉ mất phần xưng hô riêng cho ca qua đêm).
+      ngayCong: res.ngayCong ?? res.ngay,
       nhanVien: res.nhanVien,
       ca: res.ca ?? null,
       hanhDongKeTiep: res.hanhDongKeTiep,

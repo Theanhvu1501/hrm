@@ -525,6 +525,64 @@ describe('BanGhiChamCong_Service', () => {
       const kq = await service.homNay(USER);
       expect(kq.hanhDongKeTiep).toBe('vao');
     });
+
+    /**
+     * Ca qua đêm 22:00–06:00, nhân viên mở app lúc 00:30.
+     *
+     * Trước đây `banGhi` lọc theo ngày lịch HÔM NAY còn `hanhDongKeTiep` suy
+     * từ bản ghi cuối bất kể ngày, nên hai phần nói ngược nhau: nút hiện
+     * "Chấm công RA" mà ngay dưới là "Chưa có lượt chấm công nào" — đọc như
+     * hệ thống vừa mất dữ liệu, trong khi lượt vào vẫn còn nguyên ở ngày
+     * công hôm trước.
+     */
+    it('ca qua đêm: danh sách hiện đúng lượt vào của ngày công đang mở, không rỗng', async () => {
+      const luotVao = {
+        loai: 'vao',
+        ngay: homQuaVN(),
+        thoiDiem: new Date(Date.now() - 2.5 * 3600 * 1000).toISOString(),
+      };
+      // Lần find đầu = banGhiCuoiCung (DESC, take 1); lần sau = danh sách
+      // bản ghi của ngày công.
+      recordRepo.find
+        .mockResolvedValueOnce([luotVao])
+        .mockResolvedValueOnce([luotVao]);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.hanhDongKeTiep).toBe('ra');
+      expect(kq.ngayCong).toBe(homQuaVN());
+      expect(kq.banGhi).toHaveLength(1);
+      // Truy vấn danh sách phải hỏi đúng ngày công đang mở, không phải hôm nay.
+      expect(recordRepo.find).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          where: { employeeId: 'emp-1', ngay: homQuaVN(), isActive: true },
+        }),
+      );
+    });
+
+    it('ngày thường: ngayCong trùng ngày lịch hôm nay', async () => {
+      recordRepo.find.mockResolvedValue([]);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.ngay).toBe(homNayVN());
+      expect(kq.ngayCong).toBe(homNayVN());
+    });
+
+    it('lượt vao quá hạn không kéo ngayCong về quá khứ — nút hiện "vao" thì danh sách cũng là của hôm nay', async () => {
+      recordRepo.find.mockResolvedValue([
+        {
+          loai: 'vao',
+          ngay: '2026-07-20',
+          thoiDiem: '2026-07-20T01:00:00.000Z',
+        },
+      ]);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.hanhDongKeTiep).toBe('vao');
+      expect(kq.ngayCong).toBe(homNayVN());
+    });
   });
 
   describe('hrNhap', () => {

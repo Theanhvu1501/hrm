@@ -12,8 +12,20 @@ export function LichSuHomNay() {
 
   if (!homNay) return null;
 
+  /**
+   * Ca qua đêm: lúc 00:30, lượt vào lúc 22:00 thuộc NGÀY CÔNG hôm trước nên
+   * `ngayCong !== ngay`. Backend đã trả đúng bản ghi của ngày công đó (xem
+   * `BanGhiChamCong_Service.homNay()`), việc còn lại của giao diện là gọi
+   * tên cho đúng — đề "Hôm nay 00:30" lên một lượt vào từ hôm trước sẽ đọc
+   * như sai dữ liệu, y hệt cái bẫy mà thay đổi này đang gỡ.
+   */
+  const caQuaDemTuHomTruoc = homNay.ngayCong !== homNay.ngay;
+  const tieuDe = caQuaDemTuHomTruoc
+    ? `Ca ngày ${homNay.ngayCong} (chưa kết thúc)`
+    : `Hôm nay ${homNay.ngay}`;
+
   return (
-    <Card title={`Hôm nay ${homNay.ngay}`} size="small">
+    <Card title={tieuDe} size="small">
       {homNay.banGhi.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}

@@ -370,15 +370,38 @@ export class BanGhiChamCong_Service {
     const ngay = ngayVN(bayGio);
     const ca = await this.layCa(emp);
 
+    const cuoi = await this.banGhiCuoiCung(employeeId);
+    const dangMoLuotVao = this.luotVaoConHieuLuc(cuoi, bayGio);
+
+    /**
+     * NGÀY CÔNG mà màn hình đang nói tới — không nhất thiết là ngày lịch.
+     *
+     * Ca qua đêm 22:00–06:00: lượt vào lúc 22:00 mang `ngay` của hôm trước
+     * (xem checkOut, dòng `ngay = cuoi.ngay`). Nhân viên mở app lúc 00:30 mà
+     * danh sách vẫn lọc theo ngày lịch hôm nay thì trả về rỗng, trong khi
+     * `hanhDongKeTiep` lại là 'ra' — màn hình hiện "Chưa có lượt chấm công
+     * nào" ngay dưới nút "Chấm công RA", đọc như hệ thống vừa mất dữ liệu.
+     *
+     * Lấy đúng ngày công của lượt vào đang mở để hai phần nói cùng một câu
+     * chuyện. Điều kiện dùng CHUNG `luotVaoConHieuLuc()` với
+     * `hanhDongKeTiep` ngay bên dưới, nên hai thứ không thể lệch nhau: hễ
+     * nút hiện 'ra' thì danh sách là của đúng ngày công đó, hễ nút hiện
+     * 'vao' (kể cả khi có lượt vao treo đã quá hạn) thì danh sách là của
+     * hôm nay.
+     *
+     * `ngay` vẫn giữ nguyên nghĩa "ngày lịch hôm nay" để FE phân biệt được
+     * hai trường hợp và xưng hô cho đúng.
+     */
+    const ngayCong = dangMoLuotVao && cuoi ? cuoi.ngay : ngay;
+
     const banGhi = await this.repo.find({
-      where: { employeeId, ngay, isActive: true },
+      where: { employeeId, ngay: ngayCong, isActive: true },
       order: { thoiDiem: 'ASC' },
     } as any);
 
-    const cuoi = await this.banGhiCuoiCung(employeeId);
-
     return {
       ngay,
+      ngayCong,
       nhanVien: {
         id: employeeId,
         hoTen: emp.hoTen,
@@ -396,7 +419,7 @@ export class BanGhiChamCong_Service {
       // Hành động kế tiếp mà FE nên hiện trên nút lớn. Dùng CHUNG hàm với
       // checkOut: một lượt vao treo từ tuần trước không được phép làm nút
       // hiện "Check-out", vì cú bấm đó sẽ bị chặn ngay bằng 409.
-      hanhDongKeTiep: this.luotVaoConHieuLuc(cuoi, bayGio) ? 'ra' : 'vao',
+      hanhDongKeTiep: dangMoLuotVao ? 'ra' : 'vao',
       banGhi,
     };
   }
