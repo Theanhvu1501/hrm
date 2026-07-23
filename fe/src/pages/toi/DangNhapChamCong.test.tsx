@@ -38,6 +38,10 @@ let diToi: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
+  // sessionStorage.clear() ở đây là bắt buộc: cờ chống-vòng-lặp ở Finding 1
+  // sống trong sessionStorage cả đời tab, nên nếu không dọn, một test trước
+  // đã điều hướng thành công sẽ để lại cờ và làm sai lệch mọi test sau.
+  sessionStorage.clear();
   // KHÔNG spy window.location.assign — jsdom ném "Cannot redefine property".
   diToi = vi.spyOn(dieuHuong, 'diToi').mockImplementation(() => {});
 });
@@ -56,6 +60,12 @@ describe('DangNhapChamCong — phiên còn sống', () => {
 
     ve();
 
+    // Assertion ĐỒNG BỘ, ngay sau render, TRƯỚC bất kỳ await nào: nếu ô mật
+    // khẩu từng chớp qua màn hình lúc đang dò phiên rồi mới điều hướng, chỉ
+    // kiểm tra sau waitFor(diToi) bên dưới sẽ không bao giờ bắt được — lúc đó
+    // component đã ở màn spinner rồi, chớp nháy đã qua.
+    expect(screen.queryByLabelText(/mật khẩu/i)).toBeNull();
+
     await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
     expect(screen.queryByLabelText(/mật khẩu/i)).toBeNull();
     expect(login).not.toHaveBeenCalled();
@@ -70,6 +80,58 @@ describe('DangNhapChamCong — phiên còn sống', () => {
       expect(screen.getByText(/chưa được cấp quyền dùng ứng dụng Nhân sự/i)).toBeTruthy()
     );
     expect(screen.queryByLabelText(/mật khẩu/i)).toBeNull();
+    // Finding 2a: không có danh sách để chọn thì không phải là "Chọn công ty".
+    expect(screen.queryByText('Chọn công ty')).toBeNull();
+  });
+
+  /**
+   * Finding 2b: danh sách rỗng từng là ngõ cụt tuyệt đối — phiên identity vẫn
+   * sống nên reload cũng chỉ quay lại đúng màn báo lỗi này. Ai lỡ đăng nhập
+   * nhầm tài khoản trên thiết bị mượn sẽ kẹt tới khi tự tay xoá cookie.
+   */
+  it('không có công ty nào → có nút "Đăng nhập tài khoản khác", bấm thì đăng xuất và quay lại ô mật khẩu', async () => {
+    vi.spyOn(identity, 'identityTenants').mockResolvedValue([]);
+    const logout = vi.spyOn(identity, 'identityLogout').mockResolvedValue(undefined);
+
+    ve();
+
+    await waitFor(() =>
+      expect(screen.getByText(/chưa được cấp quyền dùng ứng dụng Nhân sự/i)).toBeTruthy()
+    );
+    const nutDangXuat = screen.getByRole('button', { name: /đăng nhập tài khoản khác/i });
+    expect(screen.queryByLabelText(/mật khẩu/i)).toBeNull();
+
+    fireEvent.click(nutDangXuat);
+
+    await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByLabelText(/mật khẩu/i)).toBeTruthy());
+  });
+});
+
+describe('DangNhapChamCong — chặn vòng lặp reload khi tự động điều hướng', () => {
+  /**
+   * Finding 1. Kịch bản thật: `diToi` là full page reload; nếu sau reload
+   * backend hrm lỗi, guard đá người dùng ngược lại đúng màn này — phiên
+   * identity vẫn sống nên nó tự động thử điều hướng lại, thành vòng lặp
+   * reload vô hạn. Mô phỏng "quay lại tab cũ sau khi bị đá" bằng cách unmount
+   * rồi render lại: sessionStorage (không bị beforeEach dọn giữa 2 lần render
+   * trong CÙNG một test) phải còn nhớ là đã thử 1 lần.
+   */
+  it('đã điều hướng 1 lần trong tab rồi thì lần render sau không điều hướng lại nữa', async () => {
+    vi.spyOn(identity, 'identityTenants').mockResolvedValue([A]);
+    vi.spyOn(identity, 'refreshFromIdentity').mockResolvedValue('token-moi');
+
+    const lanDau = ve();
+    await waitFor(() => expect(diToi).toHaveBeenCalledTimes(1));
+    lanDau.unmount();
+
+    diToi.mockClear();
+    ve();
+
+    await waitFor(() =>
+      expect(screen.getByText(/Không vào được màn chấm công/i)).toBeTruthy()
+    );
+    expect(diToi).not.toHaveBeenCalled();
   });
 });
 
