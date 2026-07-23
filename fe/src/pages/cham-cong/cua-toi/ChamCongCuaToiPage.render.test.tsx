@@ -16,6 +16,8 @@ import {
   TrangThaiHomNay,
 } from '@/services/attendanceRecordService';
 import { ApiError, ApiErrorType } from '@/config/api';
+import { bayNgayTu, dauTuanCua } from './lichTuan';
+import { homNayVN } from '@/ultils/thoiGianVN';
 
 beforeAll(() => {
   const w = window as unknown as Record<string, unknown>;
@@ -510,6 +512,65 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
     await waitFor(() => expect(cuaToi).toHaveBeenCalled());
 
     consoleError.mockRestore();
+  });
+
+  /**
+   * Finding 2a: tới giờ chỉ có nhánh LỖI của `napTuan` được khoá bằng test
+   * (dải toàn xám). Chưa có gì chứng minh rằng bản ghi NẠP ĐƯỢC thật sự tô
+   * đúng màu — đúng thứ sẽ bắt được kiểu lỗi ở Finding 1 (dải đứng yên với
+   * dữ liệu cũ trong khi ba ô trạng thái đã đổi).
+   */
+  it('tuần nạp được: đủ vào+ra tô xanh, chỉ có vào tô đỏ', async () => {
+    const dauTuan = dauTuanCua(homNayVN());
+    const ngay = bayNgayTu(dauTuan);
+
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+    vi.spyOn(attendanceRecordService, 'cuaToi').mockResolvedValue([
+      banGhiMau({ id: 'w1', ngay: ngay[0], loai: 'vao' }),
+      banGhiMau({ id: 'w2', ngay: ngay[0], loai: 'ra' }),
+      banGhiMau({ id: 'w3', ngay: ngay[1], loai: 'vao' }),
+    ]);
+
+    const { container } = render(<ChamCongCuaToiPage />);
+
+    await waitFor(() => expect(screen.getByText(/Chấm công/)).toBeTruthy());
+    const cham = container.querySelectorAll('.rounded-full');
+    expect(cham).toHaveLength(7);
+    // Có vào + ra trong ngày → xanh (var(--emp-accent)); ngày kế chỉ có vào,
+    // chưa ra → đỏ (var(--emp-danger)). Đây là hai màu người dùng phân biệt
+    // được "đã xong ca" với "đang mở ca", nên phải đúng ô đúng màu.
+    await waitFor(() =>
+      expect((cham[0] as HTMLElement).style.background).toBe('var(--emp-accent)'),
+    );
+    expect((cham[1] as HTMLElement).style.background).toBe('var(--emp-danger)');
+  });
+});
+
+/**
+ * Finding 1: `taiLaiHomNay()` chỉ nạp lại ba ô trạng thái, KHÔNG có gì nạp
+ * lại dải lịch tuần — nên sau một cú chấm công thành công, ba ô trạng thái
+ * đổi (VD "08:02 / Chờ ra") trong khi chấm hôm nay trên dải tuần vẫn đứng
+ * yên với dữ liệu cũ (xám). Xoá đoạn `napTuan` trong `cham.handler.ts` là
+ * test này FAIL ngay — `cuaToi` sẽ chỉ được gọi 1 lần lúc mount.
+ */
+describe('Chấm công của tôi — dải lịch tuần đồng bộ sau khi chấm công', () => {
+  it('chấm công VÀO thành công → nạp lại lịch tuần (cuaToi được gọi thêm lần nữa)', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+    vi.spyOn(attendanceRecordService, 'checkIn').mockResolvedValue(banGhiMau());
+    const cuaToi = vi.spyOn(attendanceRecordService, 'cuaToi').mockResolvedValue([]);
+
+    render(<ChamCongCuaToiPage />);
+
+    // Lần nạp đầu tiên là lúc `init` mount trang.
+    await waitFor(() => expect(cuaToi).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công VÀO/ }));
+
+    expect(await screen.findByText(/Đã chấm công vào thành công/)).toBeTruthy();
+    // Lần nạp thứ hai phải xảy ra SAU khi chấm công thành công — nếu không,
+    // dải lịch tuần và ba ô trạng thái kể hai câu chuyện khác nhau về cùng
+    // một cú bấm.
+    await waitFor(() => expect(cuaToi).toHaveBeenCalledTimes(2));
   });
 });
 

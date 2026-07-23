@@ -57,6 +57,16 @@ export class ChamHandler extends CSubHanlder {
       this.setState("banGhiVuaTao", banGhi);
       this.setState("trangThai", TrangThai.SAN_SANG);
       await this.taiLaiHomNay();
+      // Dải lịch tuần được nạp một lần lúc mount và không tự nghe theo
+      // `homNay` — nếu không nạp lại ở đây, ba ô trạng thái vừa đổi thành
+      // "08:02 / Chờ ra" trong khi chấm hôm nay trên dải tuần VẪN XÁM, hai
+      // khối kể hai câu chuyện khác nhau về đúng một hành động vừa bấm.
+      // Không truyền `tuanBatDau`: nếu người dùng đang xem tuần trước rồi
+      // mới bấm chấm công (hiếm nhưng có thể), họ cần được đưa về tuần chứa
+      // lượt chấm vừa tạo, không phải tuần đang xem dở. `napTuan` tự nuốt lỗi
+      // của nó (xem tuan.handler.ts) nên await ở đây không thể làm hỏng
+      // trạng thái chấm công vừa ghi nhận thành công.
+      await this.executeEvent("napTuan", {});
     } catch (error) {
       console.error("Chấm công lỗi:", error);
       // LoiViTri là lỗi của thiết bị người dùng, chưa hề gọi API — không được

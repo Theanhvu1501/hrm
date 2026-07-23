@@ -40,7 +40,13 @@ export enum TrangThai {
   LOI_KHAC = 'loi_khac',
 }
 
-function layStatus(err: unknown): number | undefined {
+/**
+ * Bóc mã HTTP status từ một lỗi API, dù đã bọc qua `ApiError` hay còn
+ * nguyên response gốc. Xuất ra để các màn hình khác (vd `TaiKhoanPage`) dùng
+ * chung, thay vì mỗi nơi tự đoán một kiểu — 404 nghĩa là "chưa liên kết hồ
+ * sơ" ở đây và cả những nơi khác gọi cùng API này.
+ */
+export function layStatus(err: unknown): number | undefined {
   if (err instanceof ApiError && err.statusCode) return err.statusCode;
   const goc = err instanceof ApiError ? (err.originalError as unknown) : err;
   return (goc as { response?: { status?: number } })?.response?.status;

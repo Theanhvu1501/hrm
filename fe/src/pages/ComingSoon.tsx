@@ -57,6 +57,13 @@ const pathTitles: Record<string, string> = {
   "/chinh-sach": "Chính sách",
   "/bieu-mau": "Biểu mẫu",
   "/huong-dan": "Hướng dẫn",
+
+  // Vỏ ứng dụng nhân viên (phase 3.3) — 2 trong 4 tab đáy còn là "Sắp ra
+  // mắt" đúng mockup; thiếu ở đây thì cả hai hiện tiêu đề chung "Tính năng".
+  // Đơn từ: xin nghỉ phép, làm thêm giờ, nghỉ bù (đã có spec riêng, chưa nối
+  // vào tab này).
+  "/toi/don-tu": "Đơn từ",
+  "/toi/bang-cong": "Bảng công",
 };
 
 const ComingSoon: React.FC = () => {

@@ -11,6 +11,7 @@ import {
   employeeDeviceService,
   EmployeeDevice,
 } from "@/services/employeeDeviceService";
+import { layStatus } from "@/pages/cham-cong/cua-toi/trangThai";
 
 const NHAN_TRANG_THAI: Record<string, { nhan: string; mau: string }> = {
   cho_duyet: { nhan: "Chờ duyệt", mau: "gold" },
@@ -31,7 +32,12 @@ export default function TaiKhoanPage() {
   const navigate = useNavigate();
   const [homNay, setHomNay] = useState<TrangThaiHomNay | null>(null);
   const [chuaLienKet, setChuaLienKet] = useState(false);
+  // Rớt mạng, 500, hay token hết hạn KHÔNG phải là "chưa gắn hồ sơ" — chỉ
+  // status 404 từ resolveEmployeeFromUser mới có nghĩa đó. Gộp chung sẽ đẩy
+  // nhân viên đi báo HR một chuyện HR không sửa được.
+  const [loiTaiThongTin, setLoiTaiThongTin] = useState(false);
   const [thietBi, setThietBi] = useState<EmployeeDevice[]>([]);
+  const [loiTaiThietBi, setLoiTaiThietBi] = useState(false);
 
   useEffect(() => {
     attendanceRecordService
@@ -42,12 +48,19 @@ export default function TaiKhoanPage() {
         // ngày đầu. Màn hình phải còn dùng được — nhất là nút đăng xuất —
         // chứ không được trắng.
         console.error("Tải thông tin nhân viên lỗi:", err);
-        setChuaLienKet(true);
+        if (layStatus(err) === 404) setChuaLienKet(true);
+        else setLoiTaiThongTin(true);
       });
     employeeDeviceService
       .cuaToi()
       .then(setThietBi)
-      .catch((err) => console.error("Tải thiết bị của tôi lỗi:", err));
+      .catch((err) => {
+        // Không tải được KHÔNG đồng nghĩa với "không có thiết bị nào" — một
+        // nhân viên có máy đã được duyệt mà thấy dòng này sẽ tưởng máy mình
+        // bị gỡ.
+        console.error("Tải thiết bị của tôi lỗi:", err);
+        setLoiTaiThietBi(true);
+      });
   }, []);
 
   const hoTen = homNay?.nhanVien.hoTen ?? user?.hoTen ?? "";
@@ -82,6 +95,10 @@ export default function TaiKhoanPage() {
           <div className="mt-2 text-[13px]" style={{ color: "var(--emp-danger)" }}>
             Tài khoản chưa được gắn với hồ sơ nhân viên. Liên hệ HR để được gán.
           </div>
+        ) : loiTaiThongTin ? (
+          <div className="mt-2 text-[13px]" style={{ color: "var(--emp-danger)" }}>
+            Không tải được thông tin nhân viên. Thử tải lại trang.
+          </div>
         ) : (
           <div className="mt-1 text-[13px] text-[color:var(--emp-text-phu)]">
             {[homNay?.phongBan, homNay?.nhanVien.employeeCode]
@@ -95,7 +112,11 @@ export default function TaiKhoanPage() {
         <div className="border-b border-[color:var(--emp-border)] px-5 py-3 text-[13px] font-semibold text-[color:var(--emp-text-phu)]">
           📱 Thiết bị của tôi
         </div>
-        {thietBi.length === 0 ? (
+        {loiTaiThietBi ? (
+          <div className="px-5 py-4 text-[13px]" style={{ color: "var(--emp-danger)" }}>
+            Không tải được danh sách thiết bị. Thử tải lại trang.
+          </div>
+        ) : thietBi.length === 0 ? (
           <div className="px-5 py-4 text-[13px] text-[color:var(--emp-muted)]">
             Chưa có thiết bị nào được đăng ký.
           </div>
