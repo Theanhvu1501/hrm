@@ -12,6 +12,8 @@ export class InitHandler extends CSubHanlder {
     this.setState("dangCham", false);
     this.setState("banGhiVuaTao", null);
     this.setState("thongBao", "");
+    this.setState("banGhiTuan", []);
+    this.setState("dangTaiTuan", false);
 
     try {
       const homNay = await attendanceRecordService.homNay();
@@ -27,5 +29,10 @@ export class InitHandler extends CSubHanlder {
       this.setState("thongBao", thongDiepChoTrangThai(tt, error));
       this.setState("homNay", null);
     }
+
+    // Nạp lịch tuần SAU khi trạng thái chính đã xong và KHÔNG await chung
+    // khối try ở trên: lịch tuần hỏng thì chỉ mất lịch tuần, nút chấm công
+    // vẫn phải dùng được.
+    void this.executeEvent("napTuan", {});
   }
 }

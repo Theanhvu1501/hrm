@@ -110,6 +110,10 @@ function tuChoiGps() {
 
 beforeEach(() => {
   capGps();
+  // init() giờ bắn napTuan() ngay khi mount. Các test ở đây khoá 7 nhánh
+  // trạng thái của nút chấm công, không quan tâm lịch tuần — mock để không
+  // tạo request thật (và không log lỗi network) trên mỗi test.
+  vi.spyOn(attendanceRecordService, 'cuaToi').mockResolvedValue([]);
 });
 
 afterEach(() => {
