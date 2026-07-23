@@ -6,6 +6,8 @@ export interface LichTuanStates extends BaseStates {
   tuanBatDau: string;
   banGhiTuan: AttendanceRecord[];
   dangTaiTuan: boolean;
+  /** Ngày đang được xem trong dải tuần (3 ô + chi tiết đi theo ngày này). */
+  ngayDangXem: string;
 }
 
 declare module "../chamCongCuaToiHandler" {

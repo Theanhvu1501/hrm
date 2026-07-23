@@ -1,14 +1,23 @@
 import { useChamCongCuaToiState } from "../ChamCongCuaToiHandlerContext";
-import { TrangThaiHomNay } from "@/services/attendanceRecordService";
+import { AttendanceRecord, TrangThaiHomNay } from "@/services/attendanceRecordService";
+import { homNayVN } from "@/ultils/thoiGianVN";
 import { baOTrangThai } from "../oTrangThai";
+import { duLieuNgay } from "../ngayDangXem";
 import "./NutCham.state";
+import "./LichTuan.state";
 
 /** Ba ô: giờ vào · giờ ra · công. Xanh = xong, đỏ = chưa. */
 export function BaOTrangThai() {
   const [homNay] = useChamCongCuaToiState("homNay", null as TrangThaiHomNay | null);
+  const [ngayDangXem] = useChamCongCuaToiState("ngayDangXem", homNayVN());
+  const [banGhiTuan] = useChamCongCuaToiState("banGhiTuan", [] as AttendanceRecord[]);
   if (!homNay) return null;
 
-  const o = baOTrangThai(homNay);
+  // 3 ô đi theo NGÀY ĐANG XEM, không phải luôn luôn hôm nay — nhưng hôm nay
+  // vẫn lấy từ `homNay` (tươi nhất), không từ `banGhiTuan` (dl.laHomNay lo
+  // việc đó bên trong duLieuNgay()).
+  const dl = duLieuNgay(ngayDangXem, homNayVN(), homNay, banGhiTuan);
+  const o = baOTrangThai({ ...homNay, banGhi: dl.banGhi, soCong: dl.soCong });
 
   return (
     <div className="mb-4 grid grid-cols-3 gap-2">

@@ -1,7 +1,9 @@
 import { useChamCongCuaToiState } from "../ChamCongCuaToiHandlerContext";
-import { TrangThaiHomNay } from "@/services/attendanceRecordService";
-import { gioVN } from "@/ultils/thoiGianVN";
+import { AttendanceRecord, TrangThaiHomNay } from "@/services/attendanceRecordService";
+import { gioVN, homNayVN } from "@/ultils/thoiGianVN";
+import { duLieuNgay } from "../ngayDangXem";
 import "./NutCham.state";
+import "./LichTuan.state";
 
 /**
  * CHỈ hiện phương thức khi biết chắc. `phuongThuc` là optional, và bản ghi
@@ -25,25 +27,40 @@ const NHAN_PHUONG_THUC: Record<string, string> = {
  */
 export function ChiTietChamCong() {
   const [homNay] = useChamCongCuaToiState("homNay", null as TrangThaiHomNay | null);
+  const [ngayDangXem] = useChamCongCuaToiState("ngayDangXem", homNayVN());
+  const [banGhiTuan] = useChamCongCuaToiState("banGhiTuan", [] as AttendanceRecord[]);
   if (!homNay) return null;
 
-  const caQuaDemTuHomTruoc = homNay.ngayCong !== homNay.ngay;
+  // Khối chi tiết đi theo NGÀY ĐANG XEM; hôm nay lấy từ `homNay` (tươi nhất
+  // — xem duLieuNgay()), ngày khác lấy từ `banGhiTuan`.
+  const dl = duLieuNgay(ngayDangXem, homNayVN(), homNay, banGhiTuan);
+
+  const caQuaDemTuHomTruoc = dl.laHomNay && homNay.ngayCong !== homNay.ngay;
   const tieuDe = caQuaDemTuHomTruoc
     ? `Chi tiết ca ngày ${homNay.ngayCong} (chưa kết thúc)`
-    : "Chi tiết chấm công";
+    : dl.laHomNay
+      ? "Chi tiết chấm công"
+      : `Chi tiết ngày ${ngayDangXem}`;
 
   return (
     <details className="emp-card mt-4">
       <summary className="cursor-pointer list-none px-4 py-3 text-[13px] font-semibold text-[color:var(--emp-text-phu)]">
         📋 {tieuDe}
       </summary>
+      {!dl.laHomNay && (
+        // Nút chấm công luôn của hôm nay bất kể đang xem ngày nào — nhắc rõ
+        // để người dùng không tưởng nhầm mình sắp chấm công cho ngày này.
+        <div className="px-4 pb-2 text-[12px] text-[color:var(--emp-muted)]">
+          Đang xem ngày khác — nút chấm công vẫn của hôm nay.
+        </div>
+      )}
       <div className="px-4 pb-3.5">
-        {homNay.banGhi.length === 0 ? (
+        {dl.banGhi.length === 0 ? (
           <div className="py-4 text-center text-[13px] text-[color:var(--emp-muted)]">
             Chưa có lượt chấm công nào
           </div>
         ) : (
-          homNay.banGhi.map((b) => (
+          dl.banGhi.map((b) => (
             <div
               key={b.id}
               className="flex items-center justify-between border-t border-[color:var(--emp-border)] py-2.5 first:border-t-0"

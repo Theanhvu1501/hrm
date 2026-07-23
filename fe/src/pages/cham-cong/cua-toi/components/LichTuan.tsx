@@ -23,12 +23,13 @@ export function LichTuan() {
   const [tuanBatDau] = useChamCongCuaToiState("tuanBatDau", dauTuanCua(homNayVN()));
   const [banGhiTuan] = useChamCongCuaToiState("banGhiTuan", [] as AttendanceRecord[]);
   const [dangTaiTuan] = useChamCongCuaToiState("dangTaiTuan", false);
+  const homNay = homNayVN();
+  const [ngayDangXem] = useChamCongCuaToiState("ngayDangXem", homNay);
 
   if (!homNayTrangThai) return null;
 
   const ngay = bayNgayTu(tuanBatDau);
   const theoNgay = gomTheoNgay(banGhiTuan);
-  const homNay = homNayVN();
 
   return (
     <div className="emp-card mb-4 p-3">
@@ -61,15 +62,27 @@ export function LichTuan() {
       <div className="grid grid-cols-7 gap-1">
         {ngay.map((n, i) => {
           const laHomNay = n === homNay;
+          const dangChon = n === ngayDangXem;
+          // "Hôm nay" (nền + outline accent) và "đang chọn" (viền riêng) là hai
+          // khái niệm khác nhau — bấm sang ngày khác vẫn phải thấy được đâu là
+          // hôm nay thật, không chỉ đâu là ngày đang xem.
+          const style: React.CSSProperties = laHomNay
+            ? { background: "var(--emp-accent-nhat)", outline: "1.5px solid var(--emp-accent)" }
+            : {};
+          if (dangChon && !laHomNay) {
+            style.border = "1.5px solid var(--emp-text)";
+          }
           return (
-            <div
+            <button
               key={n}
-              className="rounded-lg py-1.5 text-center"
-              style={
-                laHomNay
-                  ? { background: "var(--emp-accent-nhat)", outline: "1.5px solid var(--emp-accent)" }
-                  : undefined
-              }
+              type="button"
+              aria-label={String(Number(n.slice(8, 10)))}
+              aria-pressed={dangChon}
+              // Mockup cho .week-day `cursor: pointer` (dòng 71) — mỗi ngày
+              // phải bấm được để xem lịch sử ngày đó, không chỉ hai nút ‹ ›.
+              onClick={() => handler.executeEvent("chonNgay", { ngay: n })}
+              className="rounded-lg border-0 bg-transparent py-1.5 text-center"
+              style={style}
             >
               <div className="mb-0.5 text-[10px] text-[color:var(--emp-muted)]">{TEN_THU[i]}</div>
               <div className="mb-1 text-[13px] font-semibold">{Number(n.slice(8, 10))}</div>
@@ -77,7 +90,7 @@ export function LichTuan() {
                 className="mx-auto h-1.5 w-1.5 rounded-full"
                 style={{ background: MAU[mauChamNgay(theoNgay[n])] }}
               />
-            </div>
+            </button>
           );
         })}
       </div>

@@ -147,6 +147,10 @@ describe('Chấm công của tôi — đường hạnh phúc', () => {
     expect(dto.deviceId).toBeTruthy();
     // Tên máy luôn được gửi kèm để dòng chờ duyệt tự sinh của BE không trống.
     expect(dto.tenThietBi).toBeTruthy();
+    // Ca fixture: banGhi rỗng, soCong 0 → chưa đủ công, KHÔNG được hiện dòng
+    // nhắc "bấm lại nếu cần cập nhật giờ ra". Thay điều kiện `daDuCong` bằng
+    // `true` sẽ làm test này đỏ.
+    expect(screen.queryByText(/bấm lại nếu cần cập nhật giờ ra/)).toBeNull();
   });
 
   it('tin hanhDongKeTiep của backend: "ra" → bấm nút gọi checkOut', async () => {
@@ -192,12 +196,20 @@ describe('Chấm công của tôi — ca qua đêm', () => {
       }),
     );
 
-    render(<ChamCongCuaToiPage />);
+    const { container } = render(<ChamCongCuaToiPage />);
 
     expect(await screen.findByRole('button', { name: /Chấm công$/ })).toBeTruthy();
     expect(screen.queryByText('Chưa có lượt chấm công nào')).toBeNull();
     // Tiêu đề nói rõ đây là ca của ngày công hôm trước, không đề ngày hôm nay.
     expect(screen.getByText(/Chi tiết ca ngày 2026-07-22 \(chưa kết thúc\)/)).toBeTruthy();
+    // Fixture chỉ có MỘT lượt vào → chưa đủ công, không được hiện dòng nhắc
+    // "bấm lại nếu cần cập nhật giờ ra". Thay điều kiện `daDuCong` bằng
+    // `true` sẽ làm test này đỏ.
+    expect(screen.queryByText(/bấm lại nếu cần cập nhật giờ ra/)).toBeNull();
+    // hanhDongKeTiep là "ra" → nút phải mang icon logout (cam/RA), không
+    // phải icon login (teal/VÀO). Nhãn nút giờ chỉ còn "Chấm công" nên chỉ
+    // icon (và màu) còn nói được chiều chấm công.
+    expect(container.querySelector('.anticon-logout')).toBeTruthy();
   });
 
   it('ngày thường thì khối chi tiết đề tiêu đề chung, không kèm "(chưa kết thúc)"', async () => {
@@ -680,6 +692,63 @@ describe('Chấm công của tôi — nút một nhãn theo mockup, không bao g
     fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     await waitFor(() => expect(screen.getByText(/480m/)).toBeTruthy());
+    expect(screen.getByRole('button', { name: /Chấm công$/ })).toBeTruthy();
+  });
+});
+
+describe('Chấm công của tôi — bấm ngày trong lịch tuần', () => {
+  it('bấm ngày khác trong tuần → 3 ô và chi tiết đổi theo ngày đó', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+
+    // Suy từ tuần THẬT để test không mục theo thời gian. Bản brief chọn cố
+    // định "thứ Ba" (dauTuan + 1) làm ngày bấm — nhưng nếu test chạy đúng
+    // vào thứ Ba thật thì "thứ Ba của tuần" CHÍNH LÀ hôm nay, ngày bấm sẽ
+    // trùng hôm nay và dòng nhắc "Đang xem ngày khác" sẽ không hiện, làm
+    // test đỏ một cách ngẫu nhiên theo ngày trong tuần chạy CI. Ở đây quét
+    // cả 7 ngày của tuần hiện tại, chọn ngày ĐẦU TIÊN khác hôm nay — luôn
+    // tồn tại vì một tuần có 7 ngày và chỉ đúng một ngày là hôm nay.
+    const hienNay = homNayVN();
+    const dauTuan = dauTuanCua(hienNay);
+    let truoc = '';
+    for (let i = 0; i < 7; i += 1) {
+      const d = new Date(`${dauTuan}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + i);
+      const s = d.toISOString().slice(0, 10);
+      if (s !== hienNay) {
+        truoc = s;
+        break;
+      }
+    }
+
+    vi.spyOn(attendanceRecordService, 'cuaToi').mockResolvedValue([
+      {
+        id: 'x1',
+        employeeId: 'e1',
+        ngay: truoc,
+        loai: 'vao',
+        thoiDiem: `${truoc}T02:00:00.000Z`,
+        ngoaiVung: false,
+        soPhutDiMuon: 0,
+        soPhutVeSom: 0,
+        laNgayNghi: false,
+        nguonTao: 'tu_cham',
+      },
+    ]);
+
+    render(<ChamCongCuaToiPage />);
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: new RegExp(`^${Number(truoc.slice(8, 10))}$`),
+      }),
+    );
+
+    await waitFor(() => expect(screen.getByText(/Đang xem ngày khác/i)).toBeTruthy());
+    // Nút chấm công vẫn của hôm nay bất kể đang xem ngày nào. Regex KHÔNG
+    // được neo `^`: tên hỗ trợ tiếp cận của nút gồm cả tên icon
+    // (LoginOutlined/LogoutOutlined tự thêm "login"/"logout" phía trước) rồi
+    // mới tới chữ "Chấm công" — đúng quy ước mọi assertion khác trong file
+    // này đã dùng (`/Chấm công$/`, không neo đầu).
     expect(screen.getByRole('button', { name: /Chấm công$/ })).toBeTruthy();
   });
 });

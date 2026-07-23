@@ -3,6 +3,7 @@ import { CSubHanlder } from "@/common/c-handler/core/sub-handler.ts/sub-handler"
 import { attendanceRecordService } from "@/services/attendanceRecordService";
 import { homNayVN } from "@/ultils/thoiGianVN";
 import { bayNgayTu, dauTuanCua, dichTuan } from "../../lichTuan";
+import { ngayMacDinhCuaTuan } from "../../ngayDangXem";
 import "./tuan.event";
 
 @RegisterHandler("cham-cong-cua-toi-context")
@@ -13,6 +14,9 @@ export class TuanHandler extends CSubHanlder {
     const ngay = bayNgayTu(dau);
 
     this.setState("tuanBatDau", dau);
+    // Đặt TRƯỚC lời gọi mạng: đổi tuần phải thấy 3 ô + chi tiết nhảy về ngày
+    // mặc định của tuần mới ngay lập tức, không đợi round-trip API.
+    this.setState("ngayDangXem", ngayMacDinhCuaTuan(dau, homNayVN()));
     this.setState("dangTaiTuan", true);
 
     try {
@@ -36,5 +40,10 @@ export class TuanHandler extends CSubHanlder {
     await this.executeEvent("napTuan", {
       tuanBatDau: dichTuan(hienTai, params.lech),
     });
+  }
+
+  @HandlerDecorator("chonNgay")
+  async chonNgay(params: { ngay: string }): Promise<void> {
+    this.setState("ngayDangXem", params.ngay);
   }
 }
