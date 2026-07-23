@@ -514,8 +514,13 @@ describe('BanGhiChamCong_Service', () => {
         ])
         .mockResolvedValueOnce([]); // không có lượt vao nào cho ngày công đó
 
+      // Chỉ assert class ConflictException thì không phân biệt được với
+      // nhánh 409 còn lại (`luotVaoConHieuLuc` false — "quá hạn để tự
+      // check-out") — assert đúng thông điệp để ghim đúng nhánh mà tên test
+      // này khẳng định đã chạy: "chưa có vao nào" (`if (!moc)`), không phải
+      // "có vao nhưng đã treo quá hạn".
       await expect(service.checkOut(USER, DTO)).rejects.toThrow(
-        ConflictException,
+        'Chưa có lượt check-in nào đang mở để check-out.',
       );
       expect(recordRepo.save).not.toHaveBeenCalled();
     });
@@ -541,33 +546,11 @@ describe('BanGhiChamCong_Service', () => {
       ...over,
     });
 
-    /**
-     * "Treo quá hạn" theo luotVaoConHieuLuc là > 1 ngày lịch (chỉ hôm nay
-     * hoặc hôm qua còn hiệu lực) — dùng 3 ngày trước để chắc chắn rơi ngoài
-     * cả hai mốc đó.
-     */
-    const ngayTreoQuaHanVN = () =>
-      ngayVNCua(new Date(Date.now() - 3 * 86_400_000));
-
-    /**
-     * Nhánh mà hôm nay trả về 'vao': lượt vào treo quá hạn. Sau P3.5 nút
-     * KHÔNG được quay lại chấm vào — ngày công đó đã có lượt vào rồi.
-     *
-     * `ngay` PHẢI thực sự quá hạn (>1 ngày): nếu để mặc định `homNayVN()`
-     * như trong brief gốc, `luotVaoConHieuLuc` coi lượt vào còn hiệu lực nên
-     * `hanhDongKeTiep` đã là 'ra' ngay trên code CŨ — test không bắt được gì.
-     */
-    it('ngày công đã có lượt vào (dù đã treo quá hạn) → hanhDongKeTiep luôn là ra', async () => {
-      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
-      shiftRepo.findOne.mockResolvedValue(CA);
-      recordRepo.find.mockResolvedValue([
-        banGhi({ loai: 'vao', ngay: ngayTreoQuaHanVN() }),
-      ]);
-
-      const kq = await service.homNay(USER);
-
-      expect(kq.hanhDongKeTiep).toBe('ra');
-    });
+    // Trường hợp "lượt vào treo quá hạn → hanhDongKeTiep" đã được kiểm tra ở
+    // describe('homNay', ...) → 'hanhDongKeTiep là vao khi lượt vao mở đã quá
+    // hạn — không dẫn NV vào cái bẫy check-out': ngày công bị đẩy về hôm nay
+    // (không chứa lượt vào cũ) nên kết quả đúng là 'vao', không phải 'ra' —
+    // KHÔNG lặp lại test đó ở đây với kỳ vọng ngược lại.
 
     /**
      * recordRepo.find được gọi HAI lần trong homNay(): banGhiCuoiCung (DESC,

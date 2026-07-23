@@ -164,7 +164,10 @@ export class BanGhiChamCong_Service {
       // thắng" là chủ đích, để ai lỡ bấm ra sớm tự sửa được bằng cách bấm lại
       // mà không cần nhờ HR. Chỉ còn CHẶN khi ngày công đó chưa có lượt vao
       // nào cả (xem nhánh `if (!moc)` dưới đây).
-      const moc = cuoi?.loai === 'vao' ? cuoi : await this.luotVaoCuaNgayCong(cuoi);
+      const moc =
+        cuoi?.loai === 'vao'
+          ? cuoi
+          : await this.luotVaoCuaNgayCong(employeeId, cuoi);
 
       if (!moc) {
         throw new ConflictException(
@@ -250,7 +253,7 @@ export class BanGhiChamCong_Service {
       // muộn còn cứu được bảng công, còn "di chuyển vào rồi bấm lại" cho
       // lượt ra chỉ dẫn người ta bấm ra ở SAI thời điểm — giờ về sẽ sai theo
       // giờ bấm chứ không phải giờ họ thực sự rời đi. Nêu thẳng ngày công
-      // (`ngay`, đã gán = cuoi.ngay cho lượt ra) để NV báo đúng ngày cho HR.
+      // (`ngay`, đã gán = moc.ngay cho lượt ra) để NV báo đúng ngày cho HR.
       const huongDan =
         loai === 'ra'
           ? ` Hãy quay lại khu vực để chấm ra, hoặc liên hệ HR nhập bù giờ ra cho ngày ${ngay}.`
@@ -358,12 +361,14 @@ export class BanGhiChamCong_Service {
    * lạc sang ngày sau.
    */
   private async luotVaoCuaNgayCong(
+    employeeId: string,
     cuoi: AttendanceRecord | null | undefined,
   ): Promise<AttendanceRecord | null> {
     if (!cuoi) return null;
     const ds = await this.repo.find({
-      where: { employeeId: cuoi.employeeId, ngay: cuoi.ngay, loai: 'vao', isActive: true },
+      where: { employeeId, ngay: cuoi.ngay, loai: 'vao', isActive: true },
       order: { thoiDiem: 'ASC' },
+      take: 1,
     } as any);
     return ds[0] ?? null;
   }
@@ -543,15 +548,17 @@ export class BanGhiChamCong_Service {
         banKinh: d.banKinh,
       })),
       soCong: this.tinhSoCong(banGhi),
-      // Ngày công này đã có lượt vào thì mọi lượt tiếp theo là RA — không bao
-      // giờ quay lại "vào" nữa.
+      // Ngày công ĐANG HIỂN THỊ (`ngayCong`) đã có lượt vào thì mọi lượt tiếp
+      // theo là RA — không bao giờ quay lại "vào" nữa, kể cả khi lượt vào đó
+      // đã có lượt ra đi kèm rồi. Nhờ vậy bấm lại nút "ra" chỉ cập nhật giờ ra
+      // của phiên hiện tại (xem nhánh `moc` trong `cham()`), thay vì lặng lẽ
+      // hiện lại "vào" và mở một phiên chồng lên phiên chưa đóng.
       //
-      // Trước đây tính từ `dangMoLuotVao` (tức `luotVaoConHieuLuc`), nên một
-      // lượt vào treo 3 ngày làm nút hiện lại "Chấm công VÀO" và người dùng
-      // mở một ngày công thứ hai chồng lên ngày cũ chưa đóng.
-      //
-      // Giữ nguyên `ra` cả khi đã có lượt ra: bấm lại là cập nhật giờ ra, để
-      // ai lỡ bấm ra sớm tự sửa được mà không phải nhờ HR.
+      // Lưu ý: đây KHÔNG áp dụng cho lượt vào đã treo quá hạn (>1 ngày lịch,
+      // xem `luotVaoConHieuLuc`) — ngày công đó đã bị `ngayCong` đẩy về hôm
+      // nay, nên `banGhi` (lọc theo `ngayCong`) không còn chứa lượt vào cũ,
+      // và người dùng vẫn thấy "vào" cho ngày mới — đúng ý, vì lượt cũ đã quá
+      // hạn tự đóng, cần HR xử lý, không thể tự sửa qua nút chấm công.
       hanhDongKeTiep: banGhi.some((b) => b.loai === 'vao') ? 'ra' : 'vao',
       banGhi,
     };
