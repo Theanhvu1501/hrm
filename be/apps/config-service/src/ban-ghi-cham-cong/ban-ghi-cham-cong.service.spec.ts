@@ -6,7 +6,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { BanGhiChamCong_Service } from './ban-ghi-cham-cong.service';
-import { ChamCongRules_Service } from './cham-cong-rules.service';
+import { ChamCongRules_Service, khoangCachMet } from './cham-cong-rules.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { ThietBiChamCong_Service } from '../thiet-bi-cham-cong/thiet-bi-cham-cong.service';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
@@ -20,14 +20,19 @@ const NV: any = {
   employeeId: 'NV0001',
   workShiftId: '507f1f77bcf86cd799439011',
   ngayLamViecTrongTuan: [1, 2, 3, 4, 5],
-  // DTO/địa điểm mặc định của các test KHÔNG khớp nhau (phương thức 'qr' mà
-  // locationRepo mặc định trả về rỗng) nên kq.ngoaiVung mặc định là true.
-  // Đa số test dùng NV này để kiểm tra những thứ khác hẳn (giờ, ca, ngày
-  // nghỉ…) chứ không kiểm tra chặn ngoài bán kính, nên cấp sẵn cờ cho phép
-  // ở đây để chúng không vô tình dính chặn. Test riêng cho việc chặn dùng
-  // NV_KHONG_CO_CO/NV_CO_CO (đè lại cờ này) nên không phụ thuộc giá trị mặc
-  // định ở đây.
-  choPhepChamNgoaiVung: true,
+  // KHÔNG miễn trừ, đúng với mặc định thật của entity
+  // (`@Column({ default: false })` trên Employee.choPhepChamNgoaiVung). Cấp
+  // cờ miễn trừ ở đây là con đường tắt rẻ nhất để test xanh nhưng lại che
+  // mất chính hành vi chặn mà Task 2 thêm vào — mọi test dùng NV mặc định sẽ
+  // "miễn nhiễm" một cách vô hình, kể cả khi không hề định kiểm tra
+  // geofencing. Để phần lớn test (giờ, ca, ngày nghỉ…) không vô tình dính
+  // chặn mà KHÔNG cần cờ giả, `beforeEach` bên dưới cho locationRepo trả về
+  // một địa điểm khớp đúng phuongThuc/maQr của DTO mặc định — mô phỏng đúng
+  // tình huống thật của một nhân viên đang đứng trong vùng được phép. Test
+  // cần một nhân viên được miễn trừ hoặc đang ở ngoài vùng phải tự khai báo
+  // rõ ràng (xem NV_KHONG_CO_CO/NV_CO_CO trong describe('chặn chấm công
+  // ngoài bán kính', ...) và test wifi "IP không khớp" bên dưới).
+  choPhepChamNgoaiVung: false,
 };
 
 const CA: any = {
@@ -85,7 +90,22 @@ describe('BanGhiChamCong_Service', () => {
       ),
     };
     shiftRepo = { findOne: jest.fn().mockResolvedValue(CA) };
-    locationRepo = { find: jest.fn().mockResolvedValue([]) };
+    // Khớp đúng phuongThuc/maQr của DTO mặc định bên dưới ('qr'/'MA-QR') —
+    // đây là tình huống thật của một nhân viên bình thường đang đứng trong
+    // vùng được phép, KHÔNG phải một cách né guard chặn ngoài bán kính. Test
+    // nào cần mô phỏng "ngoài vùng" hoặc "không có địa điểm nào khớp" phải tự
+    // ghi đè locationRepo.find.mockResolvedValue(...) một cách rõ ràng.
+    locationRepo = {
+      find: jest.fn().mockResolvedValue([
+        {
+          _id: 'loc-mac-dinh',
+          ten: 'Văn phòng chính',
+          loai: 'qr',
+          maQr: 'MA-QR',
+          isActive: true,
+        },
+      ]),
+    };
     nhanVien = {
       resolveEmployeeFromUser: jest.fn().mockResolvedValue(NV),
       findOne: jest.fn().mockResolvedValue(NV),
@@ -329,6 +349,17 @@ describe('BanGhiChamCong_Service', () => {
     });
 
     it('IP không khớp địa điểm wifi nào → ngoài vùng', async () => {
+      // Test này kiểm tra riêng việc GẮN CỜ ngoaiVung khi IP lệch, không phải
+      // hành vi chặn (có test riêng ở describe('chặn chấm công ngoài bán
+      // kính', ...)). IP lệch nghĩa là NV thật sự đang ở ngoài vùng, nên với
+      // NV mặc định (không miễn trừ) cú gọi này sẽ bị chặn 403 thay vì tạo
+      // được bản ghi để kiểm tra cờ — khai rõ miễn trừ ở đây để không phải
+      // âm thầm nhờ vào cờ mặc định của NV (đó chính là điều Task 2 review
+      // yêu cầu sửa).
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue({
+        ...NV,
+        choPhepChamNgoaiVung: true,
+      });
       locationRepo.find.mockResolvedValue([
         {
           _id: 'loc-wifi',
@@ -946,21 +977,72 @@ describe('BanGhiChamCong_Service', () => {
     const XA = { latitude: 10.0, longitude: 106.0, doChinhXacMet: 5 };
 
     it('ngoài bán kính + không có cờ → 403 và KHÔNG ghi bản ghi nào', async () => {
+      const diaDiem = {
+        _id: 'l1', ten: 'VP', loai: 'gps',
+        latitude: 21.0, longitude: 105.8, banKinh: 100, isActive: true,
+      };
       nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV_KHONG_CO_CO);
       shiftRepo.findOne.mockResolvedValue(CA);
       recordRepo.findOne.mockResolvedValue(null);
+      locationRepo.find.mockResolvedValue([diaDiem]);
+
+      // Tính khoảng cách kỳ vọng BẰNG chính công thức Haversine mà rules
+      // dùng — độc lập với chuỗi thông báo của service — để không hardcode
+      // một con số ma thuật. Đây chính là lý do guard chặn phải đứng SAU
+      // tinhKetQua(): dời guard lên trước, hoặc bỏ luôn vế khoảng cách khỏi
+      // message, thì assertion dưới đây thất bại.
+      const khoangCachDuKien = Math.ceil(
+        khoangCachMet(XA.latitude, XA.longitude, diaDiem.latitude, diaDiem.longitude),
+      );
+
+      await expect(
+        service.checkIn(USER, { deviceId: 'd1', phuongThuc: 'gps', ...XA }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({
+          code: 'NGOAI_BAN_KINH_CHO_PHEP',
+          message: expect.stringContaining(`${khoangCachDuKien}m`),
+        }),
+      });
+
+      // Chặn mà vẫn ghi thì bảng công có bản ghi ma, còn nhân viên thì tưởng
+      // mình chưa chấm — tệ hơn cả không chặn.
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('checkOut ngoài bán kính + không có cờ → 403 và KHÔNG ghi bản ghi nào', async () => {
+      // checkOut đi qua CÙNG cham() với checkIn nên cũng bị chặn — cố ý:
+      // chấm ra từ xa lúc 18:00 trong khi thực tế đã rời khu vực từ 15:00
+      // vẫn thổi phồng giờ công y hệt chấm vào hộ từ xa. Lượt vao phải đang
+      // mở và còn hiệu lực (luotVaoConHieuLuc) thì checkOut mới đi được đến
+      // đoạn đối chiếu vị trí — nếu không sẽ dừng sớm ở lỗi 409 thứ tự.
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV_KHONG_CO_CO);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.findOne.mockResolvedValue(null);
+      recordRepo.find.mockResolvedValue([
+        {
+          _id: 'rec-vao',
+          loai: 'vao',
+          ngay: homNayVN(),
+          thoiDiem: new Date(Date.now() - 3600_000).toISOString(),
+        },
+      ]);
       locationRepo.find.mockResolvedValue([
         { _id: 'l1', ten: 'VP', loai: 'gps', latitude: 21.0, longitude: 105.8, banKinh: 100, isActive: true },
       ]);
 
       await expect(
-        service.checkIn(USER, { deviceId: 'd1', phuongThuc: 'gps', ...XA }),
+        service.checkOut(USER, { deviceId: 'd1', phuongThuc: 'gps', ...XA }),
       ).rejects.toMatchObject({
-        response: expect.objectContaining({ code: 'NGOAI_BAN_KINH_CHO_PHEP' }),
+        response: expect.objectContaining({
+          code: 'NGOAI_BAN_KINH_CHO_PHEP',
+          // Lối thoát của chấm RA phải khác chấm VÀO: nêu đúng ngày công
+          // (của lượt vao đang mở, ở đây là hôm nay) để NV báo đúng ngày cho
+          // HR nhập bù — mất mệnh đề này thì escape hatch coi như không tồn
+          // tại dù code vẫn trả đúng.
+          message: expect.stringContaining(homNayVN()),
+        }),
       });
 
-      // Chặn mà vẫn ghi thì bảng công có bản ghi ma, còn nhân viên thì tưởng
-      // mình chưa chấm — tệ hơn cả không chặn.
       expect(recordRepo.save).not.toHaveBeenCalled();
     });
 
@@ -999,17 +1081,26 @@ describe('BanGhiChamCong_Service', () => {
     });
 
     /**
-     * HR nhập bù không bao giờ có toạ độ nên ngoaiVung luôn true. Chặn ở đó
-     * là khoá mất chính công cụ dùng để sửa những ca bị chặn oan.
+     * HR nhập bù không đối chiếu vị trí nên không gọi rules.tinhKetQua —
+     * ngoaiVung được gán CỨNG là false trong hrNhap (không bao giờ true, xem
+     * service). Nhưng lý do hrNhap không bị chặn không nằm ở giá trị cờ đó:
+     * guard chặn ngoài bán kính chỉ nằm trong cham() (dùng chung cho
+     * checkIn/checkOut), còn hrNhap là một luồng riêng, đơn giản không đi
+     * qua guard đó. Chặn nó sẽ khoá mất chính công cụ dùng để sửa những ca
+     * bị chặn oan.
      */
     it('hrNhap KHÔNG bị chặn', async () => {
       nhanVien.findOne.mockResolvedValue(NV_KHONG_CO_CO);
       recordRepo.save.mockImplementation((v: any) => Promise.resolve(v));
       recordRepo.findOne.mockResolvedValue(null);
 
+      // Dùng HÔM QUA chứ không phải hôm nay: hrNhap chặn thoiDiem ở tương
+      // lai, và homNayVN() + '08:00' đứng trước 08:00 giờ VN thì rơi vào
+      // tương lai — suite chạy lúc 03:00 VN sẽ khiến test này flake sang
+      // BadRequestException dù không liên quan gì tới guard đang được test.
       await expect(
         service.hrNhap(
-          { employeeId: 'emp-1', ngay: homNayVN(), loai: 'vao', gio: '08:00' },
+          { employeeId: 'emp-1', ngay: homQuaVN(), loai: 'vao', gio: '08:00' },
           'hr@cty.vn',
         ),
       ).resolves.toBeDefined();

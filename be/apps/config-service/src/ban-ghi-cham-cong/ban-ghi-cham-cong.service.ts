@@ -222,15 +222,31 @@ export class BanGhiChamCong_Service {
     // Và chặn TRƯỚC khi ghi: chặn mà vẫn ghi thì bảng công có bản ghi ma
     // trong khi nhân viên tưởng mình chưa chấm.
     if (kq.ngoaiVung && emp.choPhepChamNgoaiVung !== true) {
+      // khoangCachMet chỉ có trên nhánh GPS (xem
+      // ChamCongRules_Service.doiChieuGps): khớp wifi/QR trả thẳng
+      // { ngoaiVung: true } không kèm khoảng cách, vì hai phương thức đó
+      // không có toạ độ để tính — không phải lỗi thiếu sót, câu báo lỗi ở
+      // hai đường này chỉ đơn giản không nêu được bán kính.
+      //
+      // Không tự làm tròn ở đây: rules đã Math.ceil khi ngoài vùng để số
+      // hiển thị luôn nằm cùng phía biên với kết luận (xem comment tại
+      // doiChieuGps). Làm tròn lại lần nữa có thể lật số đó về khác phía.
       const khoangCach =
         kq.khoangCachMet !== undefined
-          ? ` Bạn đang cách điểm chấm công gần nhất khoảng ${Math.round(kq.khoangCachMet)}m.`
+          ? ` Bạn đang cách điểm chấm công gần nhất khoảng ${kq.khoangCachMet}m.`
           : '';
+      // Chấm ra ngoài vùng cần lối thoát khác chấm vào: quay lại chấm ra
+      // muộn còn cứu được bảng công, còn "di chuyển vào rồi bấm lại" cho
+      // lượt ra chỉ dẫn người ta bấm ra ở SAI thời điểm — giờ về sẽ sai theo
+      // giờ bấm chứ không phải giờ họ thực sự rời đi. Nêu thẳng ngày công
+      // (`ngay`, đã gán = cuoi.ngay cho lượt ra) để NV báo đúng ngày cho HR.
+      const huongDan =
+        loai === 'ra'
+          ? ` Hãy quay lại khu vực để chấm ra, hoặc liên hệ HR nhập bù giờ ra cho ngày ${ngay}.`
+          : ' Hãy di chuyển vào khu vực rồi bấm lại, hoặc liên hệ HR nếu công việc của bạn cần chấm công từ xa.';
       throw new ForbiddenException({
         code: MA_LOI_NGOAI_BAN_KINH,
-        message:
-          `Bạn đang ở ngoài khu vực được phép chấm công.${khoangCach}` +
-          ' Hãy di chuyển vào khu vực rồi bấm lại, hoặc liên hệ HR nếu công việc của bạn cần chấm công từ xa.',
+        message: `Bạn đang ở ngoài khu vực được phép chấm công.${khoangCach}${huongDan}`,
       });
     }
 
