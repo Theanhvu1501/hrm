@@ -31,6 +31,7 @@ import {
   ThietBiPage,
   BanGhiPage,
   ChamCongCuaToiPage,
+  TrangChuTheoQuyen,
   NotFound
 } from "./pages/loadable";
 
@@ -82,7 +83,7 @@ const App = () => (
                   </ProtectedRoute>
                 }
               >
-                <Route index element={<Navigate to="/cau-hinh/vai-tro" replace />} />
+                <Route index element={<TrangChuTheoQuyen />} />
                 <Route path="profile" element={<ProfilePage />} />
 
                 {/* Cấu hình */}

@@ -82,6 +82,10 @@ export const ChamCongCuaToiPage = loadable(
 );
 
 // Other pages
+export const TrangChuTheoQuyen = loadable(() => import('./TrangChuTheoQuyen'), {
+  fallback: <PageLoader />
+});
+
 export const PlaceholderPage = loadable(() => import('./PlaceholderPage'), {
   fallback: <PageLoader />
 });
