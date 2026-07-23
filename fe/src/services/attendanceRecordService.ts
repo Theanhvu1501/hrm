@@ -152,10 +152,11 @@ class AttendanceRecordService extends ServiceBase {
       banGhi: (res.banGhi ?? []).map(this.transform),
       phongBan: res.phongBan,
       diaDiem: (res.diaDiem ?? []) as DiaDiemChamCongTom[],
-      // `?? 0` chứ không `?? null`: backend cũ chưa có trường này thì ô
-      // "Công" hiện 0 ("Chưa tính") — im lặng và đúng — chứ không hiện "—"
-      // ngụ ý đang chờ chấm ra.
-      soCong: res.soCong ?? 0,
+      // CHỈ `undefined` mới lùi về 0 — đó là backend cũ chưa có trường này.
+      // `null` là giá trị thật backend gửi cho trạng thái "đã vào, chờ ra",
+      // phải đi thẳng qua để màn hình hiện "—" thay vì "Chưa tính". Dùng
+      // `?? 0` ở đây sẽ nuốt mất `null` vì `??` không phân biệt hai thứ.
+      soCong: res.soCong === undefined ? 0 : res.soCong,
     };
   }
 

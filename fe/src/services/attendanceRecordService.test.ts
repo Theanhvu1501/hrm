@@ -69,6 +69,41 @@ describe('attendanceRecordService.cuaToi', () => {
       params: { tuNgay: '2026-07-21', denNgay: '2026-07-27' },
     });
   });
+
+  /**
+   * Chỉ kiểm tra tham số gọi API là chưa đủ: nếu ai đó lỡ xoá
+   * `.map(this.transform)`, test trên vẫn xanh. Đưa một bản ghi thô có
+   * `_id` (dạng Mongo) để buộc phải đi qua transform() mới ra `id`.
+   */
+  it('map bản ghi thô qua transform (vd. _id -> id)', async () => {
+    gia([
+      {
+        _id: 'rec1',
+        employeeId: 'e1',
+        ngay: '2026-07-21',
+        loai: 'vao',
+        thoiDiem: '2026-07-21T01:00:00.000Z',
+      },
+    ]);
+
+    const kq = await attendanceRecordService.cuaToi('2026-07-21', '2026-07-27');
+
+    expect(kq).toEqual([
+      expect.objectContaining({
+        id: 'rec1',
+        employeeId: 'e1',
+        ngay: '2026-07-21',
+        loai: 'vao',
+        thoiDiem: '2026-07-21T01:00:00.000Z',
+        ngoaiVung: false,
+        soPhutDiMuon: 0,
+        soPhutVeSom: 0,
+        laNgayNghi: false,
+        nguonTao: 'tu_cham',
+      }),
+    ]);
+    expect(kq[0]).not.toHaveProperty('_id');
+  });
 });
 
 describe('attendanceRecordService.homNay', () => {
@@ -114,5 +149,27 @@ describe('attendanceRecordService.homNay', () => {
     expect(kq.soCong).toBe(0);
     expect(kq.diaDiem).toEqual([]);
     expect(kq.phongBan).toBeUndefined();
+  });
+
+  /**
+   * Backend HIỆN TẠI gửi `null` cho trạng thái "đã vào, chờ ra". Nuốt nó
+   * thành 0 sẽ khiến màn hình nói "Chưa tính" ngay sau khi người ta vừa
+   * bấm chấm vào — đúng cái hiểu nhầm mà việc tách null/0 sinh ra để tránh.
+   */
+  it('giữ nguyên soCong null của backend, không gộp thành 0', async () => {
+    gia({
+      ngay: '2026-07-23',
+      ngayCong: '2026-07-23',
+      nhanVien: { id: 'e1', hoTen: 'Nguyễn Văn Hải' },
+      ca: null,
+      diaDiem: [],
+      soCong: null,
+      hanhDongKeTiep: 'ra',
+      banGhi: [],
+    });
+
+    const kq = await attendanceRecordService.homNay();
+
+    expect(kq.soCong).toBeNull();
   });
 });
