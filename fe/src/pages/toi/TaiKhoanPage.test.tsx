@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import TaiKhoanPage from './TaiKhoanPage';
 import { attendanceRecordService } from '@/services/attendanceRecordService';
@@ -140,5 +140,45 @@ describe('TaiKhoanPage', () => {
       expect(screen.getByText(/không tải được danh sách thiết bị/i)).toBeTruthy(),
     );
     expect(screen.queryByText(/chưa có thiết bị nào được đăng ký/i)).toBeNull();
+  });
+
+  it('đăng xuất đóng luôn phiên identity, không chỉ xoá token cục bộ', async () => {
+    const logout = vi.fn();
+    const identityLogout = vi
+      .spyOn(await import('@/services/identitySession'), 'identityLogout')
+      .mockResolvedValue(undefined);
+    mockAuth.mockReturnValue({
+      user: { hoTen: 'Nguyễn Văn Hải', isSuperAdmin: false },
+      logout,
+      hasPermission: () => false,
+    });
+
+    ve();
+    await waitFor(() => expect(screen.getByText('Đăng xuất')).toBeTruthy());
+    fireEvent.click(screen.getByText('Đăng xuất'));
+
+    await waitFor(() => expect(identityLogout).toHaveBeenCalled());
+    expect(logout).toHaveBeenCalled();
+  });
+
+  /**
+   * Người dùng đã bấm đăng xuất rồi — identity hỏng cũng không được kẹt lại
+   * màn hình cũ với phiên cục bộ còn nguyên.
+   */
+  it('identity lỗi thì vẫn dọn phiên cục bộ', async () => {
+    const logout = vi.fn();
+    vi.spyOn(await import('@/services/identitySession'), 'identityLogout')
+      .mockRejectedValue(new Error('offline'));
+    mockAuth.mockReturnValue({
+      user: { hoTen: 'Nguyễn Văn Hải', isSuperAdmin: false },
+      logout,
+      hasPermission: () => false,
+    });
+
+    ve();
+    await waitFor(() => expect(screen.getByText('Đăng xuất')).toBeTruthy());
+    fireEvent.click(screen.getByText('Đăng xuất'));
+
+    await waitFor(() => expect(logout).toHaveBeenCalled());
   });
 });

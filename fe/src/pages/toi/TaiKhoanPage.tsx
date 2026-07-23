@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tag } from "antd";
 import { useAuth } from "@/contexts/AuthContext";
+import { identityLogout } from "@/services/identitySession";
 import { coQuyenQuanTri } from "@/config/coQuyenQuanTri";
 import {
   attendanceRecordService,
@@ -62,6 +63,28 @@ export default function TaiKhoanPage() {
         setLoiTaiThietBi(true);
       });
   }, []);
+
+  /**
+   * Đăng xuất phải đóng CẢ phiên identity, không chỉ xoá token cục bộ.
+   * `logout()` của AuthContext gọi /auth/logout của hrm và dọn localStorage,
+   * nhưng cookie mc_session của identity vẫn sống — mở lại masterceo.com.vn là
+   * vào thẳng. Trên máy cá nhân dùng để chấm công, thế không phải đăng xuất.
+   *
+   * `identityLogout` tự nuốt lỗi rồi (xem service), nhưng vẫn bọc catch ở đây
+   * làm lưới bảo hiểm — lỡ sau này ai sửa service đó mà quên nuốt lỗi thì
+   * cũng không được để văng ra ngoài thành unhandled rejection. `finally` mới
+   * là chỗ đảm bảo thật: người dùng đã bấm rồi thì phần dọn phiên cục bộ phải
+   * chạy bằng mọi giá, bất kể identity trả lời ra sao.
+   */
+  const dangXuat = async () => {
+    try {
+      await identityLogout();
+    } catch {
+      /* đã nói ở trên — lưới bảo hiểm, không có gì để xử lý thêm ở đây */
+    } finally {
+      logout();
+    }
+  };
 
   const hoTen = homNay?.nhanVien.hoTen ?? user?.hoTen ?? "";
   const quanTri = Boolean(user?.isSuperAdmin) || coQuyenQuanTri(hasPermission);
@@ -142,7 +165,7 @@ export default function TaiKhoanPage() {
             mục này họ chỉ thoát được /toi bằng cách gõ tay URL. Dùng chung
             phép kiểm với TrangChuTheoQuyen để hai chỗ không lệch nhau. */}
         {quanTri && dong("Khu quản trị", "🗂", () => navigate("/cau-hinh/vai-tro"))}
-        {dong("Đăng xuất", "🚪", () => logout(), true)}
+        {dong("Đăng xuất", "🚪", () => void dangXuat(), true)}
       </div>
     </div>
   );
