@@ -7,6 +7,10 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { homNayVN } from '@/ultils/thoiGianVN';
+import {
+  HoSoChamCongProvider,
+  useHoSoChamCong,
+} from '@/contexts/HoSoChamCongContext';
 import './employee-shell.css';
 
 const TAB = [
@@ -43,12 +47,29 @@ function chuDau(ten?: string): string {
  * biểu, nhân viên đứng ở cổng công ty bấm một nút), trộn vào một file sẽ
  * làm cả hai cùng khó sửa.
  *
- * Header CỐ Ý không gọi API: mọi thứ nó cần đã có trong AuthContext. Gọi
- * /hom-nay ở đây sẽ thành cú gọi thứ hai trùng với cú gọi của màn chấm
- * công, chỉ để lấy tên phòng ban — phòng ban hiện ở tab Tài khoản.
+ * Bọc `HoSoChamCongProvider` ở NGAY ĐÂY (cấp vỏ), không phải ở App.tsx: một
+ * lần nạp `/hom-nay` cho mọi route con của `/toi` dùng chung (header lấy
+ * phòng ban, TaiKhoanPage lấy lại đúng dữ liệu đó thay vì tự gọi riêng —
+ * xem HoSoChamCongContext.tsx). Trang Chấm công vẫn giữ nguyên CHandler
+ * fetch riêng của nó, không đụng tới.
  */
 export default function EmployeeLayout() {
+  return (
+    <HoSoChamCongProvider>
+      <EmployeeShell />
+    </HoSoChamCongProvider>
+  );
+}
+
+/**
+ * Tách riêng khỏi `EmployeeLayout` vì phải nằm BÊN TRONG
+ * `HoSoChamCongProvider` mới `useHoSoChamCong()` được — một component
+ * không thể vừa dựng ra Provider vừa đọc Context của chính nó trong cùng
+ * một lần render.
+ */
+function EmployeeShell() {
   const { user, currentTenant } = useAuth();
+  const { hoSo } = useHoSoChamCong();
 
   return (
     <div className="emp-shell mx-auto w-full max-w-[480px]">
@@ -58,7 +79,20 @@ export default function EmployeeLayout() {
             <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/40 bg-white/20 text-[15px] font-semibold">
               {chuDau(user?.hoTen)}
             </div>
-            <div className="text-base font-semibold">{user?.hoTen}</div>
+            <div>
+              <div className="text-base font-semibold">{user?.hoTen}</div>
+              {/* Thiếu phòng ban (chưa tải xong, chưa gắn hồ sơ, hoặc lỗi
+                  khác) thì KHÔNG hiện dòng rỗng — mockup có dòng này nhưng
+                  chỉ khi có dữ liệu thật. */}
+              {hoSo?.phongBan && (
+                <div
+                  data-testid="header-phong-ban"
+                  className="text-[11px] opacity-80"
+                >
+                  {hoSo.phongBan}
+                </div>
+              )}
+            </div>
           </div>
           {currentTenant?.tenantName && (
             <span className="rounded-full bg-white/15 px-2.5 py-1 text-[11px]">

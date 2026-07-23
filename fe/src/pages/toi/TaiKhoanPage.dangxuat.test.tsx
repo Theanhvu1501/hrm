@@ -38,6 +38,7 @@ import { attendanceRecordService } from '@/services/attendanceRecordService';
 import { employeeDeviceService } from '@/services/employeeDeviceService';
 import { setAuthToken, getAuthToken, clearAuthToken } from '@/services/base/service-base';
 import * as identity from '@/services/identitySession';
+import { HoSoChamCongProvider } from '@/contexts/HoSoChamCongContext';
 
 beforeAll(() => {
   const w = window as unknown as Record<string, unknown>;
@@ -78,7 +79,10 @@ function ve() {
   return render(
     <MemoryRouter>
       <AuthProvider>
-        <TaiKhoanPage />
+        {/* TaiKhoanPage đọc /hom-nay qua HoSoChamCongProvider (Task 7). */}
+        <HoSoChamCongProvider>
+          <TaiKhoanPage />
+        </HoSoChamCongProvider>
       </AuthProvider>
     </MemoryRouter>
   );

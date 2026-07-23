@@ -7,6 +7,7 @@ import TaiKhoanPage from './TaiKhoanPage';
 import { attendanceRecordService } from '@/services/attendanceRecordService';
 import { employeeDeviceService } from '@/services/employeeDeviceService';
 import { ApiError, ApiErrorType } from '@/config/api';
+import { HoSoChamCongProvider } from '@/contexts/HoSoChamCongContext';
 
 const mockAuth = vi.fn();
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth() }));
@@ -37,7 +38,16 @@ describe('TaiKhoanPage', () => {
     vi.spyOn(employeeDeviceService, 'cuaToi').mockResolvedValue([]);
   });
 
-  const ve = () => render(<MemoryRouter><TaiKhoanPage /></MemoryRouter>);
+  // TaiKhoanPage đọc /hom-nay qua HoSoChamCongProvider (Task 7) thay vì tự
+  // gọi — phải bọc provider ở đây để hook không ném lỗi "gọi ngoài Provider".
+  const ve = () =>
+    render(
+      <MemoryRouter>
+        <HoSoChamCongProvider>
+          <TaiKhoanPage />
+        </HoSoChamCongProvider>
+      </MemoryRouter>
+    );
 
   it('hiện họ tên, phòng ban và mã nhân viên', async () => {
     ve();

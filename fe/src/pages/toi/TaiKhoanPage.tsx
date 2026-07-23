@@ -4,14 +4,10 @@ import { Tag } from "antd";
 import { useAuth } from "@/contexts/AuthContext";
 import { coQuyenQuanTri } from "@/config/coQuyenQuanTri";
 import {
-  attendanceRecordService,
-  TrangThaiHomNay,
-} from "@/services/attendanceRecordService";
-import {
   employeeDeviceService,
   EmployeeDevice,
 } from "@/services/employeeDeviceService";
-import { layStatus } from "@/pages/cham-cong/cua-toi/trangThai";
+import { useHoSoChamCong } from "@/contexts/HoSoChamCongContext";
 
 const NHAN_TRANG_THAI: Record<string, { nhan: string; mau: string }> = {
   cho_duyet: { nhan: "Chờ duyệt", mau: "gold" },
@@ -30,27 +26,19 @@ function chuDau(ten?: string): string {
 export default function TaiKhoanPage() {
   const { user, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
-  const [homNay, setHomNay] = useState<TrangThaiHomNay | null>(null);
-  const [chuaLienKet, setChuaLienKet] = useState(false);
+  // Hồ sơ chấm công hôm nay giờ nạp MỘT LẦN ở cấp vỏ /toi
+  // (HoSoChamCongProvider, xem EmployeeLayout.tsx) và chia sẻ cho cả header
+  // lẫn màn hình này — bỏ lời gọi /hom-nay riêng của trang này (Task 7).
+  const { hoSo: homNay, chuaLienKet, dangTai } = useHoSoChamCong();
   // Rớt mạng, 500, hay token hết hạn KHÔNG phải là "chưa gắn hồ sơ" — chỉ
-  // status 404 từ resolveEmployeeFromUser mới có nghĩa đó. Gộp chung sẽ đẩy
-  // nhân viên đi báo HR một chuyện HR không sửa được.
-  const [loiTaiThongTin, setLoiTaiThongTin] = useState(false);
+  // 404 (chuaLienKet) mới có nghĩa đó. Suy lại đúng 3 nhánh cũ (đang tải /
+  // chưa liên kết / lỗi khác) từ 3 cờ mà context phơi ra, không tự thêm
+  // state lặp lại thứ context đã quản lý.
+  const loiTaiThongTin = !dangTai && !homNay && !chuaLienKet;
   const [thietBi, setThietBi] = useState<EmployeeDevice[]>([]);
   const [loiTaiThietBi, setLoiTaiThietBi] = useState(false);
 
   useEffect(() => {
-    attendanceRecordService
-      .homNay()
-      .then(setHomNay)
-      .catch((err) => {
-        // Chưa gắn hồ sơ nhân viên là trường hợp có thật và khá phổ biến ở
-        // ngày đầu. Màn hình phải còn dùng được — nhất là nút đăng xuất —
-        // chứ không được trắng.
-        console.error("Tải thông tin nhân viên lỗi:", err);
-        if (layStatus(err) === 404) setChuaLienKet(true);
-        else setLoiTaiThongTin(true);
-      });
     employeeDeviceService
       .cuaToi()
       .then(setThietBi)
