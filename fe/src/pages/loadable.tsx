@@ -81,6 +81,11 @@ export const ChamCongCuaToiPage = loadable(
   { fallback: <PageLoader /> }
 );
 
+// Vỏ nhân viên (/toi)
+export const TaiKhoanPage = loadable(() => import('./toi/TaiKhoanPage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const TrangChuTheoQuyen = loadable(() => import('./TrangChuTheoQuyen'), {
   fallback: <PageLoader />

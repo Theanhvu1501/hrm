@@ -11,6 +11,7 @@ import { TermProvider } from "./contexts/TermContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 import MainLayout from "./components/layout/MainLayout";
+import EmployeeLayout from "./components/layout/EmployeeLayout";
 import InstallPWA from "./components/shared/InstallPWA";
 import PWAUpdatePrompt from "./components/shared/PWAUpdatePrompt";
 import {
@@ -32,6 +33,8 @@ import {
   BanGhiPage,
   ChamCongCuaToiPage,
   TrangChuTheoQuyen,
+  ComingSoonPage,
+  TaiKhoanPage,
   NotFound
 } from "./pages/loadable";
 
@@ -163,7 +166,15 @@ const App = () => (
                     hom-nay (xem ban-ghi-cham-cong.controller.ts) — phạm vi
                     dữ liệu được khoá bằng employeeId suy từ token.
                   */}
-                  <Route path="cua-toi" element={<ChamCongCuaToiPage />} />
+                  {/*
+                    Giữ lại làm redirect, KHÔNG xoá: link đã gửi cho nhân
+                    viên qua tin nhắn, PWA shortcut và bookmark đều trỏ vào
+                    đây. Vỏ nhân viên nay sống ở /toi.
+                  */}
+                  <Route
+                    path="cua-toi"
+                    element={<Navigate to="/toi/cham-cong" replace />}
+                  />
                   <Route
                     path="ca-lam-viec"
                     element={
@@ -221,6 +232,30 @@ const App = () => (
                     }
                   />
                 </Route>
+              </Route>
+
+              {/*
+                Vỏ nhân viên. CỐ Ý không bọc `requiredPermission` và CỐ Ý
+                không khai trong routePermissions.ts — cùng lý do đã ghi cho
+                /cham-cong/cua-toi trước đây: mọi nhân viên đăng nhập đều
+                phải chấm công được ngay ngày đầu đi làm, trước khi HR kịp
+                gán vai trò. Backend cũng chỉ đặt JwtGuard cho check-in/
+                check-out/hom-nay/cua-toi; phạm vi dữ liệu khoá bằng
+                employeeId suy từ token, không bằng quyền.
+              */}
+              <Route
+                path="/toi"
+                element={
+                  <ProtectedRoute>
+                    <EmployeeLayout />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<Navigate to="cham-cong" replace />} />
+                <Route path="cham-cong" element={<ChamCongCuaToiPage />} />
+                <Route path="don-tu" element={<ComingSoonPage />} />
+                <Route path="bang-cong" element={<ComingSoonPage />} />
+                <Route path="tai-khoan" element={<TaiKhoanPage />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

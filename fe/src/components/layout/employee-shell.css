@@ -1,0 +1,65 @@
+/*
+ * Biến của vỏ nhân viên, khoanh trong .emp-shell.
+ *
+ * CỐ Ý không đụng ConfigProvider ở App.tsx: borderRadius 0 và
+ * controlHeight 28 là quyết định toàn dự án cho các bảng/form quản trị.
+ * Màn hình điện thoại cần bo góc mềm và vùng bấm to hơn, nên nhịp riêng
+ * sống ở đây và chỉ áp cho cây DOM bên trong vỏ.
+ *
+ * Accent là teal MasterCEO (#1f7769), không phải #10B981 của bản mockup.
+ */
+.emp-shell {
+  --emp-accent: #1f7769;
+  --emp-accent-nhat: #e6f2f0;
+  --emp-bg: #f8fafc;
+  --emp-surface: #ffffff;
+  --emp-text: #1e293b;
+  --emp-text-phu: #64748b;
+  --emp-muted: #94a3b8;
+  --emp-border: #e2e8f0;
+  --emp-danger: #ef4444;
+  --emp-danger-nhat: #fef2f2;
+  --emp-radius: 12px;
+  --emp-tab-height: 64px;
+
+  background: var(--emp-bg);
+  color: var(--emp-text);
+  min-height: 100vh;
+}
+
+.emp-header {
+  background: linear-gradient(135deg, #0f3d36 0%, #145d52 60%, var(--emp-accent) 100%);
+  color: #ffffff;
+}
+
+.emp-card {
+  background: var(--emp-surface);
+  border: 1px solid var(--emp-border);
+  border-radius: var(--emp-radius);
+}
+
+/* Thanh tab dính đáy. padding-bottom ăn theo safe-area để tab không nằm
+   dưới thanh gạt của iPhone. */
+.emp-tabs {
+  position: fixed;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 480px;
+  height: var(--emp-tab-height);
+  background: var(--emp-surface);
+  border-top: 1px solid var(--emp-border);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  z-index: 100;
+}
+
+.emp-tab {
+  color: var(--emp-muted);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.emp-tab[aria-current='page'] {
+  color: var(--emp-accent);
+  font-weight: 600;
+}
