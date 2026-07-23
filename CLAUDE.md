@@ -11,7 +11,7 @@ SSO auth, and the platform's config screens — all accounting business logic re
 | Item | Value |
 |---|---|
 | `appId` (row in identity's `apps` collection) | `nhan-su` |
-| FE subdomain | `https://nhan-su.masterceo.com.vn` |
+| FE subdomain | `https://nhansu.masterceo.com.vn` |
 | App's own MongoDB database | `nhan_su` |
 | Identity/SSO service (external, not in this repo) | `http://localhost:3020` (dev) |
 
@@ -119,7 +119,7 @@ Read this before assuming something is broken vs. intentionally deferred.
    any non-local deployment.
 5. **Registering this app in identity is a manual/deploy-time step**, not automatic. Use
    `ops/seed-nhan-su-app.ts` (see `ops/README.md`) to upsert the `apps` row and, optionally,
-   a `tenant_apps` grant — plus manually add the `nhan-su.masterceo.com.vn` subdomain to
+   a `tenant_apps` grant — plus manually add the `nhansu.masterceo.com.vn` subdomain to
    identity-service's `CORS_ORIGINS` and redeploy identity. This repo never modifies
    identity-service source.
 6. **Leftover dead code from the fork, safe to ignore or prune later:**

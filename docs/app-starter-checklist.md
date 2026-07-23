@@ -64,7 +64,7 @@ config, from outside.
 
 1. Copy `ops/seed-nhan-su-app.ts` → `ops/seed-<new-app>-app.ts` in the new app's repo and
    change the two literals inside: `appId: 'nhan-su'` → `'<new-app>'` and the default
-   `feUrl` (`FE_NHAN_SU_URL` fallback `https://nhan-su.masterceo.com.vn`) → the new app's
+   `feUrl` (`FE_NHAN_SU_URL` fallback `https://nhansu.masterceo.com.vn`) → the new app's
    subdomain. Run it:
    ```bash
    IDENTITY_MONGODB_URI="mongodb://..." \

@@ -16,7 +16,7 @@ Run the standalone MongoDB upsert script:
 IDENTITY_MONGODB_URI="mongodb://..." \
 IDENTITY_DB="masterceo_identity" \
 TENANT_ID="<tenant-id>" \
-FE_NHAN_SU_URL="https://nhan-su.masterceo.com.vn" \
+FE_NHAN_SU_URL="https://nhansu.masterceo.com.vn" \
 npx ts-node ops/seed-nhan-su-app.ts
 ```
 
@@ -24,7 +24,7 @@ npx ts-node ops/seed-nhan-su-app.ts
 - `IDENTITY_MONGODB_URI` (required): MongoDB connection string to the identity database
 - `IDENTITY_DB` (optional, default: `masterceo_identity`): Database name
 - `TENANT_ID` (optional): If provided, also upserts a `tenant_apps` row to grant the app to this tenant
-- `FE_NHAN_SU_URL` (optional, default: `https://nhan-su.masterceo.com.vn`): Frontend URL for the app
+- `FE_NHAN_SU_URL` (optional, default: `https://nhansu.masterceo.com.vn`): Frontend URL for the app
 
 **Output:** Idempotently upserts:
 - `apps` collection: `{appId: 'nhan-su', name: 'Nhân sự', feUrl, isActive: true}`
@@ -51,11 +51,11 @@ Content-Type: application/json
 **Manual task on identity-service project** (done by operator during deployment, NOT automated here):
 
 1. Edit `identity-service/.env-cmdrc.json`
-2. Add `https://nhan-su.masterceo.com.vn` to `prod.CORS_ORIGINS`:
+2. Add `https://nhansu.masterceo.com.vn` to `prod.CORS_ORIGINS`:
    ```json
    {
      "prod": {
-       "CORS_ORIGINS": ["https://nhan-su.masterceo.com.vn", "..."],
+       "CORS_ORIGINS": ["https://nhansu.masterceo.com.vn", "..."],
        "COOKIE_DOMAIN": ".masterceo.com.vn"
      }
    }
@@ -63,6 +63,11 @@ Content-Type: application/json
 3. Redeploy identity-service
 
 **Note:** `COOKIE_DOMAIN=.masterceo.com.vn` already covers all subdomains (`*.masterceo.com.vn`), so keep it unchanged.
+
+**Note:** the repo copy of identity's config is not the source of truth for CORS — per this step, the operator edits it directly on the server, so `identity-service/.env-cmdrc.json` here can go stale. Read the live value instead:
+```bash
+ssh kt "docker exec masterceo-identity sh -c 'echo \$CORS_ORIGINS'"
+```
 
 ## Summary
 
