@@ -363,6 +363,29 @@ export class BanGhiChamCong_Service {
     return !lich.includes(thuTrongTuanCuaNgay(ngay));
   }
 
+  /**
+   * Số công của MỘT ngày công, chỉ nhìn vào bản ghi đã chấm.
+   *
+   * Cố ý KHÔNG đọc từ module bảng công: `chiTietNgay` ở đó là lưới ký hiệu
+   * do HR tự điền (xem BangCong_Service, mỗi lần chạy chỉ soGioLamThem được
+   * tính lại), nên ngày hôm nay luôn rỗng và ô "Công" trên màn hình nhân
+   * viên sẽ luôn hiện 0 — nói dối đúng vào lúc người ta cần tin nó nhất.
+   *
+   * `null` khác `0`: `null` là "đã vào, đang chờ ra" (màn hình hiện "—"),
+   * `0` là "chưa có gì để tính". Gộp hai thứ này lại là làm mất đúng thông
+   * tin mà người vừa chấm vào muốn thấy.
+   *
+   * Nửa công (0.5) không thuộc phạm vi ở đây: nó cần luật ca và đơn từ, và
+   * ký hiệu '1/2' hôm nay vẫn do HR quyết ở bảng công.
+   */
+  private tinhSoCong(banGhi: AttendanceRecord[]): number | null {
+    const coVao = banGhi.some((b) => b.loai === 'vao');
+    const coRa = banGhi.some((b) => b.loai === 'ra');
+    if (coVao && coRa) return 1;
+    if (coVao) return null;
+    return 0;
+  }
+
   async homNay(user: { id: string }) {
     const emp = await this.nhanVien_Service.resolveEmployeeFromUser(user);
     const employeeId = String((emp as any)._id);
@@ -399,6 +422,15 @@ export class BanGhiChamCong_Service {
       order: { thoiDiem: 'ASC' },
     } as any);
 
+    // Địa điểm KHÔNG gắn với nhân viên: `checkIn` khớp GPS/wifi/QR với toàn
+    // bộ địa điểm đang bật (xem lời gọi locationRepo.find trong checkIn và
+    // ChamCongRules_Service.doiChieuViTri). Trả cả danh sách để màn hình
+    // nhân viên nói đúng sự thật — hiện tên khi công ty chỉ có một điểm, và
+    // hiện số lượng khi có nhiều — thay vì bịa ra "địa điểm của bạn".
+    const diaDiem = await this.locationRepo.find({
+      where: { isActive: true },
+    });
+
     return {
       ngay,
       ngayCong,
@@ -407,6 +439,7 @@ export class BanGhiChamCong_Service {
         hoTen: emp.hoTen,
         employeeCode: emp.employeeId,
       },
+      phongBan: emp.phongBan,
       ca: ca
         ? {
             id: String((ca as any)._id),
@@ -416,6 +449,13 @@ export class BanGhiChamCong_Service {
             laCaQuaDem: ca.laCaQuaDem ?? false,
           }
         : null,
+      diaDiem: diaDiem.map((d) => ({
+        id: String((d as any)._id),
+        ten: d.ten,
+        loai: d.loai,
+        banKinh: d.banKinh,
+      })),
+      soCong: this.tinhSoCong(banGhi),
       // Hành động kế tiếp mà FE nên hiện trên nút lớn. Dùng CHUNG hàm với
       // checkOut: một lượt vao treo từ tuần trước không được phép làm nút
       // hiện "Check-out", vì cú bấm đó sẽ bị chặn ngay bằng 409.

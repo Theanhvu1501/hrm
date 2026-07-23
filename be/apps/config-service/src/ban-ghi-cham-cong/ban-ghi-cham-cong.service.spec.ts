@@ -67,6 +67,10 @@ describe('BanGhiChamCong_Service', () => {
   beforeEach(async () => {
     recordRepo = {
       find: jest.fn().mockResolvedValue([]),
+      // Service không gọi findOne() ở đâu cả (banGhiCuoiCung dùng find +
+      // take:1) — mock này chỉ để test soCong gọi được mà không vỡ khi lỡ
+      // set giá trị không dùng tới.
+      findOne: jest.fn().mockResolvedValue(null),
       create: jest.fn((v: any) => v),
       save: jest.fn((v: any) =>
         Promise.resolve({ ...v, _id: v._id ?? 'rec-new' }),
@@ -582,6 +586,107 @@ describe('BanGhiChamCong_Service', () => {
 
       expect(kq.hanhDongKeTiep).toBe('vao');
       expect(kq.ngayCong).toBe(homNayVN());
+    });
+  });
+
+  describe('homNay — soCong', () => {
+    it('trả 0 khi chưa có bản ghi nào', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find.mockResolvedValue([]);
+      recordRepo.findOne.mockResolvedValue(null);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.soCong).toBe(0);
+    });
+
+    it('trả null khi mới có lượt vào — màn hình hiện "—", không hiện 0', async () => {
+      const vao = {
+        _id: 'r1',
+        employeeId: 'emp-1',
+        ngay: homNayVN(),
+        loai: 'vao',
+        thoiDiem: new Date(),
+      };
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find.mockResolvedValue([vao]);
+      recordRepo.findOne.mockResolvedValue(null);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.soCong).toBeNull();
+    });
+
+    it('trả 1 khi có đủ vào và ra', async () => {
+      const ngay = homNayVN();
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find.mockResolvedValue([
+        { _id: 'r1', employeeId: 'emp-1', ngay, loai: 'vao', thoiDiem: new Date() },
+        { _id: 'r2', employeeId: 'emp-1', ngay, loai: 'ra', thoiDiem: new Date() },
+      ]);
+      recordRepo.findOne.mockResolvedValue(null);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.soCong).toBe(1);
+    });
+
+    // Dữ liệu bất thường: HR nhập bù mỗi lượt 'ra'. Không có lượt vào thì
+    // không có gì để tính — 0, không phải 1. Khoá lại để lần sửa sau không
+    // vô tình biến bản ghi lẻ thành một công.
+    it('trả 0 khi chỉ có lượt ra mà không có lượt vào', async () => {
+      const ngay = homNayVN();
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find.mockResolvedValue([
+        { _id: 'r2', employeeId: 'emp-1', ngay, loai: 'ra', thoiDiem: new Date() },
+      ]);
+      recordRepo.findOne.mockResolvedValue(null);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.soCong).toBe(0);
+    });
+  });
+
+  describe('homNay — địa điểm và phòng ban', () => {
+    it('trả toàn bộ địa điểm đang bật, giữ nguyên tên trường banKinh', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue({
+        ...NV,
+        phongBan: 'Phòng Kỹ thuật',
+      });
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find.mockResolvedValue([]);
+      recordRepo.findOne.mockResolvedValue(null);
+      locationRepo.find.mockResolvedValue([
+        { _id: 'loc-1', ten: 'Văn phòng HN', loai: 'gps', banKinh: 100 },
+        { _id: 'loc-2', ten: 'Chi nhánh HCM', loai: 'wifi' },
+      ]);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.diaDiem).toEqual([
+        { id: 'loc-1', ten: 'Văn phòng HN', loai: 'gps', banKinh: 100 },
+        { id: 'loc-2', ten: 'Chi nhánh HCM', loai: 'wifi', banKinh: undefined },
+      ]);
+      expect(kq.phongBan).toBe('Phòng Kỹ thuật');
+    });
+
+    it('chỉ lấy địa điểm isActive — địa điểm đã tắt không được hiện lên màn hình nhân viên', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find.mockResolvedValue([]);
+      recordRepo.findOne.mockResolvedValue(null);
+      locationRepo.find.mockResolvedValue([]);
+
+      await service.homNay(USER);
+
+      expect(locationRepo.find).toHaveBeenCalledWith({
+        where: { isActive: true },
+      });
     });
   });
 
