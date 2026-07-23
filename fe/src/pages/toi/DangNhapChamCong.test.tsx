@@ -133,6 +133,52 @@ describe('DangNhapChamCong — chặn vòng lặp reload khi tự động điề
     );
     expect(diToi).not.toHaveBeenCalled();
   });
+
+  /**
+   * Finding 1 (đợt review sau). Cầu chì CHỈ được áp cho nhánh tự động lúc
+   * mount — một cú bấm/gửi form CHỦ ĐỘNG của người dùng, theo định nghĩa,
+   * không phải vòng lặp. Kịch bản thật đúng như finding mô tả: người dùng vừa
+   * tự động vào thành công (cờ đã set), sau đó — vẫn trong CÙNG tab — quay
+   * lại /toi/login (vd. bấm "Đăng nhập tài khoản khác") và tự tay đăng nhập
+   * lại; `chonCongTy` tự chọn công ty duy nhất và gọi `vaoVoiCongTy` lần nữa
+   * — màn phải vào được ngay, không được hiện "Thử lại" chỉ vì cờ cũ còn
+   * sống từ lượt tự động thành công trước đó.
+   */
+  it('đã tự động vào thành công 1 lần rồi, sau đó người dùng chủ động đăng nhập lại vẫn vào được', async () => {
+    vi.spyOn(identity, 'identityTenants').mockResolvedValue([A]);
+    vi.spyOn(identity, 'refreshFromIdentity').mockResolvedValue('token-moi');
+
+    // Bước 1: một lượt tự động vào THÀNH CÔNG trong tab này — set cờ.
+    const lanDau = ve();
+    await waitFor(() => expect(diToi).toHaveBeenCalledTimes(1));
+    lanDau.unmount();
+    diToi.mockClear();
+
+    // Bước 2: mở lại /toi/login trong CÙNG tab (sessionStorage — và do đó cờ
+    // — không bị dọn giữa 2 lần render này). Lần này phiên đã hết (vd. sau
+    // "Đăng nhập tài khoản khác") nên effect lúc mount (tự động) chỉ dừng ở
+    // ô mật khẩu — KHÔNG gọi vaoVoiCongTy, nên chưa hề tra cầu chì ở bước
+    // này.
+    vi.spyOn(identity, 'identityTenants')
+      .mockResolvedValueOnce(null) // dò phiên lúc mount: đã đăng xuất trước đó
+      .mockResolvedValue([A]);     // sau khi đăng nhập lại: vẫn đúng 1 công ty
+    const login = vi.spyOn(identity, 'identityLogin').mockResolvedValue('ok');
+    ve();
+    await waitFor(() => expect(screen.getByLabelText(/mật khẩu/i)).toBeTruthy());
+    expect(diToi).not.toHaveBeenCalled();
+
+    // Bước 3: người dùng CHỦ ĐỘNG gửi form đăng nhập. `chonCongTy` tự chọn
+    // lại đúng công ty duy nhất và gọi `vaoVoiCongTy` — đây là thao tác thủ
+    // công, phải luôn điều hướng bất kể cờ cũ. Nếu cầu chì (bug cũ) áp luôn
+    // cho cả đường này, màn sẽ dừng ở "Thử lại" dù không có gì lỗi thật.
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'hai@cty.vn' } });
+    fireEvent.change(screen.getByLabelText(/mật khẩu/i), { target: { value: 'matkhau' } });
+    fireEvent.click(screen.getByRole('button', { name: /đăng nhập/i }));
+
+    await waitFor(() => expect(login).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
+    expect(screen.queryByText(/Không vào được màn chấm công/i)).toBeNull();
+  });
 });
 
 describe('DangNhapChamCong — chưa có phiên', () => {
@@ -163,6 +209,44 @@ describe('DangNhapChamCong — chưa có phiên', () => {
     await nhapVaGui();
 
     await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
+  });
+
+  /**
+   * Finding 2. `guiDangNhap` chỉ tắt `dangGui` (và do đó bật lại nút) trong
+   * `finally`, SAU khi `diTiepVoiPhien()` chạy xong — không phải ngay sau
+   * `identityLogin`. Test này giữ `identityTenants` (bên trong
+   * `diTiepVoiPhien`) treo lại có chủ đích để mô phỏng đúng cửa sổ hở: nếu
+   * nút được bật lại sớm (bug cũ), bấm lần 2 ngay lúc đó sẽ gọi thêm một lượt
+   * `identityLogin` nữa.
+   */
+  it('bấm gửi 2 lần liên tiếp trong lúc đang xử lý chỉ gọi identityLogin đúng 1 lần', async () => {
+    let moTiepPhien!: (ds: identity.TenantChamCong[]) => void;
+    vi.spyOn(identity, 'identityTenants')
+      .mockResolvedValueOnce(null) // dò phiên lúc mount: chưa có → hiện form
+      .mockImplementationOnce(
+        () => new Promise((resolve) => { moTiepPhien = resolve; })
+      );
+    const login = vi.spyOn(identity, 'identityLogin').mockResolvedValue('ok');
+    vi.spyOn(identity, 'refreshFromIdentity').mockResolvedValue('token-moi');
+
+    ve();
+    await waitFor(() => expect(screen.getByLabelText(/email/i)).toBeTruthy());
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'hai@cty.vn' } });
+    fireEvent.change(screen.getByLabelText(/mật khẩu/i), { target: { value: 'matkhau' } });
+    const nutGui = screen.getByRole('button', { name: /đăng nhập/i });
+
+    fireEvent.click(nutGui);
+    await waitFor(() => expect(login).toHaveBeenCalledTimes(1));
+
+    // Tại đây identityLogin đã resolve 'ok' nhưng diTiepVoiPhien vẫn đang chờ
+    // identityTenants (bị giữ treo có chủ đích) — đúng cửa sổ hở của Finding
+    // 2. Bấm lần 2 ngay bây giờ.
+    fireEvent.click(nutGui);
+
+    moTiepPhien([A]);
+    await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
+
+    expect(login).toHaveBeenCalledTimes(1);
   });
 
   it('sai mật khẩu → báo đúng câu, không điều hướng', async () => {

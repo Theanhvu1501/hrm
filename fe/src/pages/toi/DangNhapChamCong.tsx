@@ -89,8 +89,19 @@ export default function DangNhapChamCong() {
   const [dangGui, setDangGui] = useState(false);
   const [danhSach, setDanhSach] = useState<TenantChamCong[]>([]);
 
-  /** Có tenantId rồi thì đổi lấy access token và vào. */
-  const vaoVoiCongTy = useCallback(async (tenantId: string) => {
+  /**
+   * Có tenantId rồi thì đổi lấy access token và vào.
+   *
+   * `tuDong` phân biệt NGUỒN của lệnh gọi này, không phải kết quả của nó:
+   * - `true`  — CHỈ nhánh do effect lúc mount kích hoạt (dò phiên sẵn có rồi
+   *   tự vào thẳng, người dùng chưa bấm gì cả). Cầu chì chống-vòng-lặp chỉ áp
+   *   cho nhánh này, vì chỉ nhánh này mới có thể tự lặp lại vô hạn khi remount.
+   * - `false` — mọi hành động CHỦ ĐỘNG của người dùng (gửi form mật khẩu,
+   *   bấm chọn công ty, bấm "Thử lại"). Một cú bấm, theo định nghĩa, không
+   *   phải là vòng lặp tự động — luôn điều hướng, không tra cầu chì, và xoá
+   *   cờ cũ vì đây là bằng chứng người dùng vừa có hành động mới.
+   */
+  const vaoVoiCongTy = useCallback(async (tenantId: string, tuDong: boolean) => {
     setMan('dang_vao');
     const token = await refreshFromIdentity(tenantId);
     if (!token) {
@@ -100,24 +111,32 @@ export default function DangNhapChamCong() {
     }
     setAuthToken(token);
     ghiCongTyDaNho(tenantId);
-    if (daThuVaoRoi()) {
-      // Đã từng gọi diToi ít nhất 1 lần trong tab này mà vẫn quay lại được
-      // tới đây — rất có thể backend hrm đang lỗi ngay sau reload. Điều
-      // hướng tiếp sẽ thành vòng lặp reload vô hạn; dừng lại và để người
-      // dùng chủ động bấm thử lại thay vì màn hình tự đá qua đá lại.
-      setLoi(CAU_LOI.khong_vao_duoc);
-      setMan('loi_vao');
-      return;
+    if (tuDong) {
+      if (daThuVaoRoi()) {
+        // Đã từng gọi diToi ít nhất 1 lần TỰ ĐỘNG trong tab này mà vẫn quay
+        // lại được tới đây — rất có thể backend hrm đang lỗi ngay sau reload.
+        // Điều hướng tiếp sẽ thành vòng lặp reload vô hạn; dừng lại và để
+        // người dùng chủ động bấm thử lại thay vì màn hình tự đá qua đá lại.
+        setLoi(CAU_LOI.khong_vao_duoc);
+        setMan('loi_vao');
+        return;
+      }
+      danhDauDaThuVao();
+    } else {
+      xoaDaThuVao();
     }
-    danhDauDaThuVao();
     // Tải lại cả trang thay vì navigate: AuthContext.initAuth chỉ chạy lúc
     // mount, và refreshUser() không set currentTenant lẫn nạp lĩnh vực. Đi
     // bằng router sẽ để isAuthenticated = false và bị guard đá ngược lại đây.
     diToi('/toi/cham-cong');
   }, []);
 
-  /** Có phiên rồi thì đi tiếp; chưa có thì hiện ô mật khẩu. */
-  const diTiepVoiPhien = useCallback(async () => {
+  /**
+   * Có phiên rồi thì đi tiếp; chưa có thì hiện ô mật khẩu. `tuDong` được
+   * truyền thẳng xuống `vaoVoiCongTy` khi chonCongTy tự chọn được công ty
+   * duy nhất/đã nhớ — xem chú thích ở đó.
+   */
+  const diTiepVoiPhien = useCallback(async (tuDong: boolean) => {
     const ds = await identityTenants();
     if (ds === null) {
       setMan('nhap_mat_khau');
@@ -135,11 +154,12 @@ export default function DangNhapChamCong() {
       setMan('chon_cong_ty');
       return;
     }
-    await vaoVoiCongTy(kq.tenantId);
+    await vaoVoiCongTy(kq.tenantId, tuDong);
   }, [vaoVoiCongTy]);
 
   useEffect(() => {
-    void diTiepVoiPhien();
+    // Duy nhất nhánh tự động: effect lúc mount, dò phiên sẵn có.
+    void diTiepVoiPhien(true);
   }, [diTiepVoiPhien]);
 
   /** Khi cầu chì ở trên chặn (man === 'loi_vao') thì đây là lối thoát: xoá cờ
@@ -149,7 +169,8 @@ export default function DangNhapChamCong() {
     xoaDaThuVao();
     setLoi('');
     setMan('dang_thu_phien');
-    void diTiepVoiPhien();
+    // Hành động chủ động (bấm nút), không phải nhánh tự động lúc mount.
+    void diTiepVoiPhien(false);
   }, [diTiepVoiPhien]);
 
   /**
@@ -173,7 +194,8 @@ export default function DangNhapChamCong() {
         setLoi(CAU_LOI[kq]);
         return;
       }
-      await diTiepVoiPhien();
+      // Hành động chủ động (gửi form), không phải nhánh tự động lúc mount.
+      await diTiepVoiPhien(false);
     } finally {
       // finally (không phải ngay sau identityLogin): nếu tắt loading trước
       // khi diTiepVoiPhien/vaoVoiCongTy chạy xong thì form vẫn bấm được
@@ -214,7 +236,8 @@ export default function DangNhapChamCong() {
             size="large"
             className="mb-2"
             style={KIEU_NUT_NHAN}
-            onClick={() => void vaoVoiCongTy(t.tenantId)}
+            // Hành động chủ động (bấm chọn công ty), không phải tự động.
+            onClick={() => void vaoVoiCongTy(t.tenantId, false)}
           >
             {t.tenantName}
           </Button>
