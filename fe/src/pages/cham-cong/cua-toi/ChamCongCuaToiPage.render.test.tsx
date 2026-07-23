@@ -59,6 +59,8 @@ function homNayMau(over: Partial<TrangThaiHomNay> = {}): TrangThaiHomNay {
     },
     hanhDongKeTiep: 'vao',
     banGhi: [],
+    soCong: 0,
+    diaDiem: [],
     ...over,
   };
 }

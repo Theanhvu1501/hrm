@@ -60,6 +60,20 @@ export interface AttendanceRecord {
   ghiChu?: string;
 }
 
+/**
+ * Địa điểm chấm công dạng rút gọn cho màn hình nhân viên.
+ *
+ * Là DANH SÁCH chứ không phải một điểm: nhân viên không được gán địa điểm,
+ * backend khớp GPS/wifi/QR với toàn bộ điểm đang bật khi chấm. Giữ tên
+ * trường `banKinh` đúng như entity, không đổi thành `banKinhMet`.
+ */
+export interface DiaDiemChamCongTom {
+  id: string;
+  ten: string;
+  loai: string;
+  banKinh?: number;
+}
+
 export interface TrangThaiHomNay {
   /** Ngày lịch hôm nay theo giờ VN. */
   ngay: string;
@@ -79,6 +93,13 @@ export interface TrangThaiHomNay {
   } | null;
   hanhDongKeTiep: 'vao' | 'ra';
   banGhi: AttendanceRecord[];
+  phongBan?: string;
+  diaDiem: DiaDiemChamCongTom[];
+  /**
+   * Số công của `ngayCong`. `null` KHÁC `0`: `null` là "đã vào, đang chờ
+   * ra" (màn hình hiện "—"), `0` là "chưa có gì để tính".
+   */
+  soCong: number | null;
 }
 
 export interface ChamCongDto {
@@ -129,7 +150,27 @@ class AttendanceRecordService extends ServiceBase {
       ca: res.ca ?? null,
       hanhDongKeTiep: res.hanhDongKeTiep,
       banGhi: (res.banGhi ?? []).map(this.transform),
+      phongBan: res.phongBan,
+      diaDiem: (res.diaDiem ?? []) as DiaDiemChamCongTom[],
+      // `?? 0` chứ không `?? null`: backend cũ chưa có trường này thì ô
+      // "Công" hiện 0 ("Chưa tính") — im lặng và đúng — chứ không hiện "—"
+      // ngụ ý đang chờ chấm ra.
+      soCong: res.soCong ?? 0,
     };
+  }
+
+  /**
+   * Bản ghi chấm công của chính mình trong một khoảng ngày, cho lịch tuần.
+   *
+   * Không dùng `getList()`: đường đó gọi `GET /ban-ghi-cham-cong` vốn có
+   * AdminGuard ở backend, nhân viên thường sẽ nhận 403.
+   */
+  async cuaToi(tuNgay: string, denNgay: string): Promise<AttendanceRecord[]> {
+    const res = await super.get<Array<Record<string, unknown>>>({
+      endpoint: '/cua-toi',
+      params: { tuNgay, denNgay },
+    });
+    return res.map(this.transform);
   }
 
   async checkIn(dto: ChamCongDto): Promise<AttendanceRecord> {
