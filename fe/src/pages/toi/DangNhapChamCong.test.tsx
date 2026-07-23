@@ -7,6 +7,13 @@ import DangNhapChamCong from './DangNhapChamCong';
 import * as identity from '@/services/identitySession';
 import * as dieuHuong from '@/ultils/dieuHuong';
 import { KHOA_CONG_TY_DA_NHO } from './chonCongTy';
+import {
+  setAuthToken,
+  getAuthToken,
+  setCurrentTenant,
+  getCurrentTenant,
+  clearAuthToken,
+} from '@/services/base/service-base';
 
 // antd Form/Grid gọi matchMedia trong hiệu ứng nội bộ; jsdom không có sẵn.
 // Không polyfill thì Form ném lỗi ngay khi mount và ô mật khẩu không bao giờ
@@ -31,6 +38,12 @@ beforeAll(() => {
 const A = { tenantId: 't1', tenantName: 'Công ty A' };
 const B = { tenantId: 't2', tenantName: 'Công ty B' };
 
+/**
+ * Đích điều hướng sau khi đã có token. `?tenant=` là bắt buộc, không phải
+ * trang trí — xem Finding 2 và test "công ty vừa chọn phải đi kèm..." bên dưới.
+ */
+const DICH = (tenantId: string) => `/toi/cham-cong?tenant=${tenantId}`;
+
 const ve = () => render(<MemoryRouter><DangNhapChamCong /></MemoryRouter>);
 
 let diToi: ReturnType<typeof vi.spyOn>;
@@ -38,6 +51,10 @@ let diToi: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
+  // `service-base` giữ token trong một biến module ngoài localStorage, nên
+  // `localStorage.clear()` một mình KHÔNG dọn sạch — thiếu dòng này thì token
+  // của test trước còn sống và test Finding 4 xanh giả.
+  clearAuthToken();
   // sessionStorage.clear() ở đây là bắt buộc: cờ chống-vòng-lặp ở Finding 1
   // sống trong sessionStorage cả đời tab, nên nếu không dọn, một test trước
   // đã điều hướng thành công sẽ để lại cờ và làm sai lệch mọi test sau.
@@ -66,7 +83,7 @@ describe('DangNhapChamCong — phiên còn sống', () => {
     // component đã ở màn spinner rồi, chớp nháy đã qua.
     expect(screen.queryByLabelText(/mật khẩu/i)).toBeNull();
 
-    await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
+    await waitFor(() => expect(diToi).toHaveBeenCalledWith(DICH('t1')));
     expect(screen.queryByLabelText(/mật khẩu/i)).toBeNull();
     expect(login).not.toHaveBeenCalled();
   });
@@ -105,6 +122,75 @@ describe('DangNhapChamCong — phiên còn sống', () => {
 
     await waitFor(() => expect(logout).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.getByLabelText(/mật khẩu/i)).toBeTruthy());
+  });
+
+  /**
+   * Finding 4 (đợt review cuối). Đóng phiên identity KHÔNG đủ: hrm tự kiểm
+   * access token bằng HS256 và không bao giờ hỏi lại identity, nên token cũ
+   * trong localStorage vẫn sống hết 15 phút của nó — gõ /toi/cham-cong là ra
+   * dữ liệu người trước. Nút này sinh ra đúng cho máy mượn nên đây là chỗ
+   * không được rò.
+   */
+  it('"Đăng nhập tài khoản khác" xoá luôn token hrm và tenant cache, không chỉ cookie identity', async () => {
+    setAuthToken('token-cua-nguoi-truoc');
+    setCurrentTenant({ tenantId: 't1', tenantName: 'Công ty A' } as any);
+    expect(getAuthToken()).toBe('token-cua-nguoi-truoc'); // tiền đề: có rò thật để bịt
+
+    vi.spyOn(identity, 'identityTenants').mockResolvedValue([]);
+    vi.spyOn(identity, 'identityLogout').mockResolvedValue(undefined);
+
+    ve();
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /đăng nhập tài khoản khác/i })).toBeTruthy()
+    );
+    fireEvent.click(screen.getByRole('button', { name: /đăng nhập tài khoản khác/i }));
+
+    await waitFor(() => expect(getAuthToken()).toBeNull());
+    expect(getCurrentTenant()).toBeNull();
+  });
+});
+
+describe('DangNhapChamCong — công ty đã chọn phải sống sót qua lần tải lại', () => {
+  /**
+   * Finding 2. `diToi` là full page reload; sau đó `initAuth` chốt công ty
+   * theo thứ tự `handoffTenant (?tenant) ?? currentTenant ?? tenant trong
+   * token`. Một `currentTenant` cũ còn sót trong localStorage (phiên Portal
+   * hoặc phiên quản trị trước đó) sẽ ĐÈ lên lựa chọn vừa bấm ở đây — nhân viên
+   * chọn Công ty B nhưng bị đặt vào Công ty A và chấm công nhầm công ty, lặp
+   * lại mỗi ngày vì lựa chọn còn được ghi nhớ.
+   *
+   * Test dựng đúng cái bẫy đó: `currentTenant` cũ = t1, người dùng bấm t2.
+   */
+  it('có currentTenant cũ trong localStorage, chọn công ty khác → URL mang ?tenant của công ty vừa chọn', async () => {
+    setCurrentTenant({ tenantId: 't1', tenantName: 'Công ty A' } as any);
+    vi.spyOn(identity, 'identityTenants').mockResolvedValue([A, B]);
+    vi.spyOn(identity, 'refreshFromIdentity').mockResolvedValue('token-moi');
+
+    ve();
+
+    await waitFor(() => expect(screen.getByText('Công ty B')).toBeTruthy());
+    fireEvent.click(screen.getByText('Công ty B'));
+
+    await waitFor(() => expect(diToi).toHaveBeenCalled());
+    const url = String(diToi.mock.calls[0][0]);
+    // Không so khớp cả chuỗi: điều đang khoá là "ý định công ty t2 có được
+    // truyền đi qua kênh mà initAuth ưu tiên hay không".
+    expect(new URLSearchParams(url.split('?')[1] ?? '').get('tenant')).toBe('t2');
+    expect(url.startsWith('/toi/cham-cong')).toBe(true);
+  });
+
+  it('công ty đã nhớ cũng phải đi kèm ?tenant, không dựa vào currentTenant cũ', async () => {
+    localStorage.setItem(KHOA_CONG_TY_DA_NHO, 't2');
+    setCurrentTenant({ tenantId: 't1', tenantName: 'Công ty A' } as any);
+    vi.spyOn(identity, 'identityTenants').mockResolvedValue([A, B]);
+    vi.spyOn(identity, 'refreshFromIdentity').mockResolvedValue('token-moi');
+
+    ve();
+
+    await waitFor(() => expect(diToi).toHaveBeenCalled());
+    const url = String(diToi.mock.calls[0][0]);
+    expect(new URLSearchParams(url.split('?')[1] ?? '').get('tenant')).toBe('t2');
   });
 });
 
@@ -176,7 +262,7 @@ describe('DangNhapChamCong — chặn vòng lặp reload khi tự động điề
     fireEvent.click(screen.getByRole('button', { name: /đăng nhập/i }));
 
     await waitFor(() => expect(login).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
+    await waitFor(() => expect(diToi).toHaveBeenCalledWith(DICH('t1')));
     expect(screen.queryByText(/Không vào được màn chấm công/i)).toBeNull();
   });
 });
@@ -208,7 +294,7 @@ describe('DangNhapChamCong — chưa có phiên', () => {
     ve();
     await nhapVaGui();
 
-    await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
+    await waitFor(() => expect(diToi).toHaveBeenCalledWith(DICH('t1')));
   });
 
   /**
@@ -244,7 +330,7 @@ describe('DangNhapChamCong — chưa có phiên', () => {
     fireEvent.click(nutGui);
 
     moTiepPhien([A]);
-    await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
+    await waitFor(() => expect(diToi).toHaveBeenCalledWith(DICH('t1')));
 
     expect(login).toHaveBeenCalledTimes(1);
   });
@@ -294,7 +380,7 @@ describe('DangNhapChamCong — nhiều công ty', () => {
 
     fireEvent.click(screen.getByText('Công ty B'));
 
-    await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
+    await waitFor(() => expect(diToi).toHaveBeenCalledWith(DICH('t2')));
     expect(localStorage.getItem(KHOA_CONG_TY_DA_NHO)).toBe('t2');
   });
 
@@ -305,7 +391,7 @@ describe('DangNhapChamCong — nhiều công ty', () => {
 
     ve();
 
-    await waitFor(() => expect(diToi).toHaveBeenCalledWith('/toi/cham-cong'));
+    await waitFor(() => expect(diToi).toHaveBeenCalledWith(DICH('t2')));
     expect(screen.queryByText('Công ty B')).toBeNull();
   });
 });

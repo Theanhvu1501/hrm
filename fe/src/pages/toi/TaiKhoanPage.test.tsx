@@ -142,11 +142,19 @@ describe('TaiKhoanPage', () => {
     expect(screen.queryByText(/chưa có thiết bị nào được đăng ký/i)).toBeNull();
   });
 
-  it('đăng xuất đóng luôn phiên identity, không chỉ xoá token cục bộ', async () => {
+  /**
+   * Finding 3. Hai test đăng xuất trước đây mock `useAuth` nên không bao giờ
+   * quan sát được đích hạ cánh — vì thế không ai thấy `AuthContext.logout` vốn
+   * ĐÃ POST `/api/logout` (nên gọi thêm `identityLogout()` ở màn hình là bắn
+   * hai lượt) và đưa nhân viên về Portal.
+   *
+   * Ở tầng này khoá đúng phần thuộc về màn hình: nó phải yêu cầu đích
+   * `/toi/login` và không được tự đóng phiên identity lần nữa. Phần "yêu cầu
+   * đó biến thành điều hướng thật" được khoá ở
+   * `TaiKhoanPage.dangxuat.test.tsx` với AuthProvider thật.
+   */
+  it('đăng xuất yêu cầu hạ cánh ở /toi/login, không phải Portal', async () => {
     const logout = vi.fn();
-    const identityLogout = vi
-      .spyOn(await import('@/services/identitySession'), 'identityLogout')
-      .mockResolvedValue(undefined);
     mockAuth.mockReturnValue({
       user: { hoTen: 'Nguyễn Văn Hải', isSuperAdmin: false },
       logout,
@@ -157,18 +165,14 @@ describe('TaiKhoanPage', () => {
     await waitFor(() => expect(screen.getByText('Đăng xuất')).toBeTruthy());
     fireEvent.click(screen.getByText('Đăng xuất'));
 
-    await waitFor(() => expect(identityLogout).toHaveBeenCalled());
-    expect(logout).toHaveBeenCalled();
+    await waitFor(() => expect(logout).toHaveBeenCalledWith('/toi/login'));
   });
 
-  /**
-   * Người dùng đã bấm đăng xuất rồi — identity hỏng cũng không được kẹt lại
-   * màn hình cũ với phiên cục bộ còn nguyên.
-   */
-  it('identity lỗi thì vẫn dọn phiên cục bộ', async () => {
+  it('không gọi identityLogout lần hai — AuthContext.logout đã đóng phiên identity', async () => {
+    const identityLogout = vi
+      .spyOn(await import('@/services/identitySession'), 'identityLogout')
+      .mockResolvedValue(undefined);
     const logout = vi.fn();
-    vi.spyOn(await import('@/services/identitySession'), 'identityLogout')
-      .mockRejectedValue(new Error('offline'));
     mockAuth.mockReturnValue({
       user: { hoTen: 'Nguyễn Văn Hải', isSuperAdmin: false },
       logout,
@@ -180,5 +184,6 @@ describe('TaiKhoanPage', () => {
     fireEvent.click(screen.getByText('Đăng xuất'));
 
     await waitFor(() => expect(logout).toHaveBeenCalled());
+    expect(identityLogout).not.toHaveBeenCalled();
   });
 });

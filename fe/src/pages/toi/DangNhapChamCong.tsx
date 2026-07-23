@@ -8,7 +8,11 @@ import {
   refreshFromIdentity,
   TenantChamCong,
 } from '@/services/identitySession';
-import { setAuthToken } from '@/services/base/service-base';
+import {
+  setAuthToken,
+  clearAuthToken,
+  clearCurrentTenant,
+} from '@/services/base/service-base';
 import { chonCongTy, docCongTyDaNho, ghiCongTyDaNho } from './chonCongTy';
 import '@/components/layout/employee-shell.css';
 
@@ -128,7 +132,15 @@ export default function DangNhapChamCong() {
     // Tải lại cả trang thay vì navigate: AuthContext.initAuth chỉ chạy lúc
     // mount, và refreshUser() không set currentTenant lẫn nạp lĩnh vực. Đi
     // bằng router sẽ để isAuthenticated = false và bị guard đá ngược lại đây.
-    diToi('/toi/cham-cong');
+    //
+    // `?tenant=` KHÔNG phải trang trí: sau khi tải lại, `initAuth` chốt công ty
+    // theo thứ tự `handoffTenant ?? currentTenant ?? tenant trong token`. Một
+    // `currentTenant` cũ còn sót trong localStorage (từ phiên Portal hoặc phiên
+    // quản trị trước đó) sẽ ĐÈ lên công ty vừa chọn ở đây — nhân viên bấm Công
+    // ty B mà bị đặt vào Công ty A và chấm công nhầm công ty, ngày nào cũng lặp
+    // vì lựa chọn còn được ghi nhớ. Đây đúng là kênh mà handoff SSO từ Portal
+    // vẫn dùng để báo ý định, và `initAuth` đã xếp nó lên đầu.
+    diToi(`/toi/cham-cong?tenant=${encodeURIComponent(tenantId)}`);
   }, []);
 
   /**
@@ -181,6 +193,13 @@ export default function DangNhapChamCong() {
    */
   const dangXuatVaVeMatKhau = useCallback(async () => {
     await identityLogout();
+    // Đóng phiên identity thôi CHƯA đủ. hrm tự kiểm access token bằng HS256 và
+    // không bao giờ hỏi lại identity, nên token cũ nằm trong localStorage vẫn
+    // dùng được đến hết 15 phút đời của nó: chỉ cần gõ /toi/cham-cong là thấy
+    // dữ liệu của người vừa đăng xuất. Nút này tồn tại ĐÚNG cho tình huống máy
+    // mượn, nên đây là chỗ không được phép rò.
+    clearAuthToken();
+    clearCurrentTenant();
     setLoi('');
     setMan('nhap_mat_khau');
   }, []);

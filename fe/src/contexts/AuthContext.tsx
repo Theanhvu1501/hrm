@@ -9,6 +9,28 @@ import { ApiError, ApiErrorType } from '@/config/api';
 import { getAvailableModuleCodes } from '@/config/modules';
 import { linhVucService, type LinhVuc } from '@/services/linhVucService';
 
+/**
+ * Đang đứng trong vỏ nhân viên (`/toi`) hay không?
+ *
+ * Vỏ nhân viên có cổng đăng nhập RIÊNG ở `/toi/login`, gọi thẳng identity từ
+ * trình duyệt. Nếu ở nhánh này mà vẫn đá về Portal thì nhân viên mở máy mới,
+ * vừa xoá dữ liệu, hoặc vừa cài PWA sẽ bị ném ngược vào đúng luồng 5 bước qua
+ * Portal mà cổng này sinh ra để xoá — và tệ hơn: `window.location.href` chạy
+ * ngay trong microtask, trước cả khi cổng kịp dò phiên. Ở `/toi` ta KHÔNG đá
+ * về Portal; cứ để `initAuth` chạy nốt (`setIsLoading(false)`) rồi guard
+ * `YeuCauDangNhapChamCong` đưa về `/toi/login` — chính nó mới biết cách tận
+ * dụng cookie identity còn sống.
+ *
+ * CỐ Ý hẹp và chỉ đọc `window.location.pathname`: mọi đường dẫn NGOÀI `/toi`
+ * (toàn bộ khu quản trị) giữ nguyên hành vi cũ, vẫn bật về Portal. Nhìn qua
+ * thì đây trông như một chỗ thiếu nhất quán — nó là chủ ý, vì hai khu vực có
+ * hai cửa đăng nhập khác nhau.
+ */
+function dangOVoNhanVien(): boolean {
+  const duongDan = window.location.pathname ?? '';
+  return duongDan === '/toi' || duongDan.startsWith('/toi/');
+}
+
 function extractPermissionsFromToken(token: string): string[] {
   try {
     const payload = token.split('.')[1];
@@ -36,7 +58,12 @@ interface AuthContextType {
   // Nạp lại danh sách lĩnh vực (sau khi admin sửa).
   refreshModules: () => Promise<void>;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  logout: () => void;
+  /**
+   * `dichDen` = nơi hạ cánh sau khi đã đóng phiên (cả hrm lẫn identity).
+   * Bỏ trống → về Portal như cũ (khu quản trị). Vỏ nhân viên truyền
+   * `/toi/login` để không phải đi vòng qua Portal.
+   */
+  logout: (dichDen?: string) => void;
   refreshUser: () => Promise<void>;
   applyGlossary: (glossary: import('@/types/tenant').Glossary) => void;
   currentLinhVuc: LinhVuc | null;
@@ -159,7 +186,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Nếu không có phiên hợp lệ → redirect sang portal identity (nếu được cấu hình).
       // Khi redirect: giữ màn loading (trang sắp điều hướng đi, không render LoginPage).
       // Khi không redirect (VITE_IDENTITY_URL rỗng): hiển thị LoginPage cục bộ (fallback dev).
-      if (!hasValidSession && redirectToIdentityLogin()) return;
+      // Ngoại lệ /toi: xem chú thích ở `dangOVoNhanVien`. Phải rơi xuống
+      // `setIsLoading(false)`, nếu không guard của vỏ nhân viên quay mãi.
+      if (!hasValidSession && !dangOVoNhanVien() && redirectToIdentityLogin()) return;
       setIsLoading(false);
     };
 
@@ -171,6 +200,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       clearAuthToken();
       clearCurrentTenant();
+      // Token hết hạn giữa ca làm phải đưa nhân viên về /toi/login, không phải
+      // về Portal — xem `dangOVoNhanVien`. setUser(null) ở trên đã đủ để guard
+      // chuyển hướng.
+      if (dangOVoNhanVien()) return;
       redirectToIdentityLogin(); // dev (VITE_IDENTITY_URL rỗng): no-op, giữ hành vi cũ
     };
 
@@ -197,6 +230,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         clearAuthToken();
         clearCurrentTenant();
+        // Cùng lý do như hai chỗ trên: ở vỏ nhân viên thì về /toi/login chứ
+        // không văng ra Portal — xem `dangOVoNhanVien`.
+        if (dangOVoNhanVien()) return;
         redirectToIdentityLogin();
       }
     }, REVALIDATE_MS);
@@ -257,7 +293,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [refreshModules]);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (dichDen?: string) => {
     try {
       await authService.logout();
     } catch (error) {
@@ -272,16 +308,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       clearAuthToken();
       clearCurrentTenant();
 
-      // SSO: đăng xuất cũng kết thúc phiên ở MasterCeo Portal rồi quay về cổng chính.
+      // SSO: đăng xuất cũng kết thúc phiên ở MasterCeo Portal. Đây là NƠI DUY
+      // NHẤT gọi /api/logout trong luồng đăng xuất — màn hình gọi thêm
+      // `identityLogout()` nữa là bắn hai lượt cho cùng một cú bấm.
       const identityUrl = import.meta.env.VITE_IDENTITY_URL as string | undefined;
       if (identityUrl) {
         try {
           await fetch(`${identityUrl}/api/logout`, { method: 'POST', credentials: 'include' });
         } catch {
-          /* bỏ qua — vẫn điều hướng về Portal */
+          /* bỏ qua — vẫn phải điều hướng đi */
         }
-        window.location.href = identityUrl;
       }
+      // Mặc định về Portal (giữ nguyên hành vi khu quản trị). Vỏ nhân viên
+      // truyền `/toi/login` để hạ cánh thẳng ở cổng chấm công — Portal chính
+      // là chặng đường vòng đợt này sinh ra để xoá.
+      const diDau = dichDen ?? identityUrl;
+      if (diDau) window.location.href = diDau;
     }
   }, []);
 
