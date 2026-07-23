@@ -96,3 +96,99 @@ export async function identityApps(): Promise<IdentityApp[]> {
     return [];
   }
 }
+
+/** Công ty dạng rút gọn cho cổng chấm công — chỉ cần đủ để chọn và hiển thị. */
+export interface TenantChamCong {
+  tenantId: string;
+  tenantName: string;
+}
+
+export type KetQuaDangNhap = 'ok' | 'sai_thong_tin' | 'loi_mang';
+
+/**
+ * Đăng nhập thẳng vào identity từ trình duyệt.
+ *
+ * hrm CỐ Ý không đứng giữa: mật khẩu đi từ trình duyệt sang identity, backend
+ * hrm không bao giờ thấy nó. Cookie `mc_session` identity đặt nằm ở domain
+ * `.masterceo.com.vn` nên đây là CÙNG một phiên với Portal — không phải
+ * identity thứ hai, chỉ là cửa trước thứ hai.
+ *
+ * Trả mã thay vì ném, theo đúng lối `refreshFromIdentity` ở trên: màn hình cần
+ * phân biệt "sai mật khẩu" với "mất mạng" để nói đúng việc phải làm tiếp, và
+ * `try/catch` rải khắp component thì không ai đọc được.
+ */
+export async function identityLogin(
+  email: string,
+  matKhau: string
+): Promise<KetQuaDangNhap> {
+  if (!IDENTITY_URL) return 'loi_mang';
+  try {
+    const res = await fetch(`${IDENTITY_URL}/api/login`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: matKhau }),
+    });
+    if (res.ok) return 'ok';
+    // CHỈ 401 mới là sai thông tin. 500 mà báo "sai mật khẩu" sẽ khiến người
+    // dùng gõ lại đúng mật khẩu mười lần rồi gọi HR.
+    return res.status === 401 ? 'sai_thong_tin' : 'loi_mang';
+  } catch {
+    return 'loi_mang';
+  }
+}
+
+/**
+ * Danh sách công ty mà tài khoản hiện tại dùng được app này.
+ *
+ * `GET /api/me/tenants` của identity dùng `SessionOrBearerGuard` nên CHỈ cookie
+ * là đủ — không cần access token. Đó là thứ cho phép cổng chấm công biết
+ * "phiên còn sống không" TRƯỚC khi hỏi mật khẩu.
+ *
+ * `null` và `[]` là hai chuyện khác nhau và không được gộp:
+ * - `null` = không có phiên (401) hoặc không gọi được → phải hiện ô mật khẩu.
+ * - `[]`   = có phiên, nhưng tài khoản không được cấp app này → phải báo lỗi
+ *            và liên hệ HR; hỏi mật khẩu ở đây là dẫn người dùng đi vòng vô ích.
+ */
+export async function identityTenants(): Promise<TenantChamCong[] | null> {
+  if (!IDENTITY_URL) return null;
+  try {
+    const res = await fetch(
+      `${IDENTITY_URL}/api/me/tenants?app=${encodeURIComponent(APP_ID)}`,
+      { credentials: 'include' }
+    );
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null);
+    const list = (body?.data ?? []) as Array<{ tenantId: string; tenantName: string }>;
+    return list.map((t) => ({ tenantId: t.tenantId, tenantName: t.tenantName }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Đóng phiên identity của CHÍNH thiết bị này.
+ *
+ * Không có bước này thì "Đăng xuất" chỉ xoá token cục bộ, còn cookie
+ * `mc_session` vẫn sống — mở lại masterceo.com.vn là vào thẳng, không phải
+ * nhập mật khẩu. Trên máy cá nhân dùng để chấm công, đăng xuất phải có nghĩa
+ * là đăng xuất.
+ *
+ * Endpoint này chỉ đóng phiên của đúng cookie đó (xem chú thích ở
+ * `identity-service/src/auth/auth.controller.ts`), nên không đá người dùng ra
+ * khỏi máy tính để bàn của họ.
+ *
+ * Nuốt mọi lỗi: người dùng đã bấm đăng xuất rồi, phần dọn phiên cục bộ và
+ * điều hướng phải chạy tiếp dù identity có trả lời hay không.
+ */
+export async function identityLogout(): Promise<void> {
+  if (!IDENTITY_URL) return;
+  try {
+    await fetch(`${IDENTITY_URL}/api/logout`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+  } catch {
+    /* bỏ qua — xem chú thích trên */
+  }
+}
