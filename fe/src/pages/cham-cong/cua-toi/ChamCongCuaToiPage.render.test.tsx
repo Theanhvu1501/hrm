@@ -123,7 +123,7 @@ afterEach(() => {
 });
 
 describe('Chấm công của tôi — đường hạnh phúc', () => {
-  it('hiện nút "Chấm công VÀO" và ghi nhận thành công', async () => {
+  it('hiện nút "Chấm công" (chiều vào) và ghi nhận thành công', async () => {
     vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
     const checkIn = vi
       .spyOn(attendanceRecordService, 'checkIn')
@@ -131,7 +131,7 @@ describe('Chấm công của tôi — đường hạnh phúc', () => {
 
     render(<ChamCongCuaToiPage />);
 
-    const nut = await screen.findByRole('button', { name: /Chấm công VÀO/ });
+    const nut = await screen.findByRole('button', { name: /Chấm công$/ });
     fireEvent.click(nut);
 
     expect(await screen.findByText(/Đã chấm công vào thành công/)).toBeTruthy();
@@ -149,7 +149,7 @@ describe('Chấm công của tôi — đường hạnh phúc', () => {
     expect(dto.tenThietBi).toBeTruthy();
   });
 
-  it('tin hanhDongKeTiep của backend: "ra" → hiện nút RA và gọi checkOut', async () => {
+  it('tin hanhDongKeTiep của backend: "ra" → bấm nút gọi checkOut', async () => {
     // Danh sách bản ghi hôm nay RỖNG nhưng backend vẫn bảo "ra" (lượt vào mở
     // từ hôm qua, ca qua đêm). Nếu FE tự suy từ banGhi thì sẽ hiện nút VÀO và
     // đẩy người dùng thẳng vào lỗi 409.
@@ -161,7 +161,7 @@ describe('Chấm công của tôi — đường hạnh phúc', () => {
       .mockResolvedValue(banGhiMau({ loai: 'ra' }));
 
     render(<ChamCongCuaToiPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /Chấm công RA/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     await waitFor(() => expect(checkOut).toHaveBeenCalledTimes(1));
   });
@@ -194,7 +194,7 @@ describe('Chấm công của tôi — ca qua đêm', () => {
 
     render(<ChamCongCuaToiPage />);
 
-    expect(await screen.findByRole('button', { name: /Chấm công RA/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Chấm công$/ })).toBeTruthy();
     expect(screen.queryByText('Chưa có lượt chấm công nào')).toBeNull();
     // Tiêu đề nói rõ đây là ca của ngày công hôm trước, không đề ngày hôm nay.
     expect(screen.getByText(/Chi tiết ca ngày 2026-07-22 \(chưa kết thúc\)/)).toBeTruthy();
@@ -220,7 +220,7 @@ describe('Chấm công của tôi — ngoài vùng KHÔNG phải lỗi', () => {
     );
 
     const { container } = render(<ChamCongCuaToiPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /Chấm công VÀO/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     const tieuDe = await screen.findByText(/Đã ghi nhận — ngoài khu vực cho phép/);
     expect(tieuDe).toBeTruthy();
@@ -248,7 +248,7 @@ describe('Chấm công của tôi — thiết bị chưa được phép có LỐ
       );
 
     render(<ChamCongCuaToiPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /Chấm công VÀO/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     const nutGui = await screen.findByRole('button', {
       name: /Gửi HR duyệt máy này/,
@@ -268,7 +268,7 @@ describe('Chấm công của tôi — thiết bị chưa được phép có LỐ
     );
 
     render(<ChamCongCuaToiPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /Chấm công VÀO/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     expect(await screen.findByText(/đã bị HR từ chối/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Gửi HR duyệt máy này/ })).toBeNull();
@@ -292,12 +292,12 @@ describe('Chấm công của tôi — 3 mã lỗi thiết bị backend thêm sau
     );
 
     render(<ChamCongCuaToiPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /Chấm công VÀO/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     expect(await screen.findByText(mong)).toBeTruthy();
     expect(screen.queryByText(/Có lỗi xảy ra\. Vui lòng thử lại\./)).toBeNull();
     // Cả 3 đều phải liên hệ HR — bấm lại không đổi được gì.
-    expect(screen.queryByRole('button', { name: /Chấm công VÀO/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Chấm công$/ })).toBeNull();
   });
 });
 
@@ -312,7 +312,7 @@ describe('Chấm công của tôi — nhân viên đã nghỉ việc', () => {
     );
 
     render(<ChamCongCuaToiPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /Chấm công VÀO/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     expect(await screen.findByText(cau)).toBeTruthy();
   });
@@ -325,12 +325,12 @@ describe('Chấm công của tôi — vị trí và sai thứ tự', () => {
     const checkIn = vi.spyOn(attendanceRecordService, 'checkIn');
 
     render(<ChamCongCuaToiPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /Chấm công VÀO/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     expect(await screen.findByText(/chưa được cấp quyền vị trí/)).toBeTruthy();
     // Không gọi API khi chưa có vị trí — tránh đẻ ra bản ghi thiếu toạ độ.
     expect(checkIn).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: /Chấm công VÀO/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Chấm công$/ })).toBeTruthy();
   });
 
   it('409 sai thứ tự → hiện câu backend (nêu đích danh ngày cần HR nhập bù)', async () => {
@@ -347,10 +347,10 @@ describe('Chấm công của tôi — vị trí và sai thứ tự', () => {
     );
 
     render(<ChamCongCuaToiPage />);
-    fireEvent.click(await screen.findByRole('button', { name: /Chấm công VÀO/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     expect(await screen.findByText(cau)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Chấm công VÀO/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Chấm công$/ })).toBeTruthy();
   });
 });
 
@@ -374,7 +374,7 @@ describe('Chấm công của tôi — chưa liên kết hồ sơ', () => {
     render(<ChamCongCuaToiPage />);
 
     expect(await screen.findByText(/chưa được gắn với hồ sơ nhân viên/)).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /Chấm công VÀO/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Chấm công$/ })).toBeNull();
   });
 
   it('404 lúc mở màn hình → dải lịch tuần cũng ẩn theo, không nổi lên rỗng trên thông báo chặn', async () => {
@@ -416,10 +416,10 @@ describe('Chấm công của tôi — chưa liên kết hồ sơ', () => {
     const nut = await screen.findByRole('button', { name: /Thử lại/ });
     // Không được hiện nút Check-out "phòng hờ": đoán sai chiều là đẩy thẳng
     // người dùng vào lỗi 409.
-    expect(screen.queryByRole('button', { name: /Chấm công RA/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Chấm công$/ })).toBeNull();
 
     fireEvent.click(nut);
-    expect(await screen.findByRole('button', { name: /Chấm công VÀO/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Chấm công$/ })).toBeTruthy();
     expect(homNay).toHaveBeenCalledTimes(2);
   });
 });
@@ -497,7 +497,7 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
 
     const { container } = render(<ChamCongCuaToiPage />);
 
-    await waitFor(() => expect(screen.getByText(/Chấm công VÀO/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/^Chấm công$/)).toBeTruthy());
     // Chỉ khoá được nút chấm công thì chưa đủ để chứng minh `cuaToi` thật sự
     // bị gọi và lỗi thật sự được bắt — dải lịch tuần phải rơi về "toàn xám"
     // (dọn về mảng rỗng), không phải bịa dữ liệu hay treo nửa vời.
@@ -564,7 +564,7 @@ describe('Chấm công của tôi — dải lịch tuần đồng bộ sau khi c
     // Lần nạp đầu tiên là lúc `init` mount trang.
     await waitFor(() => expect(cuaToi).toHaveBeenCalledTimes(1));
 
-    fireEvent.click(await screen.findByRole('button', { name: /Chấm công VÀO/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
     expect(await screen.findByText(/Đã chấm công vào thành công/)).toBeTruthy();
     // Lần nạp thứ hai phải xảy ra SAU khi chấm công thành công — nếu không,
@@ -623,5 +623,63 @@ describe('Chấm công của tôi — chi tiết từng lượt chấm', () => {
     // Ô ba trạng thái chỉ nói được về lượt vào ĐẦU TIÊN (Muộn 5 phút); lượt
     // vào thứ hai muộn 20 phút chỉ có chi tiết từng lượt mới kể được.
     await waitFor(() => expect(screen.getByText('Muộn 20 phút')).toBeTruthy());
+  });
+});
+
+/**
+ * Task 5: nút theo mockup (dòng 274) chỉ có MỘT nhãn "Chấm công" — ba ô
+ * trạng thái ngay trên đã nói rõ đang thiếu vào hay thiếu ra, chữ VÀO/RA
+ * trên nút là thừa. Mockup còn vẽ disabled "Đã chấm đủ" (dòng 381) nhưng cố
+ * ý KHÔNG làm theo: ai lỡ bấm ra sớm sẽ bị khoá cả ngày, phải nhờ HR nhập
+ * bù. Cho bấm lại thì tự lành.
+ */
+describe('Chấm công của tôi — nút một nhãn theo mockup, không bao giờ tắt', () => {
+  it('nút luôn ghi "Chấm công", không phải VÀO/RA', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+
+    render(<ChamCongCuaToiPage />);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Chấm công$/ })).toBeTruthy());
+    expect(screen.queryByText(/Chấm công VÀO|Chấm công RA/)).toBeNull();
+  });
+
+  /**
+   * Mockup vẽ nút disabled "Đã chấm đủ", nhưng cố ý không làm theo: ai lỡ bấm
+   * ra sớm sẽ bị khoá cả ngày và phải nhờ HR. Cho bấm lại thì tự lành.
+   */
+  it('đủ công → nút VẪN bấm được, kèm dòng nhắc cập nhật giờ ra', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
+      homNayMau({
+        banGhi: [
+          { id: 'r1', employeeId: 'e1', ngay: '2026-07-22', loai: 'vao', thoiDiem: '2026-07-22T01:00:00.000Z', ngoaiVung: false, soPhutDiMuon: 0, soPhutVeSom: 0, laNgayNghi: false, nguonTao: 'tu_cham' },
+          { id: 'r2', employeeId: 'e1', ngay: '2026-07-22', loai: 'ra', thoiDiem: '2026-07-22T10:00:00.000Z', ngoaiVung: false, soPhutDiMuon: 0, soPhutVeSom: 0, laNgayNghi: false, nguonTao: 'tu_cham' },
+        ],
+        soCong: 1,
+        hanhDongKeTiep: 'ra',
+      })
+    );
+
+    render(<ChamCongCuaToiPage />);
+
+    const nut = await screen.findByRole('button', { name: /Chấm công$/ });
+    // Dự án này KHÔNG cài @testing-library/jest-dom (không có setup file nào
+    // mở rộng matcher) nên `toBeDisabled()` không tồn tại — đọc thẳng thuộc
+    // tính DOM `disabled`, đúng cách columnFilterDropdown.render.test.tsx đã
+    // làm ở chỗ khác trong repo.
+    expect((nut as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByText(/bấm lại nếu cần cập nhật giờ ra/i)).toBeTruthy();
+  });
+
+  it('ngoài bán kính → hiện câu backend và nút vẫn còn', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+    vi.spyOn(attendanceRecordService, 'checkIn').mockRejectedValue(
+      loiBackend(403, 'NGOAI_BAN_KINH_CHO_PHEP', 'Bạn đang cách 480m')
+    );
+
+    render(<ChamCongCuaToiPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
+
+    await waitFor(() => expect(screen.getByText(/480m/)).toBeTruthy());
+    expect(screen.getByRole('button', { name: /Chấm công$/ })).toBeTruthy();
   });
 });

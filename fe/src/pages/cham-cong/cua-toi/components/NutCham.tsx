@@ -41,6 +41,10 @@ const LOI_TAM_THOI: ReadonlySet<TrangThai> = new Set<TrangThai>([
   TrangThai.TU_CHOI_VI_TRI,
   TrangThai.LOI_VI_TRI,
   TrangThai.LOI_KHAC,
+  // Đứng ngoài bán kính là lỗi tạm thời (đi lại gần là hết): câu backend nêu
+  // khoảng cách thật (vd "cách 480m") nên phải hiện ra, không được im lặng
+  // trong khi nút vẫn còn cho bấm lại.
+  TrangThai.NGOAI_BAN_KINH,
 ]);
 
 /** Cao 96px: ngón cái bấm được mà không cần nhìn, kể cả khi đang vội. */
@@ -150,6 +154,11 @@ export function NutCham() {
 
   // ── 4. Màn hình chính ──────────────────────────────────────────────────
   const laVao = homNay.hanhDongKeTiep === "vao";
+  // Đủ công = ngày công có cả lượt vào lẫn lượt ra. Nút VẪN bấm được: bấm
+  // thêm là cập nhật giờ ra, lối thoát cho người lỡ bấm ra sớm.
+  const daDuCong =
+    homNay.banGhi.some((b) => b.loai === "vao") &&
+    homNay.banGhi.some((b) => b.loai === "ra");
 
   return (
     <div>
@@ -214,8 +223,22 @@ export function NutCham() {
           }}
           onClick={() => handler.executeEvent("cham", {})}
         >
-          {laVao ? "Chấm công VÀO" : "Chấm công RA"}
+          {/*
+            Nhãn luôn là "Chấm công" (theo mockup) — ba ô trạng thái ngay
+            trên đã nói rõ đang thiếu vào hay thiếu ra, chữ VÀO/RA trên nút
+            là thừa. Màu + icon (teal/vào, cam/ra) vẫn giữ nguyên để chỉ
+            ngầm việc sắp ghi mà không cần chữ.
+          */}
+          Chấm công
         </Button>
+
+        {daDuCong && (
+          <div className="text-center">
+            <Text type="secondary" className="text-xs">
+              Đã đủ công — bấm lại nếu cần cập nhật giờ ra
+            </Text>
+          </div>
+        )}
 
         <div className="text-center">
           <Text type="secondary" className="text-xs">
