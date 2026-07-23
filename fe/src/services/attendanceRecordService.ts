@@ -11,6 +11,9 @@ export const MA_LOI_THIET_BI = {
   TRANG_THAI_KHONG_HOP_LE: 'THIET_BI_TRANG_THAI_KHONG_HOP_LE',
 } as const;
 
+/** Đứng ngoài bán kính và không được HR cấp phép chấm từ xa. */
+export const MA_LOI_NGOAI_BAN_KINH = 'NGOAI_BAN_KINH_CHO_PHEP';
+
 /**
  * Rút `code` backend gửi kèm lỗi 403.
  *

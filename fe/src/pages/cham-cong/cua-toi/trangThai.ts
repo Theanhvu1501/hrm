@@ -1,5 +1,9 @@
 import { ApiError, apiErrorMessage } from '@/config/api';
-import { maLoiChamCong, MA_LOI_THIET_BI } from '@/services/attendanceRecordService';
+import {
+  maLoiChamCong,
+  MA_LOI_THIET_BI,
+  MA_LOI_NGOAI_BAN_KINH,
+} from '@/services/attendanceRecordService';
 
 /**
  * Trạng thái màn hình chấm công. Tách khỏi component để test được bằng
@@ -34,6 +38,14 @@ export enum TrangThai {
    * câu backend gửi, vì backend là bên duy nhất biết vì sao.
    */
   BI_CHAN = 'bi_chan',
+  /**
+   * Đứng ngoài bán kính địa điểm và không được HR cấp phép chấm từ xa.
+   *
+   * CỐ Ý không nằm trong CHAN_CHAM_CONG: đây là lỗi tạm thời, đi lại gần là
+   * hết. Ẩn nút chấm công ở đây là bắt người dùng liên hệ HR cho một việc họ
+   * tự làm được trong 30 giây.
+   */
+  NGOAI_BAN_KINH = 'ngoai_ban_kinh',
   TU_CHOI_VI_TRI = 'tu_choi_vi_tri',
   LOI_VI_TRI = 'loi_vi_tri',
   SAI_THU_TU = 'sai_thu_tu',
@@ -72,6 +84,10 @@ export function phanLoaiLoi(err: unknown): TrangThai {
 
   if (status === 403) {
     const ma = maLoiChamCong(err);
+    // Kiểm tra trước bảng tra thiết bị: đây không phải lỗi thiết bị, và
+    // KHÔNG được rơi vào TrangThai.BI_CHAN (nhóm chặn) — đi lại gần rồi bấm
+    // lại là hết, nên phải có trạng thái riêng để giữ nút chấm công.
+    if (ma === MA_LOI_NGOAI_BAN_KINH) return TrangThai.NGOAI_BAN_KINH;
     // Không rơi về LOI_KHAC ("Vui lòng thử lại"): 403 luôn là quyết định có
     // chủ đích của backend, thử lại sẽ luôn hỏng y hệt. BI_CHAN hiện đúng
     // câu backend nói, kèm hướng liên hệ HR.
@@ -106,6 +122,8 @@ export const CHAN_CHAM_CONG: ReadonlySet<TrangThai> = new Set<TrangThai>([
 const UU_TIEN_CAU_BACKEND: ReadonlySet<TrangThai> = new Set<TrangThai>([
   TrangThai.BI_CHAN,
   TrangThai.SAI_THU_TU,
+  // Chỉ backend biết khoảng cách thật (vd "cách 480m") — FE không đoán nổi.
+  TrangThai.NGOAI_BAN_KINH,
 ]);
 
 export const THONG_DIEP: Record<TrangThai, string> = {
@@ -133,6 +151,8 @@ export const THONG_DIEP: Record<TrangThai, string> = {
     'Liên hệ HR để kiểm tra lại đăng ký thiết bị; bấm lại cũng không đổi được.',
   [TrangThai.BI_CHAN]:
     'Hiện chưa thể chấm công trên tài khoản này. Liên hệ HR để được hỗ trợ.',
+  [TrangThai.NGOAI_BAN_KINH]:
+    'Bạn đang ở ngoài khu vực được phép chấm công. Hãy di chuyển vào khu vực rồi bấm lại.',
   [TrangThai.TU_CHOI_VI_TRI]:
     'Trình duyệt chưa được cấp quyền vị trí. Vào Cài đặt → Quyền → Vị trí để bật, rồi thử lại.',
   [TrangThai.LOI_VI_TRI]:

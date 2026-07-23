@@ -154,6 +154,26 @@ describe('thongDiepChoTrangThai', () => {
   });
 });
 
+describe('NGOAI_BAN_KINH', () => {
+  it('403 kèm code NGOAI_BAN_KINH_CHO_PHEP → trạng thái riêng', () => {
+    const err = loiThat(403, 'NGOAI_BAN_KINH_CHO_PHEP', 'Bạn đang cách 480m');
+    expect(phanLoaiLoi(err)).toBe(TrangThai.NGOAI_BAN_KINH);
+  });
+
+  /**
+   * KHÔNG được vào nhóm chặn: người dùng chỉ cần đi lại gần rồi bấm lại.
+   * Ẩn nút là bắt họ liên hệ HR cho việc họ tự làm được trong 30 giây.
+   */
+  it('không thuộc nhóm chặn — nút chấm công phải còn', () => {
+    expect(CHAN_CHAM_CONG.has(TrangThai.NGOAI_BAN_KINH)).toBe(false);
+  });
+
+  it('hiện nguyên văn câu backend vì chỉ backend biết khoảng cách', () => {
+    const err = loiThat(403, 'NGOAI_BAN_KINH_CHO_PHEP', 'Bạn đang cách 480m');
+    expect(thongDiepChoTrangThai(TrangThai.NGOAI_BAN_KINH, err)).toContain('480m');
+  });
+});
+
 describe('CHAN_CHAM_CONG', () => {
   it('gồm mọi trạng thái thiết bị + chưa liên kết + bị chặn', () => {
     expect(CHAN_CHAM_CONG.has(TrangThai.CHUA_LIEN_KET)).toBe(true);
