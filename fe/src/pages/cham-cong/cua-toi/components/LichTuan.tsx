@@ -1,5 +1,5 @@
 import { useChamCongCuaToiHandler, useChamCongCuaToiState } from "../ChamCongCuaToiHandlerContext";
-import { AttendanceRecord } from "@/services/attendanceRecordService";
+import { AttendanceRecord, TrangThaiHomNay } from "@/services/attendanceRecordService";
 import { homNayVN } from "@/ultils/thoiGianVN";
 import { bayNgayTu, dauTuanCua, gomTheoNgay, mauChamNgay, nhanTuan } from "../lichTuan";
 import "./LichTuan.state";
@@ -14,9 +14,17 @@ const MAU: Record<string, string> = {
 
 export function LichTuan() {
   const handler = useChamCongCuaToiHandler();
+  // Cùng cờ chặn mà 3 component anh em (ShiftCard, BaOTrangThai, NutCham
+  // nhánh 4) đều dựa vào: `init` set về null trên màn hình chặn (chưa liên
+  // kết hồ sơ, thiết bị bị chặn…). Thiếu guard này thì dải 7 ngày với nút
+  // ‹ › vẫn nổi lên rỗng ngay trên thông báo chặn — trông như nửa trang còn
+  // dùng được trong khi cả màn hình đang khoá.
+  const [homNayTrangThai] = useChamCongCuaToiState("homNay", null as TrangThaiHomNay | null);
   const [tuanBatDau] = useChamCongCuaToiState("tuanBatDau", dauTuanCua(homNayVN()));
   const [banGhiTuan] = useChamCongCuaToiState("banGhiTuan", [] as AttendanceRecord[]);
   const [dangTaiTuan] = useChamCongCuaToiState("dangTaiTuan", false);
+
+  if (!homNayTrangThai) return null;
 
   const ngay = bayNgayTu(tuanBatDau);
   const theoNgay = gomTheoNgay(banGhiTuan);

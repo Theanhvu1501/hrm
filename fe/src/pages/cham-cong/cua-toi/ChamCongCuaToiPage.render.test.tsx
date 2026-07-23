@@ -8,7 +8,7 @@
  */
 import React from 'react';
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import ChamCongCuaToiPage from './ChamCongCuaToiPage';
 import {
   attendanceRecordService,
@@ -375,6 +375,32 @@ describe('Chấm công của tôi — chưa liên kết hồ sơ', () => {
     expect(screen.queryByRole('button', { name: /Chấm công VÀO/ })).toBeNull();
   });
 
+  it('404 lúc mở màn hình → dải lịch tuần cũng ẩn theo, không nổi lên rỗng trên thông báo chặn', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockRejectedValue(
+      new ApiError('Request failed with status code 404', ApiErrorType.NOT_FOUND, 404, {
+        response: {
+          status: 404,
+          data: {
+            success: false,
+            error: {
+              code: 'NOT_FOUND',
+              message: 'Tài khoản chưa được liên kết với hồ sơ nhân viên.',
+            },
+          },
+        },
+      }),
+    );
+
+    render(<ChamCongCuaToiPage />);
+
+    await screen.findByText(/chưa được gắn với hồ sơ nhân viên/);
+    // `homNay` là null trên nhánh chặn — dải 7 ngày với nút ‹ › điều hướng
+    // không được phép nổi lên rỗng ngay trên thông báo chặn, đọc như nửa
+    // trang còn dùng được trong khi cả màn hình đang khoá.
+    expect(screen.queryByRole('button', { name: 'Tuần trước' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Tuần sau' })).toBeNull();
+  });
+
   it('mất mạng lúc mở màn hình → hiện nút Thử lại, không đoán chiều vào/ra', async () => {
     const homNay = vi
       .spyOn(attendanceRecordService, 'homNay')
@@ -412,16 +438,18 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
       })
     );
 
-    render(<ChamCongCuaToiPage />);
+    const { container } = render(<ChamCongCuaToiPage />);
 
     // Cùng bản ghi còn hiện lại trong khối chi tiết (thu gọn nhưng vẫn có
-    // trong DOM) nên "08:02" xuất hiện 2 lần — chỉ định `selector` để trỏ
-    // đúng giá trị của ô ba trạng thái, không phải dòng trong chi tiết.
+    // trong DOM) nên "08:02" và "Muộn 2 phút" đều xuất hiện 2 lần (ô ba
+    // trạng thái + dòng chi tiết của chính lượt đó) — khoanh vùng vào ô ba
+    // trạng thái (`.grid-cols-3`) để không lẫn với chi tiết.
     await waitFor(() =>
       expect(screen.getByText('08:02', { selector: '.text-xl' })).toBeTruthy()
     );
-    expect(screen.getByText('Muộn 2 phút')).toBeTruthy();
-    expect(screen.getByText('Chờ ra')).toBeTruthy();
+    const baO = container.querySelector('.grid-cols-3') as HTMLElement;
+    expect(within(baO).getByText('Muộn 2 phút')).toBeTruthy();
+    expect(within(baO).getByText('Chờ ra')).toBeTruthy();
   });
 
   it('shift card hiện tên địa điểm khi công ty chỉ có một điểm', async () => {
@@ -458,9 +486,75 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
   it('lỗi tải lịch tuần không chặn nút chấm công', async () => {
     vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
     vi.spyOn(attendanceRecordService, 'cuaToi').mockRejectedValue(new Error('mạng hỏng'));
+    // tuan.handler.ts cố ý console.error khi lịch tuần hỏng — đúng, nhưng
+    // một test XANH không được phép in ra stack trace; khoá lại và trả về
+    // sau khi test xong, không để rò sang các test khác.
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { container } = render(<ChamCongCuaToiPage />);
+
+    await waitFor(() => expect(screen.getByText(/Chấm công VÀO/)).toBeTruthy());
+    // Chỉ khoá được nút chấm công thì chưa đủ để chứng minh `cuaToi` thật sự
+    // bị gọi và lỗi thật sự được bắt — dải lịch tuần phải rơi về "toàn xám"
+    // (dọn về mảng rỗng), không phải bịa dữ liệu hay treo nửa vời.
+    const cham = container.querySelectorAll('.rounded-full');
+    expect(cham).toHaveLength(7);
+    cham.forEach((el) => {
+      expect((el as HTMLElement).style.background).toBe('var(--emp-border)');
+    });
+
+    consoleError.mockRestore();
+  });
+});
+
+describe('Chấm công của tôi — chi tiết từng lượt chấm', () => {
+  it('bản ghi HR nhập không có phuongThuc thì KHÔNG bịa ra "QR"', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
+      homNayMau({
+        banGhi: [banGhiMau({ nguonTao: 'hr_nhap', phuongThuc: undefined })],
+      }),
+    );
 
     render(<ChamCongCuaToiPage />);
 
-    await waitFor(() => expect(screen.getByText(/Chấm công VÀO/)).toBeTruthy());
+    // Bản ghi HR nhập bù không có phương thức tự chấm nào cả — hiện "QR" ở
+    // đây là bịa, và đứng cạnh "HR nhập" thì hai chữ tự mâu thuẫn nhau.
+    await waitFor(() => expect(screen.getByText(/HR nhập/)).toBeTruthy());
+    expect(screen.queryByText(/QR/)).toBeNull();
+    expect(screen.queryByText(/GPS/)).toBeNull();
+    expect(screen.queryByText(/Wifi/)).toBeNull();
+  });
+
+  it('lượt vào thứ hai trong ngày bị muộn thì hiện muộn ngay trên chính lượt đó', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
+      homNayMau({
+        banGhi: [
+          banGhiMau({
+            id: 'bg-1',
+            loai: 'vao',
+            thoiDiem: '2026-07-22T01:05:00.000Z', // 08:05 giờ VN
+            soPhutDiMuon: 5,
+          }),
+          banGhiMau({
+            id: 'bg-2',
+            loai: 'ra',
+            thoiDiem: '2026-07-22T04:00:00.000Z', // 11:00 giờ VN
+            soPhutVeSom: 0,
+          }),
+          banGhiMau({
+            id: 'bg-3',
+            loai: 'vao',
+            thoiDiem: '2026-07-22T06:00:00.000Z', // 13:00 giờ VN
+            soPhutDiMuon: 20,
+          }),
+        ],
+      }),
+    );
+
+    render(<ChamCongCuaToiPage />);
+
+    // Ô ba trạng thái chỉ nói được về lượt vào ĐẦU TIÊN (Muộn 5 phút); lượt
+    // vào thứ hai muộn 20 phút chỉ có chi tiết từng lượt mới kể được.
+    await waitFor(() => expect(screen.getByText('Muộn 20 phút')).toBeTruthy());
   });
 });

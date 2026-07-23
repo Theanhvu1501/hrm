@@ -4,6 +4,18 @@ import { gioVN } from "@/ultils/thoiGianVN";
 import "./NutCham.state";
 
 /**
+ * CHỈ hiện phương thức khi biết chắc. `phuongThuc` là optional, và bản ghi
+ * do HR nhập bù không có phương thức nào cả — rơi vào nhánh mặc định sẽ đẻ
+ * ra dòng "🔳 QR · HR nhập", tự mâu thuẫn ngay trong một dòng. Thà không
+ * nói gì còn hơn bịa ra một cách chấm mà người dùng sẽ tin.
+ */
+const NHAN_PHUONG_THUC: Record<string, string> = {
+  gps: "📡 GPS",
+  wifi: "📶 Wifi",
+  qr: "🔳 QR",
+};
+
+/**
  * Chi tiết từng lượt chấm, thu gọn mặc định.
  *
  * Ca qua đêm: lúc 00:30, lượt vào lúc 22:00 thuộc NGÀY CÔNG hôm trước nên
@@ -50,16 +62,39 @@ export function ChiTietChamCong() {
                 <div>
                   <div className="text-[15px] font-semibold">{gioVN(b.thoiDiem)}</div>
                   <div className="mt-0.5 text-[11px] text-[color:var(--emp-muted)]">{b.ngay}</div>
+                  {/* Có nhiều lượt vào/ra trong ngày thì muộn/sớm phải gắn
+                      đúng vào lượt gây ra nó — ô ba trạng thái chỉ nói được
+                      về lượt đầu/cuối, không thay được dòng này. */}
+                  {b.loai === "vao" && b.soPhutDiMuon > 0 && (
+                    <div
+                      className="mt-0.5 text-[11px] font-medium"
+                      style={{ color: "var(--emp-danger)" }}
+                    >
+                      Muộn {b.soPhutDiMuon} phút
+                    </div>
+                  )}
+                  {b.loai === "ra" && b.soPhutVeSom > 0 && (
+                    <div
+                      className="mt-0.5 text-[11px] font-medium"
+                      style={{ color: "var(--emp-danger)" }}
+                    >
+                      Sớm {b.soPhutVeSom} phút
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="text-right text-xs">
                 <div>{b.locationTen ?? "—"}</div>
                 <div className="mt-0.5 text-[11px] text-[color:var(--emp-muted)]">
-                  {b.phuongThuc === "gps" ? "📡 GPS" : b.phuongThuc === "wifi" ? "📶 Wifi" : "🔳 QR"}
                   {/* Ngoài vùng KHÔNG phải lỗi: bản ghi đã vào sổ, HR sẽ xem
                       xét. Hiện như lỗi thì người dùng bấm lại và đẻ ra rác. */}
-                  {b.ngoaiVung && " · ngoài vùng"}
-                  {b.nguonTao === "hr_nhap" && " · HR nhập"}
+                  {[
+                    b.phuongThuc ? NHAN_PHUONG_THUC[b.phuongThuc] : undefined,
+                    b.ngoaiVung ? "ngoài vùng" : undefined,
+                    b.nguonTao === "hr_nhap" ? "HR nhập" : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </div>
               </div>
             </div>
