@@ -30,6 +30,17 @@ export class Employee extends BaseEntity {
   @Column({ nullable: true }) workShiftId?: string;
   // 0=CN, 1=T2 … 6=T7 — khớp Date.getDay()
   @Column('json', { nullable: true }) ngayLamViecTrongTuan?: number[];
+  /**
+   * Cho phép nhân viên này chấm công cả khi đứng NGOÀI bán kính địa điểm.
+   *
+   * Mặc định không bật: từ P3.5 trở đi, chấm ngoài bán kính bị CHẶN. Cờ này
+   * là lối mở có chủ đích cho các trường hợp thật — nhân viên thị trường, đi
+   * công trình, làm tại nhà — do HR bật cho từng người.
+   *
+   * Bản ghi tạo ra vẫn giữ `ngoaiVung: true` để HR còn nhìn thấy; cờ chỉ bỏ
+   * chặn, không tẩy dấu vết.
+   */
+  @Column({ default: false }) choPhepChamNgoaiVung: boolean;
   @Column({ default: true }) isActive: boolean;
 }
 

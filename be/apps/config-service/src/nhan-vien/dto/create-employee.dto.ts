@@ -7,6 +7,7 @@ import {
   IsArray,
   IsObject,
   IsInt,
+  IsBoolean,
   Min,
   Max,
 } from 'class-validator';
@@ -95,4 +96,8 @@ export class CreateEmployeeDto {
   @Min(0, { each: true })
   @Max(6, { each: true })
   ngayLamViecTrongTuan?: number[];
+
+  @IsOptional()
+  @IsBoolean()
+  choPhepChamNgoaiVung?: boolean;
 }

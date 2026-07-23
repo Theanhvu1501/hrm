@@ -462,4 +462,42 @@ describe('NhanVien_Service', () => {
       );
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // choPhepChamNgoaiVung — cờ HR bật cho từng người, mở khoá chấm công ngoài
+  // bán kính (P3.5 mặc định chặn, xem employee.entity.ts).
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('choPhepChamNgoaiVung', () => {
+    it('lưu được cờ cho phép chấm ngoài vùng', async () => {
+      await service.create({
+        hoTen: 'Nguyễn Văn Hải',
+        cccd: '001',
+        choPhepChamNgoaiVung: true,
+      } as any);
+
+      expect(mockEmployeeRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ choPhepChamNgoaiVung: true }),
+      );
+    });
+
+    /**
+     * Tắt cờ phải ghi được `false`, không phải bỏ trường đi. Nếu DTO nuốt mất
+     * `false` thì HR bỏ tick sẽ không bao giờ gỡ được quyền đã cấp — đúng lỗi
+     * đã gặp với ngayLamViecTrongTuan ở P3.1.
+     */
+    it('tắt cờ ghi false, không phải bỏ trường', async () => {
+      const id = '507f1f77bcf86cd799439011';
+      mockEmployeeRepo.findOne.mockResolvedValueOnce({
+        _id: id,
+        hoTen: 'Nguyễn Văn Hải',
+        cccd: '001',
+        choPhepChamNgoaiVung: true,
+      });
+
+      await service.update(id, { choPhepChamNgoaiVung: false } as any);
+
+      const daGhi = mockEmployeeRepo.save.mock.calls.at(-1)?.[0];
+      expect(daGhi).toHaveProperty('choPhepChamNgoaiVung', false);
+    });
+  });
 });
