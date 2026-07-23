@@ -492,15 +492,27 @@ describe('BanGhiChamCong_Service', () => {
       expect(recordRepo.save).not.toHaveBeenCalled();
     });
 
-    it('bản ghi ra cũ quá 60 giây → 409, không tạo dòng ra thứ hai', async () => {
-      recordRepo.find.mockResolvedValue([
-        {
-          _id: 'rec-9',
-          loai: 'ra',
-          ngay: '2026-07-15',
-          thoiDiem: new Date(Date.now() - 5 * 60_000).toISOString(),
-        },
-      ]);
+    // P3.5 đảo ngược luật cũ: bản ghi cuối là 'ra' không còn tự động bị chặn
+    // (xem describe('luật vào/ra mới (P3.5)', ...) cho trường hợp NGƯỢC LẠI —
+    // đã có vao thì chấm ra lần hai phải được chấp nhận). Test này vẫn giữ
+    // nguyên kỳ vọng 409 vì lý do khác: ngày công '2026-07-15' của bản ghi
+    // 'ra' cũ đó KHÔNG có lượt vao nào — đúng luật mới "chưa có vao thì vẫn
+    // chặn".
+    it('ngày công của bản ghi ra cũ (quá 60 giây) không có lượt vao nào → vẫn 409', async () => {
+      // recordRepo.find gọi hai lần: banGhiCuoiCung (bản ghi 'ra' cũ) rồi
+      // luotVaoCuaNgayCong tra lượt vao của ngày '2026-07-15' — rỗng, đúng
+      // với giả thiết của test.
+      recordRepo.find
+        .mockResolvedValueOnce([
+          {
+            _id: 'rec-9',
+            employeeId: 'emp-1',
+            loai: 'ra',
+            ngay: '2026-07-15',
+            thoiDiem: new Date(Date.now() - 5 * 60_000).toISOString(),
+          },
+        ])
+        .mockResolvedValueOnce([]); // không có lượt vao nào cho ngày công đó
 
       await expect(service.checkOut(USER, DTO)).rejects.toThrow(
         ConflictException,
@@ -517,6 +529,139 @@ describe('BanGhiChamCong_Service', () => {
         ForbiddenException,
       );
       expect(locationRepo.find).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('luật vào/ra mới (P3.5): không quay lại chấm vào, cho phép chấm ra lặp lại', () => {
+    const banGhi = (over: any) => ({
+      _id: 'r',
+      employeeId: 'emp-1',
+      ngay: homNayVN(),
+      thoiDiem: new Date(Date.now() - 3600_000),
+      ...over,
+    });
+
+    /**
+     * "Treo quá hạn" theo luotVaoConHieuLuc là > 1 ngày lịch (chỉ hôm nay
+     * hoặc hôm qua còn hiệu lực) — dùng 3 ngày trước để chắc chắn rơi ngoài
+     * cả hai mốc đó.
+     */
+    const ngayTreoQuaHanVN = () =>
+      ngayVNCua(new Date(Date.now() - 3 * 86_400_000));
+
+    /**
+     * Nhánh mà hôm nay trả về 'vao': lượt vào treo quá hạn. Sau P3.5 nút
+     * KHÔNG được quay lại chấm vào — ngày công đó đã có lượt vào rồi.
+     *
+     * `ngay` PHẢI thực sự quá hạn (>1 ngày): nếu để mặc định `homNayVN()`
+     * như trong brief gốc, `luotVaoConHieuLuc` coi lượt vào còn hiệu lực nên
+     * `hanhDongKeTiep` đã là 'ra' ngay trên code CŨ — test không bắt được gì.
+     */
+    it('ngày công đã có lượt vào (dù đã treo quá hạn) → hanhDongKeTiep luôn là ra', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find.mockResolvedValue([
+        banGhi({ loai: 'vao', ngay: ngayTreoQuaHanVN() }),
+      ]);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.hanhDongKeTiep).toBe('ra');
+    });
+
+    /**
+     * recordRepo.find được gọi HAI lần trong homNay(): banGhiCuoiCung (DESC,
+     * take 1) rồi danh sách bản ghi của ngày công. Phải mock riêng từng lần
+     * để `cuoi` đúng là bản ghi 'ra' mới nhất — nếu chỉ mockResolvedValue một
+     * mảng chung [vao, ra] như brief gốc, `cuoi` sẽ luôn là phần tử ĐẦU của
+     * mảng ('vao'), không hề dựng được tình huống "bản ghi cuối là ra".
+     */
+    it('đã đủ vào và ra → vẫn là ra, để bấm lại cập nhật giờ ra', async () => {
+      const vao = banGhi({ _id: 'r1', loai: 'vao' });
+      const ra = banGhi({ _id: 'r2', loai: 'ra' });
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find
+        .mockResolvedValueOnce([ra]) // banGhiCuoiCung: bản ghi cuối là 'ra'
+        .mockResolvedValueOnce([vao, ra]); // danh sách bản ghi của ngày công
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.hanhDongKeTiep).toBe('ra');
+    });
+
+    it('ngày công chưa có gì → vao', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find.mockResolvedValue([]);
+
+      const kq = await service.homNay(USER);
+
+      expect(kq.hanhDongKeTiep).toBe('vao');
+    });
+
+    /**
+     * Đây là thứ làm "bấm lại để cập nhật giờ ra" chạy được. Trước P3.5
+     * nhánh này ném 409 và người lỡ bấm ra sớm bị khoá cả ngày.
+     *
+     * Hai chỗ sửa so với brief gốc (service KHÔNG dùng `recordRepo.findOne`
+     * — banGhiCuoiCung dùng `find` + `take: 1` — và guard ngoài bán kính của
+     * Task 2 vẫn đứng nguyên):
+     * - `recordRepo.findOne.mockResolvedValue(raCu)` là mock chết, không ảnh
+     *   hưởng gì tới `cuoi` thật. Đổi sang hai lần `recordRepo.find`: lần
+     *   đầu trả bản ghi cuối (raCu), lần sau trả lượt vao của ngày công đó.
+     * - DTO dùng `phuongThuc: 'gps'` mà `locationRepo.find` trả `[]` thì
+     *   `doiChieuGps` không có địa điểm gps nào để so khớp → ngoaiVung: true
+     *   → NV (không có cờ miễn trừ ngoài vùng) bị chặn 403 bởi guard Task 2
+     *   TRƯỚC khi kịp chạm tới hành vi đang test. Phải cấp một địa điểm gps
+     *   đúng toạ độ DTO để ở trong bán kính.
+     */
+    it('chấm ra lần hai trong cùng ngày công → ghi thêm bản ghi ra', async () => {
+      const vao = banGhi({ _id: 'r1', loai: 'vao' });
+      const raCu = banGhi({
+        _id: 'r2',
+        loai: 'ra',
+        thoiDiem: new Date(Date.now() - 1800_000),
+      });
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find
+        .mockResolvedValueOnce([raCu]) // banGhiCuoiCung: bản ghi cuối là 'ra'
+        .mockResolvedValueOnce([vao]); // luotVaoCuaNgayCong: lượt vao của ngày công đó
+      recordRepo.save.mockImplementation((v: any) => Promise.resolve(v));
+      locationRepo.find.mockResolvedValue([
+        {
+          _id: 'loc-gps',
+          ten: 'VP',
+          loai: 'gps',
+          latitude: 21.0,
+          longitude: 105.8,
+          banKinh: 100,
+          isActive: true,
+        },
+      ]);
+
+      const kq = await service.checkOut(USER, {
+        deviceId: 'd1',
+        phuongThuc: 'gps',
+        latitude: 21.0,
+        longitude: 105.8,
+      });
+
+      expect(kq.loai).toBe('ra');
+      // Phải mang cùng ngày công với lượt vào, không phải ngày lịch hiện tại
+      // — nếu không ca qua đêm sẽ đẻ lượt ra lạc sang ngày sau.
+      expect(kq.ngay).toBe(vao.ngay);
+    });
+
+    it('ngày công chưa có lượt vao nào → chấm ra vẫn bị chặn', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.find.mockResolvedValue([]);
+
+      await expect(
+        service.checkOut(USER, { deviceId: 'd1', phuongThuc: 'gps' }),
+      ).rejects.toThrow(ConflictException);
     });
   });
 
@@ -557,13 +702,22 @@ describe('BanGhiChamCong_Service', () => {
     });
 
     it('hanhDongKeTiep là vao khi lượt vao mở đã quá hạn — không dẫn NV vào cái bẫy check-out', async () => {
-      recordRepo.find.mockResolvedValue([
-        {
-          loai: 'vao',
-          ngay: '2026-07-20',
-          thoiDiem: '2026-07-20T01:00:00.000Z',
-        },
-      ]);
+      // recordRepo.find được gọi HAI lần trong homNay(): banGhiCuoiCung (lấy
+      // lượt vao treo quá hạn) rồi danh sách bản ghi của NGÀY CÔNG đang xét
+      // (= hôm nay, vì lượt vao treo không còn hiệu lực nên không kéo
+      // ngayCong về quá khứ). Ngày công hôm nay chưa có bản ghi nào — phải
+      // mock hai lần find riêng biệt, nếu không lượt vao treo của ngày
+      // 2026-07-20 sẽ lẫn vào danh sách của hôm nay (mock dùng chung một
+      // mảng cho cả hai lần gọi, không lọc theo `where.ngay` như DB thật).
+      recordRepo.find
+        .mockResolvedValueOnce([
+          {
+            loai: 'vao',
+            ngay: '2026-07-20',
+            thoiDiem: '2026-07-20T01:00:00.000Z',
+          },
+        ])
+        .mockResolvedValueOnce([]); // ngày công hôm nay chưa có bản ghi nào
 
       const kq = await service.homNay(USER);
       expect(kq.hanhDongKeTiep).toBe('vao');
@@ -613,13 +767,18 @@ describe('BanGhiChamCong_Service', () => {
     });
 
     it('lượt vao quá hạn không kéo ngayCong về quá khứ — nút hiện "vao" thì danh sách cũng là của hôm nay', async () => {
-      recordRepo.find.mockResolvedValue([
-        {
-          loai: 'vao',
-          ngay: '2026-07-20',
-          thoiDiem: '2026-07-20T01:00:00.000Z',
-        },
-      ]);
+      // Cùng lý do mock hai lần như test ngay phía trên: lần đầu là
+      // banGhiCuoiCung (lượt vao treo), lần sau là danh sách của ngày công
+      // hôm nay — rỗng, vì lượt vao treo không thuộc về hôm nay.
+      recordRepo.find
+        .mockResolvedValueOnce([
+          {
+            loai: 'vao',
+            ngay: '2026-07-20',
+            thoiDiem: '2026-07-20T01:00:00.000Z',
+          },
+        ])
+        .mockResolvedValueOnce([]);
 
       const kq = await service.homNay(USER);
 

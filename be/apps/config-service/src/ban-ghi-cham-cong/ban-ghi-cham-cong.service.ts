@@ -156,25 +156,36 @@ export class BanGhiChamCong_Service {
       }
     } else {
       if (cuoi?.loai === 'ra' && this.vuaMoiBam(cuoi, thoiDiem)) return cuoi;
-      if (!cuoi || cuoi.loai === 'ra') {
+
+      // Mốc để gán ngày công cho lượt ra: lượt VÀO đang mở, hoặc lượt vào của
+      // ngày công mà lượt ra gần nhất thuộc về.
+      //
+      // P3.5: bản ghi cuối là 'ra' không còn tự động bị chặn — "lượt cuối
+      // thắng" là chủ đích, để ai lỡ bấm ra sớm tự sửa được bằng cách bấm lại
+      // mà không cần nhờ HR. Chỉ còn CHẶN khi ngày công đó chưa có lượt vao
+      // nào cả (xem nhánh `if (!moc)` dưới đây).
+      const moc = cuoi?.loai === 'vao' ? cuoi : await this.luotVaoCuaNgayCong(cuoi);
+
+      if (!moc) {
         throw new ConflictException(
           'Chưa có lượt check-in nào đang mở để check-out.',
         );
       }
-      if (!this.luotVaoConHieuLuc(cuoi, thoiDiem)) {
+      if (!this.luotVaoConHieuLuc(moc, thoiDiem)) {
         throw new ConflictException(
-          `Lượt check-in ngày ${cuoi.ngay} chưa được đóng và đã quá hạn để tự check-out. ` +
-            `Nếu vẫn bấm ra, ngày ${cuoi.ngay} sẽ bị ghi sai giờ về. ` +
-            `Vui lòng liên hệ HR nhập bù giờ ra cho ngày ${cuoi.ngay}, sau đó check-in lại.`,
+          `Lượt check-in ngày ${moc.ngay} chưa được đóng và đã quá hạn để tự check-out. ` +
+            `Nếu vẫn bấm ra, ngày ${moc.ngay} sẽ bị ghi sai giờ về. ` +
+            `Vui lòng liên hệ HR nhập bù giờ ra cho ngày ${moc.ngay}, sau đó check-in lại.`,
         );
       }
       // Ca qua đêm tự đúng nhờ dòng này: bản ghi ra thừa hưởng ngay của
-      // bản ghi vao đang mở, không lấy ngày lịch hiện tại.
-      ngay = cuoi.ngay;
+      // bản ghi vao đang mở (kể cả khi đây là lượt ra THỨ HAI), không lấy
+      // ngày lịch hiện tại.
+      ngay = moc.ngay;
       // Lượt ra phải mang ĐÚNG ca của lượt vào đang mở. HR đổi ca giữa lúc
       // vào và lúc ra thì hai nửa một phiên sẽ mang hai ca khác nhau — ngược
       // với chính lý do snapshot tồn tại.
-      caBanGhi = this.caTuLuotVao(cuoi);
+      caBanGhi = this.caTuLuotVao(moc);
     }
 
     // 5–6. Ca, ngày nghỉ, luật tính
@@ -336,6 +347,25 @@ export class BanGhiChamCong_Service {
     // VN không có DST nên trừ đúng 24h luôn ra ngày lịch liền trước.
     const homQua = ngayVN(new Date(bayGio.getTime() - MOT_NGAY_MS));
     return cuoi.ngay === homNay || cuoi.ngay === homQua;
+  }
+
+  /**
+   * Lượt `vao` của ngày công mà bản ghi `cuoi` thuộc về.
+   *
+   * Cần đến khi người dùng bấm ra LẦN THỨ HAI: lúc đó bản ghi cuối là `ra`,
+   * nhưng lượt ra mới vẫn phải mang đúng ngày công và đúng ca của lượt vào
+   * ban đầu — nếu lấy ngày lịch hiện tại thì ca qua đêm sẽ đẻ một lượt ra
+   * lạc sang ngày sau.
+   */
+  private async luotVaoCuaNgayCong(
+    cuoi: AttendanceRecord | null | undefined,
+  ): Promise<AttendanceRecord | null> {
+    if (!cuoi) return null;
+    const ds = await this.repo.find({
+      where: { employeeId: cuoi.employeeId, ngay: cuoi.ngay, loai: 'vao', isActive: true },
+      order: { thoiDiem: 'ASC' },
+    } as any);
+    return ds[0] ?? null;
   }
 
   /** Ca ghi trên bản ghi `vao` đang mở — dùng lại cho lượt `ra` của cùng phiên. */
@@ -513,10 +543,16 @@ export class BanGhiChamCong_Service {
         banKinh: d.banKinh,
       })),
       soCong: this.tinhSoCong(banGhi),
-      // Hành động kế tiếp mà FE nên hiện trên nút lớn. Dùng CHUNG hàm với
-      // checkOut: một lượt vao treo từ tuần trước không được phép làm nút
-      // hiện "Check-out", vì cú bấm đó sẽ bị chặn ngay bằng 409.
-      hanhDongKeTiep: dangMoLuotVao ? 'ra' : 'vao',
+      // Ngày công này đã có lượt vào thì mọi lượt tiếp theo là RA — không bao
+      // giờ quay lại "vào" nữa.
+      //
+      // Trước đây tính từ `dangMoLuotVao` (tức `luotVaoConHieuLuc`), nên một
+      // lượt vào treo 3 ngày làm nút hiện lại "Chấm công VÀO" và người dùng
+      // mở một ngày công thứ hai chồng lên ngày cũ chưa đóng.
+      //
+      // Giữ nguyên `ra` cả khi đã có lượt ra: bấm lại là cập nhật giờ ra, để
+      // ai lỡ bấm ra sớm tự sửa được mà không phải nhờ HR.
+      hanhDongKeTiep: banGhi.some((b) => b.loai === 'vao') ? 'ra' : 'vao',
       banGhi,
     };
   }
