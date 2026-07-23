@@ -194,18 +194,19 @@ describe('Chấm công của tôi — ca qua đêm', () => {
 
     expect(await screen.findByRole('button', { name: /Chấm công RA/ })).toBeTruthy();
     expect(screen.queryByText('Chưa có lượt chấm công nào')).toBeNull();
-    // Tiêu đề nói rõ đây là ca của ngày công hôm trước, không đề "Hôm nay".
-    expect(screen.getByText(/Ca ngày 2026-07-22 \(chưa kết thúc\)/)).toBeTruthy();
+    // Tiêu đề nói rõ đây là ca của ngày công hôm trước, không đề ngày hôm nay.
+    expect(screen.getByText(/Chi tiết ca ngày 2026-07-22 \(chưa kết thúc\)/)).toBeTruthy();
   });
 
-  it('ngày thường vẫn đề "Hôm nay"', async () => {
+  it('ngày thường thì khối chi tiết đề tiêu đề chung, không kèm "(chưa kết thúc)"', async () => {
     vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
       homNayMau({ banGhi: [banGhiMau()] }),
     );
 
     render(<ChamCongCuaToiPage />);
 
-    expect(await screen.findByText(/Hôm nay 2026-07-22/)).toBeTruthy();
+    expect(await screen.findByText(/Chi tiết chấm công/)).toBeTruthy();
+    expect(screen.queryByText(/chưa kết thúc/)).toBeNull();
   });
 });
 
@@ -392,5 +393,74 @@ describe('Chấm công của tôi — chưa liên kết hồ sơ', () => {
     fireEvent.click(nut);
     expect(await screen.findByRole('button', { name: /Chấm công VÀO/ })).toBeTruthy();
     expect(homNay).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', () => {
+  it('hiện ba ô trạng thái với giờ vào đã chấm', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
+      homNayMau({
+        banGhi: [
+          {
+            id: 'r1', employeeId: 'emp-1', ngay: '2026-07-22', loai: 'vao',
+            thoiDiem: '2026-07-22T01:02:00.000Z', ngoaiVung: false,
+            soPhutDiMuon: 2, soPhutVeSom: 0, laNgayNghi: false, nguonTao: 'tu_cham',
+          },
+        ],
+        soCong: null,
+        hanhDongKeTiep: 'ra',
+      })
+    );
+
+    render(<ChamCongCuaToiPage />);
+
+    // Cùng bản ghi còn hiện lại trong khối chi tiết (thu gọn nhưng vẫn có
+    // trong DOM) nên "08:02" xuất hiện 2 lần — chỉ định `selector` để trỏ
+    // đúng giá trị của ô ba trạng thái, không phải dòng trong chi tiết.
+    await waitFor(() =>
+      expect(screen.getByText('08:02', { selector: '.text-xl' })).toBeTruthy()
+    );
+    expect(screen.getByText('Muộn 2 phút')).toBeTruthy();
+    expect(screen.getByText('Chờ ra')).toBeTruthy();
+  });
+
+  it('shift card hiện tên địa điểm khi công ty chỉ có một điểm', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
+      homNayMau({ diaDiem: [{ id: 'l1', ten: 'Văn phòng HN', loai: 'gps', banKinh: 100 }] })
+    );
+
+    render(<ChamCongCuaToiPage />);
+
+    await waitFor(() => expect(screen.getByText('📍 Văn phòng HN')).toBeTruthy());
+    expect(screen.getByText('Bán kính 100m')).toBeTruthy();
+  });
+
+  it('nhiều địa điểm thì hiện số lượng, không bịa ra một điểm', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
+      homNayMau({
+        diaDiem: [
+          { id: 'l1', ten: 'Văn phòng HN', loai: 'gps', banKinh: 100 },
+          { id: 'l2', ten: 'Chi nhánh HCM', loai: 'gps', banKinh: 50 },
+        ],
+      })
+    );
+
+    render(<ChamCongCuaToiPage />);
+
+    await waitFor(() => expect(screen.getByText('📍 2 địa điểm được phép')).toBeTruthy());
+    expect(screen.queryByText('Bán kính 100m')).toBeNull();
+  });
+
+  /**
+   * Lịch tuần hỏng KHÔNG được kéo theo nút chấm công. Đây là nhánh dễ vỡ
+   * nhất khi vẽ lại theo mockup — mockup chỉ vẽ đường hạnh phúc.
+   */
+  it('lỗi tải lịch tuần không chặn nút chấm công', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+    vi.spyOn(attendanceRecordService, 'cuaToi').mockRejectedValue(new Error('mạng hỏng'));
+
+    render(<ChamCongCuaToiPage />);
+
+    await waitFor(() => expect(screen.getByText(/Chấm công VÀO/)).toBeTruthy());
   });
 });

@@ -3,8 +3,11 @@ import {
   ChamCongCuaToiHandlerProvider,
   useChamCongCuaToiHandler,
 } from "./ChamCongCuaToiHandlerContext";
+import { ShiftCard } from "./components/ShiftCard";
+import { LichTuan } from "./components/LichTuan";
+import { BaOTrangThai } from "./components/BaOTrangThai";
 import { NutCham } from "./components/NutCham";
-import { LichSuHomNay } from "./components/LichSuHomNay";
+import { ChiTietChamCong } from "./components/ChiTietChamCong";
 
 function ChamCongCuaToiPageInner() {
   const handler = useChamCongCuaToiHandler();
@@ -13,13 +16,13 @@ function ChamCongCuaToiPageInner() {
     handler.executeEvent("init", {});
   }, [handler]);
 
-  // max-w-md: màn hình này dành cho điện thoại. Trên desktop nội dung giữ
-  // nguyên bề ngang một cột và canh giữa, không trải rộng ra cả màn hình —
-  // nút chấm công dài 1200px không giúp ai bấm nhanh hơn.
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-3">
+    <div className="w-full">
+      <ShiftCard />
+      <LichTuan />
+      <BaOTrangThai />
       <NutCham />
-      <LichSuHomNay />
+      <ChiTietChamCong />
     </div>
   );
 }

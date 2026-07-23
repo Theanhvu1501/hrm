@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Alert, Button, Card, Input, Space, Spin, Tag, Typography } from "antd";
+import { Alert, Button, Card, Input, Space, Spin, Typography } from "antd";
 import {
   LoginOutlined,
   LogoutOutlined,
@@ -152,36 +152,8 @@ export function NutCham() {
   const laVao = homNay.hanhDongKeTiep === "vao";
 
   return (
-    <Card>
+    <div>
       <Space direction="vertical" size="middle" className="w-full">
-        <div className="text-center">
-          <div className="text-lg font-semibold">{homNay.nhanVien.hoTen}</div>
-          <Text type="secondary" className="text-xs">
-            {homNay.nhanVien.employeeCode
-              ? `${homNay.nhanVien.employeeCode} · `
-              : ""}
-            Ngày {homNay.ngay}
-          </Text>
-        </div>
-
-        {homNay.ca ? (
-          <div className="text-center">
-            <Text type="secondary" className="text-xs">
-              Ca hôm nay
-            </Text>
-            <div className="text-base font-medium">
-              {homNay.ca.ten} · {homNay.ca.gioBatDau}–{homNay.ca.gioKetThuc}
-              {homNay.ca.laCaQuaDem && <Tag className="ml-2">Qua đêm</Tag>}
-            </div>
-          </div>
-        ) : (
-          <Alert
-            type="info"
-            showIcon
-            message="Bạn chưa được gán ca làm việc — hệ thống sẽ không tính đi muộn/về sớm."
-          />
-        )}
-
         {/*
           Ngoài vùng KHÔNG phải lỗi: bản ghi đã vào sổ, chỉ là đứng ngoài khu
           vực cho phép và HR sẽ xem xét. Hiện đỏ như lỗi thì người dùng bấm
@@ -228,16 +200,16 @@ export function NutCham() {
           block
           loading={dangCham}
           icon={laVao ? <LoginOutlined /> : <LogoutOutlined />}
-          // Xanh lá cho VÀO, cam cho RA. Cố ý KHÔNG dùng `danger` (đỏ antd):
-          // trên màn hình này màu đỏ đã có nghĩa "hỏng", dùng lại cho nút
-          // chính sẽ khiến người dùng ngần ngại bấm.
+          // Teal cho VÀO, cam cho RA. Cố ý KHÔNG dùng `danger` (đỏ antd):
+          // trên màn hình này đỏ đã có nghĩa "hỏng", dùng lại cho nút chính
+          // sẽ khiến người dùng ngần ngại bấm.
           style={{
             height: CAO_NUT_CHAM,
             fontSize: 22,
-            fontWeight: 600,
-            borderRadius: 16,
-            backgroundColor: dangCham ? undefined : laVao ? "#16a34a" : "#ea580c",
-            borderColor: dangCham ? undefined : laVao ? "#16a34a" : "#ea580c",
+            fontWeight: 700,
+            borderRadius: 12,
+            backgroundColor: dangCham ? undefined : laVao ? "#1f7769" : "#ea580c",
+            borderColor: dangCham ? undefined : laVao ? "#1f7769" : "#ea580c",
             touchAction: "manipulation",
           }}
           onClick={() => handler.executeEvent("cham", {})}
@@ -251,6 +223,6 @@ export function NutCham() {
           </Text>
         </div>
       </Space>
-    </Card>
+    </div>
   );
 }
