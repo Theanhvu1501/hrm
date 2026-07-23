@@ -485,7 +485,9 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
    */
   it('lỗi tải lịch tuần không chặn nút chấm công', async () => {
     vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
-    vi.spyOn(attendanceRecordService, 'cuaToi').mockRejectedValue(new Error('mạng hỏng'));
+    const cuaToi = vi
+      .spyOn(attendanceRecordService, 'cuaToi')
+      .mockRejectedValue(new Error('mạng hỏng'));
     // tuan.handler.ts cố ý console.error khi lịch tuần hỏng — đúng, nhưng
     // một test XANH không được phép in ra stack trace; khoá lại và trả về
     // sau khi test xong, không để rò sang các test khác.
@@ -502,6 +504,10 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
     cham.forEach((el) => {
       expect((el as HTMLElement).style.background).toBe('var(--emp-border)');
     });
+    // Không có dòng này thì test xanh kể cả khi napTuan không bao giờ chạy:
+    // `banGhiTuan` mặc định đã là [] nên dải lịch xám sẵn, không phân biệt được
+    // "đã gọi rồi nuốt lỗi" với "chưa từng gọi".
+    await waitFor(() => expect(cuaToi).toHaveBeenCalled());
 
     consoleError.mockRestore();
   });
