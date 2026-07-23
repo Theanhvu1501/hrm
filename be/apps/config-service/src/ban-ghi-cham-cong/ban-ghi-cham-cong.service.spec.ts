@@ -859,6 +859,77 @@ describe('BanGhiChamCong_Service', () => {
     });
   });
 
+  describe('cuaToi', () => {
+    beforeEach(() => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+    });
+
+    it('lọc theo employeeId suy từ token, không phải từ tham số gọi vào', async () => {
+      recordRepo.find.mockResolvedValue([]);
+
+      await service.cuaToi(USER, '2026-07-21', '2026-07-27');
+
+      expect(nhanVien.resolveEmployeeFromUser).toHaveBeenCalledWith(USER);
+      expect(recordRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            employeeId: 'emp-1',
+            isActive: true,
+            ngay: { $gte: '2026-07-21', $lte: '2026-07-27' },
+          }),
+        }),
+      );
+    });
+
+    it('sắp xếp theo thoiDiem tăng dần để màn hình gom theo ngày không phải sắp lại', async () => {
+      recordRepo.find.mockResolvedValue([]);
+
+      await service.cuaToi(USER, '2026-07-21', '2026-07-27');
+
+      expect(recordRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ order: { thoiDiem: 'ASC' } }),
+      );
+    });
+
+    it('thiếu tuNgay hoặc denNgay → BadRequest', async () => {
+      await expect(service.cuaToi(USER, undefined, '2026-07-27')).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.cuaToi(USER, '2026-07-21', undefined)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('ngày sai định dạng hoặc không có thật → BadRequest', async () => {
+      await expect(service.cuaToi(USER, '21/07/2026', '2026-07-27')).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.cuaToi(USER, '2026-02-30', '2026-03-01')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('denNgay trước tuNgay → BadRequest', async () => {
+      await expect(service.cuaToi(USER, '2026-07-27', '2026-07-21')).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    // Endpoint này chỉ để vẽ lịch tuần. Không chặn thì nó thành cửa kéo cả
+    // năm dữ liệu vị trí về máy trong một request.
+    it('khoảng đúng 31 ngày vẫn qua, 32 ngày bị chặn', async () => {
+      recordRepo.find.mockResolvedValue([]);
+
+      await expect(
+        service.cuaToi(USER, '2026-07-01', '2026-07-31'),
+      ).resolves.toEqual([]);
+
+      await expect(
+        service.cuaToi(USER, '2026-07-01', '2026-08-01'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   describe('findAll', () => {
     it('lọc theo khoảng ngày và nhân viên', async () => {
       await service.findAll({

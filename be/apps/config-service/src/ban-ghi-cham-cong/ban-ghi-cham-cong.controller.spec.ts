@@ -33,7 +33,7 @@ describe('BanGhiChamCong_Controller — phân quyền', () => {
     },
   );
 
-  it.each([['checkIn'], ['checkOut'], ['homNay']])(
+  it.each([['checkIn'], ['checkOut'], ['homNay'], ['cuaToi']])(
     'route %s là tự phục vụ nên KHÔNG gắn AdminGuard',
     (ten) => {
       expect(guardsOf(proto[ten])).not.toContain(AdminGuard);
@@ -130,5 +130,42 @@ describe('BanGhiChamCong_Controller — nguồn dữ liệu vào', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(mockService.hrNhap).not.toHaveBeenCalled();
+  });
+});
+
+describe('BanGhiChamCong_Controller — cua-toi', () => {
+  /**
+   * `@Get()` đứng trước `@Get('cua-toi')` thì "cua-toi" bị nuốt thành query
+   * rỗng của route tra cứu toàn tenant — và route đó có AdminGuard, nên nhân
+   * viên thường sẽ nhận 403 thay vì lịch tuần của mình.
+   */
+  it('route cua-toi khai trước route tra cứu không tham số', () => {
+    const duongDan = (ten: string) =>
+      Reflect.getMetadata(PATH_METADATA, proto[ten]);
+    const thuTu = Object.getOwnPropertyNames(proto);
+
+    expect(duongDan('cuaToi')).toBe('cua-toi');
+    expect(thuTu.indexOf('cuaToi')).toBeLessThan(thuTu.indexOf('findAll'));
+  });
+
+  /**
+   * Ranh giới dữ liệu: employeeId phải suy từ token trong service. Controller
+   * chuyển đúng ba thứ — req.user, tuNgay, denNgay — và KHÔNG được chuyển
+   * employeeId dù client có gửi kèm query.
+   */
+  it('không chuyển employeeId từ query xuống service', async () => {
+    const service: any = { cuaToi: jest.fn().mockResolvedValue([]) };
+
+    await proto.cuaToi.call(
+      { banGhi_Service: service },
+      { tuNgay: '2026-07-21', denNgay: '2026-07-27', employeeId: 'emp-khac' },
+      { user: { id: 'sso-1' } },
+    );
+
+    expect(service.cuaToi).toHaveBeenCalledWith(
+      { id: 'sso-1' },
+      '2026-07-21',
+      '2026-07-27',
+    );
   });
 });

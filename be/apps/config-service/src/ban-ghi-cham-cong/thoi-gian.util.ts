@@ -100,6 +100,19 @@ export function ngayKeTiep(ngay: string): string {
   return `${d.getUTCFullYear()}-${hai(d.getUTCMonth() + 1)}-${hai(d.getUTCDate())}`;
 }
 
+/**
+ * Số ngày lịch của khoảng [tuNgay, denNgay], tính CẢ hai đầu.
+ *
+ * Dùng `mocUtcCuaNgay` (đã kiểm ngày có thật) chứ không `new Date(chuỗi)`:
+ * cách sau nhận cả "2026-02-30" rồi âm thầm cuộn sang tháng 3, và khoảng
+ * tra cứu sẽ lệch hai ngày mà không có lỗi nào.
+ */
+export function soNgayGiua(tuNgay: string, denNgay: string): number {
+  const a = mocUtcCuaNgay(tuNgay).getTime();
+  const b = mocUtcCuaNgay(denNgay).getTime();
+  return Math.round((b - a) / 86_400_000) + 1;
+}
+
 /** Chỉ chấp nhận đúng dạng "HH:mm" 24h: 00:00 … 23:59. */
 const RE_HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 

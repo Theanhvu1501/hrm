@@ -73,6 +73,28 @@ export class BanGhiChamCong_Controller {
     return { success: true, data };
   }
 
+  /**
+   * Lịch sử chấm công của CHÍNH mình, cho lịch tuần trên màn hình nhân viên.
+   *
+   * Chỉ `JwtGuard` như `hom-nay`: mọi nhân viên đều phải xem được tuần của
+   * mình mà không cần HR gán quyền. Phạm vi khoá bằng employeeId suy từ
+   * token trong service — `employeeId` gửi kèm query bị bỏ qua hoàn toàn.
+   *
+   * Phải đặt TRƯỚC `@Get()` để không bị nuốt thành query rỗng.
+   */
+  @Get('cua-toi')
+  async cuaToi(
+    @Query() query: { tuNgay?: string; denNgay?: string },
+    @Req() req: any,
+  ) {
+    const data = await this.banGhi_Service.cuaToi(
+      req.user,
+      query.tuNgay,
+      query.denNgay,
+    );
+    return { success: true, data };
+  }
+
   // ── Quản trị ────────────────────────────────────────────────────────
   // Dùng `AdminGuard` (kiểm `vaiTro`), KHÔNG dùng `@Roles(...)`: `RoleGuard`
   // trong repo hiện chỉ `return true` nên mọi `@Roles` đều vô hiệu.

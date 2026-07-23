@@ -6,6 +6,7 @@ import {
   ngayKeTiep,
   kiemTraNgay,
   hhmmSangPhut,
+  soNgayGiua,
 } from './thoi-gian.util';
 
 // VN = UTC+7 quanh năm (không có DST), nên dựng Date bằng UTC là cách
@@ -170,6 +171,26 @@ describe('thoi-gian.util', () => {
 
     it('thông báo lỗi nêu rõ giá trị không hợp lệ', () => {
       expect(() => hhmmSangPhut('25:99')).toThrow(/25:99/);
+    });
+  });
+
+  describe('soNgayGiua', () => {
+    it('tính CẢ hai đầu — một tuần là 7 ngày, không phải 6', () => {
+      expect(soNgayGiua('2026-07-21', '2026-07-27')).toBe(7);
+    });
+
+    it('cùng một ngày là 1', () => {
+      expect(soNgayGiua('2026-07-23', '2026-07-23')).toBe(1);
+    });
+
+    // Việt Nam không có DST nên phép trừ 86_400_000 luôn đúng, nhưng mốc phải
+    // là UTC 00:00 chứ không phải new Date(chuỗi) đọc theo TZ tiến trình.
+    it('bắc qua ranh giới tháng', () => {
+      expect(soNgayGiua('2026-07-28', '2026-08-03')).toBe(7);
+    });
+
+    it('ném lỗi với ngày không có thật', () => {
+      expect(() => soNgayGiua('2026-02-30', '2026-03-01')).toThrow();
     });
   });
 });

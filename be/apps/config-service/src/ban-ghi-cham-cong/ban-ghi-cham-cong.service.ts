@@ -23,12 +23,21 @@ import {
   thuTrongTuanCuaNgay,
   ngayKeTiep,
   kiemTraNgay,
+  soNgayGiua,
 } from './thoi-gian.util';
 import { chuanHoaIp } from './ip.util';
 import { ChamCongDto, HrNhapChamCongDto } from './dto';
 
 const NGUONG_TRUNG_LAP_MS = 60_000;
 const MOT_NGAY_MS = 86_400_000;
+
+/**
+ * Trần khoảng tra cứu của endpoint tự phục vụ. Màn hình nhân viên chỉ vẽ
+ * lịch MỘT tuần, nên 31 ngày đã rộng gấp bốn nhu cầu thật. Không có trần
+ * thì một request kéo được cả năm bản ghi kèm toạ độ GPS của chính mình —
+ * không cần thiết, và là món quà sẵn cho ai chiếm được token.
+ */
+export const SO_NGAY_TOI_DA_TRA_CUU = 31;
 
 /** Trạng thái hồ sơ không còn được tự chấm công. */
 const TRANG_THAI_DA_NGHI = 'da_nghi';
@@ -462,6 +471,48 @@ export class BanGhiChamCong_Service {
       hanhDongKeTiep: dangMoLuotVao ? 'ra' : 'vao',
       banGhi,
     };
+  }
+
+  /**
+   * Bản ghi chấm công của CHÍNH người đang đăng nhập trong một khoảng ngày.
+   *
+   * `employeeId` suy từ token, KHÔNG nhận từ tham số — đó là toàn bộ ranh
+   * giới ngăn một nhân viên đọc lịch đi lại của đồng nghiệp. `findAll()`
+   * bên dưới vẫn giữ nguyên nghĩa "toàn tenant, chỉ quản trị"; đừng gộp hai
+   * đường này lại.
+   */
+  async cuaToi(
+    user: { id: string },
+    tuNgay?: string,
+    denNgay?: string,
+  ): Promise<AttendanceRecord[]> {
+    if (!tuNgay || !denNgay) {
+      throw new BadRequestException('Thiếu khoảng ngày tra cứu (tuNgay, denNgay)');
+    }
+    // kiemTraNgay ném BadRequest cho cả sai định dạng lẫn ngày không có thật.
+    kiemTraNgay(tuNgay);
+    kiemTraNgay(denNgay);
+    if (denNgay < tuNgay) {
+      throw new BadRequestException('denNgay phải không nhỏ hơn tuNgay');
+    }
+    if (soNgayGiua(tuNgay, denNgay) > SO_NGAY_TOI_DA_TRA_CUU) {
+      throw new BadRequestException(
+        `Khoảng tra cứu tối đa ${SO_NGAY_TOI_DA_TRA_CUU} ngày`,
+      );
+    }
+
+    const emp = await this.nhanVien_Service.resolveEmployeeFromUser(user);
+    const employeeId = String((emp as any)._id);
+
+    return this.repo.find({
+      where: {
+        employeeId,
+        isActive: true,
+        // Chuỗi "YYYY-MM-DD" so sánh từ điển trùng với so sánh thời gian.
+        ngay: { $gte: tuNgay, $lte: denNgay },
+      },
+      order: { thoiDiem: 'ASC' },
+    } as any);
   }
 
   async findAll(filter?: BanGhiFilter): Promise<AttendanceRecord[]> {
