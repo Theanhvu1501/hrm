@@ -9,6 +9,7 @@ import viVN from 'antd/locale/vi_VN';
 import { AuthProvider } from "./contexts/AuthContext";
 import { TermProvider } from "./contexts/TermContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { YeuCauDangNhapChamCong } from "./components/YeuCauDangNhapChamCong";
 
 import MainLayout from "./components/layout/MainLayout";
 import EmployeeLayout from "./components/layout/EmployeeLayout";
@@ -35,6 +36,7 @@ import {
   TrangChuTheoQuyen,
   ComingSoonPage,
   TaiKhoanPage,
+  DangNhapChamCongPage,
   NotFound
 } from "./pages/loadable";
 
@@ -235,20 +237,27 @@ const App = () => (
               </Route>
 
               {/*
-                Vỏ nhân viên. CỐ Ý không bọc `requiredPermission` và CỐ Ý
-                không khai trong routePermissions.ts — cùng lý do đã ghi cho
-                /cham-cong/cua-toi trước đây: mọi nhân viên đăng nhập đều
-                phải chấm công được ngay ngày đầu đi làm, trước khi HR kịp
-                gán vai trò. Backend cũng chỉ đặt JwtGuard cho check-in/
-                check-out/hom-nay/cua-toi; phạm vi dữ liệu khoá bằng
-                employeeId suy từ token, không bằng quyền.
+                Cổng đăng nhập của vỏ nhân viên. PHẢI nằm NGOÀI
+                YeuCauDangNhapChamCong — bọc vào trong thì nó tự chuyển hướng
+                vào chính nó, thành vòng lặp vô hạn.
+              */}
+              <Route path="/toi/login" element={<DangNhapChamCongPage />} />
+
+              {/*
+                Vỏ nhân viên. Dùng YeuCauDangNhapChamCong chứ KHÔNG dùng
+                ProtectedRoute: ProtectedRoute đá sang /login rồi bật tiếp sang
+                Portal, và cổng chấm công sẽ không bao giờ được nhìn thấy.
+
+                CỐ Ý không kiểm quyền và CỐ Ý không khai trong
+                routePermissions.ts — mọi nhân viên đăng nhập đều phải chấm công
+                được ngay ngày đầu đi làm, trước khi HR kịp gán vai trò.
               */}
               <Route
                 path="/toi"
                 element={
-                  <ProtectedRoute>
+                  <YeuCauDangNhapChamCong>
                     <EmployeeLayout />
-                  </ProtectedRoute>
+                  </YeuCauDangNhapChamCong>
                 }
               >
                 <Route index element={<Navigate to="cham-cong" replace />} />

@@ -86,6 +86,10 @@ export const TaiKhoanPage = loadable(() => import('./toi/TaiKhoanPage'), {
   fallback: <PageLoader />
 });
 
+export const DangNhapChamCongPage = loadable(() => import('./toi/DangNhapChamCong'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const TrangChuTheoQuyen = loadable(() => import('./TrangChuTheoQuyen'), {
   fallback: <PageLoader />
