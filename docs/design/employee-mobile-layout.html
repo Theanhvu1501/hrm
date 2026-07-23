@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nhân sự — Giao diện nhân viên</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --accent: #10B981;
+      --bg: #F8FAFC;
+      --surface: #FFFFFF;
+      --text: #1E293B;
+      --text-secondary: #64748B;
+      --text-muted: #94A3B8;
+      --border: #E2E8F0;
+      --danger: #EF4444;
+      --radius: 12px;
+      --tab-height: 64px;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg); color: var(--text);
+      max-width: 390px; margin: 0 auto; min-height: 100vh; position: relative;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #0F172A 0%, #1E3A5F 60%, #2563EB 100%);
+      color: white; padding: 20px 20px 16px; position: sticky; top: 0; z-index: 10;
+    }
+    .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4);
+      display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 15px;
+    }
+    .header-info h2 { font-size: 16px; font-weight: 600; }
+    .header-info span { font-size: 12px; opacity: 0.75; }
+    .header-tenant { font-size: 11px; background: rgba(255,255,255,0.12); padding: 4px 10px; border-radius: 20px; }
+    .header-date { font-size: 13px; opacity: 0.85; }
+
+    /* Page */
+    .page { padding: 16px; padding-bottom: calc(var(--tab-height) + 24px); }
+    .page.hidden { display: none; }
+
+    /* Shift card */
+    .shift-card {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 16px; border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .shift-name { font-size: 15px; font-weight: 600; }
+    .shift-time { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+    .shift-right { text-align: right; font-size: 11px; color: var(--text-muted); }
+
+    /* Week calendar */
+    .week-calendar {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 12px; margin-bottom: 16px; border: 1px solid var(--border);
+    }
+    .week-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .week-title { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .week-nav { display: flex; gap: 6px; }
+    .week-nav button {
+      width: 26px; height: 26px; border: 1px solid var(--border);
+      border-radius: 6px; background: var(--surface); cursor: pointer; font-size: 13px; color: var(--text-secondary);
+    }
+    .week-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .week-day { text-align: center; padding: 6px 2px; border-radius: 8px; cursor: pointer; }
+    .week-day.today { background: #EFF6FF; border: 1.5px solid #2563EB; }
+    .d-name { font-size: 10px; color: var(--text-muted); margin-bottom: 3px; }
+    .d-num { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+    .d-dot { width: 6px; height: 6px; border-radius: 50%; margin: 0 auto; }
+    .d-dot.green { background: var(--accent); }
+    .d-dot.red { background: var(--danger); }
+    .d-dot.gray { background: var(--border); }
+
+    /* 3 cells */
+    .daily-status { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .cell {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 14px 8px; text-align: center; border: 2px solid var(--border);
+      position: relative; transition: all 0.3s;
+    }
+    .cell.red { border-color: var(--danger); background: #FEF2F2; }
+    .cell.green { border-color: var(--accent); background: #ECFDF5; }
+    .cell-icon { font-size: 16px; margin-bottom: 4px; }
+    .cell-label { font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-bottom: 4px; }
+    .cell-value { font-size: 20px; font-weight: 700; }
+    .cell.red .cell-value { color: var(--danger); }
+    .cell.green .cell-value { color: #065F46; }
+    .cell-note { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+    .cell-check { position: absolute; top: 6px; right: 8px; font-size: 14px; color: var(--accent); display: none; }
+    .cell.green .cell-check { display: block; }
+
+    /* Button */
+    .checkin-btn {
+      width: 100%; padding: 24px; border: none; border-radius: var(--radius);
+      font-size: 20px; font-weight: 700; color: white; cursor: pointer;
+      background: var(--accent); transition: all 0.2s;
+    }
+    .checkin-btn:active { transform: scale(0.98); opacity: 0.9; }
+    .checkin-btn:disabled { background: #D1D5DB; cursor: default; transform: none; }
+
+    /* Collapse detail */
+    details.record-detail {
+      margin-top: 16px; background: var(--surface);
+      border-radius: var(--radius); border: 1px solid var(--border);
+    }
+    details.record-detail summary {
+      padding: 12px 16px; font-size: 13px; font-weight: 600;
+      color: var(--text-secondary); cursor: pointer;
+      list-style: none; display: flex; align-items: center; gap: 8px;
+    }
+    details.record-detail summary::-webkit-details-marker { display: none; }
+    details.record-detail summary::after { content: '▾'; margin-left: auto; transition: transform 0.2s; }
+    details.record-detail[open] summary::after { transform: rotate(180deg); }
+    .detail-body { padding: 0 16px 14px; }
+    .record-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-top: 1px solid var(--border);
+    }
+    .record-row:first-child { border-top: none; }
+    .r-left { display: flex; align-items: center; gap: 10px; }
+    .r-badge { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+    .r-badge.vao { background: #D1FAE5; color: #065F46; }
+    .r-badge.ra { background: #DBEAFE; color: #1E40AF; }
+    .r-time { font-size: 15px; font-weight: 600; }
+    .r-date { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .r-right { text-align: right; font-size: 12px; color: var(--text); }
+    .r-method { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .empty-detail { text-align: center; padding: 16px 0; color: var(--text-muted); font-size: 13px; }
+
+    /* Bottom tabs */
+    .bottom-tabs {
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 390px; height: var(--tab-height);
+      background: var(--surface); border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-around; z-index: 100;
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    .tab-item {
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      padding: 8px 12px; cursor: pointer; -webkit-tap-highlight-color: transparent;
+    }
+    .t-icon { font-size: 20px; color: var(--text-muted); }
+    .t-label { font-size: 10px; color: var(--text-muted); font-weight: 500; }
+    .tab-item.active .t-icon { color: #2563EB; }
+    .tab-item.active .t-label { color: #2563EB; font-weight: 600; }
+
+    /* Coming soon & Profile */
+    .coming-soon { text-align: center; padding: 60px 20px; }
+    .coming-soon .cs-icon { font-size: 48px; margin-bottom: 16px; }
+    .coming-soon h3 { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .coming-soon p { font-size: 14px; color: var(--text-secondary); }
+    .profile-card {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 24px; text-align: center; border: 1px solid var(--border); margin-bottom: 16px;
+    }
+    .p-avatar {
+      width: 64px; height: 64px; border-radius: 50%; background: #2563EB; color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: 600; margin: 0 auto 12px;
+    }
+    .p-name { font-size: 18px; font-weight: 600; }
+    .p-dept { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+    .menu-list { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); }
+    .menu-item {
+      padding: 16px 20px; display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); cursor: pointer;
+    }
+    .menu-item:last-child { border-bottom: none; }
+    .m-left { display: flex; align-items: center; gap: 12px; }
+    .menu-item.danger .m-label { color: var(--danger); }
+
+    /* Demo switcher */
+    .demo-sw {
+      position: fixed; top: 72px; right: 8px; z-index: 1000;
+      background: rgba(0,0,0,0.85); color: white; padding: 8px 10px;
+      border-radius: 8px; font-size: 11px;
+    }
+    .demo-sw select {
+      display: block; width: 100%; margin-top: 4px;
+      background: transparent; color: white; border: 1px solid rgba(255,255,255,0.3);
+      padding: 3px 6px; border-radius: 4px; font-size: 11px;
+    }
+    .demo-sw option { color: black; }
+  </style>
+</head>
+<body>
+
+  <div class="demo-sw">
+    <div>Demo trạng thái:</div>
+    <select onchange="setDemo(this.value)">
+      <option value="chua-cham">Chưa chấm công</option>
+      <option value="da-vao">Đã chấm vào</option>
+      <option value="du-cong">Đủ công (vào + ra)</option>
+    </select>
+  </div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-top">
+      <div class="header-left">
+        <div class="header-avatar">H</div>
+        <div class="header-info">
+          <h2>Nguyễn Văn Hải</h2>
+          <span>Phòng Kỹ thuật</span>
+        </div>
+      </div>
+      <div class="header-tenant">Công ty ABC</div>
+    </div>
+    <div class="header-date">📅 Thứ Tư, 23/07/2026</div>
+  </div>
+
+  <!-- ====== Chấm công ====== -->
+  <div class="page" id="page-chamcong">
+    <div class="shift-card">
+      <div>
+        <div class="shift-name">Ca hành chính</div>
+        <div class="shift-time">⏰ 08:00 – 17:00</div>
+      </div>
+      <div class="shift-right">
+        <div>📍 Văn phòng HN</div>
+        <div>Bán kính 100m</div>
+      </div>
+    </div>
+
+    <!-- Lịch tuần -->
+    <div class="week-calendar">
+      <div class="week-header">
+        <span class="week-title">Tuần 21–27/07</span>
+        <div class="week-nav"><button>‹</button><button>›</button></div>
+      </div>
+      <div class="week-days">
+        <div class="week-day"><div class="d-name">T2</div><div class="d-num">21</div><div class="d-dot green"></div></div>
+        <div class="week-day"><div class="d-name">T3</div><div class="d-num">22</div><div class="d-dot green"></div></div>
+        <div class="week-day today"><div class="d-name">T4</div><div class="d-num">23</div><div class="d-dot red" id="dot-today"></div></div>
+        <div class="week-day"><div class="d-name">T5</div><div class="d-num">24</div><div class="d-dot gray"></div></div>
+        <div class="week-day"><div class="d-name">T6</div><div class="d-num">25</div><div class="d-dot gray"></div></div>
+        <div class="week-day"><div class="d-name">T7</div><div class="d-num">26</div><div class="d-dot gray"></div></div>
+        <div class="week-day"><div class="d-name">CN</div><div class="d-num">27</div><div class="d-dot gray"></div></div>
+      </div>
+    </div>
+
+    <!-- 3 ô: đỏ = chưa chấm, xanh = đã chấm -->
+    <div class="daily-status">
+      <div class="cell red" id="cell-vao">
+        <span class="cell-check">✓</span>
+        <div class="cell-icon">🕐</div>
+        <div class="cell-label">Giờ vào</div>
+        <div class="cell-value" id="val-vao">--:--</div>
+        <div class="cell-note" id="note-vao">Chưa chấm</div>
+      </div>
+      <div class="cell red" id="cell-ra">
+        <span class="cell-check">✓</span>
+        <div class="cell-icon">🕐</div>
+        <div class="cell-label">Giờ ra</div>
+        <div class="cell-value" id="val-ra">--:--</div>
+        <div class="cell-note" id="note-ra">Chưa chấm</div>
+      </div>
+      <div class="cell red" id="cell-cong">
+        <span class="cell-check">✓</span>
+        <div class="cell-icon">📊</div>
+        <div class="cell-label">Công</div>
+        <div class="cell-value" id="val-cong">0</div>
+        <div class="cell-note" id="note-cong">Chưa tính</div>
+      </div>
+    </div>
+
+    <!-- Nút -->
+    <button class="checkin-btn" id="btn-cham" onclick="doCheckin()">Chấm công</button>
+
+    <!-- Chi tiết: collapse mặc định đóng -->
+    <details class="record-detail" id="detail-block">
+      <summary>📋 Chi tiết chấm công</summary>
+      <div class="detail-body" id="detail-body">
+        <div class="empty-detail">Chưa có lượt chấm công nào</div>
+      </div>
+    </details>
+  </div>
+
+  <!-- ====== Đơn từ ====== -->
+  <div class="page hidden" id="page-donto">
+    <div class="coming-soon">
+      <div class="cs-icon">📋</div>
+      <h3>Đơn từ</h3>
+      <p>Xin nghỉ phép, làm thêm giờ, nghỉ bù.<br>Sắp ra mắt.</p>
+    </div>
+  </div>
+
+  <!-- ====== Bảng công ====== -->
+  <div class="page hidden" id="page-bangcong">
+    <div class="coming-soon">
+      <div class="cs-icon">📊</div>
+      <h3>Bảng công</h3>
+      <p>Xem bảng công tháng của bạn.<br>Sắp ra mắt.</p>
+    </div>
+  </div>
+
+  <!-- ====== Tài khoản ====== -->
+  <div class="page hidden" id="page-taikhoan">
+    <div class="profile-card">
+      <div class="p-avatar">H</div>
+      <div class="p-name">Nguyễn Văn Hải</div>
+      <div class="p-dept">Phòng Kỹ thuật · NV0001</div>
+    </div>
+    <div class="menu-list">
+      <div class="menu-item"><div class="m-left"><span>👤</span><span class="m-label">Thông tin cá nhân</span></div><span>›</span></div>
+      <div class="menu-item"><div class="m-left"><span>📱</span><span class="m-label">Thiết bị của tôi</span></div><span>›</span></div>
+      <div class="menu-item danger"><div class="m-left"><span>🚪</span><span class="m-label">Đăng xuất</span></div><span>›</span></div>
+    </div>
+  </div>
+
+  <!-- Bottom tabs -->
+  <div class="bottom-tabs">
+    <div class="tab-item active" onclick="switchTab('chamcong', this)"><span class="t-icon">⏱</span><span class="t-label">Chấm công</span></div>
+    <div class="tab-item" onclick="switchTab('donto', this)"><span class="t-icon">📋</span><span class="t-label">Đơn từ</span></div>
+    <div class="tab-item" onclick="switchTab('bangcong', this)"><span class="t-icon">📊</span><span class="t-label">Bảng công</span></div>
+    <div class="tab-item" onclick="switchTab('taikhoan', this)"><span class="t-icon">👤</span><span class="t-label">Tài khoản</span></div>
+  </div>
+
+  <script>
+    function switchTab(tab, el) {
+      document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+      document.getElementById('page-' + tab).classList.remove('hidden');
+      document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    function setDemo(state) {
+      const cellVao = document.getElementById('cell-vao');
+      const cellRa = document.getElementById('cell-ra');
+      const cellCong = document.getElementById('cell-cong');
+      const btn = document.getElementById('btn-cham');
+      const dot = document.getElementById('dot-today');
+      const body = document.getElementById('detail-body');
+
+      if (state === 'chua-cham') {
+        cellVao.className = 'cell red';
+        cellRa.className = 'cell red';
+        cellCong.className = 'cell red';
+        document.getElementById('val-vao').textContent = '--:--';
+        document.getElementById('val-ra').textContent = '--:--';
+        document.getElementById('val-cong').textContent = '0';
+        document.getElementById('note-vao').textContent = 'Chưa chấm';
+        document.getElementById('note-ra').textContent = 'Chưa chấm';
+        document.getElementById('note-cong').textContent = 'Chưa tính';
+        btn.disabled = false; btn.textContent = 'Chấm công';
+        dot.className = 'd-dot red';
+        body.innerHTML = '<div class="empty-detail">Chưa có lượt chấm công nào</div>';
+      } else if (state === 'da-vao') {
+        cellVao.className = 'cell green';
+        cellRa.className = 'cell red';
+        cellCong.className = 'cell red';
+        document.getElementById('val-vao').textContent = '08:02';
+        document.getElementById('val-ra').textContent = '--:--';
+        document.getElementById('val-cong').textContent = '—';
+        document.getElementById('note-vao').textContent = 'Muộn 2 phút';
+        document.getElementById('note-ra').textContent = 'Chưa chấm';
+        document.getElementById('note-cong').textContent = 'Chờ ra';
+        btn.disabled = false; btn.textContent = 'Chấm công';
+        dot.className = 'd-dot red';
+        body.innerHTML = `
+          <div class="record-row">
+            <div class="r-left"><span class="r-badge vao">Vào</span><div><div class="r-time">08:02</div><div class="r-date">23/07/2026</div></div></div>
+            <div class="r-right"><div>Văn phòng HN</div><div class="r-method">📡 GPS</div></div>
+          </div>`;
+      } else if (state === 'du-cong') {
+        cellVao.className = 'cell green';
+        cellRa.className = 'cell green';
+        cellCong.className = 'cell green';
+        document.getElementById('val-vao').textContent = '08:02';
+        document.getElementById('val-ra').textContent = '17:05';
+        document.getElementById('val-cong').textContent = '1';
+        document.getElementById('note-vao').textContent = 'Muộn 2 phút';
+        document.getElementById('note-ra').textContent = 'Đúng giờ';
+        document.getElementById('note-cong').textContent = 'Đủ công';
+        btn.disabled = true; btn.textContent = 'Đã chấm đủ';
+        dot.className = 'd-dot green';
+        body.innerHTML = `
+          <div class="record-row">
+            <div class="r-left"><span class="r-badge vao">Vào</span><div><div class="r-time">08:02</div><div class="r-date">23/07/2026</div></div></div>
+            <div class="r-right"><div>Văn phòng HN</div><div class="r-method">📡 GPS</div></div>
+          </div>
+          <div class="record-row">
+            <div class="r-left"><span class="r-badge ra">Ra</span><div><div class="r-time">17:05</div><div class="r-date">23/07/2026</div></div></div>
+            <div class="r-right"><div>Văn phòng HN</div><div class="r-method">📡 GPS</div></div>
+          </div>`;
+      }
+    }
+
+    function doCheckin() {
+      setDemo('da-vao');
+      document.querySelector('.demo-sw select').value = 'da-vao';
+    }
+  </script>
+</body>
+</html>
