@@ -33,6 +33,9 @@ const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   userId: undefined,
   workShiftId: undefined,
   ngayLamViecTrongTuan: [],
+  // Mặc định an toàn: nhân viên mới chưa được phép chấm công ngoài khu vực
+  // cho tới khi HR chủ động bật (xem chamCongTab.convert.ts).
+  choPhepChamNgoaiVung: false,
 };
 
 function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
@@ -57,6 +60,10 @@ function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
     userId: employee.userId,
     workShiftId: employee.workShiftId,
     ngayLamViecTrongTuan: employee.ngayLamViecTrongTuan || [],
+    // `??` (không phải `||`): hồ sơ có thể đã được lưu `false` một cách
+    // tường minh — không được đảo ngược nó về mặc định. Hồ sơ cũ chưa từng
+    // có trường này (undefined) mới rơi vào mặc định an toàn `false`.
+    choPhepChamNgoaiVung: employee.choPhepChamNgoaiVung ?? false,
   };
 }
 

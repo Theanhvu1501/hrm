@@ -5,6 +5,7 @@ import {
   NGAY_TRONG_TUAN_OPTIONS,
   nguoiDungToUserOptions,
   workShiftToOptions,
+  choPhepChamNgoaiVungToDto,
 } from "./chamCongTab.convert";
 
 describe("NGAY_TRONG_TUAN_OPTIONS", () => {
@@ -93,5 +94,35 @@ describe("workShiftToOptions", () => {
     expect(workShiftToOptions(list)).toEqual([
       { value: "ws1", label: "Ca hành chính (08:00–17:00)" },
     ]);
+  });
+});
+
+describe("choPhepChamNgoaiVungToDto", () => {
+  // Bẫy P3.1: `JSON.stringify` (dùng ở ServiceBase khi gửi request) loại
+  // hẳn khoá mang giá trị `undefined` khỏi body. Nếu hàm này để lọt
+  // `undefined` khi form chưa từng có trường, hoặc khi HR bỏ tick, thì BE
+  // (Object.assign(item, dto)) sẽ giữ nguyên quyền "chấm ngoài vùng" đã cấp
+  // trước đó — HR bấm lưu, thấy "Cập nhật thành công", nhưng nhân viên vẫn
+  // chấm công được từ bất kỳ đâu.
+  it("luôn gửi boolean cho choPhepChamNgoaiVung, kể cả khi tắt", () => {
+    const kq = choPhepChamNgoaiVungToDto({ choPhepChamNgoaiVung: false } as any);
+    expect(kq).toHaveProperty("choPhepChamNgoaiVung", false);
+  });
+
+  it("không có giá trị → gửi false, không gửi undefined", () => {
+    const kq = choPhepChamNgoaiVungToDto({} as any);
+    expect(kq.choPhepChamNgoaiVung).toBe(false);
+  });
+
+  it("bật công tắc thì gửi true", () => {
+    const kq = choPhepChamNgoaiVungToDto({ choPhepChamNgoaiVung: true } as any);
+    expect(kq.choPhepChamNgoaiVung).toBe(true);
+  });
+
+  it("kết quả luôn còn khoá choPhepChamNgoaiVung sau khi qua JSON.stringify (mô phỏng đúng ServiceBase)", () => {
+    const kq = choPhepChamNgoaiVungToDto({ choPhepChamNgoaiVung: false } as any);
+    const body = JSON.parse(JSON.stringify(kq));
+    expect("choPhepChamNgoaiVung" in body).toBe(true);
+    expect(body.choPhepChamNgoaiVung).toBe(false);
   });
 });

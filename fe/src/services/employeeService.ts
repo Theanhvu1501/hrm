@@ -42,6 +42,10 @@ export interface Employee {
   userId?: string;
   workShiftId?: string;
   ngayLamViecTrongTuan?: number[];
+  // Công tắc HR trong tab "Chấm công": bật cho nhân viên thị trường/công
+  // trình/làm tại nhà — nếu tắt (mặc định), nhân viên đứng ngoài bán kính
+  // địa điểm sẽ bị BE chặn chấm công (xem `employee.entity.ts`, Task 1/2).
+  choPhepChamNgoaiVung?: boolean;
 }
 
 export interface EmployeeFilter {
@@ -71,6 +75,7 @@ export interface CreateEmployeeDto {
   userId?: string;
   workShiftId?: string;
   ngayLamViecTrongTuan?: number[];
+  choPhepChamNgoaiVung?: boolean;
 }
 
 export type UpdateEmployeeDto = Partial<CreateEmployeeDto>;
@@ -138,6 +143,9 @@ class EmployeeService extends ServiceBase {
       userId: x.userId as string | undefined,
       workShiftId: x.workShiftId as string | undefined,
       ngayLamViecTrongTuan: x.ngayLamViecTrongTuan as number[] | undefined,
+      // `??` (không phải `||`) để không nuốt mất giá trị `false` hợp lệ đọc
+      // từ BE — hồ sơ chưa từng lưu trường này mới rơi vào mặc định an toàn.
+      choPhepChamNgoaiVung: (x.choPhepChamNgoaiVung as boolean) ?? false,
     };
   }
 }

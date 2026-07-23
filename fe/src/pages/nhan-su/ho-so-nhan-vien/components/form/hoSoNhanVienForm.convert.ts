@@ -1,5 +1,6 @@
 import { CreateEmployeeDto } from "@/services/employeeService";
 import { HoSoNhanVienFormValues } from "./HoSoNhanVienForm.state";
+import { choPhepChamNgoaiVungToDto } from "./tabs/chamCongTab.convert";
 
 /**
  * Dựng DTO gửi lên BE từ giá trị form.
@@ -55,5 +56,12 @@ export function toCreateEmployeeDto(
     // Cùng quy tắc, dạng mảng: bỏ tick hết ngày rồi lưu phải thực sự xoá
     // được cấu hình cũ. `[]` mang đúng nghĩa "chưa cấu hình".
     ngayLamViecTrongTuan: values.ngayLamViecTrongTuan || [],
+
+    // Cùng quy tắc, dạng boolean: công tắc "Cho phép chấm công ngoài khu
+    // vực" (tab Chấm công). Tách hàm riêng ở `chamCongTab.convert.ts` để
+    // test độc lập được cùng chỗ với các hàm chuyển đổi khác của tab đó —
+    // xem docblock ở hàm `choPhepChamNgoaiVungToDto` để biết vì sao không
+    // được dùng `||` hay để lọt `undefined` ở đây.
+    ...choPhepChamNgoaiVungToDto(values),
   };
 }

@@ -1,5 +1,6 @@
 import type { NguoiDung } from "@/types";
 import type { WorkShift } from "@/services/workShiftService";
+import type { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
 
 /**
  * Thứ trong tuần, xếp hiển thị T2→CN (tự nhiên với người Việt) nhưng `value`
@@ -41,4 +42,28 @@ export function workShiftToOptions(list: WorkShift[]): SelectOption[] {
     value: ws.id,
     label: `${ws.ten} (${ws.gioBatDau}–${ws.gioKetThuc})`,
   }));
+}
+
+/**
+ * Rút gọn phần DTO cho công tắc "Cho phép chấm công ngoài khu vực".
+ *
+ * BẪY (đã gặp ở P3.1 với `ngayLamViecTrongTuan`): `ServiceBase` gửi request
+ * bằng `JSON.stringify`, mà `JSON.stringify` loại thẳng khoá mang giá trị
+ * `undefined` khỏi body; BE lại cập nhật kiểu `Object.assign(item, dto)` nên
+ * khoá vắng mặt nghĩa là "giữ nguyên giá trị cũ". Nếu hàm này trả về
+ * `undefined` khi form chưa từng có trường (hồ sơ cũ) hoặc khi HR vừa bỏ
+ * tick, thì:
+ *   - bỏ tick xong bấm lưu → màn hình báo "Cập nhật thành công" nhưng nhân
+ *     viên vẫn được phép chấm công ngoài vùng như trước (quyền không bị
+ *     thu hồi);
+ *   - hồ sơ chưa từng cấu hình trường này sẽ không tự nhận giá trị mặc định
+ *     an toàn (`false`) khi lưu lần đầu.
+ * Vì vậy: chỉ coi là "bật" khi giá trị đúng bằng `true` (không dùng `||`),
+ * mọi trường hợp khác (`false`, `undefined`, hồ sơ chưa có trường) đều ép
+ * thành `false` thật — luôn có mặt trong object trả về.
+ */
+export function choPhepChamNgoaiVungToDto(
+  values: Pick<HoSoNhanVienFormValues, "choPhepChamNgoaiVung">
+): { choPhepChamNgoaiVung: boolean } {
+  return { choPhepChamNgoaiVung: values.choPhepChamNgoaiVung === true };
 }

@@ -71,6 +71,36 @@ describe("toCreateEmployeeDto — trường gỡ được liên kết", () => {
     expect("ngayLamViecTrongTuan" in body).toBe(true);
     expect(body.ngayLamViecTrongTuan).toEqual([]);
   });
+
+  // Cùng bẫy đúng như trên, cho công tắc "Cho phép chấm công ngoài khu vực"
+  // (ChamCongTab). Đây là phép kiểm mạnh nhất trong cả bộ: nó gọi thẳng hàm
+  // dựng DTO thật sự chạy khi bấm "Cập nhật"/"Thêm" (xem
+  // HoSoNhanVienForm.tsx#onSubmit), không phải một hàm phụ trợ tách riêng.
+  it("bỏ tick 'chấm công ngoài khu vực' thì KHOÁ choPhepChamNgoaiVung vẫn nằm trong body gửi đi (giá trị false)", () => {
+    const body = bodyThucGui(
+      toCreateEmployeeDto(values({ choPhepChamNgoaiVung: false }))
+    );
+
+    expect("choPhepChamNgoaiVung" in body).toBe(true);
+    expect(body.choPhepChamNgoaiVung).toBe(false);
+  });
+
+  it("hồ sơ chưa từng có trường này (undefined) vẫn gửi false, không gửi undefined", () => {
+    const body = bodyThucGui(
+      toCreateEmployeeDto(values({ choPhepChamNgoaiVung: undefined }))
+    );
+
+    expect("choPhepChamNgoaiVung" in body).toBe(true);
+    expect(body.choPhepChamNgoaiVung).toBe(false);
+  });
+
+  it("bật công tắc 'chấm công ngoài khu vực' thì gửi true", () => {
+    const body = bodyThucGui(
+      toCreateEmployeeDto(values({ choPhepChamNgoaiVung: true }))
+    );
+
+    expect(body.choPhepChamNgoaiVung).toBe(true);
+  });
 });
 
 describe("toCreateEmployeeDto — các trường tuỳ chọn khác giữ nguyên hành vi cũ", () => {

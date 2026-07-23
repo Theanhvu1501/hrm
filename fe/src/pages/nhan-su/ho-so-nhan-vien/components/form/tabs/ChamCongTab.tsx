@@ -117,6 +117,23 @@ export function ChamCongTab() {
           ngày nghỉ (không phải nghỉ tất cả các ngày).
         </div>
       </div>
+
+      <div className="mb-3">
+        <Controller
+          name="choPhepChamNgoaiVung"
+          control={control}
+          render={({ field }) => (
+            <Checkbox checked={!!field.value} onChange={(e) => field.onChange(e.target.checked)}>
+              Cho phép chấm công ngoài khu vực
+            </Checkbox>
+          )}
+        />
+        <div className="mt-1 text-xs text-gray-500">
+          Mặc định nhân viên đứng ngoài bán kính địa điểm sẽ KHÔNG chấm công
+          được. Bật ô này cho người làm thị trường, đi công trình hoặc làm tại
+          nhà. Bản ghi của họ vẫn được đánh dấu "ngoài vùng" để HR đối chiếu.
+        </div>
+      </div>
     </div>
   );
 }
