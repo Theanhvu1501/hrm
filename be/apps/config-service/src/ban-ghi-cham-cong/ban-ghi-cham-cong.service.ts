@@ -39,6 +39,15 @@ const MOT_NGAY_MS = 86_400_000;
  */
 export const SO_NGAY_TOI_DA_TRA_CUU = 31;
 
+/**
+ * Đứng ngoài bán kính địa điểm và không được HR cấp phép riêng.
+ *
+ * FE đọc `code` này để hiện câu riêng và GIỮ LẠI nút chấm công — người dùng
+ * chỉ cần đi lại gần rồi bấm lại, không phải liên hệ ai. Đọc code chứ không
+ * so khớp chuỗi tiếng Việt: đổi câu chữ một lần là FE hỏng im lặng.
+ */
+export const MA_LOI_NGOAI_BAN_KINH = 'NGOAI_BAN_KINH_CHO_PHEP';
+
 /** Trạng thái hồ sơ không còn được tự chấm công. */
 const TRANG_THAI_DA_NGHI = 'da_nghi';
 
@@ -201,6 +210,29 @@ export class BanGhiChamCong_Service {
       diaDiemList,
       laNgayNghi,
     });
+
+    // Ngoài bán kính thì CHẶN, trừ người được HR cấp phép riêng.
+    //
+    // Đây là đảo ngược mặc định cũ (cho qua, gắn cờ để HR xem lại): giữ cách
+    // cũ thì cờ `ngoaiVung` chỉ là một cột không ai đọc, và chấm công hộ từ
+    // quán cà phê đối diện vẫn trôi.
+    //
+    // Chặn SAU khi đã tính để câu báo lỗi nói được khoảng cách — "bạn đang
+    // cách 480m" thì hành động được, còn "ngoài khu vực cho phép" thì không.
+    // Và chặn TRƯỚC khi ghi: chặn mà vẫn ghi thì bảng công có bản ghi ma
+    // trong khi nhân viên tưởng mình chưa chấm.
+    if (kq.ngoaiVung && emp.choPhepChamNgoaiVung !== true) {
+      const khoangCach =
+        kq.khoangCachMet !== undefined
+          ? ` Bạn đang cách điểm chấm công gần nhất khoảng ${Math.round(kq.khoangCachMet)}m.`
+          : '';
+      throw new ForbiddenException({
+        code: MA_LOI_NGOAI_BAN_KINH,
+        message:
+          `Bạn đang ở ngoài khu vực được phép chấm công.${khoangCach}` +
+          ' Hãy di chuyển vào khu vực rồi bấm lại, hoặc liên hệ HR nếu công việc của bạn cần chấm công từ xa.',
+      });
+    }
 
     // 7. Ghi
     return this.repo.save(

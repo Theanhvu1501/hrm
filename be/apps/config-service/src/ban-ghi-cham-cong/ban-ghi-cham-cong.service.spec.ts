@@ -20,6 +20,14 @@ const NV: any = {
   employeeId: 'NV0001',
   workShiftId: '507f1f77bcf86cd799439011',
   ngayLamViecTrongTuan: [1, 2, 3, 4, 5],
+  // DTO/địa điểm mặc định của các test KHÔNG khớp nhau (phương thức 'qr' mà
+  // locationRepo mặc định trả về rỗng) nên kq.ngoaiVung mặc định là true.
+  // Đa số test dùng NV này để kiểm tra những thứ khác hẳn (giờ, ca, ngày
+  // nghỉ…) chứ không kiểm tra chặn ngoài bán kính, nên cấp sẵn cờ cho phép
+  // ở đây để chúng không vô tình dính chặn. Test riêng cho việc chặn dùng
+  // NV_KHONG_CO_CO/NV_CO_CO (đè lại cờ này) nên không phụ thuộc giá trị mặc
+  // định ở đây.
+  choPhepChamNgoaiVung: true,
 };
 
 const CA: any = {
@@ -927,6 +935,84 @@ describe('BanGhiChamCong_Service', () => {
       await expect(
         service.cuaToi(USER, '2026-07-01', '2026-08-01'),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('chặn chấm công ngoài bán kính', () => {
+    const NV_KHONG_CO_CO: any = { ...NV, choPhepChamNgoaiVung: false };
+    const NV_CO_CO: any = { ...NV, choPhepChamNgoaiVung: true };
+
+    /** Toạ độ cách xa mọi địa điểm để rules trả ngoaiVung = true. */
+    const XA = { latitude: 10.0, longitude: 106.0, doChinhXacMet: 5 };
+
+    it('ngoài bán kính + không có cờ → 403 và KHÔNG ghi bản ghi nào', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV_KHONG_CO_CO);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.findOne.mockResolvedValue(null);
+      locationRepo.find.mockResolvedValue([
+        { _id: 'l1', ten: 'VP', loai: 'gps', latitude: 21.0, longitude: 105.8, banKinh: 100, isActive: true },
+      ]);
+
+      await expect(
+        service.checkIn(USER, { deviceId: 'd1', phuongThuc: 'gps', ...XA }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'NGOAI_BAN_KINH_CHO_PHEP' }),
+      });
+
+      // Chặn mà vẫn ghi thì bảng công có bản ghi ma, còn nhân viên thì tưởng
+      // mình chưa chấm — tệ hơn cả không chặn.
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('ngoài bán kính + CÓ cờ → ghi bình thường, vẫn giữ ngoaiVung: true', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV_CO_CO);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.findOne.mockResolvedValue(null);
+      recordRepo.save.mockImplementation((v: any) => Promise.resolve(v));
+      locationRepo.find.mockResolvedValue([
+        { _id: 'l1', ten: 'VP', loai: 'gps', latitude: 21.0, longitude: 105.8, banKinh: 100, isActive: true },
+      ]);
+
+      const kq = await service.checkIn(USER, {
+        deviceId: 'd1', phuongThuc: 'gps', ...XA,
+      });
+
+      // Cờ chỉ bỏ chặn, KHÔNG tẩy dấu vết — HR vẫn phải nhìn thấy.
+      expect(kq.ngoaiVung).toBe(true);
+    });
+
+    it('trong bán kính → không bị ảnh hưởng dù không có cờ', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV_KHONG_CO_CO);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.findOne.mockResolvedValue(null);
+      recordRepo.save.mockImplementation((v: any) => Promise.resolve(v));
+      locationRepo.find.mockResolvedValue([
+        { _id: 'l1', ten: 'VP', loai: 'gps', latitude: 21.0, longitude: 105.8, banKinh: 100, isActive: true },
+      ]);
+
+      const kq = await service.checkIn(USER, {
+        deviceId: 'd1', phuongThuc: 'gps',
+        latitude: 21.0, longitude: 105.8, doChinhXacMet: 5,
+      });
+
+      expect(kq.ngoaiVung).toBe(false);
+    });
+
+    /**
+     * HR nhập bù không bao giờ có toạ độ nên ngoaiVung luôn true. Chặn ở đó
+     * là khoá mất chính công cụ dùng để sửa những ca bị chặn oan.
+     */
+    it('hrNhap KHÔNG bị chặn', async () => {
+      nhanVien.findOne.mockResolvedValue(NV_KHONG_CO_CO);
+      recordRepo.save.mockImplementation((v: any) => Promise.resolve(v));
+      recordRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.hrNhap(
+          { employeeId: 'emp-1', ngay: homNayVN(), loai: 'vao', gio: '08:00' },
+          'hr@cty.vn',
+        ),
+      ).resolves.toBeDefined();
     });
   });
 
