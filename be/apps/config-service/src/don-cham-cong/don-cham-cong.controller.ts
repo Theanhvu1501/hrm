@@ -17,6 +17,7 @@ import {
   CreateDonChamCongDto,
   UpdateDonChamCongDto,
   TaoDonCuaToiDto,
+  CapNhatTrangThaiDto,
 } from './dto';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { AdminGuard, JwtGuard } from '@app/auth';
@@ -115,7 +116,11 @@ export class DonChamCong_Controller {
   @UseGuards(AdminGuard)
   async updateStatus(
     @Param('id') id: string,
-    @Body() body: { trangThai: string; nguoiDuyet?: string },
+    // CapNhatTrangThaiDto (thay vì inline type) là điều kiện BẮT BUỘC để
+    // ValidationPipe toàn cục có metatype mà validate — inline type không có
+    // class thật đứng sau nên pipe bỏ qua hoàn toàn, để lọt trangThai là
+    // chuỗi bất kỳ hoặc thiếu hẳn (xem comment trong DTO).
+    @Body() body: CapNhatTrangThaiDto,
     @Req() req: any,
   ) {
     // req.user LUÔN là người thực hiện thật (qua JwtGuard/AdminGuard),
