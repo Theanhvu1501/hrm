@@ -1,0 +1,460 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { BadRequestException } from '@nestjs/common';
+import { BangLuong_Service } from './bang-luong.service';
+import { CauHinhLuong, DongLuong, Employee, Timesheet } from '@app/entities';
+import type { CauHinhLuongData } from '@app/entities';
+import { tinhDongLuong } from '@app/core';
+import { CAU_HINH_LUONG_MAC_DINH } from './cau-hinh-luong.seed';
+
+describe('BangLuong_Service', () => {
+  let service: BangLuong_Service;
+
+  let mockCauHinhRepo: {
+    find: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+  };
+  let mockDongLuongRepo: {
+    find: jest.Mock;
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+  };
+  let mockEmployeeRepo: {
+    find: jest.Mock;
+  };
+  let mockTimesheetRepo: {
+    find: jest.Mock;
+  };
+
+  // In-memory stores backing the mocked `find` calls — a `where` filter is
+  // applied against these arrays so tests can assert on genuine filtering
+  // behaviour, not just on what arguments the service happened to pass.
+  let cauHinhStore: Partial<CauHinhLuong>[];
+  let dongLuongStore: Partial<DongLuong>[];
+  let timesheetStore: Partial<Timesheet>[];
+
+  const EMP1 = '507f1f77bcf86cd799439011';
+  const EMP2 = '507f1f77bcf86cd799439022';
+
+  function matchesWhere(item: any, where: Record<string, any>): boolean {
+    return Object.entries(where).every(([k, v]) => item[k] === v);
+  }
+
+  beforeEach(async () => {
+    cauHinhStore = [];
+    dongLuongStore = [];
+    timesheetStore = [];
+
+    mockCauHinhRepo = {
+      find: jest.fn(({ where }: any) =>
+        Promise.resolve(cauHinhStore.filter((c) => matchesWhere(c, where ?? {}))),
+      ),
+      create: jest.fn((v) => ({ ...v })),
+      save: jest.fn((v) =>
+        Promise.resolve({ ...v, _id: v._id ?? 'generated-cauhinh-id' }),
+      ),
+    };
+
+    mockDongLuongRepo = {
+      find: jest.fn(({ where }: any) =>
+        Promise.resolve(dongLuongStore.filter((d) => matchesWhere(d, where ?? {}))),
+      ),
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((v) => ({ ...v })),
+      // Actually persists into `dongLuongStore` (push new / replace by _id) so
+      // tests can call `tongHop` twice in a row and observe real upsert
+      // behaviour (no duplicate row, updated fields) — a plain "echo back"
+      // mock (as bang-cong's spec uses) isn't enough for that assertion.
+      save: jest.fn((v) => {
+        const saved = { ...v, _id: v._id ?? `generated-dongluong-id-${dongLuongStore.length + 1}` };
+        const idx = dongLuongStore.findIndex((d) => d._id === saved._id);
+        if (idx >= 0) dongLuongStore[idx] = saved;
+        else dongLuongStore.push(saved);
+        return Promise.resolve(saved);
+      }),
+    };
+
+    mockEmployeeRepo = {
+      find: jest.fn().mockResolvedValue([]),
+    };
+
+    mockTimesheetRepo = {
+      find: jest.fn(({ where }: any) =>
+        Promise.resolve(timesheetStore.filter((t) => matchesWhere(t, where ?? {}))),
+      ),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        BangLuong_Service,
+        { provide: getRepositoryToken(CauHinhLuong), useValue: mockCauHinhRepo },
+        { provide: getRepositoryToken(DongLuong), useValue: mockDongLuongRepo },
+        { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
+        { provide: getRepositoryToken(Timesheet), useValue: mockTimesheetRepo },
+      ],
+    }).compile();
+
+    service = module.get<BangLuong_Service>(BangLuong_Service);
+  });
+
+  function seedCauHinh(): void {
+    cauHinhStore.push({
+      _id: 'ch-1',
+      ...(CAU_HINH_LUONG_MAC_DINH as any),
+      isActive: true,
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // layCauHinh — đọc / auto-seed cấu hình mặc định
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('layCauHinh', () => {
+    it('chưa có bản ghi nào → tự tạo bản mặc định (seed) rồi trả về', async () => {
+      const result = await service.layCauHinh();
+
+      expect(mockCauHinhRepo.create).toHaveBeenCalledTimes(1);
+      expect(mockCauHinhRepo.save).toHaveBeenCalledTimes(1);
+      expect(result.mucKhaiBaoMacDinh).toBe(
+        CAU_HINH_LUONG_MAC_DINH.mucKhaiBaoMacDinh,
+      );
+      expect(result.khoanLuong).toEqual(CAU_HINH_LUONG_MAC_DINH.khoanLuong);
+      expect(result.bacThue).toEqual(CAU_HINH_LUONG_MAC_DINH.bacThue);
+      expect((result as any).isActive).toBe(true);
+    });
+
+    it('đã có bản ghi active → trả về bản đó, không tạo thêm', async () => {
+      seedCauHinh();
+
+      const result = await service.layCauHinh();
+
+      expect(mockCauHinhRepo.create).not.toHaveBeenCalled();
+      expect(mockCauHinhRepo.save).not.toHaveBeenCalled();
+      expect((result as any)._id).toBe('ch-1');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // capNhatCauHinh — sửa cấu hình
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('capNhatCauHinh', () => {
+    it('gộp dto vào bản ghi hiện có rồi lưu', async () => {
+      seedCauHinh();
+
+      const result = await service.capNhatCauHinh({ mucKhaiBaoMacDinh: 6_000_000 });
+
+      expect(result.mucKhaiBaoMacDinh).toBe(6_000_000);
+      // các trường khác giữ nguyên
+      expect(result.congChuan).toBe(CAU_HINH_LUONG_MAC_DINH.congChuan);
+      expect(mockCauHinhRepo.save).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // tongHop — tổng hợp kỳ, chạy engine cho 2 mức
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('tongHop', () => {
+    beforeEach(() => {
+      seedCauHinh();
+    });
+
+    it('tạo một dòng DongLuong/NV với khaiBao(base=mucKhaiBao) và thucTe(base=luongThoaThuan) khớp tinhDongLuong thật', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 15_000_000,
+          mucKhaiBao: 5_500_000,
+          phuCapCoDinh: 500_000,
+          soNguoiPhuThuoc: 1,
+          dongBH: true,
+          thoiVu: false,
+          camKet: false,
+          isActive: true,
+        },
+      ]);
+      timesheetStore = [
+        { thang: '2026-06', employeeId: EMP1, soNgayCong: 24 },
+      ];
+
+      const [row] = await service.tongHop('2026-06');
+
+      expect(row.thang).toBe('2026-06');
+      expect(row.employeeId).toBe(EMP1);
+      expect(row.employeeName).toBe('Nguyen Van A');
+      expect(row.employeeCode).toBe('NV0001');
+      expect(row.congThuong).toBe(24);
+
+      const ch = CAU_HINH_LUONG_MAC_DINH as CauHinhLuongData;
+      const congChung = {
+        congThuong: 24,
+        congThuViec: 0,
+        congKhac: 0,
+        phuCapCoDinh: 500_000,
+        soNguoiPhuThuoc: 1,
+        tamUng: 0,
+        khauTruKhac: 0,
+        dongBH: true,
+        thoiVu: false,
+        camKet: false,
+        nhapTheoKy: {},
+      };
+
+      const expectedKhaiBao = tinhDongLuong(
+        { base: 5_500_000, mucKhaiBao: 5_500_000, ...congChung },
+        ch,
+      );
+      const expectedThucTe = tinhDongLuong(
+        { base: 15_000_000, mucKhaiBao: 5_500_000, ...congChung },
+        ch,
+      );
+
+      expect(row.khaiBao).toEqual(expectedKhaiBao);
+      expect(row.thucTe).toEqual(expectedThucTe);
+      // Hai mức khác kết quả (base khác nhau) — chứng minh không dùng chung 1 lần chạy.
+      expect(row.khaiBao).not.toEqual(row.thucTe);
+    });
+
+    it('mucKhaiBao rỗng → dùng mucKhaiBaoMacDinh của cấu hình cho cả base khai báo lẫn BHXH', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 10_000_000,
+          mucKhaiBao: undefined,
+          isActive: true,
+        },
+      ]);
+
+      const [row] = await service.tongHop('2026-06');
+
+      expect(row.mucKhaiBao).toBe(CAU_HINH_LUONG_MAC_DINH.mucKhaiBaoMacDinh);
+      expect(row.khaiBao.giaTriTungKhoan.LUONG_CONG).toBe(0); // công=0 (chưa có timesheet)
+    });
+
+    it('chưa có bản ghi công của NV trong tháng → công = 0', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        { _id: EMP1, employeeId: 'NV0001', hoTen: 'A', isActive: true },
+      ]);
+      timesheetStore = []; // không có bản ghi công
+
+      const [row] = await service.tongHop('2026-06');
+
+      expect(row.congThuong).toBe(0);
+      expect(row.congThuViec).toBe(0);
+      expect(row.congKhac).toBe(0);
+    });
+
+    it('chạy lại KHÔNG nhân đôi dòng (upsert theo {thang, employeeId})', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 10_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+        },
+      ]);
+      timesheetStore = [{ thang: '2026-06', employeeId: EMP1, soNgayCong: 24 }];
+
+      await service.tongHop('2026-06');
+      expect(dongLuongStore).toHaveLength(1);
+
+      // thêm dữ liệu công khác cho lần chạy lại — mô phỏng cập nhật bảng công
+      timesheetStore = [{ thang: '2026-06', employeeId: EMP1, soNgayCong: 20 }];
+      await service.tongHop('2026-06');
+
+      expect(dongLuongStore).toHaveLength(1);
+      expect(dongLuongStore[0].congThuong).toBe(20);
+    });
+
+    it('chạy lại giữ nguyên nhapTheoKy/tamUng/khauTruKhac đã nhập (không mất số đã nhập)', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 10_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+        },
+      ]);
+      timesheetStore = [{ thang: '2026-06', employeeId: EMP1, soNgayCong: 24 }];
+
+      await service.tongHop('2026-06');
+
+      // admin nhập tay khoản biến động theo kỳ trên dòng vừa tạo
+      dongLuongStore[0].nhapTheoKy = { HIEU_SUAT: 2_000_000 };
+      dongLuongStore[0].tamUng = 1_000_000;
+      dongLuongStore[0].khauTruKhac = 200_000;
+
+      const [row] = await service.tongHop('2026-06');
+
+      expect(row.nhapTheoKy).toEqual({ HIEU_SUAT: 2_000_000 });
+      expect(row.tamUng).toBe(1_000_000);
+      expect(row.khauTruKhac).toBe(200_000);
+      expect(row.khaiBao.giaTriTungKhoan.HIEU_SUAT).toBe(2_000_000);
+    });
+
+    it('tạo một dòng cho mỗi NV active', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        { _id: EMP1, employeeId: 'NV0001', hoTen: 'A', isActive: true },
+        { _id: EMP2, employeeId: 'NV0002', hoTen: 'B', isActive: true },
+      ]);
+
+      const rows = await service.tongHop('2026-06');
+
+      expect(rows).toHaveLength(2);
+      expect(rows.map((r) => r.employeeId).sort()).toEqual([EMP1, EMP2].sort());
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // danhSachDong
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('danhSachDong', () => {
+    it('trả về các dòng active của đúng tháng', async () => {
+      dongLuongStore = [
+        { _id: 'd1', thang: '2026-06', employeeId: EMP1, isActive: true },
+        { _id: 'd2', thang: '2026-07', employeeId: EMP1, isActive: true },
+      ];
+
+      const result = await service.danhSachDong('2026-06');
+
+      expect(result).toHaveLength(1);
+      expect((result[0] as any)._id).toBe('d1');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // capNhatDong — sửa khoản biến động, tính lại
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('capNhatDong', () => {
+    beforeEach(() => {
+      seedCauHinh();
+    });
+
+    it('cập nhật snapshot rồi tính lại khaiBao/thucTe khớp tinhDongLuong thật', async () => {
+      const id = '507f1f77bcf86cd799439001';
+      const existing: Partial<DongLuong> = {
+        _id: id,
+        thang: '2026-06',
+        employeeId: EMP1,
+        congThuong: 24,
+        congThuViec: 0,
+        congKhac: 0,
+        luongThoaThuan: 15_000_000,
+        mucKhaiBao: 5_500_000,
+        phuCapCoDinh: 0,
+        soNguoiPhuThuoc: 0,
+        dongBH: false,
+        thoiVu: false,
+        camKet: false,
+        tamUng: 0,
+        khauTruKhac: 0,
+        nhapTheoKy: {},
+        trangThai: 'nhap',
+        isActive: true,
+      };
+      mockDongLuongRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.capNhatDong(id, {
+        nhapTheoKy: { HIEU_SUAT: 2_000_000 },
+      });
+
+      expect(result.nhapTheoKy).toEqual({ HIEU_SUAT: 2_000_000 });
+
+      const ch = CAU_HINH_LUONG_MAC_DINH as CauHinhLuongData;
+      const congChung = {
+        congThuong: 24,
+        congThuViec: 0,
+        congKhac: 0,
+        phuCapCoDinh: 0,
+        soNguoiPhuThuoc: 0,
+        tamUng: 0,
+        khauTruKhac: 0,
+        dongBH: false,
+        thoiVu: false,
+        camKet: false,
+        nhapTheoKy: { HIEU_SUAT: 2_000_000 },
+      };
+      const expectedKhaiBao = tinhDongLuong(
+        { base: 5_500_000, mucKhaiBao: 5_500_000, ...congChung },
+        ch,
+      );
+      const expectedThucTe = tinhDongLuong(
+        { base: 15_000_000, mucKhaiBao: 5_500_000, ...congChung },
+        ch,
+      );
+
+      expect(result.khaiBao).toEqual(expectedKhaiBao);
+      expect(result.thucTe).toEqual(expectedThucTe);
+      expect(result.khaiBao.giaTriTungKhoan.HIEU_SUAT).toBe(2_000_000);
+    });
+
+    it('kỳ đã chốt → từ chối sửa', async () => {
+      const id = '507f1f77bcf86cd799439002';
+      mockDongLuongRepo.findOne.mockResolvedValue({
+        _id: id,
+        thang: '2026-06',
+        employeeId: EMP1,
+        trangThai: 'chot',
+        isActive: true,
+      });
+
+      await expect(
+        service.capNhatDong(id, { tamUng: 500_000 }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockDongLuongRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('không tồn tại → NotFoundException', async () => {
+      mockDongLuongRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.capNhatDong('507f1f77bcf86cd799439099', { tamUng: 1 }),
+      ).rejects.toThrow();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // chot / moLai
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('chot / moLai', () => {
+    it('chot: đổi trangThai của mọi dòng trong kỳ sang chot', async () => {
+      dongLuongStore = [
+        { _id: 'd1', thang: '2026-06', employeeId: EMP1, trangThai: 'nhap', isActive: true },
+        { _id: 'd2', thang: '2026-06', employeeId: EMP2, trangThai: 'nhap', isActive: true },
+        { _id: 'd3', thang: '2026-07', employeeId: EMP1, trangThai: 'nhap', isActive: true },
+      ];
+
+      const result = await service.chot('2026-06');
+
+      expect(result).toHaveLength(2);
+      expect(result.every((r) => r.trangThai === 'chot')).toBe(true);
+      // Dòng của tháng khác không bị đổi.
+      expect(dongLuongStore.find((d) => d._id === 'd3')!.trangThai).toBe('nhap');
+    });
+
+    it('moLai: đổi trangThai của mọi dòng trong kỳ về nhap; capNhatDong lại sửa được', async () => {
+      const id = '507f1f77bcf86cd799439003';
+      dongLuongStore = [
+        { _id: id, thang: '2026-06', employeeId: EMP1, trangThai: 'chot', isActive: true },
+      ];
+
+      const result = await service.moLai('2026-06');
+
+      expect(result.every((r) => r.trangThai === 'nhap')).toBe(true);
+
+      seedCauHinh();
+      mockDongLuongRepo.findOne.mockResolvedValue(dongLuongStore[0]);
+      await expect(
+        service.capNhatDong(id, { tamUng: 100_000 }),
+      ).resolves.toBeDefined();
+    });
+  });
+});
