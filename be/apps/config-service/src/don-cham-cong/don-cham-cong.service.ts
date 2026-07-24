@@ -162,7 +162,14 @@ export class DonChamCong_Service {
       ...dto,
       employeeName: emp.hoTen,
       employeeCode: emp.employeeId,
-      trangThai: dto.trangThai ?? 'cho_duyet',
+      // Task 4 (cửa thứ hai): LUÔN 'cho_duyet', bất kể dto.trangThai là gì.
+      // Design spec §3 câu hỏi 7 chốt: HR được phép nộp hộ đơn cho người
+      // khác, nhưng đơn vẫn phải qua một bước duyệt riêng để lại vết
+      // (nguoiDuyetId/thoiDiemDuyet trong updateStatus()) — không ai được
+      // "tạo thẳng ra đơn đã duyệt". Trước đây `dto.trangThai ?? 'cho_duyet'`
+      // để lọt giá trị client gửi kèm, cho phép né PATCH :id/trang-thai (và
+      // luật KHONG_TU_DUYET_DON trong đó) ngay từ lúc tạo.
+      trangThai: 'cho_duyet',
       isActive: true,
       // Đặt SAU `...dto` — dù DTO đã cố tình không có các trường này (xem
       // CreateDonChamCongDto), việc gán tường minh ở đây đảm bảo backend luôn
@@ -284,21 +291,30 @@ export class DonChamCong_Service {
   }
 
   /**
-   * RỦI RO CÒN LẠI (ghi nhận lúc tự rà soát Task 4, cố tình chưa vá — nằm
-   * ngoài phạm vi brief): `UpdateDonChamCongDto` vẫn còn `trangThai`/
-   * `nguoiDuyet` (brief yêu cầu "mở rộng đường PATCH :id/trang-thai, không
-   * phải DTO create/update"), nên một ADMIN đồng thời là chủ đơn có thể gọi
-   * `PUT :id` với `{ trangThai: 'da_duyet' }` để tự duyệt mà KHÔNG đi qua
-   * luật KHONG_TU_DUYET_DON trong `updateStatus()` — `Object.assign` ở đây
-   * ghi thẳng, không kiểm, không ghi `nguoiDuyetId`/`thoiDiemDuyet`. Cần một
-   * task theo dõi riêng nếu muốn khoá luôn đường này.
+   * Task 4 (đóng "cửa thứ hai"): PUT :id KHÔNG ĐƯỢC PHÉP đổi trangThai dưới
+   * bất kỳ hình thức nào — trạng thái đơn CHỈ được di chuyển qua
+   * `updateStatus()` (route `PATCH :id/trang-thai`), nơi duy nhất kiểm luật
+   * KHONG_TU_DUYET_DON và ghi vết nguoiDuyetId/thoiDiemDuyet. Trước đây
+   * `Object.assign(item, dto)` ghi thẳng mọi trường của dto — kể cả
+   * `trangThai` — xuống entity rồi lưu, nên một ADMIN đồng thời là chủ đơn
+   * gọi PUT với `{ trangThai: 'da_duyet' }` tự duyệt được đơn của chính
+   * mình, né hoàn toàn luật vừa vá ở updateStatus(). Một cánh cửa khoá kỹ mà
+   * còn cửa thứ hai không khoá thì coi như không khoá.
+   *
+   * Cách vá phải mang tính CẤU TRÚC, không phải "nếu có thì xoá": tách hẳn
+   * `trangThai` ra khỏi dto bằng destructuring trước khi merge vào entity —
+   * biến `_trangThaiBiBoQua` không được dùng ở đâu khác, nên trường này về
+   * mặt code không có đường nào chạm tới `repo.save` từ nhánh update(). Nếu
+   * sau này ai thêm trường tự tính khác cần cùng cách xử lý, làm y hệt ở
+   * đây thay vì thêm điều kiện rẽ nhánh dễ quên.
    */
   async update(
     id: string,
     dto: UpdateDonChamCongDto,
   ): Promise<AttendanceRequest> {
     const item = await this.findOne(id);
-    Object.assign(item, dto);
+    const { trangThai: _trangThaiBiBoQua, ...phanConLaiDuocPhepSua } = dto;
+    Object.assign(item, phanConLaiDuocPhepSua);
     return this.repo.save(item);
   }
 

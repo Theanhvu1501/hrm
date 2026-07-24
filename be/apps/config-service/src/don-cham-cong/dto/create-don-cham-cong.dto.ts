@@ -57,6 +57,14 @@ export class CreateDonChamCongDto {
   @IsString()
   minhChung?: string;
 
+  // Giữ field này (thay vì xoá hẳn) để không phá TaoDonCuaToiDto (OmitType
+  // đang loại 'trangThai' khỏi danh sách field CÓ trên lớp này) và để pipe
+  // validation không chặn nhầm client cũ còn gửi kèm. Nhưng từ Task 4, giá
+  // trị này BỊ BỎ QUA HOÀN TOÀN ở DonChamCong_Service.create() — đơn luôn
+  // được tạo ở 'cho_duyet', bất kể ai gửi gì ở đây (xem comment trong
+  // service). Lý do: design spec §3 câu hỏi 7 — HR được nộp hộ đơn cho
+  // người khác, nhưng đơn vẫn phải qua một bước duyệt riêng để lại vết, không
+  // được tạo thẳng ra ở trạng thái đã duyệt.
   @IsOptional()
   @IsIn(['cho_duyet', 'da_duyet', 'tu_choi'], {
     message: 'Trạng thái không hợp lệ',

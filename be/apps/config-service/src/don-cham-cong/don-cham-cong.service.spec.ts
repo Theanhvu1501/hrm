@@ -107,6 +107,33 @@ describe('DonChamCong_Service', () => {
         }),
       );
     });
+
+    // Task 4 (lỗ hổng thứ hai): design spec §3 câu hỏi 7 — HR có thể nộp hộ
+    // đơn cho người khác, nhưng đơn vẫn phải qua một bước duyệt để lại vết
+    // (nguoiDuyetId/thoiDiemDuyet). Nếu create() tin trangThai client gửi,
+    // người nộp đơn tự tạo thẳng một đơn "đã duyệt" mà không ai bấm duyệt cả
+    // — cùng họ lỗ hổng với việc né PATCH :id/trang-thai, chỉ khác cửa vào.
+    it('trangThai gửi kèm trong payload bị bỏ qua hoàn toàn — đơn luôn được tạo ở cho_duyet', async () => {
+      const employee = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+      };
+      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+
+      const result = await service.create({
+        employeeId: EMP_ID,
+        loaiDon: 'giai_trinh',
+        ngay: '2026-07-18',
+        lyDo: 'Quên chấm công',
+        trangThai: 'da_duyet',
+      } as any);
+
+      expect(result.trangThai).toBe('cho_duyet');
+      expect(mockRequestRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'cho_duyet' }),
+      );
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -338,6 +365,62 @@ describe('DonChamCong_Service', () => {
       } as any);
 
       expect(result.trangThai).toBe('tu_choi');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // update — Task 4 (đóng lỗ hổng "cửa thứ hai"): PUT :id KHÔNG được phép đổi
+  // trangThai dưới bất kỳ hình thức nào. Trước đây update() chỉ
+  // Object.assign(item, dto) rồi lưu, nên một ADMIN đồng thời là chủ đơn có
+  // thể gọi PUT với { trangThai: 'da_duyet' } để tự duyệt, né hoàn toàn luật
+  // KHONG_TU_DUYET_DON chỉ được kiểm trong updateStatus(). Quyết định thiết
+  // kế: KHÔNG thêm một bản sao luật tự duyệt ở đây — chặn đứng khả năng
+  // trangThai chạm tới repo.save từ nhánh update() luôn, vì vậy hai kịch bản
+  // dưới (đơn của chính người gọi / đơn của người khác) đều phải cho cùng
+  // một kết quả: trạng thái không đổi. Đó chính là luận điểm — PUT không di
+  // chuyển trạng thái, không phải "PUT chặn được chủ đơn nhưng cho người
+  // khác qua".
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('update — PUT :id không được đổi trạng thái đơn', () => {
+    const DON_ID_1 = '507f1f77bcf86cd799439021';
+    const DON_ID_2 = '507f1f77bcf86cd799439022';
+
+    it('PUT mang trangThai: da_duyet trên đơn của chính người gọi → trạng thái giữ nguyên, đơn KHÔNG được duyệt', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID_1,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        lyDo: 'Lý do cũ',
+      });
+
+      const result = await service.update(DON_ID_1, {
+        trangThai: 'da_duyet',
+        lyDo: 'Lý do mới',
+      } as any);
+
+      expect(result.trangThai).toBe('cho_duyet');
+      expect(result.nguoiDuyetId).toBeUndefined();
+      expect(result.thoiDiemDuyet).toBeUndefined();
+      expect(mockRequestRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'cho_duyet', lyDo: 'Lý do mới' }),
+      );
+    });
+
+    it('PUT mang trangThai trên đơn của người khác → trạng thái vẫn không đổi (PUT không bao giờ được phép chuyển trạng thái)', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID_2,
+        employeeId: 'nhan-vien-khac-999',
+        trangThai: 'cho_duyet',
+      });
+
+      const result = await service.update(DON_ID_2, {
+        trangThai: 'tu_choi',
+      } as any);
+
+      expect(result.trangThai).toBe('cho_duyet');
+      expect(mockRequestRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'cho_duyet' }),
+      );
     });
   });
 
