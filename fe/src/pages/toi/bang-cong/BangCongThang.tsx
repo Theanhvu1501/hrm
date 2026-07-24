@@ -193,7 +193,11 @@ export default function BangCongThang() {
                     className="text-[11px] font-medium"
                     style={{ color: chu ?? "var(--emp-text-phu)" }}
                   >
-                    {o.kyHieu ?? o.hienThi}
+                    {/* Khớp ảnh mẫu: số công kèm ký hiệu NHỎ trên góc (1ᵖ),
+                        không thay số bằng chữ. Ngày không có ký hiệu chỉ hiện
+                        hienThi ('1'|'0'|'N'|'•'|''). */}
+                    {o.hienThi}
+                    {o.kyHieu && <sup className="text-[8px]">{o.kyHieu}</sup>}
                   </div>
                 </div>
               );
