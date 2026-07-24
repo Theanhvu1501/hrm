@@ -99,3 +99,19 @@
 .emp-sheet .ant-modal-mask {
   background: rgba(0, 0, 0, 0.45);
 }
+
+/* Bo tròn control antd bên trong tấm (Modal render trong portal, ngoài
+   .emp-shell nên rule của .emp-shell không với tới đây). */
+.emp-sheet .ant-btn {
+  border-radius: 999px;
+}
+
+.emp-sheet .ant-input,
+.emp-sheet .ant-input-affix-wrapper,
+.emp-sheet .ant-select .ant-select-selector {
+  border-radius: 12px;
+}
+
+.emp-sheet .ant-alert {
+  border-radius: 12px;
+}

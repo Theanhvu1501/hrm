@@ -219,3 +219,34 @@
   color: var(--emp-accent);
   font-weight: 600;
 }
+
+/* ── Bo tròn control antd trong vỏ ────────────────────────────────────────
+   ConfigProvider ở App.tsx đặt borderRadius 0 cho TOÀN dự án (khu quản trị).
+   Ở đây bo lại các control antd (nút, ô nhập, Alert, Card, Tag) cho khớp nhịp
+   iOS bo mềm. Selector 2 lớp (.emp-shell .ant-*) thắng rule 1 lớp mà antd
+   sinh ra, nên KHÔNG cần !important; inline style 999 của các nút chính vẫn
+   thắng cả hai nên nút viên thuốc giữ nguyên. */
+.emp-shell .ant-btn {
+  border-radius: 999px;
+}
+
+.emp-shell .ant-input,
+.emp-shell .ant-input-affix-wrapper,
+.emp-shell .ant-input-number,
+.emp-shell .ant-input-number-affix-wrapper,
+.emp-shell .ant-picker,
+.emp-shell .ant-select .ant-select-selector {
+  border-radius: 12px;
+}
+
+.emp-shell .ant-alert {
+  border-radius: 12px;
+}
+
+.emp-shell .ant-card {
+  border-radius: 14px;
+}
+
+.emp-shell .ant-tag {
+  border-radius: 6px;
+}
