@@ -1,15 +1,11 @@
-import { PartialType, OmitType } from '@nestjs/mapped-types';
+import { PartialType } from '@nestjs/mapped-types';
 import { CreateDonChamCongDto } from './create-don-cham-cong.dto';
 
-/**
- * `trangThai`/`nguoiDuyet` bị OmitType XOÁ HẲN khỏi DTO này (Task 4, phát
- * hiện lúc tự rà soát — không có trong brief gốc): nếu còn ở đây, `PUT :id`
- * (route quản trị) có thể set thẳng `trangThai: 'da_duyet'` mà KHÔNG đi qua
- * `DonChamCong_Service.updateStatus()` — nơi DUY NHẤT chặn tự duyệt
- * (KHONG_TU_DUYET_DON). Một admin đồng thời là chủ đơn gọi PUT thay vì
- * PATCH sẽ tự duyệt được đơn của chính mình, vô hiệu hoá hoàn toàn luật đó.
- * Đổi trạng thái CHỈ được phép qua `PATCH :id/trang-thai`.
- */
-export class UpdateDonChamCongDto extends PartialType(
-  OmitType(CreateDonChamCongDto, ['trangThai', 'nguoiDuyet'] as const),
-) {}
+// KHÔNG loại trangThai/nguoiDuyet khỏi DTO này — brief Task 4 nói rõ đường
+// duyệt là PATCH :id/trang-thai (body inline riêng), "mở rộng đường đó chứ
+// không phải DTO create/update", và spec §6 liệt PUT :id là "sửa + duyệt"
+// của nhóm quản trị. Xem ghi chú rủi ro còn lại ở don-cham-cong.service.ts
+// (update()): PUT hiện có thể set thẳng trangThai mà không qua luật chặn tự
+// duyệt trong updateStatus() — cố tình để nguyên theo đúng phạm vi brief,
+// gắn cờ trong report thay vì tự ý mở rộng phạm vi.
+export class UpdateDonChamCongDto extends PartialType(CreateDonChamCongDto) {}

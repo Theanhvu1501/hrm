@@ -283,6 +283,16 @@ export class DonChamCong_Service {
     return item;
   }
 
+  /**
+   * RỦI RO CÒN LẠI (ghi nhận lúc tự rà soát Task 4, cố tình chưa vá — nằm
+   * ngoài phạm vi brief): `UpdateDonChamCongDto` vẫn còn `trangThai`/
+   * `nguoiDuyet` (brief yêu cầu "mở rộng đường PATCH :id/trang-thai, không
+   * phải DTO create/update"), nên một ADMIN đồng thời là chủ đơn có thể gọi
+   * `PUT :id` với `{ trangThai: 'da_duyet' }` để tự duyệt mà KHÔNG đi qua
+   * luật KHONG_TU_DUYET_DON trong `updateStatus()` — `Object.assign` ở đây
+   * ghi thẳng, không kiểm, không ghi `nguoiDuyetId`/`thoiDiemDuyet`. Cần một
+   * task theo dõi riêng nếu muốn khoá luôn đường này.
+   */
   async update(
     id: string,
     dto: UpdateDonChamCongDto,
