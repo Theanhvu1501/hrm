@@ -307,13 +307,34 @@ export class DonChamCong_Service {
    * mặt code không có đường nào chạm tới `repo.save` từ nhánh update(). Nếu
    * sau này ai thêm trường tự tính khác cần cùng cách xử lý, làm y hệt ở
    * đây thay vì thêm điều kiện rẽ nhánh dễ quên.
+   *
+   * vòng sửa 2 (task-4-fix2): cửa thứ hai chưa đóng hết — `employeeId` cũng
+   * phải bóc ra cùng chỗ. Luật KHONG_TU_DUYET_DON đọc chủ đơn TẠI THỜI ĐIỂM
+   * DUYỆT (`findEmployee(item.employeeId)` trong `updateStatus()`), nên nếu
+   * PUT còn sửa được `employeeId`, chủ đơn trở thành một đầu vào có thể thao
+   * túng của chính luật đó: đổi đơn sang tên đồng nghiệp → nhờ duyệt (hoặc tự
+   * duyệt vì đã không còn là "chính mình") → đổi employeeId về lại tên mình —
+   * ba bước này đi vòng hoàn toàn qua luật chặn tự duyệt mà không route nào
+   * phát hiện, vì luật chỉ kiểm tra đúng một lần lúc PATCH :id/trang-thai.
+   * Chủ đơn được chốt lúc tạo (`create()`); muốn đổi người đứng tên thì huỷ
+   * đơn và tạo đơn mới, không sửa qua PUT.
+   *
+   * `nguoiDuyet` (tên hiển thị) bóc ra cùng lý do: nửa đáng tin của vết duyệt
+   * là `nguoiDuyetId`, chỉ `updateStatus()` được ghi. Nếu PUT ghi được nửa
+   * còn lại (`nguoiDuyet`) một cách độc lập, tên hiển thị FE đọc và id soát
+   * vết có thể lệch nhau mà không có dấu hiệu gì.
    */
   async update(
     id: string,
     dto: UpdateDonChamCongDto,
   ): Promise<AttendanceRequest> {
     const item = await this.findOne(id);
-    const { trangThai: _trangThaiBiBoQua, ...phanConLaiDuocPhepSua } = dto;
+    const {
+      trangThai: _trangThaiBiBoQua,
+      employeeId: _employeeIdBiBoQua,
+      nguoiDuyet: _nguoiDuyetBiBoQua,
+      ...phanConLaiDuocPhepSua
+    } = dto;
     Object.assign(item, phanConLaiDuocPhepSua);
     return this.repo.save(item);
   }

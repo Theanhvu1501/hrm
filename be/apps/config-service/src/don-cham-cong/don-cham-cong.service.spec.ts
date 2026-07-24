@@ -422,6 +422,51 @@ describe('DonChamCong_Service', () => {
         expect.objectContaining({ trangThai: 'cho_duyet' }),
       );
     });
+
+    // vòng sửa 2 (task-4-fix2): employeeId là đầu vào của luật KHONG_TU_DUYET_DON
+    // (luật đọc chủ đơn qua findEmployee(item.employeeId) tại thời điểm duyệt).
+    // Nếu PUT còn ghi được employeeId thì kẻ tấn công đổi đơn về tên đồng
+    // nghiệp, nhờ đồng nghiệp (hoặc chính mình với vaiTro ADMIN) duyệt hộ, rồi
+    // đổi employeeId về lại chính mình — đơn cuối cùng là "của mình, do mình
+    // duyệt" mà không route nào phát hiện được, vì luật chỉ kiểm tra tại thời
+    // điểm PATCH :id/trang-thai, không kiểm tra lại sau đó.
+    it('PUT mang employeeId khác → employeeId của đơn KHÔNG đổi (chủ đơn chốt lúc tạo, không sửa qua PUT)', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID_1,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+      });
+
+      const result = await service.update(DON_ID_1, {
+        employeeId: 'nhan-vien-khac-999',
+      } as any);
+
+      expect(result.employeeId).toBe(EMP_ID);
+      expect(mockRequestRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ employeeId: EMP_ID }),
+      );
+    });
+
+    // nguoiDuyet (tên hiển thị) chỉ nên di chuyển cùng nguoiDuyetId (id đáng
+    // tin) trong updateStatus(). Nếu PUT ghi được nguoiDuyet riêng, tên người
+    // xem đọc trên UI và id người soát vết trong nguoiDuyetId lệch nhau mà
+    // không ai phát hiện — một dạng giả mạo vết duyệt nhẹ hơn nhưng cùng gốc.
+    it('PUT mang nguoiDuyet → không ghi được (chỉ updateStatus() mới được ghi vết duyệt)', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID_1,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+      });
+
+      const result = await service.update(DON_ID_1, {
+        nguoiDuyet: 'Manager Giả Mạo',
+      } as any);
+
+      expect(result.nguoiDuyet).toBeUndefined();
+      expect(mockRequestRepo.save).toHaveBeenCalledWith(
+        expect.not.objectContaining({ nguoiDuyet: 'Manager Giả Mạo' }),
+      );
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
