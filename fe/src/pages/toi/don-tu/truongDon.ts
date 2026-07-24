@@ -4,6 +4,11 @@ import {
   LoaiNghi,
   TaoDonCuaToiDto,
 } from "@/services/attendanceRequestService";
+import {
+  TruongDon,
+  hienBuoi,
+  hienTruong,
+} from "@/pages/cham-cong/don-cham-cong/truongTheoLoaiDon";
 
 /**
  * Luật "form đổi trường theo loại đơn" của màn nhân viên `/toi/don-tu`.
@@ -21,28 +26,13 @@ import {
  *    nghĩa là thiếu giờ thì nổ ở backend chứ không trả lỗi tử tế. FE phải chặn
  *    trước, ở `kiemTraDon()`.
  */
-export type TruongDon =
-  | "ngay"
-  | "denNgay"
-  | "buoi"
-  | "loaiNghi"
-  | "lyDo"
-  | "gioTu"
-  | "gioDen";
-
-/**
- * Bảng §7 của docs/superpowers/specs/2026-07-24-hrm-p3.6-don-tu-design.md.
- *
- * `buoi` có mặt ở đây cho nghi_phep/nghi_bu nhưng CHỈ hiện khi đơn đúng một
- * ngày — xem `hienBuoi()`. Nửa buổi của một khoảng 3 ngày là vô nghĩa, và
- * `tinhSoNgayNghi()` ở backend cũng chỉ đọc `buoi` khi tuNgay === denNgay.
- */
-const TRUONG_THEO_LOAI: Record<AttendanceRequestType, readonly TruongDon[]> = {
-  giai_trinh: ["ngay", "gioTu", "gioDen", "lyDo"],
-  lam_them_gio: ["ngay", "gioTu", "gioDen", "lyDo"],
-  nghi_phep: ["ngay", "denNgay", "buoi", "loaiNghi", "lyDo"],
-  nghi_bu: ["ngay", "denNgay", "buoi", "lyDo"],
-};
+// Luật "loại đơn nào có trường nào" nay nằm ở
+// `cham-cong/don-cham-cong/truongTheoLoaiDon.ts` — dùng chung với form HR
+// (Task 7), vì hai form nộp đơn phải theo cùng một bảng. Re-export để các
+// import cũ (`FormNopDon.tsx`, test) không phải đổi và để chỗ này vẫn là
+// "cửa vào" duy nhất của màn nhân viên.
+export type { TruongDon };
+export { hienBuoi, hienTruong };
 
 export interface GiaTriFormDon {
   loaiDon: AttendanceRequestType;
@@ -66,21 +56,6 @@ export const GIA_TRI_MAC_DINH: GiaTriFormDon = {
   gioTu: "",
   gioDen: "",
 };
-
-/** Đơn nghỉ đúng MỘT ngày mới có khái niệm nửa buổi. */
-export function hienBuoi(v: GiaTriFormDon): boolean {
-  if (v.loaiDon !== "nghi_phep" && v.loaiDon !== "nghi_bu") return false;
-  // denNgay rỗng nghĩa là người dùng chưa chọn ngày kết thúc → coi như đúng
-  // một ngày (đó cũng là cách `dungDtoNopDon` gửi lên: denNgay = ngay).
-  return !v.denNgay || v.denNgay === v.ngay;
-}
-
-/** Trường nào được vẽ ra cho loại đơn đang chọn. */
-export function hienTruong(v: GiaTriFormDon, truong: TruongDon): boolean {
-  if (!TRUONG_THEO_LOAI[v.loaiDon].includes(truong)) return false;
-  if (truong === "buoi") return hienBuoi(v);
-  return true;
-}
 
 const NHAN_TRUONG: Record<TruongDon, string> = {
   ngay: "Ngày",
