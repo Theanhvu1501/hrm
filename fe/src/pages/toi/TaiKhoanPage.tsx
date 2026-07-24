@@ -82,7 +82,7 @@ export default function TaiKhoanPage() {
       onClick={onClick}
       className="emp-row emp-row-co-icon"
     >
-      <span className="emp-icon-tile-md" style={{ background: gradient }}>
+      <span className="emp-icon-tile emp-icon-tile-md" style={{ background: gradient }}>
         {icon}
       </span>
       <span
@@ -138,7 +138,7 @@ export default function TaiKhoanPage() {
             return (
               <div key={t.id} className="emp-row emp-row-co-icon">
                 <span
-                  className="emp-icon-tile-md"
+                  className="emp-icon-tile emp-icon-tile-md"
                   style={{ background: "linear-gradient(135deg, #4aa3ff, #0a84ff)" }}
                 >
                   <MobileOutlined />
