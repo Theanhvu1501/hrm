@@ -247,6 +247,25 @@ describe("kiemTraDon", () => {
     ).toMatch(/Đến ngày/);
   });
 
+  it("giai_trinh mang denNgay rác nhỏ hơn ngay (sót lại từ lúc còn là đơn nghỉ) → KHÔNG chặn", () => {
+    // Kịch bản kẹt cứng: chọn Nghỉ phép (ngay=01, denNgay=05) → đổi sang
+    // Giải trình (ô "Đến ngày" biến mất nhưng denNgay=05 vẫn còn trong
+    // state) → sửa ngay thành 10. giai_trinh không có trường denNgay nên
+    // kiemTraDon phải bỏ qua nó, không được đọc thẳng v.denNgay.
+    expect(
+      kiemTraDon(
+        form({
+          loaiDon: "giai_trinh",
+          ngay: "2026-08-10",
+          denNgay: "2026-08-05",
+          gioTu: "18:00",
+          gioDen: "20:00",
+          lyDo: "x",
+        })
+      )
+    ).toBeNull();
+  });
+
   it("thiếu lý do → chặn", () => {
     expect(
       kiemTraDon(form({ loaiDon: "giai_trinh", ngay: "2026-07-24", lyDo: " " }))

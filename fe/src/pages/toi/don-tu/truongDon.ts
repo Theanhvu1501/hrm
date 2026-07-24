@@ -115,7 +115,14 @@ export function kiemTraDon(v: GiaTriFormDon): string | null {
 
   // So sánh chuỗi "YYYY-MM-DD" là so sánh đúng thứ tự thời gian, không cần
   // dựng Date (và không dính múi giờ máy người dùng).
-  if (v.denNgay && v.denNgay < v.ngay) {
+  //
+  // PHẢI kiểm hienTruong(v, "denNgay") trước khi đọc v.denNgay: khi người
+  // dùng đổi loại đơn (vd. nghi_phep → giai_trinh), ô "Đến ngày" biến mất
+  // khỏi form nhưng giá trị cũ vẫn còn nằm trong state (xem `dungDtoNopDon`
+  // — cùng lý do nó gọi `co("denNgay")`). Thiếu điều kiện này thì người dùng
+  // bị chặn bởi một câu lỗi trỏ tới một ô không còn tồn tại trên màn hình,
+  // không có cách nào tự sửa ngoài đóng form và mất hết dữ liệu đã gõ.
+  if (hienTruong(v, "denNgay") && v.denNgay && v.denNgay < v.ngay) {
     return "Đến ngày phải bằng hoặc sau ngày bắt đầu";
   }
 
