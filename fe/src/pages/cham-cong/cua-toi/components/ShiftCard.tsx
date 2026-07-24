@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ClockCircleOutlined, EnvironmentOutlined } from "@ant-design/icons";
 import { useChamCongCuaToiState } from "../ChamCongCuaToiHandlerContext";
 import { TrangThaiHomNay } from "@/services/attendanceRecordService";
 import "./NutCham.state";
@@ -28,8 +29,9 @@ export function ShiftCard() {
         {homNay.ca ? (
           <>
             <div className="text-[15px] font-semibold">{homNay.ca.ten}</div>
-            <div className="mt-0.5 text-[13px] text-[color:var(--emp-text-phu)]">
-              ⏰ {homNay.ca.gioBatDau} – {homNay.ca.gioKetThuc}
+            <div className="mt-0.5 flex items-center gap-1.5 text-[13px] text-[color:var(--emp-text-phu)]">
+              <ClockCircleOutlined className="text-[color:var(--emp-accent)]" />
+              {homNay.ca.gioBatDau} – {homNay.ca.gioKetThuc}
               {homNay.ca.laCaQuaDem && " (qua đêm)"}
             </div>
           </>
@@ -47,16 +49,20 @@ export function ShiftCard() {
         <div className="text-right text-[11px] text-[color:var(--emp-muted)]">
           {motDiem ? (
             <>
-              <div>📍 {motDiem.ten}</div>
+              <div className="flex items-center justify-end gap-1">
+                <EnvironmentOutlined className="text-[color:var(--emp-cam)]" />
+                {motDiem.ten}
+              </div>
               {motDiem.banKinh !== undefined && <div>Bán kính {motDiem.banKinh}m</div>}
             </>
           ) : (
             <button
               type="button"
-              className="text-[11px] text-[color:var(--emp-muted)] underline"
+              className="flex items-center gap-1 text-[11px] text-[color:var(--emp-muted)] underline"
               onClick={() => setMoDanhSach((v) => !v)}
             >
-              📍 {diaDiem.length} địa điểm được phép
+              <EnvironmentOutlined className="text-[color:var(--emp-cam)]" />
+              {diaDiem.length} địa điểm được phép
             </button>
           )}
           {moDanhSach &&

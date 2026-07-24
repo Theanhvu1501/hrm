@@ -471,7 +471,9 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
 
     render(<ChamCongCuaToiPage />);
 
-    await waitFor(() => expect(screen.getByText('📍 Văn phòng HN')).toBeTruthy());
+    // Ghim địa điểm giờ là icon antd (EnvironmentOutlined) tách khỏi tên, không
+    // còn emoji 📍 trong text — khớp nội dung tên thuần.
+    await waitFor(() => expect(screen.getByText('Văn phòng HN')).toBeTruthy());
     expect(screen.getByText('Bán kính 100m')).toBeTruthy();
   });
 
@@ -487,7 +489,7 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
 
     render(<ChamCongCuaToiPage />);
 
-    await waitFor(() => expect(screen.getByText('📍 2 địa điểm được phép')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('2 địa điểm được phép')).toBeTruthy());
     expect(screen.queryByText('Bán kính 100m')).toBeNull();
   });
 

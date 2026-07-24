@@ -1,3 +1,10 @@
+import type { ReactNode } from "react";
+import {
+  AimOutlined,
+  HistoryOutlined,
+  QrcodeOutlined,
+  WifiOutlined,
+} from "@ant-design/icons";
 import { useChamCongCuaToiState } from "../ChamCongCuaToiHandlerContext";
 import { AttendanceRecord, TrangThaiHomNay } from "@/services/attendanceRecordService";
 import { gioGiayVN, homNayVN } from "@/ultils/thoiGianVN";
@@ -11,10 +18,10 @@ import "./LichTuan.state";
  * ra dòng "🔳 QR · HR nhập", tự mâu thuẫn ngay trong một dòng. Thà không
  * nói gì còn hơn bịa ra một cách chấm mà người dùng sẽ tin.
  */
-const NHAN_PHUONG_THUC: Record<string, string> = {
-  gps: "📡 GPS",
-  wifi: "📶 Wifi",
-  qr: "🔳 QR",
+const NHAN_PHUONG_THUC: Record<string, { icon: ReactNode; nhan: string }> = {
+  gps: { icon: <AimOutlined />, nhan: "GPS" },
+  wifi: { icon: <WifiOutlined />, nhan: "Wifi" },
+  qr: { icon: <QrcodeOutlined />, nhan: "QR" },
 };
 
 /**
@@ -44,8 +51,9 @@ export function ChiTietChamCong() {
 
   return (
     <details className="emp-card mt-4">
-      <summary className="cursor-pointer list-none px-4 py-3 text-[13px] font-semibold text-[color:var(--emp-text-phu)]">
-        📋 {tieuDe}
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-[13px] font-semibold text-[color:var(--emp-text-phu)]">
+        <HistoryOutlined className="text-[color:var(--emp-accent)]" />
+        {tieuDe}
       </summary>
       {!dl.laHomNay && (
         // Nút chấm công luôn của hôm nay bất kể đang xem ngày nào — nhắc rõ
@@ -102,16 +110,28 @@ export function ChiTietChamCong() {
               </div>
               <div className="text-right text-xs">
                 <div>{b.locationTen ?? "—"}</div>
-                <div className="mt-0.5 text-[11px] text-[color:var(--emp-muted)]">
+                <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-[color:var(--emp-muted)]">
                   {/* Ngoài vùng KHÔNG phải lỗi: bản ghi đã vào sổ, HR sẽ xem
                       xét. Hiện như lỗi thì người dùng bấm lại và đẻ ra rác. */}
-                  {[
-                    b.phuongThuc ? NHAN_PHUONG_THUC[b.phuongThuc] : undefined,
-                    b.ngoaiVung ? "ngoài vùng" : undefined,
-                    b.nguonTao === "hr_nhap" ? "HR nhập" : undefined,
-                  ]
+                  {(
+                    [
+                      b.phuongThuc && NHAN_PHUONG_THUC[b.phuongThuc] ? (
+                        <span key="pt" className="inline-flex items-center gap-1">
+                          {NHAN_PHUONG_THUC[b.phuongThuc].icon}
+                          {NHAN_PHUONG_THUC[b.phuongThuc].nhan}
+                        </span>
+                      ) : null,
+                      b.ngoaiVung ? <span key="nv">ngoài vùng</span> : null,
+                      b.nguonTao === "hr_nhap" ? <span key="hr">HR nhập</span> : null,
+                    ] as (ReactNode | null)[]
+                  )
                     .filter(Boolean)
-                    .join(" · ")}
+                    .map((node, i) => (
+                      <span key={i} className="inline-flex items-center gap-1">
+                        {i > 0 && <span aria-hidden>·</span>}
+                        {node}
+                      </span>
+                    ))}
                 </div>
               </div>
             </div>
