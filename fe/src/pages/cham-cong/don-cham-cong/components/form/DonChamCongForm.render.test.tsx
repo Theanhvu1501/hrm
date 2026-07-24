@@ -220,11 +220,42 @@ describe("Form HR — payload gửi lên backend", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it("đến ngày trước ngày bắt đầu thì chặn tại FE, KHÔNG gọi service", async () => {
+    // Backend không kiểm thứ tự hai đầu khoảng: `cacNgayTrongKhoang()` chạy
+    // vòng lặp `t <= mocDen` nên khoảng ngược trả về 0 ngày và đơn được lưu
+    // với soNgayNghi = 0 — im lặng và sai.
+    const update = vi
+      .spyOn(attendanceRequestService, "update")
+      .mockResolvedValue(don());
+
+    moForm(
+      don({
+        loaiDon: "nghi_bu",
+        ngay: "2026-08-10",
+        denNgay: "2026-08-05",
+        lyDo: "x",
+      })
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "Cập nhật" }));
+
+    expect(
+      await screen.findByText("Đến ngày phải bằng hoặc sau ngày bắt đầu")
+    ).toBeTruthy();
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it("đơn OT KHÔNG bị chặn bởi loại nghỉ còn sót trong state khi HR đổi loại đơn", async () => {
     // Kịch bản kẹt cứng: mở đơn nghỉ phép (chưa chọn loại nghỉ) → đổi sang
-    // Làm thêm giờ. Ô "Loại nghỉ" biến mất nhưng luật kiểm tra của nó vẫn còn
-    // trong react-hook-form; không có guard `co("loaiNghi")` thì HR bị chặn
-    // bởi một câu lỗi trỏ tới ô không còn trên màn hình.
+    // Làm thêm giờ. Giá trị "Loại nghỉ" (rỗng) vẫn còn trong state
+    // react-hook-form sau khi ô biến mất.
+    //
+    // Test này khoá HÀNH VI ("HR không bị kẹt"), không khoá một dòng code cụ
+    // thể: hôm nay hành vi đó được giữ bởi HAI lớp — react-hook-form bỏ qua
+    // luật của ô đã unmount, VÀ guard `co("loaiNghi")` trong rules. Gỡ riêng
+    // guard thì test này vẫn xanh (đã thử); nó sẽ đỏ khi lớp thứ nhất mất đi,
+    // ví dụ ô được giữ mount rồi ẩn bằng CSS, hoặc luật gom về một hàm thuần
+    // đọc cả state như `kiemTraDon()` của màn nhân viên.
     const update = vi
       .spyOn(attendanceRequestService, "update")
       .mockResolvedValue(don());

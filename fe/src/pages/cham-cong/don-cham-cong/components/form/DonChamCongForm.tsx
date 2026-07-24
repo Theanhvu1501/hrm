@@ -193,10 +193,14 @@ export function DonChamCongForm() {
               name="denNgay"
               control={control}
               rules={{
-                // Guard `co("denNgay")`: khi HR đổi sang loại đơn không có ô
-                // này, giá trị cũ vẫn còn trong state react-hook-form. Không
-                // có guard thì form bị chặn bởi một câu lỗi trỏ tới ô không
-                // còn hiện trên màn hình — HR không có cách nào tự gỡ.
+                // Guard `co("denNgay")` là lớp phòng thủ thứ hai, KHÔNG thừa
+                // dù react-hook-form hiện đã tự bỏ qua luật của ô đã unmount:
+                // giá trị cũ vẫn nằm nguyên trong state (đó là lý do
+                // `dungDtoQuanTri` phải lọc theo loại đơn), nên chỉ cần một
+                // ngày nào đó ô này được giữ mount rồi ẩn bằng CSS, hoặc luật
+                // được gom về một hàm thuần kiểu `kiemTraDon()` của màn nhân
+                // viên, là HR bị chặn bởi câu lỗi trỏ tới ô không còn trên
+                // màn hình — không có cách nào tự gỡ ngoài đóng form.
                 validate: (value: string) =>
                   !co("denNgay") ||
                   !value ||
@@ -250,7 +254,7 @@ export function DonChamCongForm() {
               name="loaiNghi"
               control={control}
               rules={{
-                // Cùng lý do guard như denNgay ở trên.
+                // Guard `co("loaiNghi")` — cùng lý do như denNgay ở trên.
                 validate: (value: string) =>
                   !co("loaiNghi") || !!value || "Vui lòng chọn loại nghỉ",
               }}
