@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { notification, Button } from 'antd';
 import { registerSW } from 'virtual:pwa-register';
+import { isNativeApp } from '../../appTarget';
 
 // Kiểm tra bản mới mỗi 60s khi app đang mở (không cần đóng/mở lại để nhận update).
 const UPDATE_CHECK_INTERVAL = 60 * 1000;
@@ -11,6 +12,10 @@ const UPDATE_CHECK_INTERVAL = 60 * 1000;
  */
 export default function PWAUpdatePrompt() {
   useEffect(() => {
+    // Capacitor tự phục vụ asset offline — không đăng ký service worker trong native
+    // để tránh xung đột scheme capacitor:// với Workbox.
+    if (isNativeApp()) return;
+
     let timer: ReturnType<typeof setInterval> | undefined;
 
     const updateSW = registerSW({
