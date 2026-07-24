@@ -177,6 +177,77 @@ describe('PermissionGuard', () => {
       );
     });
 
+    /**
+     * `AuthzLoaderService.load()` trả thẳng `{ vaiTro: 'SUPER_ADMIN',
+     * permissions: ['*'] }` cho tài khoản SUPER_ADMIN_EMAIL — `'*'` là KÝ HIỆU
+     * "có tất cả", không phải tên một quyền. Nếu guard chỉ so khớp chuỗi thuần
+     * thì `['*'].includes('/cham-cong/don-tu:them')` là false và super admin bị
+     * chặn khỏi chính hệ thống mình quản trị. Đây là điều kiện BẮT BUỘC phải
+     * đúng trước khi các controller đổi từ AdminGuard sang PermissionGuard,
+     * nếu không ta chỉ đổi lỗi 403 này lấy một lỗi 403 khác.
+     */
+    it('user có permissions ["*"] (super admin) qua được route đòi quyền bất kỳ', () => {
+      fc.assert(
+        fc.property(
+          fc.array(fc.string({ minLength: 1 }), { minLength: 1, maxLength: 5 }),
+          (requiredPermissions) => {
+            const user = {
+              id: 'super-admin',
+              email: 'admin@company.com',
+              vaiTro: 'SUPER_ADMIN',
+              permissions: ['*'],
+            };
+
+            const context = createMockExecutionContext(
+              user,
+              requiredPermissions,
+            );
+
+            expect(permissionGuard.canActivate(context)).toBe(true);
+          },
+        ),
+        { numRuns: 100 },
+      );
+    });
+
+    it('"*" là ký hiệu toàn quyền kể cả khi đứng lẫn với quyền khác', () => {
+      const user = {
+        id: 'super-admin',
+        email: 'admin@company.com',
+        vaiTro: 'SUPER_ADMIN',
+        permissions: ['/cau-hinh/vai-tro:xem', '*'],
+      };
+
+      const context = createMockExecutionContext(user, [
+        '/cham-cong/don-tu:them',
+        '/cham-cong/don-tu:xoa',
+      ]);
+
+      expect(permissionGuard.canActivate(context)).toBe(true);
+    });
+
+    /**
+     * Ranh giới của "*": chỉ chính chuỗi `'*'` mới là toàn quyền. Nếu ai đó
+     * nới thành so khớp tiền tố/wildcard thì một quyền hợp lệ bất kỳ có ký tự
+     * `*` sẽ mở toang hệ thống — test này khoá lại ranh giới đó.
+     */
+    it('quyền chứa "*" nhưng KHÔNG phải chuỗi "*" thì không phải toàn quyền', () => {
+      const user = {
+        id: 'user-123',
+        email: 'test@example.com',
+        vaiTro: 'Quản lý',
+        permissions: ['/cham-cong/don-tu:*', '**', ' *'],
+      };
+
+      const context = createMockExecutionContext(user, [
+        '/cham-cong/don-tu:them',
+      ]);
+
+      expect(() => permissionGuard.canActivate(context)).toThrow(
+        ForbiddenException,
+      );
+    });
+
     it('should include missing permissions in error message', () => {
       const user = {
         id: 'user-123',
