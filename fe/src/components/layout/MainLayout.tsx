@@ -177,6 +177,8 @@ const MainLayout: React.FC = () => {
   // thị vô điều kiện (xem ngay dưới). Cố ý KHÔNG gộp điều kiện quyền vào đây.
   const canViewChamCongGroup = true;
 
+  const canViewBangLuong = hasPermission('/luong/bang-luong:xem') || user?.isSuperAdmin;
+
   // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" + section "CHẤM CÔNG" (Phase 2+), thêm dần theo module.
   const siderMenuItems: MenuItem[] = [
     {
@@ -261,6 +263,18 @@ const MainLayout: React.FC = () => {
           icon: <AuditOutlined />,
           label: "Bản ghi chấm công",
         }] : []),
+      ],
+    }] : []),
+    ...(canViewBangLuong ? [{
+      key: "luong-group",
+      type: "group" as const,
+      label: "LƯƠNG",
+      children: [
+        {
+          key: "/luong/bang-luong",
+          icon: <DollarOutlined />,
+          label: "Bảng lương",
+        },
       ],
     }] : []),
   ];

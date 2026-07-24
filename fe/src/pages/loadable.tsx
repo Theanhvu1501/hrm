@@ -34,6 +34,10 @@ export const CauHinhLuongPage = loadable(() => import('./luong/cau-hinh-luong/Ca
   fallback: <PageLoader />
 });
 
+export const BangLuongPage = loadable(() => import('./luong/bang-luong/BangLuongPage'), {
+  fallback: <PageLoader />
+});
+
 // Nhân sự
 export const HoSoNhanVienPage = loadable(() => import('./nhan-su/ho-so-nhan-vien/HoSoNhanVienPage'), {
   fallback: <PageLoader />
