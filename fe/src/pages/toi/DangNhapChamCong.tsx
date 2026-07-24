@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Button, Form, Input, Spin } from 'antd';
+import { Alert, Button, Form, Input } from 'antd';
 import { ClockCircleFilled } from '@ant-design/icons';
 import { diToi } from '@/ultils/dieuHuong';
 import {
@@ -257,7 +257,7 @@ export default function DangNhapChamCong() {
   if (man === 'dang_thu_phien' || man === 'dang_vao') {
     return khung(
       <div className="flex justify-center py-6">
-        <Spin size="large" />
+        <span className="emp-spinner emp-spinner-lon" role="status" aria-label="Đang tải" />
       </div>
     );
   }

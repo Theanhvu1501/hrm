@@ -221,13 +221,14 @@
 }
 
 /* ── Bo tròn control antd trong vỏ ────────────────────────────────────────
-   ConfigProvider ở App.tsx đặt borderRadius 0 cho TOÀN dự án (khu quản trị).
-   Ở đây bo lại các control antd (nút, ô nhập, Alert, Card, Tag) cho khớp nhịp
-   iOS bo mềm. Selector 2 lớp (.emp-shell .ant-*) thắng rule 1 lớp mà antd
-   sinh ra, nên KHÔNG cần !important; inline style 999 của các nút chính vẫn
-   thắng cả hai nên nút viên thuốc giữ nguyên. */
+   index.css (stylesheet toàn cục của khu kế toán) ÉP border-radius: 0
+   !important lên .ant-btn/.ant-input/.ant-modal... qua biến --radius: 0. Vì có
+   !important, nó thắng cả inline style (đó là lý do nút chấm công vẫn vuông dù
+   đặt inline borderRadius:999). Selector ở đây 2 lớp (.emp-shell .ant-*) đặc
+   thù hơn rule 1 lớp của index.css, nên khi CẢ HAI cùng !important, cái đặc
+   thù hơn (ở đây) thắng — buộc phải dùng !important. */
 .emp-shell .ant-btn {
-  border-radius: 999px;
+  border-radius: 999px !important;
 }
 
 .emp-shell .ant-input,
@@ -236,17 +237,60 @@
 .emp-shell .ant-input-number-affix-wrapper,
 .emp-shell .ant-picker,
 .emp-shell .ant-select .ant-select-selector {
-  border-radius: 12px;
+  border-radius: 12px !important;
 }
 
 .emp-shell .ant-alert {
-  border-radius: 12px;
+  border-radius: 12px !important;
 }
 
 .emp-shell .ant-card {
-  border-radius: 14px;
+  border-radius: 14px !important;
 }
 
 .emp-shell .ant-tag {
-  border-radius: 6px;
+  border-radius: 6px !important;
+}
+
+/* ── Spinner kiểu iOS ──────────────────────────────────────────────────────
+   Vòng gradient teal mượt, quay đều — sạch và hiện đại hơn spinner chấm mặc
+   định, KHÔNG kèm chữ. Dùng ở màn đang tải và có thể tái dùng nơi khác. */
+.emp-spinner {
+  display: inline-block;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(18, 165, 148, 0) 0%,
+    var(--emp-accent) 100%
+  );
+  -webkit-mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 3.5px),
+    #000 calc(100% - 3.5px)
+  );
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - 3.5px),
+    #000 calc(100% - 3.5px)
+  );
+  animation: emp-spin 0.8s linear infinite;
+}
+
+.emp-spinner-lon {
+  width: 44px;
+  height: 44px;
+}
+
+@keyframes emp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emp-spinner {
+    animation-duration: 2s;
+  }
 }

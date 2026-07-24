@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Input, Space, Spin, Typography } from "antd";
+import { Alert, Button, Card, Input, Space, Typography } from "antd";
 import {
   LoginOutlined,
   LogoutOutlined,
@@ -94,12 +94,11 @@ export function NutCham() {
   const cau = thongBao || THONG_DIEP[trangThai];
 
   // ── 1. Đang tải ────────────────────────────────────────────────────────
+  // Spinner iOS mượt, KHÔNG kèm chữ (aria-label cho trình đọc màn hình thôi).
   if (trangThai === TrangThai.DANG_TAI) {
     return (
       <div className="flex justify-center py-16">
-        <Spin tip="Đang tải trạng thái chấm công…">
-          <div className="h-8 w-8" />
-        </Spin>
+        <span className="emp-spinner emp-spinner-lon" role="status" aria-label="Đang tải" />
       </div>
     );
   }
@@ -202,7 +201,9 @@ export function NutCham() {
           size="large"
           block
           loading={dangCham}
-          icon={laVao ? <LoginOutlined /> : <LogoutOutlined />}
+          // Lúc bấm đang gửi: ẩn icon để chỉ còn MỘT spinner sạch giữa nút
+          // (không icon + spinner cạnh nhau). Bình thường mới hiện icon vào/ra.
+          icon={dangCham ? undefined : laVao ? <LoginOutlined /> : <LogoutOutlined />}
           // Teal cho VÀO, cam cho RA. Cố ý KHÔNG dùng `danger` (đỏ antd):
           // trên màn hình này đỏ đã có nghĩa "hỏng", dùng lại cho nút chính
           // sẽ khiến người dùng ngần ngại bấm.
@@ -210,8 +211,8 @@ export function NutCham() {
             height: CAO_NUT_CHAM,
             fontSize: 18,
             fontWeight: 700,
-            // 999 > nửa chiều cao ở mọi kích cỡ nên luôn ra viên thuốc
-            // (pill) trọn vẹn, không phụ thuộc phải tính lại theo CAO_NUT_CHAM.
+            // Pill được ép ở .emp-shell .ant-btn (index.css ép 0 !important nên
+            // inline không đủ) — giữ lại đây làm dự phòng, vô hại.
             borderRadius: 999,
             // Teal (tint iOS) cho VÀO, cam hệ thống iOS (#ff9500) cho RA.
             backgroundColor: dangCham ? undefined : laVao ? "#12a594" : "#ff9500",
@@ -221,12 +222,12 @@ export function NutCham() {
           onClick={() => handler.executeEvent("cham", {})}
         >
           {/*
-            Nhãn luôn là "Chấm công" (theo mockup) — ba ô trạng thái ngay
-            trên đã nói rõ đang thiếu vào hay thiếu ra, chữ VÀO/RA trên nút
-            là thừa. Màu + icon (teal/vào, cam/ra) vẫn giữ nguyên để chỉ
-            ngầm việc sắp ghi mà không cần chữ.
+            Nhãn "Chấm công" chỉ hiện khi KHÔNG gửi. Lúc gửi để trống → nút chỉ
+            còn spinner, không kèm chữ (đúng yêu cầu loading không text). Ba ô
+            trạng thái ngay trên đã nói rõ thiếu vào hay ra nên nút không cần
+            chữ VÀO/RA.
           */}
-          Chấm công
+          {dangCham ? "" : "Chấm công"}
         </Button>
       </Space>
     </div>
