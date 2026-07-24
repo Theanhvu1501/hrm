@@ -19,7 +19,7 @@ const proto = BangLuong_Controller.prototype as any;
 
 /** Toàn bộ route của controller kèm động từ HTTP và quyền BẮT BUỘC. */
 const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
-  ['layCauHinh', RequestMethod.GET, '/luong/bang-luong:xem'],
+  ['layCauHinh', RequestMethod.GET, '/luong/cau-hinh:xem'],
   ['capNhatCauHinh', RequestMethod.PUT, '/luong/cau-hinh:sua'],
   ['tongHop', RequestMethod.POST, '/luong/bang-luong:them'],
   ['chot', RequestMethod.POST, '/luong/bang-luong:sua'],

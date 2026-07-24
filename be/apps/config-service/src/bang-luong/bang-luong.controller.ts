@@ -36,7 +36,7 @@ export class BangLuong_Controller {
 
   @Get('cau-hinh')
   @UseGuards(PermissionGuard)
-  @Permissions('/luong/bang-luong:xem')
+  @Permissions('/luong/cau-hinh:xem')
   async layCauHinh() {
     const data = await this.bangLuong_Service.layCauHinh();
     return { success: true, data };

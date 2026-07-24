@@ -65,8 +65,17 @@ class CauHinhLuongService extends ServiceBase {
     return super.get<CauHinhLuong>({ endpoint: '/cau-hinh' });
   }
 
+  /**
+   * `forbidNonWhitelisted` ở `CapNhatCauHinhLuongDto` (BE) chặn thẳng 400 nếu
+   * body có field ngoài whitelist — mà `dto` truyền vào đây thường là cả
+   * object `CauHinhLuong` đọc từ state (kèm `id`/`_id`/`tenantId`/`createdAt`/
+   * `updatedAt`/`isActive` do server quản lý), nên phải lọc bỏ trước khi PUT.
+   */
   async update(dto: Partial<CauHinhLuong>): Promise<CauHinhLuong> {
-    return super.put<CauHinhLuong>(dto, { endpoint: '/cau-hinh' });
+    const { id, _id, tenantId, createdAt, updatedAt, isActive, ...payload } =
+      dto as Record<string, unknown>;
+    const res = await super.put<Record<string, unknown>>(payload, { endpoint: '/cau-hinh' });
+    return res as unknown as CauHinhLuong;
   }
 }
 

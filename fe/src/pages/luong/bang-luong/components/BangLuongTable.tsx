@@ -8,6 +8,7 @@ import {
 } from "../BangLuongHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
 import type { CapNhatDongLuongDto, DongLuong, KetQuaLuong } from "@/services/bangLuongService";
+import type { KhoanLuong } from "@/services/cauHinhLuongService";
 import { OSuaBienDong } from "./OSuaBienDong";
 import "../BangLuongPage.state";
 
@@ -31,9 +32,19 @@ export function BangLuongTable() {
   const [dangTai] = useBangLuongState("dangTai", false);
   const [tabDangXem] = useBangLuongState("tabDangXem", "khaiBao" as "khaiBao" | "thucTe");
   const [daChot] = useBangLuongState("daChot", false);
+  const [khoanLuong] = useBangLuongState("khoanLuong", [] as KhoanLuong[]);
   const { canEdit } = usePagePermission("/luong/bang-luong");
 
   const chiSuaDuoc = canEdit && !daChot;
+
+  // Tra cứu khoản theo mã (từ Cấu hình lương) để biết tên hiển thị + khoản
+  // nào NHAP_THEO_KY (nhập tay theo kỳ, vd Hiệu suất/Thưởng). Rỗng khi cấu
+  // hình chưa tải xong / lỗi tải — các cột fallback về hành vi cũ bên dưới.
+  const khoanMap = useMemo(() => {
+    const map = new Map<string, KhoanLuong>();
+    khoanLuong.forEach((k) => map.set(k.ma, k));
+    return map;
+  }, [khoanLuong]);
 
   const handleCapNhat = (id: string, dto: CapNhatDongLuongDto) => {
     handler.executeEvent("capNhatDong", { id, dto });
@@ -106,32 +117,42 @@ export function BangLuongTable() {
       },
     ];
 
-    const khoanColumns: ColumnsType<DongLuong> = maKhoanList.map((ma) => ({
-      title: ma,
-      key: `khoan-${ma}`,
-      width: 130,
-      align: "right" as const,
-      render: (_: unknown, record: DongLuong) => {
-        const ketQua: KetQuaLuong | undefined = record[tabDangXem];
-        const value = ketQua?.giaTriTungKhoan?.[ma] ?? 0;
-        const laBienDong = Object.prototype.hasOwnProperty.call(record.nhapTheoKy ?? {}, ma);
-        if (!laBienDong) {
-          return renderTien(value);
-        }
-        return (
-          <OSuaBienDong
-            label={ma}
-            value={value}
-            disabled={!chiSuaDuoc}
-            onSave={(nhap) =>
-              handleCapNhat(record.id, {
-                nhapTheoKy: { ...(record.nhapTheoKy ?? {}), [ma]: nhap },
-              })
-            }
-          />
-        );
-      },
-    }));
+    const khoanColumns: ColumnsType<DongLuong> = maKhoanList.map((ma) => {
+      const khoanCauHinh = khoanMap.get(ma);
+      const tieuDe = khoanCauHinh?.ten ?? ma;
+      return {
+        title: tieuDe,
+        key: `khoan-${ma}`,
+        width: 130,
+        align: "right" as const,
+        render: (_: unknown, record: DongLuong) => {
+          const ketQua: KetQuaLuong | undefined = record[tabDangXem];
+          const value = ketQua?.giaTriTungKhoan?.[ma] ?? 0;
+          // Có cấu hình cho mã này -> theo đúng loại công thức (cho nhập cả
+          // khi dòng vừa tổng hợp chưa có sẵn `ma` trong `nhapTheoKy`).
+          // Không có cấu hình (tải lỗi / mã lạ) -> fallback hành vi cũ: chỉ
+          // cho sửa nếu dòng đã có sẵn giá trị nhập tay cho mã này.
+          const laBienDong = khoanCauHinh
+            ? khoanCauHinh.loaiCongThuc === "NHAP_THEO_KY"
+            : Object.prototype.hasOwnProperty.call(record.nhapTheoKy ?? {}, ma);
+          if (!laBienDong) {
+            return renderTien(value);
+          }
+          return (
+            <OSuaBienDong
+              label={tieuDe}
+              value={value}
+              disabled={!chiSuaDuoc}
+              onSave={(nhap) =>
+                handleCapNhat(record.id, {
+                  nhapTheoKy: { ...(record.nhapTheoKy ?? {}), [ma]: nhap },
+                })
+              }
+            />
+          );
+        },
+      };
+    });
 
     const tamUngColumn: ColumnsType<DongLuong> = [
       {
@@ -208,7 +229,7 @@ export function BangLuongTable() {
 
     return [...fixedLeft, ...khoanColumns, ...tamUngColumn, ...ketQuaColumns];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maKhoanList, tabDangXem, chiSuaDuoc]);
+  }, [maKhoanList, tabDangXem, chiSuaDuoc, khoanMap]);
 
   const tongThucLinh = danhSach.reduce((sum, dong) => sum + (dong[tabDangXem]?.thucLinh ?? 0), 0);
   const tongThue = danhSach.reduce((sum, dong) => sum + (dong[tabDangXem]?.thue ?? 0), 0);

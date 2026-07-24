@@ -4,6 +4,7 @@ import { CSubHanlder } from "@/common/c-handler/core/sub-handler.ts/sub-handler"
 import dayjs from "dayjs";
 import { apiErrorMessage } from "@/config/api";
 import { bangLuongService, DongLuong } from "@/services/bangLuongService";
+import { cauHinhLuongService } from "@/services/cauHinhLuongService";
 import "./init.event";
 
 @RegisterHandler("bang-luong-context")
@@ -17,8 +18,25 @@ export class InitHandler extends CSubHanlder {
     this.setState("dangTongHop", false);
     this.setState("tabDangXem", "khaiBao");
     this.setState("daChot", false);
+    this.setState("khoanLuong", []);
 
-    await this.loadDanhSach(thang);
+    await Promise.all([this.loadDanhSach(thang), this.loadKhoanLuong()]);
+  }
+
+  /**
+   * Best-effort: bảng lương vẫn dùng được nếu cấu hình lỗi/user không có
+   * quyền `/luong/cau-hinh:xem` — table fallback về hành vi cũ (mã thô làm
+   * tiêu đề, sửa được nếu đã có sẵn trong `nhapTheoKy`). Vì vậy KHÔNG toast
+   * lỗi ở đây (đã có toast riêng cho `loadDanhSach`, tránh chồng 2 lỗi).
+   */
+  private async loadKhoanLuong(): Promise<void> {
+    try {
+      const cauHinh = await cauHinhLuongService.get();
+      this.setState("khoanLuong", cauHinh.khoanLuong ?? []);
+    } catch (error) {
+      console.error("Tải cấu hình lương (khoản lương) lỗi:", error);
+      this.setState("khoanLuong", []);
+    }
   }
 
   @HandlerDecorator("doiThang")
