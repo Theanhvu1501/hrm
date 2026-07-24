@@ -6,43 +6,20 @@ import {
   useDonChamCongHandler,
   useDonChamCongState,
 } from "../../DonChamCongHandlerContext";
-import {
-  AttendanceRequest,
-  CreateAttendanceRequestDto,
-} from "@/services/attendanceRequestService";
+import { AttendanceRequest } from "@/services/attendanceRequestService";
 import { Employee } from "@/services/employeeService";
-import { LOAI_DON_OPTIONS } from "../../constants";
+import { BUOI_OPTIONS, LOAI_DON_OPTIONS, LOAI_NGHI_OPTIONS } from "../../constants";
+import { TruongDon, hienTruong } from "../../truongTheoLoaiDon";
 import { DonChamCongFormValues } from "./DonChamCongForm.state";
+import {
+  GIA_TRI_MAC_DINH,
+  dungDtoQuanTri,
+  toFormValues,
+} from "./donChamCongForm.convert";
 import "./DonChamCongForm.state";
 
 const TIME_FORMAT = "HH:mm";
 const DATE_FORMAT = "YYYY-MM-DD";
-
-const DEFAULT_VALUES: DonChamCongFormValues = {
-  employeeId: "",
-  loaiDon: "giai_trinh",
-  ngay: "",
-  lyDo: "",
-  gioTu: "",
-  gioDen: "",
-  minhChung: "",
-  ghiChu: "",
-};
-
-function toFormValues(request: AttendanceRequest | null): DonChamCongFormValues {
-  if (!request) return DEFAULT_VALUES;
-
-  return {
-    employeeId: request.employeeId || "",
-    loaiDon: request.loaiDon || "giai_trinh",
-    ngay: request.ngay || "",
-    lyDo: request.lyDo || "",
-    gioTu: request.gioTu || "",
-    gioDen: request.gioDen || "",
-    minhChung: request.minhChung || "",
-    ghiChu: request.ghiChu || "",
-  };
-}
 
 function FieldLabel({
   children,
@@ -76,12 +53,25 @@ export function DonChamCongForm() {
     watch,
     formState: { errors },
   } = useForm<DonChamCongFormValues>({
-    defaultValues: DEFAULT_VALUES,
+    defaultValues: GIA_TRI_MAC_DINH,
   });
 
   const isEditing = !!editingRequest;
   const loaiDon = watch("loaiDon");
-  const isLamThemGio = loaiDon === "lam_them_gio";
+  const ngay = watch("ngay");
+  const denNgay = watch("denNgay");
+
+  /**
+   * Cùng một cơ chế "đổi trường theo loại đơn" như trước (điều kiện dựng trên
+   * `loaiDon` đang watch), chỉ khác là điều kiện không còn viết tay từng chỗ
+   * mà tra bảng luật dùng chung với màn nhân viên — xem truongTheoLoaiDon.ts.
+   *
+   * `buoi` phụ thuộc thêm vào ngay/denNgay (nửa buổi chỉ có nghĩa với đơn nghỉ
+   * đúng một ngày) nên phải watch cả hai, nếu không ô Buổi sẽ không tự ẩn đi
+   * khi HR kéo khoảng nghỉ dài ra.
+   */
+  const co = (truong: TruongDon) =>
+    hienTruong({ loaiDon, ngay, denNgay }, truong);
 
   useEffect(() => {
     if (formVisible) {
@@ -103,16 +93,7 @@ export function DonChamCongForm() {
   };
 
   const onSubmit = (values: DonChamCongFormValues) => {
-    const dto: CreateAttendanceRequestDto = {
-      employeeId: values.employeeId,
-      loaiDon: values.loaiDon,
-      ngay: values.ngay,
-      lyDo: values.lyDo || undefined,
-      gioTu: values.loaiDon === "lam_them_gio" ? values.gioTu || undefined : undefined,
-      gioDen: values.loaiDon === "lam_them_gio" ? values.gioDen || undefined : undefined,
-      minhChung: values.minhChung || undefined,
-      ghiChu: values.ghiChu || undefined,
-    };
+    const dto = dungDtoQuanTri(values);
 
     if (isEditing && editingRequest) {
       handler.executeEvent("updateRequest", { id: editingRequest.id, dto });
@@ -127,7 +108,8 @@ export function DonChamCongForm() {
       open={formVisible}
       onCancel={handleCancel}
       width={640}
-      destroyOnClose
+      // antd v6: `destroyOnClose` đã deprecated, đổi tên thành `destroyOnHidden`.
+      destroyOnHidden
       footer={[
         <Button key="cancel" onClick={handleCancel}>
           Huỷ
@@ -184,7 +166,7 @@ export function DonChamCongForm() {
           />
         </Col>
         <Col span={12} className="mt-3">
-          <FieldLabel required>Ngày</FieldLabel>
+          <FieldLabel required>{co("denNgay") ? "Từ ngày" : "Ngày"}</FieldLabel>
           <Controller
             name="ngay"
             control={control}
@@ -204,15 +186,108 @@ export function DonChamCongForm() {
             <div className="text-red-500 text-xs mt-1">{errors.ngay.message}</div>
           )}
         </Col>
-        {isLamThemGio && (
+        {co("denNgay") && (
+          <Col span={12} className="mt-3">
+            <FieldLabel>Đến ngày</FieldLabel>
+            <Controller
+              name="denNgay"
+              control={control}
+              rules={{
+                // Guard `co("denNgay")`: khi HR đổi sang loại đơn không có ô
+                // này, giá trị cũ vẫn còn trong state react-hook-form. Không
+                // có guard thì form bị chặn bởi một câu lỗi trỏ tới ô không
+                // còn hiện trên màn hình — HR không có cách nào tự gỡ.
+                validate: (value: string) =>
+                  !co("denNgay") ||
+                  !value ||
+                  // So chuỗi "YYYY-MM-DD" là so đúng thứ tự thời gian, không
+                  // cần dựng Date (và không dính múi giờ máy người dùng).
+                  value >= ngay ||
+                  "Đến ngày phải bằng hoặc sau ngày bắt đầu",
+              }}
+              render={({ field }) => (
+                <DatePicker
+                  className="w-full"
+                  format="DD/MM/YYYY"
+                  placeholder="Để trống nếu nghỉ một ngày"
+                  value={field.value ? dayjs(field.value, DATE_FORMAT) : null}
+                  onChange={(date) =>
+                    field.onChange(date ? date.format(DATE_FORMAT) : "")
+                  }
+                />
+              )}
+            />
+            {errors.denNgay && (
+              <div className="text-red-500 text-xs mt-1">
+                {errors.denNgay.message}
+              </div>
+            )}
+          </Col>
+        )}
+        {co("buoi") && (
+          <Col span={12} className="mt-3">
+            <FieldLabel>Buổi</FieldLabel>
+            <Controller
+              name="buoi"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  {...field}
+                  className="w-full"
+                  options={BUOI_OPTIONS.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
+                />
+              )}
+            />
+          </Col>
+        )}
+        {co("loaiNghi") && (
+          <Col span={12} className="mt-3">
+            <FieldLabel required>Loại nghỉ</FieldLabel>
+            <Controller
+              name="loaiNghi"
+              control={control}
+              rules={{
+                // Cùng lý do guard như denNgay ở trên.
+                validate: (value: string) =>
+                  !co("loaiNghi") || !!value || "Vui lòng chọn loại nghỉ",
+              }}
+              render={({ field }) => (
+                <Select
+                  {...field}
+                  className="w-full"
+                  placeholder="Chọn loại nghỉ"
+                  options={LOAI_NGHI_OPTIONS.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                  }))}
+                />
+              )}
+            />
+            {errors.loaiNghi && (
+              <div className="text-red-500 text-xs mt-1">
+                {errors.loaiNghi.message}
+              </div>
+            )}
+          </Col>
+        )}
+        {co("gioTu") && (
           <>
             <Col span={12} className="mt-3">
-              <FieldLabel required>Giờ từ</FieldLabel>
+              <FieldLabel required={loaiDon === "lam_them_gio"}>Giờ từ</FieldLabel>
               <Controller
                 name="gioTu"
                 control={control}
                 rules={{
-                  required: isLamThemGio ? "Vui lòng chọn giờ từ" : false,
+                  // CHỈ đơn OT bắt buộc: backend tính số giờ OT bằng
+                  // `tinhSoGioOt(dto.gioTu!, dto.gioDen!)` — thiếu giờ là nổ
+                  // TypeError ở server chứ không phải 400 có thông điệp.
+                  validate: (value: string) =>
+                    loaiDon !== "lam_them_gio" ||
+                    !!value ||
+                    "Vui lòng chọn giờ từ",
                 }}
                 render={({ field }) => (
                   <TimePicker
@@ -232,12 +307,15 @@ export function DonChamCongForm() {
               )}
             </Col>
             <Col span={12} className="mt-3">
-              <FieldLabel required>Giờ đến</FieldLabel>
+              <FieldLabel required={loaiDon === "lam_them_gio"}>Giờ đến</FieldLabel>
               <Controller
                 name="gioDen"
                 control={control}
                 rules={{
-                  required: isLamThemGio ? "Vui lòng chọn giờ đến" : false,
+                  validate: (value: string) =>
+                    loaiDon !== "lam_them_gio" ||
+                    !!value ||
+                    "Vui lòng chọn giờ đến",
                 }}
                 render={({ field }) => (
                   <TimePicker
