@@ -39,35 +39,17 @@ export function BaOTrangThai() {
   const o = baOTrangThai({ ...homNay, banGhi: dl.banGhi, soCong: dl.soCong });
 
   return (
-    <div className="mb-4 grid grid-cols-3 gap-2">
+    <section className="emp-card emp-status mb-4">
       {o.map((x, i) => (
-        <div
-          key={x.nhan}
-          className="rounded-[var(--emp-radius)] border-2 px-2 py-3.5 text-center"
-          style={{
-            borderColor: x.xanh ? "var(--emp-accent)" : "var(--emp-danger)",
-            background: x.xanh ? "var(--emp-accent-nhat)" : "var(--emp-danger-nhat)",
-          }}
-        >
-          <div className="mb-1 flex items-center justify-center gap-1 text-[11px] font-medium text-[color:var(--emp-text-phu)]">
-            <span
-              className="text-[12px]"
-              style={{ color: x.xanh ? "var(--emp-accent)" : "var(--emp-danger)" }}
-              aria-hidden
-            >
-              {ICON_O[i]}
-            </span>
+        <div key={x.nhan} className={`emp-status-cell ${x.xanh ? "done" : "wait"}`}>
+          <div className="emp-status-head">
+            <span aria-hidden>{ICON_O[i]}</span>
             {x.nhan}
           </div>
-          <div
-            className="text-xl font-bold"
-            style={{ color: x.xanh ? "var(--emp-accent)" : "var(--emp-danger)" }}
-          >
-            {x.giaTri}
-          </div>
-          <div className="mt-1 text-[10px] text-[color:var(--emp-muted)]">{x.ghiChu}</div>
+          <div className="emp-status-val">{x.giaTri}</div>
+          <span className="emp-status-chip">{x.ghiChu}</span>
         </div>
       ))}
-    </div>
+    </section>
   );
 }

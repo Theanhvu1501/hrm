@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Input, Space, Typography } from "antd";
-import {
-  LoginOutlined,
-  LogoutOutlined,
-  ReloadOutlined,
-} from "@ant-design/icons";
+import { Alert, Button, Card, Input, Typography } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
+import { Hero } from "./Hero";
 import {
   useChamCongCuaToiHandler,
   useChamCongCuaToiState,
@@ -46,14 +43,6 @@ const LOI_TAM_THOI: ReadonlySet<TrangThai> = new Set<TrangThai>([
   // trong khi nút vẫn còn cho bấm lại.
   TrangThai.NGOAI_BAN_KINH,
 ]);
-
-/**
- * Cao 64px, bo tròn hết cỡ (xem `borderRadius: 999` bên dưới). 64px vẫn là
- * đích ngón cái thoải mái trên điện thoại (chuẩn touch-target ~44-48px của
- * iOS/Android còn dư biên) — không cần tới 96px như trước mới bấm được mà
- * không cần nhìn.
- */
-const CAO_NUT_CHAM = 64;
 
 export function NutCham() {
   const handler = useChamCongCuaToiHandler();
@@ -195,40 +184,18 @@ export function NutCham() {
         cau={cau}
       />
 
-      <Space direction="vertical" size="middle" className="w-full">
-        <Button
-          type="primary"
-          size="large"
-          block
-          loading={dangCham}
-          // Lúc bấm đang gửi: ẩn icon để chỉ còn MỘT spinner sạch giữa nút
-          // (không icon + spinner cạnh nhau). Bình thường mới hiện icon vào/ra.
-          icon={dangCham ? undefined : laVao ? <LoginOutlined /> : <LogoutOutlined />}
-          // Teal cho VÀO, cam cho RA. Cố ý KHÔNG dùng `danger` (đỏ antd):
-          // trên màn hình này đỏ đã có nghĩa "hỏng", dùng lại cho nút chính
-          // sẽ khiến người dùng ngần ngại bấm.
-          style={{
-            height: CAO_NUT_CHAM,
-            fontSize: 18,
-            fontWeight: 700,
-            // Bo góc do `.emp-shell .ant-btn` lo (12px — index.css ép 0
-            // !important nên đặt borderRadius inline ở đây vô ích).
-            // Teal (tint iOS) cho VÀO, cam hệ thống iOS (#ff9500) cho RA.
-            backgroundColor: dangCham ? undefined : laVao ? "#12a594" : "#ff9500",
-            borderColor: dangCham ? undefined : laVao ? "#12a594" : "#ff9500",
-            touchAction: "manipulation",
-          }}
-          onClick={() => handler.executeEvent("cham", {})}
-        >
-          {/*
-            Nhãn "Chấm công" chỉ hiện khi KHÔNG gửi. Lúc gửi để trống → nút chỉ
-            còn spinner, không kèm chữ (đúng yêu cầu loading không text). Ba ô
-            trạng thái ngay trên đã nói rõ thiếu vào hay ra nên nút không cần
-            chữ VÀO/RA.
-          */}
-          {dangCham ? "" : "Chấm công"}
-        </Button>
-      </Space>
+      {/*
+        Hero: đồng hồ sống + thông tin ca/địa điểm + tiến trình ca + nút chấm
+        pill. Nút teal cho VÀO, cam cho RA (KHÔNG dùng đỏ antd — đỏ trên màn
+        này nghĩa là "hỏng"). Mọi máy trạng thái (tải/chặn/lỗi) vẫn ở NutCham,
+        Hero chỉ là màn hình chính khi đã sẵn sàng chấm.
+      */}
+      <Hero
+        homNay={homNay}
+        laVao={laVao}
+        dangCham={dangCham}
+        onCham={() => handler.executeEvent("cham", {})}
+      />
     </div>
   );
 }

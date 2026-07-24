@@ -315,3 +315,192 @@
     animation-duration: 2s;
   }
 }
+
+/* ── Hero chấm công: đồng hồ sống + tiến trình ca + nút pill (xem Hero.tsx) ── */
+.emp-hero {
+  background: var(--emp-surface);
+  border-radius: var(--emp-radius-lg);
+  padding: 20px 20px 18px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 18px 40px rgba(18, 165, 148, 0.12);
+}
+.emp-hero-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--emp-accent);
+}
+.emp-hero-clock {
+  margin: 6px 0 2px;
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--emp-text);
+}
+.emp-hero-sec {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--emp-muted);
+}
+.emp-hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 12px;
+}
+.emp-hero-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--emp-text-phu);
+}
+.emp-hero-track {
+  margin: 18px 0 2px;
+}
+.emp-hero-track-bar {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--emp-surface-2);
+}
+.emp-hero-track-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--emp-accent), #2bd0bb);
+}
+.emp-hero-track-dot {
+  position: absolute;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--emp-surface);
+  border: 3px solid var(--emp-accent);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 2px 6px rgba(18, 165, 148, 0.5);
+}
+.emp-hero-track-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--emp-muted);
+  font-variant-numeric: tabular-nums;
+}
+.emp-punch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 62px;
+  margin-top: 18px;
+  border: none;
+  border-radius: 18px !important;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.emp-punch:active {
+  transform: scale(0.975);
+}
+.emp-punch:disabled {
+  cursor: default;
+}
+.emp-punch .anticon {
+  font-size: 20px;
+}
+.emp-punch-hint {
+  margin-top: 9px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--emp-muted);
+}
+/* Spinner trắng cho trong nút (đè màu accent của .emp-spinner). */
+.emp-spinner-trang {
+  width: 24px;
+  height: 24px;
+  background: conic-gradient(from 0deg, rgba(255, 255, 255, 0) 0%, #fff 100%);
+}
+
+/* ── Ba ô trạng thái: một thẻ grouped-list iOS, ngăn bằng đường kẻ mảnh ── */
+.emp-status {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+}
+.emp-status-cell {
+  position: relative;
+  padding: 15px 8px 14px;
+  text-align: center;
+}
+.emp-status-cell + .emp-status-cell::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 16px;
+  bottom: 16px;
+  width: 0.5px;
+  background: var(--emp-border);
+}
+.emp-status-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--emp-text-phu);
+}
+.emp-status-head .anticon {
+  font-size: 12px;
+}
+.emp-status-val {
+  margin-top: 4px;
+  font-size: 23px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.emp-status-chip {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.emp-status-cell.done .emp-status-head .anticon,
+.emp-status-cell.done .emp-status-val {
+  color: var(--emp-accent);
+}
+.emp-status-cell.done .emp-status-chip {
+  background: var(--emp-accent-nhat);
+  color: var(--emp-accent);
+}
+.emp-status-cell.wait .emp-status-head .anticon,
+.emp-status-cell.wait .emp-status-val {
+  color: var(--emp-muted);
+}
+.emp-status-cell.wait .emp-status-chip {
+  background: var(--emp-surface-2);
+  color: var(--emp-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emp-punch {
+    transition: none;
+  }
+}

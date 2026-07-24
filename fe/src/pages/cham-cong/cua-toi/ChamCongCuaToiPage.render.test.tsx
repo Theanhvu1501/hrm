@@ -454,27 +454,26 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
 
     // Cùng bản ghi còn hiện lại trong khối chi tiết (thu gọn nhưng vẫn có
     // trong DOM) nên "08:02" và "Muộn 2 phút" đều xuất hiện 2 lần (ô ba
-    // trạng thái + dòng chi tiết của chính lượt đó) — khoanh vùng vào ô ba
-    // trạng thái (`.grid-cols-3`) để không lẫn với chi tiết.
+    // trạng thái + dòng chi tiết của chính lượt đó) — khoanh vùng vào thẻ ba
+    // ô trạng thái (`.emp-status`, kiểu grouped-list iOS) để không lẫn.
     await waitFor(() =>
-      expect(screen.getByText('08:02:00', { selector: '.text-xl' })).toBeTruthy()
+      expect(screen.getByText('08:02:00', { selector: '.emp-status-val' })).toBeTruthy()
     );
-    const baO = container.querySelector('.grid-cols-3') as HTMLElement;
+    const baO = container.querySelector('.emp-status') as HTMLElement;
     expect(within(baO).getByText('Muộn 2 phút')).toBeTruthy();
     expect(within(baO).getByText('Chờ ra')).toBeTruthy();
   });
 
-  it('shift card hiện tên địa điểm khi công ty chỉ có một điểm', async () => {
+  it('hero hiện tên địa điểm + bán kính khi công ty chỉ có một điểm', async () => {
     vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
       homNayMau({ diaDiem: [{ id: 'l1', ten: 'Văn phòng HN', loai: 'gps', banKinh: 100 }] })
     );
 
     render(<ChamCongCuaToiPage />);
 
-    // Ghim địa điểm giờ là icon antd (EnvironmentOutlined) tách khỏi tên, không
-    // còn emoji 📍 trong text — khớp nội dung tên thuần.
-    await waitFor(() => expect(screen.getByText('Văn phòng HN')).toBeTruthy());
-    expect(screen.getByText('Bán kính 100m')).toBeTruthy();
+    // Địa điểm giờ nằm trong Hero dạng chip "Tên · bán kính" (icon
+    // EnvironmentOutlined tách riêng), không còn hai dòng "Bán kính 100m".
+    await waitFor(() => expect(screen.getByText('Văn phòng HN · 100m')).toBeTruthy());
   });
 
   it('nhiều địa điểm thì hiện số lượng, không bịa ra một điểm', async () => {
