@@ -25,7 +25,13 @@ import "./DanhSachDon.state";
 export function DanhSachDon() {
   const handler = useDonTuCuaToiHandler();
   const [danhSach] = useDonTuCuaToiState("danhSach", [] as AttendanceRequest[]);
-  const [dangTai] = useDonTuCuaToiState("dangTai", false);
+  // Mặc định TRUE, không phải false: `init.handler.ts` chỉ setState("dangTai",
+  // true) trong effect chạy SAU khi component đã render lần đầu. Nếu default
+  // ở đây là false thì khung hình đầu tiên (trước khi effect kịp chạy) rơi
+  // vào nhánh `ds.length === 0` bên dưới và vẽ "Chưa có đơn nào" — đúng sự
+  // nhập nhằng "rỗng vì đang tải" vs "rỗng vì thật sự chưa có đơn" mà file
+  // này viết ra để diệt. Chưa gọi xong `init` thì mặc định phải là đang tải.
+  const [dangTai] = useDonTuCuaToiState("dangTai", true);
   const [loiTai] = useDonTuCuaToiState("loiTai", "");
   const [loiHuy] = useDonTuCuaToiState("loiHuy", "");
   const [dangHuyId] = useDonTuCuaToiState("dangHuyId", null as string | null);
@@ -46,7 +52,8 @@ export function DanhSachDon() {
         <Alert
           type="error"
           showIcon
-          message="Không tải được danh sách đơn"
+          // antd v6: `message` đã deprecated, dùng `title`.
+          title="Không tải được danh sách đơn"
           description={loiTai}
         />
         <Button
@@ -74,7 +81,8 @@ export function DanhSachDon() {
           className="mb-3"
           type="error"
           showIcon
-          message={loiHuy}
+          // antd v6: `message` đã deprecated, dùng `title`.
+          title={loiHuy}
           style={{ borderRadius: 12 }}
         />
       )}
