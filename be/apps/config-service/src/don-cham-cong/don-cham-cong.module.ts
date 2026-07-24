@@ -10,9 +10,10 @@ import { DonChamCong_Controller } from './don-cham-cong.controller';
   imports: [
     DatabaseModule.forFeature([AttendanceRequest, Employee]),
     NgayLe_Module,
-    // Cần cho route tự phục vụ `cua-toi`: controller gọi
-    // NhanVien_Service.resolveEmployeeFromUser(req.user) để suy employeeId
-    // từ token, KHÔNG BAO GIỜ đọc từ body (Task 4 — vá lỗ hổng đơn từ).
+    // Cần ở HAI chỗ, cùng một lý do "employeeId phải suy từ token":
+    //  - controller, route tự phục vụ `cua-toi` — KHÔNG BAO GIỜ đọc từ body;
+    //  - service, `updateStatus()` — nhận diện chủ đơn khi hồ sơ chủ đơn
+    //    không (còn) gắn `userId`, xem `laChuDonTheoHoSo()`.
     NhanVien_Module,
   ],
   controllers: [DonChamCong_Controller],

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { DonChamCong_Service } from './don-cham-cong.service';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
+import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { AttendanceRequest, Employee } from '@app/entities';
 
 /** Lấy `code` ra khỏi ForbiddenException để assert cho gọn — cùng tiện ích
@@ -36,6 +37,9 @@ describe('DonChamCong_Service', () => {
   let mockNgayLeService: {
     timTheoNgay: jest.Mock;
   };
+  let mockNhanVienService: {
+    resolveEmployeeFromUser: jest.Mock;
+  };
 
   const EMP_ID = '507f1f77bcf86cd799439011';
   // T2→T6, khớp với lịch làm việc chuẩn dùng xuyên suốt luat-don.spec.ts.
@@ -62,6 +66,20 @@ describe('DonChamCong_Service', () => {
       timTheoNgay: jest.fn().mockResolvedValue(null),
     };
 
+    // Mặc định: người gọi KHÔNG có hồ sơ nhân viên nào — đúng như
+    // `resolveEmployeeFromUser` ném NotFoundException ngoài đời. Chọn mặc
+    // định này để test nào cần nhận diện chủ đơn qua hồ sơ thì phải khai
+    // tường minh, không được hưởng lợi từ một mock rộng rãi.
+    mockNhanVienService = {
+      resolveEmployeeFromUser: jest
+        .fn()
+        .mockRejectedValue(
+          new NotFoundException(
+            'Tài khoản chưa được liên kết với hồ sơ nhân viên',
+          ),
+        ),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DonChamCong_Service,
@@ -71,6 +89,7 @@ describe('DonChamCong_Service', () => {
         },
         { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
         { provide: NgayLe_Service, useValue: mockNgayLeService },
+        { provide: NhanVien_Service, useValue: mockNhanVienService },
       ],
     }).compile();
 
@@ -365,6 +384,96 @@ describe('DonChamCong_Service', () => {
       } as any);
 
       expect(result.trangThai).toBe('tu_choi');
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Task 4c mục 2: luật không-tự-duyệt từng fail-OPEN khi hồ sơ chủ đơn
+    // không (còn) gắn `userId` — điều kiện cũ là `chuDon.userId && ...`, nên
+    // `userId` rỗng làm cả vế trái thành false và đơn được duyệt trót lọt.
+    // `nhan-vien.service.ts` CỐ Ý cho ghi `userId: ''` để HR gỡ liên kết, mà
+    // `/nhan-su/ho-so-nhan-vien:sua` + `/cham-cong/don-tu:sua` lại nằm cùng
+    // một vai trò trên production — nên "gỡ userId của mình → tự duyệt → gắn
+    // lại" là ba bước trong tầm tay HR bình thường, không cần ADMIN.
+    // ────────────────────────────────────────────────────────────────────────
+    describe('chủ đơn KHÔNG có userId trên hồ sơ (fail-closed)', () => {
+      it('chặn khi hồ sơ nhân viên của người gọi CHÍNH LÀ chủ đơn', async () => {
+        mockEmployeeRepo.findOne.mockResolvedValue({
+          _id: EMP_ID,
+          // Vừa bị gỡ liên kết ngay trước khi bấm duyệt.
+          userId: '',
+        });
+        mockNhanVienService.resolveEmployeeFromUser.mockResolvedValue({
+          _id: EMP_ID,
+        });
+
+        const code = await batMaLoi(() =>
+          service.updateStatus(REQ_ID, 'da_duyet', undefined, {
+            id: 'sso-chu-don',
+          }),
+        );
+
+        expect(code).toBe('KHONG_TU_DUYET_DON');
+        expect(mockRequestRepo.save).not.toHaveBeenCalled();
+      });
+
+      it('vẫn cho qua khi hồ sơ của người gọi là người KHÁC', async () => {
+        mockEmployeeRepo.findOne.mockResolvedValue({ _id: EMP_ID, userId: '' });
+        mockNhanVienService.resolveEmployeeFromUser.mockResolvedValue({
+          _id: '507f1f77bcf86cd7994390ff',
+        });
+
+        const result = await service.updateStatus(
+          REQ_ID,
+          'da_duyet',
+          undefined,
+          { id: 'sso-nguoi-duyet' },
+        );
+
+        expect(result.trangThai).toBe('da_duyet');
+      });
+
+      it('cho qua khi người gọi không có hồ sơ nhân viên nào — không tồn tại "chính mình" để so', async () => {
+        mockEmployeeRepo.findOne.mockResolvedValue({ _id: EMP_ID, userId: '' });
+        // mock mặc định của beforeEach đã ném NotFoundException.
+
+        const result = await service.updateStatus(
+          REQ_ID,
+          'da_duyet',
+          undefined,
+          { id: 'sso-khong-co-ho-so' },
+        );
+
+        expect(result.trangThai).toBe('da_duyet');
+      });
+
+      it('lỗi KHÁC NotFound khi tra hồ sơ người gọi được ném tiếp, không âm thầm cho duyệt', async () => {
+        mockEmployeeRepo.findOne.mockResolvedValue({ _id: EMP_ID, userId: '' });
+        mockNhanVienService.resolveEmployeeFromUser.mockRejectedValue(
+          new Error('mất kết nối DB'),
+        );
+
+        await expect(
+          service.updateStatus(REQ_ID, 'da_duyet', undefined, {
+            id: 'sso-chu-don',
+          }),
+        ).rejects.toThrow('mất kết nối DB');
+        expect(mockRequestRepo.save).not.toHaveBeenCalled();
+      });
+
+      it('không tra hồ sơ người gọi khi chủ đơn VẪN có userId — đường cũ không đổi', async () => {
+        mockEmployeeRepo.findOne.mockResolvedValue({
+          _id: EMP_ID,
+          userId: 'sso-chu-don',
+        });
+
+        await service.updateStatus(REQ_ID, 'tu_choi', undefined, {
+          id: 'sso-nguoi-khac',
+        });
+
+        expect(
+          mockNhanVienService.resolveEmployeeFromUser,
+        ).not.toHaveBeenCalled();
+      });
     });
   });
 

@@ -9,6 +9,7 @@ import { Repository } from 'typeorm';
 import { AttendanceRequest, Employee } from '@app/entities';
 import { CreateDonChamCongDto, UpdateDonChamCongDto } from './dto';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
+import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { suyHeSoOt, tinhSoGioOt, tinhSoNgayNghi } from './luat-don';
 
 // Khoảng nghỉ vượt quá ngần này thì từ chối luôn thay vì âm thầm quét hàng
@@ -51,6 +52,7 @@ export class DonChamCong_Service {
     @InjectRepository(Employee)
     private readonly employeeRepo: Repository<Employee>,
     private readonly ngayLeService: NgayLe_Service,
+    private readonly nhanVienService: NhanVien_Service,
   ) {}
 
   private async findEmployee(employeeId: string): Promise<Employee> {
@@ -181,6 +183,42 @@ export class DonChamCong_Service {
   }
 
   /**
+   * Đường so "người gọi có phải chủ đơn không" KHÔNG đi qua `userId` của hồ
+   * sơ chủ đơn — dùng khi `chuDon.userId` rỗng.
+   *
+   * Vì sao cần đường thứ hai: `nhan-vien.service.ts` CỐ Ý cho phép ghi
+   * `userId: ''` để HR gỡ liên kết tài khoản khỏi hồ sơ. Kết hợp với việc
+   * `/nhan-su/ho-so-nhan-vien:sua` và `/cham-cong/don-tu:sua` nằm cùng một
+   * vai trò trên production ("Quản trị hệ thống", "Quản lý"), ba bước sau đủ
+   * để tự duyệt đơn của chính mình: gỡ `userId` của mình khỏi hồ sơ → duyệt
+   * đơn (luật không bắt vì `chuDon.userId` rỗng) → gắn lại `userId`. Trước
+   * 67979dd đường này đòi `vaiTro === 'ADMIN'`, thứ không ai có trên
+   * production; sau đó nó nằm trong tay HR bình thường.
+   *
+   * Trả `false` khi người gọi KHÔNG có hồ sơ nhân viên nào: lúc đó không tồn
+   * tại "đơn của chính mình" để mà chặn (vd tài khoản HR thuê ngoài chưa
+   * được gán hồ sơ). Chỉ NotFoundException mới được hiểu là "không có hồ sơ";
+   * lỗi khác (mất kết nối DB) phải ném tiếp, nếu nuốt hết thì một sự cố hạ
+   * tầng lại mở đúng cánh cửa vừa khoá.
+   */
+  private async laChuDonTheoHoSo(
+    employeeIdCuaDon: string,
+    nguoiThucHien: { id: string; [k: string]: unknown },
+  ): Promise<boolean> {
+    let hoSoNguoiGoi: Employee;
+    try {
+      hoSoNguoiGoi = await this.nhanVienService.resolveEmployeeFromUser(
+        nguoiThucHien as { id: string },
+      );
+    } catch (e) {
+      if (e instanceof NotFoundException) return false;
+      throw e;
+    }
+
+    return String((hoSoNguoiGoi as any)._id) === String(employeeIdCuaDon);
+  }
+
+  /**
    * Đổi trạng thái đơn — luồng DUYỆT/TỪ CHỐI (`PATCH :id/trang-thai`).
    *
    * `nguoiThucHien` LUÔN phải là `req.user` thật của người gọi (controller
@@ -205,7 +243,16 @@ export class DonChamCong_Service {
       const chuDon = await this.findEmployee(item.employeeId);
       const idNguoiGoi = String(nguoiThucHien?.id ?? '').trim();
 
-      if (chuDon.userId && idNguoiGoi && chuDon.userId === idNguoiGoi) {
+      // Điều kiện cũ `chuDon.userId && idNguoiGoi && ...` fail-OPEN đúng vào
+      // trường hợp dễ dựng nhất: hồ sơ chủ đơn không (còn) gắn tài khoản thì
+      // toàn bộ vế trái là false và luật im lặng cho qua. Khi thiếu `userId`
+      // để so, đổi sang so bằng hồ sơ nhân viên của người gọi thay vì bỏ
+      // kiểm — xem `laChuDonTheoHoSo()`.
+      const nguoiGoiLaChuDon = chuDon.userId
+        ? Boolean(idNguoiGoi) && chuDon.userId === idNguoiGoi
+        : await this.laChuDonTheoHoSo(item.employeeId, nguoiThucHien);
+
+      if (nguoiGoiLaChuDon) {
         // Fail-closed kể cả khi người gọi có vaiTro ADMIN/quyền duyệt: quyền
         // duyệt KHÔNG đồng nghĩa được duyệt đơn của chính mình.
         throw new ForbiddenException({
