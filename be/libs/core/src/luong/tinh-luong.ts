@@ -77,13 +77,19 @@ export function tinhDongLuong(
     .filter((k) => k.vaoTongThuNhap)
     .reduce((s, k) => s + giaTriTungKhoan[k.ma], 0);
 
-  const thuNhapMienThue = khoanSap.reduce((s, k) => {
-    const v = giaTriTungKhoan[k.ma];
-    if (!k.chiuThue) return s + v; // cả khoản miễn
-    if (k.tranMienThue != null) return s + Math.min(v, k.tranMienThue); // phần ≤ trần miễn
-    return s;
-  }, 0);
+  // Chỉ xét khoản CÓ trong Tổng thu nhập: khoản không vào thu nhập thì không được
+  // trừ khỏi thu nhập tính thuế (nếu không sẽ âm thầm giảm thuế sai).
+  const thuNhapMienThue = khoanSap
+    .filter((k) => k.vaoTongThuNhap)
+    .reduce((s, k) => {
+      const v = giaTriTungKhoan[k.ma];
+      if (!k.chiuThue) return s + v; // cả khoản miễn
+      if (k.tranMienThue != null) return s + Math.min(v, k.tranMienThue); // phần ≤ trần miễn
+      return s;
+    }, 0);
 
+  // Cơ sở đóng BHXH hiện là lựa chọn `canCu` cố định (MUC_KHAI_BAO | base);
+  // KhoanLuong.vaoBHXH chưa được cộng dồn ở đây — dành cho một task sau.
   const baseBHXH =
     ch.bhxh.canCu === 'MUC_KHAI_BAO' ? dv.mucKhaiBao : dv.base;
   const bhxh = dv.dongBH ? lamTronTheo(ch.bhxh.tyLe * baseBHXH, ch.lamTron) : 0;

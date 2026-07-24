@@ -99,6 +99,11 @@ describe('tinhDongLuong', () => {
     const r = tinhDongLuong(dauVao({ base: 10_000_000, thoiVu: true }), cauHinh());
     const tnCT = r.tongThuNhap - r.thuNhapMienThue;
     expect(r.thue).toBe(lamTronTheo(0.1 * tnCT, 1000));
+    // Đối chiếu bằng số tính tay độc lập, không lấy lại từ r.tongThuNhap/r.thuNhapMienThue:
+    // LUONG_CONG = (10tr/24)*24 = 10tr; AN_CA = 50k×24 = 1.2tr (= trần → miễn hết);
+    // HIEU_SUAT = 0 (không nhập theo kỳ) → tongThuNhap = 11.2tr, thuNhapMienThue = 1.2tr
+    // → tnCT = 10tr (≥ ngưỡng 2tr) → thuế = 10% × 10tr = 1.000.000đ.
+    expect(r.thue).toBe(1_000_000);
     const nho = tinhDongLuong(dauVao({ base: 1_000_000, congThuong: 4, thoiVu: true }), cauHinh());
     expect(nho.thue).toBe(0); // dưới 2tr
   });
@@ -114,6 +119,14 @@ describe('tinhDongLuong', () => {
     const r = tinhDongLuong(dauVao({ nhapTheoKy: { HIEU_SUAT: 3_000_000 } }), cauHinh());
     expect(r.giaTriTungKhoan.HIEU_SUAT).toBe(3_000_000);
     expect(r.tongThuNhap).toBe(6_700_000 + 3_000_000);
+  });
+
+  it('ăn ca VƯỢT trần thật (giá trị > tranMienThue): chỉ phần trần được miễn, phần vượt chịu thuế', () => {
+    // congThuong=30 → AN_CA = 50k×30 = 1.500.000 > trần 1.200.000
+    const r = tinhDongLuong(dauVao({ congThuong: 30 }), cauHinh());
+    expect(r.giaTriTungKhoan.AN_CA).toBe(1_500_000); // giá trị thực của khoản, KHÔNG bị cắt
+    // base thấp, không đóng BH → chỉ ăn ca đóng góp vào thuNhapMienThue, và bị chặn ở trần
+    expect(r.thuNhapMienThue).toBe(1_200_000); // phần vượt 300.000 KHÔNG được miễn
   });
 
   it('tắt chiuThue của ăn ca → không cộng vào thu nhập miễn kiểu "trần" mà miễn cả khoản', () => {
