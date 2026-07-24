@@ -21,6 +21,42 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@Lovable" />
     <meta name="twitter:image" content="/logo.jpg" />
+
+    <!--
+      Tráo manifest NGAY trong <head>, đồng bộ, trước khi trình duyệt đọc manifest
+      để tính "cài được / cài app nào". Nếu đợi main.tsx (chạy sau khi tải JS) thì
+      trên iOS/vài trình duyệt, manifest gốc (scope "/") đã bị đọc trước → cài ra
+      app "Nhân sự" thay vì "Chấm công". Chạy lại lúc DOMContentLoaded để chắc chắn
+      gom cả thẻ manifest do vite-plugin-pwa chèn. main.tsx + ManifestSync vẫn lo
+      phần điều hướng client-side (SPA) sau đó.
+    -->
+    <script>
+      (function () {
+        function apply() {
+          try {
+            var emp = location.pathname.indexOf("/toi") === 0;
+            var links = document.querySelectorAll('link[rel="manifest"]');
+            var link;
+            if (links.length) {
+              link = links[0];
+              for (var i = 1; i < links.length; i++) links[i].remove();
+            } else {
+              link = document.createElement("link");
+              link.rel = "manifest";
+              document.head.appendChild(link);
+            }
+            link.setAttribute(
+              "href",
+              emp ? "/manifest.chamcong.webmanifest" : "/manifest.webmanifest"
+            );
+            var t = document.querySelector('meta[name="apple-mobile-web-app-title"]');
+            if (t) t.setAttribute("content", emp ? "Chấm công" : "Nhân sự");
+          } catch (e) {}
+        }
+        apply();
+        document.addEventListener("DOMContentLoaded", apply);
+      })();
+    </script>
   </head>
 
   <body>

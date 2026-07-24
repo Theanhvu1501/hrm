@@ -30,8 +30,14 @@
 }
 
 /* Thẻ modal: bo góc vừa (18px), cắt gọn phần thừa để bo góc ăn cả header/
-   footer. Không đặt padding ở content — để header/body/footer tự lo. */
-.emp-sheet .ant-modal-content {
+   footer. Không đặt padding ở đây — để header/body/footer tự lo.
+
+   antd v6 ĐỔI TÊN hộp trắng: v5 là `.ant-modal-content`, v6 là
+   `.ant-modal-container` (xem @rc-component/dialog Panel.js + antd modal style:
+   borderRadiusLG/contentPadding gắn vào -container). Nhắm sai tên → không bo,
+   padding to. Phải dùng -container. Bo góc/padding của -container do TOKEN antd
+   (:where, 0 specificity) đặt, nên .emp-sheet .ant-modal-container thắng dễ. */
+.emp-sheet .ant-modal-container {
   border-radius: 18px !important;
   overflow: hidden !important;
   padding: 0 !important;
