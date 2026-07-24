@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ConfigProvider } from 'antd';
 import viVN from 'antd/locale/vi_VN';
 
+import { isChamCongApp, getHomePath } from "./appTarget";
 import { AuthProvider } from "./contexts/AuthContext";
 import { TermProvider } from "./contexts/TermContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -91,7 +92,16 @@ const App = () => (
                   </ProtectedRoute>
                 }
               >
-                <Route index element={<TrangChuTheoQuyen />} />
+                <Route
+                  index
+                  element={
+                    isChamCongApp ? (
+                      <Navigate to={getHomePath()} replace />
+                    ) : (
+                      <TrangChuTheoQuyen />
+                    )
+                  }
+                />
                 <Route path="profile" element={<ProfilePage />} />
 
                 {/* Cấu hình */}
@@ -270,7 +280,12 @@ const App = () => (
                 <Route path="tai-khoan" element={<TaiKhoanPage />} />
               </Route>
 
-              <Route path="*" element={<NotFound />} />
+              <Route
+                path="*"
+                element={
+                  isChamCongApp ? <Navigate to={getHomePath()} replace /> : <NotFound />
+                }
+              />
                 </Routes>
             </TermProvider>
           </AuthProvider>
