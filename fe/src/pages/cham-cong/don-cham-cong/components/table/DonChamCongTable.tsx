@@ -24,7 +24,7 @@ import {
   TRANG_THAI_TAG_COLOR,
   labelFor,
 } from "../../constants";
-import { khoangNgay, soLieuDon } from "../../hienThiDon";
+import { khoangNgay, khungGio, soLieuDon } from "../../hienThiDon";
 import "./DonChamCongTable.state";
 
 export function DonChamCongTable() {
@@ -137,10 +137,7 @@ export function DonChamCongTable() {
       title: "Giờ",
       key: "gio",
       width: 130,
-      render: (_: unknown, record: AttendanceRequest) =>
-        record.loaiDon === "lam_them_gio" && (record.gioTu || record.gioDen)
-          ? `${record.gioTu || "?"}–${record.gioDen || "?"}`
-          : "-",
+      render: (_: unknown, record: AttendanceRequest) => khungGio(record),
     },
     {
       title: "Số liệu",

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { AttendanceRequest } from "@/services/attendanceRequestService";
-import { khoangNgay, soLieuDon } from "./hienThiDon";
+import { khoangNgay, khungGio, soLieuDon } from "./hienThiDon";
 
 function don(over: Partial<AttendanceRequest> = {}): AttendanceRequest {
   return {
@@ -33,6 +33,36 @@ describe("khoangNgay — cột Ngày của bảng HR", () => {
 
   it("thiếu ngày thì trả '-' chứ không trả chuỗi rỗng", () => {
     expect(khoangNgay(don({ ngay: "" }))).toBe("-");
+  });
+});
+
+describe("khungGio — cột Giờ", () => {
+  it("đơn OT hiện khung giờ", () => {
+    expect(
+      khungGio(don({ loaiDon: "lam_them_gio", gioTu: "18:00", gioDen: "21:00" }))
+    ).toBe("18:00–21:00");
+  });
+
+  it("đơn giải trình CŨNG hiện khung giờ (loại đơn này có trường giờ)", () => {
+    expect(
+      khungGio(don({ loaiDon: "giai_trinh", gioTu: "08:00", gioDen: "09:00" }))
+    ).toBe("08:00–09:00");
+  });
+
+  it("đơn nghỉ không có khái niệm khung giờ, kể cả khi bản ghi cũ còn sót giờ", () => {
+    expect(
+      khungGio(don({ loaiDon: "nghi_phep", gioTu: "18:00", gioDen: "21:00" }))
+    ).toBe("-");
+  });
+
+  it("thiếu một đầu thì hiện dấu hỏi ở đầu đó, không giấu cả khung giờ", () => {
+    expect(khungGio(don({ loaiDon: "lam_them_gio", gioTu: "18:00" }))).toBe(
+      "18:00–?"
+    );
+  });
+
+  it("không có giờ nào thì '-'", () => {
+    expect(khungGio(don({ loaiDon: "lam_them_gio" }))).toBe("-");
   });
 });
 
