@@ -1,6 +1,11 @@
-import { METHOD_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
-import { AdminGuard, JwtGuard } from '@app/auth';
+import { JwtGuard, PermissionGuard } from '@app/auth';
+import {
+  guardsOf,
+  httpMethodOf,
+  permissionsOf,
+  quetPhanQuyenRoute,
+} from '../testing/quet-phan-quyen-route';
 import { NgayLe_Controller } from './ngay-le.controller';
 
 /**
@@ -15,74 +20,50 @@ import { NgayLe_Controller } from './ngay-le.controller';
  * vĩnh viễn — không có đường sửa từ giao diện. Nên hàng rào phải chặn ngay
  * ở lúc ghi, không thể sửa bù sau.
  *
- * Dùng `AdminGuard` (kiểm `vaiTro`), KHÔNG dùng `@Roles(...)`: `RoleGuard`
- * trong repo hiện chỉ `return true` nên mọi `@Roles` đều vô hiệu.
+ * Hàng rào là `PermissionGuard` chứ KHÔNG phải `AdminGuard`: `AdminGuard` so
+ * `vaiTro` với đúng chuỗi 'ADMIN'/'SUPER_ADMIN', trong khi `vaiTro` là tên vai
+ * trò tự do từng tenant đặt ("Quản trị hệ thống", "Quản lý"...) nên trên
+ * production nó chặn cả HR thật. Cũng KHÔNG dùng `@Roles(...)`: `RoleGuard`
+ * trong repo hiện chỉ `return true`.
  *
- * Test này bám vào metadata `__guards__` vì đó chính là thứ Nest đọc lúc
- * chạy — gỡ `@UseGuards(AdminGuard)` khỏi bất kỳ route ghi nào là đỏ ngay.
+ * Test bám vào metadata `__guards__` / `PERMISSIONS_KEY` vì đó chính là thứ
+ * Nest đọc lúc chạy — gỡ `@Permissions` hoặc `@UseGuards(PermissionGuard)`
+ * khỏi bất kỳ route nào là đỏ ngay.
  */
-
-const guardsOf = (fn: any): any[] =>
-  Reflect.getMetadata('__guards__', fn) ?? [];
-
-const httpMethodOf = (fn: any): RequestMethod =>
-  Reflect.getMetadata(METHOD_METADATA, fn);
 
 const proto = NgayLe_Controller.prototype as any;
 
-/** Mọi route ghi của controller, kèm động từ HTTP mong đợi. */
-const ROUTE_GHI: Array<[string, RequestMethod]> = [
-  ['create', RequestMethod.POST],
-  ['update', RequestMethod.PUT],
-  ['remove', RequestMethod.DELETE],
+/** Toàn bộ route của controller kèm động từ HTTP và quyền BẮT BUỘC. */
+const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
+  ['findAll', RequestMethod.GET, '/cham-cong/ngay-le:xem'],
+  ['findOne', RequestMethod.GET, '/cham-cong/ngay-le:xem'],
+  ['create', RequestMethod.POST, '/cham-cong/ngay-le:them'],
+  ['update', RequestMethod.PUT, '/cham-cong/ngay-le:sua'],
+  ['remove', RequestMethod.DELETE, '/cham-cong/ngay-le:xoa'],
 ];
-
-/** Route đọc: CỐ Ý chỉ JwtGuard — xem describe bên dưới. */
-const ROUTE_DOC = ['findAll', 'findOne'];
 
 describe('NgayLe_Controller — phân quyền', () => {
   it('class gắn JwtGuard cho toàn bộ route', () => {
     expect(guardsOf(NgayLe_Controller)).toContain(JwtGuard);
   });
 
-  it.each(ROUTE_GHI)('route ghi %s phải có AdminGuard', (ten) => {
-    expect(guardsOf(proto[ten])).toContain(AdminGuard);
-  });
-
-  it.each(ROUTE_GHI)(
-    'route %s vẫn đúng động từ HTTP (không bị đổi tên/đổi verb làm test mất mục tiêu)',
-    (ten, method) => {
+  it.each(BANG_QUYEN)(
+    'route %s có PermissionGuard và đòi đúng quyền',
+    (ten, method, quyen) => {
       expect(httpMethodOf(proto[ten])).toBe(method);
+      expect(guardsOf(proto[ten])).toContain(PermissionGuard);
+      expect(permissionsOf(proto[ten])).toEqual([quyen]);
     },
   );
 
-  /**
-   * Đọc danh sách ngày lễ KHÔNG khoá theo quản trị: đây là dữ liệu lịch
-   * chung, và bọc GET sẽ làm vỡ các màn hình nhân viên thường đang gọi bằng
-   * token thường. Chỉ thao tác GHI mới cần quản trị.
-   */
-  it.each(ROUTE_DOC)('route đọc %s KHÔNG gắn AdminGuard', (ten) => {
-    expect(guardsOf(proto[ten])).not.toContain(AdminGuard);
+  it('không route nào bị bỏ sót, kể cả route thêm sau này', () => {
+    expect(quetPhanQuyenRoute(NgayLe_Controller)).toEqual([]);
   });
 
-  it('không route ghi nào bị bỏ sót: mọi @Post/@Put/@Delete đều có AdminGuard', () => {
-    const VERB_GHI = [
-      RequestMethod.POST,
-      RequestMethod.PUT,
-      RequestMethod.PATCH,
-      RequestMethod.DELETE,
-    ];
-
-    const routeGhiThucTe = Object.getOwnPropertyNames(proto).filter((ten) =>
-      VERB_GHI.includes(httpMethodOf(proto[ten])),
+  it('bảng quyền ở trên phủ đúng toàn bộ route của controller', () => {
+    const routeThucTe = Object.getOwnPropertyNames(proto).filter(
+      (ten) => httpMethodOf(proto[ten]) !== undefined,
     );
-
-    // Nếu ai đó thêm một route ghi mới mà quên AdminGuard, danh sách này sẽ
-    // không rỗng và test đỏ — không cần nhớ cập nhật ROUTE_GHI bằng tay.
-    const thieuGuard = routeGhiThucTe.filter(
-      (ten) => !guardsOf(proto[ten]).includes(AdminGuard),
-    );
-    expect(thieuGuard).toEqual([]);
-    expect(routeGhiThucTe.sort()).toEqual(ROUTE_GHI.map(([t]) => t).sort());
+    expect(routeThucTe.sort()).toEqual(BANG_QUYEN.map(([t]) => t).sort());
   });
 });

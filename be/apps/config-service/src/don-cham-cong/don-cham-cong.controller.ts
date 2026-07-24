@@ -20,12 +20,12 @@ import {
   CapNhatTrangThaiDto,
 } from './dto';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
-import { AdminGuard, JwtGuard } from '@app/auth';
+import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 
 /**
  * Đây từng là lỗ hổng bảo mật đang khai thác được: `@UseGuards(JwtGuard)` ở
- * cấp controller, KHÔNG route ghi nào có `AdminGuard`, và `create()` đọc
- * `employeeId` thẳng từ body — bất kỳ tài khoản đăng nhập nào cũng
+ * cấp controller, KHÔNG route ghi nào có hàng rào phân quyền, và `create()`
+ * đọc `employeeId` thẳng từ body — bất kỳ tài khoản đăng nhập nào cũng
  * tạo/sửa/xoá đơn của người khác, hoặc tự duyệt đơn của chính mình.
  *
  * Vá bằng cách tách hai nhóm route, cùng khuôn mẫu
@@ -34,8 +34,16 @@ import { AdminGuard, JwtGuard } from '@app/auth';
  *  - Tự phục vụ (`cua-toi`): chỉ `JwtGuard`, `employeeId` LUÔN suy từ token
  *    qua `NhanVien_Service.resolveEmployeeFromUser(req.user)` — không bao
  *    giờ đọc từ body/query, dù client có cố gửi kèm.
- *  - Quản trị: thêm `AdminGuard` (kiểm `vaiTro`), KHÔNG dùng `@Roles(...)` —
- *    `RoleGuard` trong repo hiện chỉ `return true` nên mọi `@Roles` vô hiệu.
+ *  - Quản trị: thêm `PermissionGuard` + `@Permissions('/cham-cong/don-tu:...')`.
+ *
+ * Hàng rào là `PermissionGuard` chứ KHÔNG phải `AdminGuard`: `AdminGuard` chỉ
+ * cho qua khi `vaiTro` viết hoa lên bằng `'ADMIN'`/`'SUPER_ADMIN'`, nhưng
+ * `vaiTro` do `JwtGuard` nạp từ `app_user_roles.role` — là TÊN VAI TRÒ tự do
+ * từng tenant tự đặt ("Quản trị hệ thống", "Quản lý"...). Trên production
+ * không ai có đúng chuỗi "ADMIN" nên AdminGuard chặn cả HR thật. Vai trò
+ * "Quản trị hệ thống" thì đã có sẵn đủ `/cham-cong/don-tu:xem|them|sua|xoa|xuat`
+ * trong `phan_quyen.permissions` — đúng key FE dùng để gate màn hình Đơn từ.
+ * KHÔNG dùng `@Roles(...)`: `RoleGuard` trong repo hiện chỉ `return true`.
  */
 @Controller('don-cham-cong')
 @UseGuards(JwtGuard)
@@ -48,7 +56,7 @@ export class DonChamCong_Controller {
   // ── Tự phục vụ — PHẢI khai TRƯỚC mọi route dùng ':id' bên dưới. Nếu
   // không, NestJS khớp chuỗi "cua-toi" thành :id — nhân viên gọi
   // GET /don-cham-cong/cua-toi sẽ bị route findOne(':id') nuốt mất, và vì
-  // findOne có AdminGuard nên còn nhận nhầm 403. ─────────────────────────
+  // findOne đòi quyền nên còn nhận nhầm 403. ─────────────────────────────
 
   @Get('cua-toi')
   async cuaToi(@Query() query: DonChamCongFilter, @Req() req: any) {
@@ -82,38 +90,48 @@ export class DonChamCong_Controller {
     return { success: true, message: 'Huỷ đơn chấm công thành công' };
   }
 
-  // ── Quản trị — AdminGuard trên từng route ───────────────────────────────
+  // ── Quản trị — PermissionGuard + @Permissions trên từng route ───────────
+  // Đặt guard ở CẤP ROUTE (không phải cấp class) đúng để ba route `cua-toi`
+  // phía trên không dính phải nó.
 
   @Get()
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/don-tu:xem')
   async findAll(@Query() query: DonChamCongFilter) {
     const data = await this.donChamCong_Service.findAll(query);
     return { success: true, data };
   }
 
   @Get(':id')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/don-tu:xem')
   async findOne(@Param('id') id: string) {
     const data = await this.donChamCong_Service.findOne(id);
     return { success: true, data };
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/don-tu:them')
   async create(@Body() body: CreateDonChamCongDto) {
     const data = await this.donChamCong_Service.create(body);
     return { success: true, data };
   }
 
   @Put(':id')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/don-tu:sua')
   async update(@Param('id') id: string, @Body() body: UpdateDonChamCongDto) {
     const data = await this.donChamCong_Service.update(id, body);
     return { success: true, data };
   }
 
+  // Duyệt/từ chối đơn là SỬA đơn đã có (`:sua`), không phải xoá — khác cách
+  // xếp loại của `nhan-vien` (@Patch trạng thái ở đó là ngưng hoạt động hồ
+  // sơ, hệ quả ngang xoá mềm).
   @Patch(':id/trang-thai')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/don-tu:sua')
   async updateStatus(
     @Param('id') id: string,
     // CapNhatTrangThaiDto (thay vì inline type) là điều kiện BẮT BUỘC để
@@ -123,7 +141,7 @@ export class DonChamCong_Controller {
     @Body() body: CapNhatTrangThaiDto,
     @Req() req: any,
   ) {
-    // req.user LUÔN là người thực hiện thật (qua JwtGuard/AdminGuard),
+    // req.user LUÔN là người thực hiện thật (qua JwtGuard/PermissionGuard),
     // KHÔNG BAO GIỜ đọc "ai duyệt" từ body — đó là điều kiện DUY NHẤT giúp
     // service chặn được tự duyệt.
     const data = await this.donChamCong_Service.updateStatus(
@@ -136,7 +154,8 @@ export class DonChamCong_Controller {
   }
 
   @Delete(':id')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/don-tu:xoa')
   async remove(@Param('id') id: string) {
     await this.donChamCong_Service.remove(id);
     return { success: true, message: 'Xóa đơn chấm công thành công' };

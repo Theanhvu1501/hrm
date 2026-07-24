@@ -12,7 +12,7 @@ import {
 import { DiaDiemChamCong_Service } from './dia-diem-cham-cong.service';
 import type { DiaDiemChamCongFilter } from './dia-diem-cham-cong.service';
 import { CreateDiaDiemChamCongDto, UpdateDiaDiemChamCongDto } from './dto';
-import { AdminGuard, JwtGuard } from '@app/auth';
+import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 
 /**
  * `doiChieuGps` chọn địa điểm GẦN NHẤT rồi so với `banKinh` của chính địa
@@ -21,11 +21,16 @@ import { AdminGuard, JwtGuard } from '@app/auth';
  * lúc, và toàn bộ tín hiệu đối chiếu vị trí mà HR dựa vào mất sạch. Nên mọi
  * thao tác GHI phải là quản trị.
  *
- * Dùng `AdminGuard` (kiểm `vaiTro`), KHÔNG dùng `@Roles(...)`: `RoleGuard`
- * trong repo hiện chỉ `return true` nên mọi `@Roles` đều vô hiệu.
+ * Hàng rào là `PermissionGuard` + `@Permissions('/cham-cong/dia-diem:...')`,
+ * KHÔNG phải `AdminGuard`: `AdminGuard` chỉ cho qua khi `vaiTro` viết hoa lên
+ * bằng `'ADMIN'`/`'SUPER_ADMIN'`, nhưng `vaiTro` do `JwtGuard` nạp từ
+ * `app_user_roles.role` — là TÊN VAI TRÒ tự do từng tenant tự đặt ("Quản trị
+ * hệ thống", "Quản lý"...). Trên production không ai có đúng chuỗi "ADMIN"
+ * nên AdminGuard chặn cả HR thật, mọi thao tác ghi địa điểm trả 403.
+ * KHÔNG dùng `@Roles(...)`: `RoleGuard` trong repo hiện chỉ `return true`.
  *
- * `@Get` CỐ Ý chỉ giữ `JwtGuard` để các màn hình gọi bằng token thường
- * không bị vỡ.
+ * `@Get` CÓ gắn `:xem` — đúng key `fe/src/config/routePermissions.ts` dùng để
+ * gate màn hình Địa điểm chấm công, nên ai mở được màn hình thì gọi được API.
  */
 @Controller('dia-diem-cham-cong')
 @UseGuards(JwtGuard)
@@ -35,26 +40,32 @@ export class DiaDiemChamCong_Controller {
   ) {}
 
   @Get()
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/dia-diem:xem')
   async findAll(@Query() query: DiaDiemChamCongFilter) {
     const data = await this.diaDiemChamCong_Service.findAll(query);
     return { success: true, data };
   }
 
   @Get(':id')
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/dia-diem:xem')
   async findOne(@Param('id') id: string) {
     const data = await this.diaDiemChamCong_Service.findOne(id);
     return { success: true, data };
   }
 
   @Post()
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/dia-diem:them')
   async create(@Body() body: CreateDiaDiemChamCongDto) {
     const data = await this.diaDiemChamCong_Service.create(body);
     return { success: true, data };
   }
 
   @Put(':id')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/dia-diem:sua')
   async update(
     @Param('id') id: string,
     @Body() body: UpdateDiaDiemChamCongDto,
@@ -64,7 +75,8 @@ export class DiaDiemChamCong_Controller {
   }
 
   @Delete(':id')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/dia-diem:xoa')
   async remove(@Param('id') id: string) {
     await this.diaDiemChamCong_Service.remove(id);
     return { success: true, message: 'Xóa địa điểm chấm công thành công' };

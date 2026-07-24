@@ -184,9 +184,11 @@ export class DonChamCong_Service {
    * Đổi trạng thái đơn — luồng DUYỆT/TỪ CHỐI (`PATCH :id/trang-thai`).
    *
    * `nguoiThucHien` LUÔN phải là `req.user` thật của người gọi (controller
-   * gắn `AdminGuard`, không phải body/query) — đây là chỗ duy nhất chặn
-   * được tự duyệt: `AdminGuard` chỉ kiểm `vaiTro`, hoàn toàn không biết đơn
-   * đang xử lý có phải của chính người gọi hay không.
+   * gắn `PermissionGuard`, không phải body/query) — đây là chỗ duy nhất chặn
+   * được tự duyệt: `PermissionGuard` chỉ kiểm mảng `permissions` của vai trò,
+   * hoàn toàn không biết đơn đang xử lý có phải của chính người gọi hay không.
+   * Người có `/cham-cong/don-tu:sua` vẫn duyệt được MỌI đơn, kể cả đơn mình
+   * tự nộp — nên luật "không tự duyệt" phải nằm ở đây.
    */
   async updateStatus(
     id: string,

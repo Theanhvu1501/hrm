@@ -1,44 +1,82 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, RequestMethod } from '@nestjs/common';
 import { PATH_METADATA } from '@nestjs/common/constants';
-import { AdminGuard, JwtGuard } from '@app/auth';
+import { JwtGuard, PermissionGuard } from '@app/auth';
+import {
+  guardsOf,
+  httpMethodOf,
+  permissionsOf,
+  quetPhanQuyenRoute,
+} from '../testing/quet-phan-quyen-route';
 import { BanGhiChamCong_Controller } from './ban-ghi-cham-cong.controller';
 
 /**
  * Controller này là toàn bộ mặt tiền của chấm công thực tế nên có ba thứ
  * phải khoá bằng test, vì hỏng cả ba đều trôi qua CI hoàn toàn im lặng:
  *
- * 1. Hàng rào phân quyền: gỡ `AdminGuard` khỏi `findAll` là mọi nhân viên
- *    đọc được bản ghi chấm công của cả công ty; gỡ khỏi `hrNhap` là ai cũng
- *    tự chèn được công cho người khác.
+ * 1. Hàng rào phân quyền: gỡ quyền khỏi `findAll` là mọi nhân viên đọc được
+ *    bản ghi chấm công của cả công ty; gỡ khỏi `hrNhap` là ai cũng tự chèn
+ *    được công cho người khác. Hàng rào là `PermissionGuard` chứ KHÔNG phải
+ *    `AdminGuard`: `AdminGuard` so `vaiTro` với đúng chuỗi
+ *    'ADMIN'/'SUPER_ADMIN', trong khi `vaiTro` là tên vai trò tự do từng
+ *    tenant đặt ("Quản trị hệ thống", "Quản lý"...) nên trên production nó
+ *    chặn cả HR thật.
  * 2. Nguồn IP: đọc thẳng `X-Forwarded-For` cho phép nhân viên ngồi nhà khai
  *    IP văn phòng để qua mặt đối chiếu địa điểm wifi.
  * 3. Thứ tự route: `@Get()` đứng trước `@Get('hom-nay')` thì "hom-nay" bị
  *    nuốt thành query rỗng của route tra cứu.
  */
 
-const guardsOf = (fn: any): any[] =>
-  Reflect.getMetadata('__guards__', fn) ?? [];
-
 const proto = BanGhiChamCong_Controller.prototype as any;
+
+/** Route quản trị: động từ HTTP và quyền BẮT BUỘC. */
+const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
+  ['findAll', RequestMethod.GET, '/cham-cong/ban-ghi:xem'],
+  ['hrNhap', RequestMethod.POST, '/cham-cong/ban-ghi:them'],
+];
+
+/**
+ * Route tự phục vụ: cố ý KHÔNG nhận quyền theo vai trò. Ngoài `cua-toi`,
+ * controller này còn ba đường tự phục vụ mang tên khác — chính là các thao
+ * tác chấm công hằng ngày của nhân viên. Bắt HR gán quyền cho từng người sẽ
+ * khiến người mới không chấm được vào đúng ngày đầu tiên; phạm vi dữ liệu đã
+ * khoá bằng `employeeId` suy từ `req.user`, không bao giờ đọc từ body.
+ */
+const DUONG_DAN_TU_PHUC_VU_RIENG = ['check-in', 'check-out', 'hom-nay'];
+const ROUTE_TU_PHUC_VU = ['checkIn', 'checkOut', 'homNay', 'cuaToi'];
 
 describe('BanGhiChamCong_Controller — phân quyền', () => {
   it('class gắn JwtGuard cho toàn bộ route', () => {
     expect(guardsOf(BanGhiChamCong_Controller)).toContain(JwtGuard);
   });
 
-  it.each([['findAll'], ['hrNhap']])(
-    'route %s là thao tác quản trị nên phải có AdminGuard',
-    (ten) => {
-      expect(guardsOf(proto[ten])).toContain(AdminGuard);
+  it.each(BANG_QUYEN)(
+    'route %s có PermissionGuard và đòi đúng quyền',
+    (ten, method, quyen) => {
+      expect(httpMethodOf(proto[ten])).toBe(method);
+      expect(guardsOf(proto[ten])).toContain(PermissionGuard);
+      expect(permissionsOf(proto[ten])).toEqual([quyen]);
     },
   );
 
-  it.each([['checkIn'], ['checkOut'], ['homNay'], ['cuaToi']])(
-    'route %s là tự phục vụ nên KHÔNG gắn AdminGuard',
-    (ten) => {
-      expect(guardsOf(proto[ten])).not.toContain(AdminGuard);
-    },
-  );
+  it.each(ROUTE_TU_PHUC_VU)('route tự phục vụ %s KHÔNG gắn quyền', (ten) => {
+    expect(permissionsOf(proto[ten])).toBeUndefined();
+    expect(guardsOf(proto[ten])).not.toContain(PermissionGuard);
+  });
+
+  it('không route nào bị bỏ sót, kể cả route thêm sau này', () => {
+    expect(
+      quetPhanQuyenRoute(BanGhiChamCong_Controller, DUONG_DAN_TU_PHUC_VU_RIENG),
+    ).toEqual([]);
+  });
+
+  it('bảng quyền + danh sách tự phục vụ phủ đúng toàn bộ route của controller', () => {
+    const routeThucTe = Object.getOwnPropertyNames(proto).filter(
+      (ten) => httpMethodOf(proto[ten]) !== undefined,
+    );
+    expect(routeThucTe.sort()).toEqual(
+      [...BANG_QUYEN.map(([t]) => t), ...ROUTE_TU_PHUC_VU].sort(),
+    );
+  });
 });
 
 describe('BanGhiChamCong_Controller — thứ tự route', () => {
@@ -136,8 +174,9 @@ describe('BanGhiChamCong_Controller — nguồn dữ liệu vào', () => {
 describe('BanGhiChamCong_Controller — cua-toi', () => {
   /**
    * `@Get()` đứng trước `@Get('cua-toi')` thì "cua-toi" bị nuốt thành query
-   * rỗng của route tra cứu toàn tenant — và route đó có AdminGuard, nên nhân
-   * viên thường sẽ nhận 403 thay vì lịch tuần của mình.
+   * rỗng của route tra cứu toàn tenant — và route đó đòi
+   * `/cham-cong/ban-ghi:xem`, nên nhân viên thường sẽ nhận 403 thay vì lịch
+   * tuần của mình.
    */
   it('route cua-toi khai trước route tra cứu không tham số', () => {
     const duongDan = (ten: string) =>

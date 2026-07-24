@@ -12,7 +12,7 @@ import type { Request } from 'express';
 import { BanGhiChamCong_Service } from './ban-ghi-cham-cong.service';
 import type { BanGhiFilter } from './ban-ghi-cham-cong.service';
 import { ChamCongDto, HrNhapChamCongDto } from './dto';
-import { AdminGuard, JwtGuard } from '@app/auth';
+import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 
 /**
  * IP dùng để đối chiếu địa điểm chấm công `loai='wifi'`.
@@ -38,7 +38,7 @@ function layIp(req: Request): string | undefined {
 export class BanGhiChamCong_Controller {
   constructor(private readonly banGhi_Service: BanGhiChamCong_Service) {}
 
-  // ── Tự phục vụ: CHỈ JwtGuard, không AdminGuard/PermissionGuard ──────
+  // ── Tự phục vụ: CHỈ JwtGuard, không PermissionGuard ─────────────────
   // Mọi nhân viên đều phải chấm công được — bắt HR gán quyền cho từng
   // người sẽ khiến người mới không chấm được vào đúng ngày đầu tiên.
   // Kiểm soát nằm ở phạm vi dữ liệu: employeeId luôn suy từ req.user,
@@ -96,8 +96,18 @@ export class BanGhiChamCong_Controller {
   }
 
   // ── Quản trị ────────────────────────────────────────────────────────
-  // Dùng `AdminGuard` (kiểm `vaiTro`), KHÔNG dùng `@Roles(...)`: `RoleGuard`
-  // trong repo hiện chỉ `return true` nên mọi `@Roles` đều vô hiệu.
+  // Hàng rào là `PermissionGuard` + `@Permissions('/cham-cong/ban-ghi:...')`,
+  // KHÔNG phải `AdminGuard`: `AdminGuard` chỉ cho qua khi `vaiTro` viết hoa
+  // lên bằng 'ADMIN'/'SUPER_ADMIN', nhưng `vaiTro` do `JwtGuard` nạp từ
+  // `app_user_roles.role` — là TÊN VAI TRÒ tự do từng tenant tự đặt ("Quản
+  // trị hệ thống", "Quản lý"...). Trên production không ai có đúng chuỗi
+  // "ADMIN" nên AdminGuard chặn cả HR thật.
+  // KHÔNG dùng `@Roles(...)`: `RoleGuard` trong repo hiện chỉ `return true`.
+  //
+  // LƯU Ý dữ liệu: module `/cham-cong/ban-ghi` được thêm vào catalog SAU khi
+  // các hàng `phan_quyen` trên production được tạo, nên chúng thiếu đúng bộ 5
+  // quyền này. Phải chạy `ops/grant-quyen-module-moi.ts` cùng lần deploy, nếu
+  // không màn hình Bản ghi chấm công vẫn 403 với mọi người.
 
   /**
    * Tra cứu toàn tenant: trả bản ghi chấm công của MỌI nhân viên (giờ vào/ra,
@@ -105,7 +115,8 @@ export class BanGhiChamCong_Controller {
    * đi lại của cả công ty.
    */
   @Get()
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/ban-ghi:xem')
   async findAll(@Query() query: BanGhiFilter) {
     const data = await this.banGhi_Service.findAll(query);
     return { success: true, data };
@@ -117,7 +128,8 @@ export class BanGhiChamCong_Controller {
    * được bản ghi công cho chính mình hoặc cho đồng nghiệp.
    */
   @Post('hr-nhap')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/ban-ghi:them')
   async hrNhap(@Body() body: HrNhapChamCongDto, @Req() req: any) {
     const data = await this.banGhi_Service.hrNhap(
       body,

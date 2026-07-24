@@ -1,79 +1,92 @@
-import { PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
+import { PATH_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
-import { AdminGuard, JwtGuard } from '@app/auth';
+import { JwtGuard, PermissionGuard } from '@app/auth';
+import {
+  guardsOf,
+  httpMethodOf,
+  permissionsOf,
+  quetPhanQuyenRoute,
+} from '../testing/quet-phan-quyen-route';
 import { DonChamCong_Controller } from './don-cham-cong.controller';
 
 /**
- * Lỗ hổng đang được vá (Task 4): `@UseGuards(JwtGuard)` ở cấp controller,
- * KHÔNG route ghi nào có `AdminGuard`, và `create()` đọc `employeeId` thẳng
+ * Lỗ hổng đã được vá (Task 4): `@UseGuards(JwtGuard)` ở cấp controller, KHÔNG
+ * route ghi nào có hàng rào phân quyền, và `create()` đọc `employeeId` thẳng
  * từ body — bất kỳ tài khoản đăng nhập nào cũng tạo/sửa/xoá đơn của người
  * khác, hoặc tự duyệt đơn của chính mình. Ba thứ dưới đây phải khoá bằng
  * test vì hỏng một trong ba đều trôi qua CI hoàn toàn im lặng:
  *
- * 1. Hàng rào phân quyền: route quản trị thiếu `AdminGuard`.
+ * 1. Hàng rào phân quyền: route quản trị thiếu `@Permissions` /
+ *    `PermissionGuard`. Hàng rào là `PermissionGuard` chứ KHÔNG phải
+ *    `AdminGuard`: `AdminGuard` so `vaiTro` với đúng chuỗi
+ *    'ADMIN'/'SUPER_ADMIN', trong khi `vaiTro` là tên vai trò tự do từng
+ *    tenant đặt ("Quản trị hệ thống", "Quản lý"...) nên trên production nó
+ *    chặn cả HR thật.
  * 2. Thứ tự route: `cua-toi` bị `:id` nuốt mất nếu khai sau.
  * 3. Nguồn employeeId: route tự phục vụ đọc employeeId từ body/query thay
  *    vì suy từ token.
  */
 
-const guardsOf = (fn: any): any[] =>
-  Reflect.getMetadata('__guards__', fn) ?? [];
-
-const httpMethodOf = (fn: any): RequestMethod =>
-  Reflect.getMetadata(METHOD_METADATA, fn);
-
-const pathOf = (fn: any): string => Reflect.getMetadata(PATH_METADATA, fn) ?? '';
-
 const proto = DonChamCong_Controller.prototype as any;
 
-const VERB_GHI = [
-  RequestMethod.POST,
-  RequestMethod.PUT,
-  RequestMethod.PATCH,
-  RequestMethod.DELETE,
+/** Route quản trị: động từ HTTP và quyền BẮT BUỘC. */
+const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
+  ['findAll', RequestMethod.GET, '/cham-cong/don-tu:xem'],
+  ['findOne', RequestMethod.GET, '/cham-cong/don-tu:xem'],
+  ['create', RequestMethod.POST, '/cham-cong/don-tu:them'],
+  ['update', RequestMethod.PUT, '/cham-cong/don-tu:sua'],
+  // Duyệt/từ chối là SỬA đơn đã có, nên `:sua` chứ không phải `:xoa`.
+  ['updateStatus', RequestMethod.PATCH, '/cham-cong/don-tu:sua'],
+  ['remove', RequestMethod.DELETE, '/cham-cong/don-tu:xoa'],
 ];
+
+/** Route tự phục vụ: cố ý KHÔNG nhận quyền theo vai trò. */
+const ROUTE_TU_PHUC_VU = ['cuaToi', 'taoChoChinhMinh', 'huyCuaToi'];
 
 describe('DonChamCong_Controller — phân quyền', () => {
   it('class gắn JwtGuard cho toàn bộ route', () => {
     expect(guardsOf(DonChamCong_Controller)).toContain(JwtGuard);
   });
 
-  it.each([
-    ['findAll'],
-    ['findOne'],
-    ['create'],
-    ['update'],
-    ['remove'],
-    ['updateStatus'],
-  ])('route %s là thao tác quản trị nên phải có AdminGuard', (ten) => {
-    expect(guardsOf(proto[ten])).toContain(AdminGuard);
-  });
-
-  it.each([['cuaToi'], ['taoChoChinhMinh'], ['huyCuaToi']])(
-    'route %s là tự phục vụ nên KHÔNG gắn AdminGuard',
-    (ten) => {
-      expect(guardsOf(proto[ten])).not.toContain(AdminGuard);
+  it.each(BANG_QUYEN)(
+    'route %s có PermissionGuard và đòi đúng quyền',
+    (ten, method, quyen) => {
+      expect(httpMethodOf(proto[ten])).toBe(method);
+      expect(guardsOf(proto[ten])).toContain(PermissionGuard);
+      expect(permissionsOf(proto[ten])).toEqual([quyen]);
     },
   );
 
-  // Tiền lệ commit 05cc743 (ca-lam-viec/dia-diem-cham-cong/ngay-le/nhan-vien):
-  // hai it.each phía trên liệt kê tay tên method, nên route ghi thêm SAU NÀY
-  // (ai đó thêm @Patch mới mà quên AdminGuard) lọt lưới hoàn toàn — CI vẫn
-  // xanh vì test chỉ biết hỏi về 9 tên method đã có sẵn. Assert này quét
-  // TOÀN BỘ method có HTTP verb ghi (POST/PUT/PATCH/DELETE) bằng metadata,
-  // không quan tâm tên — nên route ghi thêm sau này bắt buộc phải tự chứng
-  // minh nó an toàn (AdminGuard, hoặc nằm dưới nhóm tự phục vụ cua-toi) thì
-  // mới qua được, thay vì mặc định lọt qua vì test không biết tới nó.
-  it('mọi route ghi đều có AdminGuard hoặc là route tự phục vụ dưới cua-toi, kể cả route thêm sau này', () => {
-    const khongDatDieuKien = Object.getOwnPropertyNames(proto)
-      .filter((ten) => VERB_GHI.includes(httpMethodOf(proto[ten])))
-      .filter((ten) => {
-        const coAdminGuard = guardsOf(proto[ten]).includes(AdminGuard);
-        const laTuPhucVu = pathOf(proto[ten]).startsWith('cua-toi');
-        return !coAdminGuard && !laTuPhucVu;
-      });
+  /**
+   * Ba route `cua-toi` là đường tự phục vụ của nhân viên: nộp / xem / huỷ đơn
+   * của CHÍNH MÌNH. Gắn quyền vào đây là khoá luôn đường nộp đơn của người
+   * chưa được HR gán vai trò nào. Phạm vi dữ liệu đã khoá bằng `employeeId`
+   * suy từ token (xem describe cuối file).
+   */
+  it.each(ROUTE_TU_PHUC_VU)('route tự phục vụ %s KHÔNG gắn quyền', (ten) => {
+    expect(permissionsOf(proto[ten])).toBeUndefined();
+    expect(guardsOf(proto[ten])).not.toContain(PermissionGuard);
+  });
 
-    expect(khongDatDieuKien).toEqual([]);
+  // Tiền lệ commit 05cc743 (ca-lam-viec/dia-diem-cham-cong/ngay-le/nhan-vien):
+  // các it.each phía trên liệt kê tay tên method, nên route thêm SAU NÀY (ai
+  // đó thêm @Patch mới mà quên quyền) lọt lưới hoàn toàn — CI vẫn xanh vì test
+  // chỉ biết hỏi về những tên method đã có sẵn. Assert này quét TOÀN BỘ method
+  // có METHOD_METADATA bằng metadata, không quan tâm tên. Quan trọng gấp đôi
+  // với PermissionGuard: `canActivate()` trả true khi route không khai
+  // @Permissions, nên gắn guard mà quên decorator = route mở toang, không có
+  // dấu hiệu gì.
+  it('mọi route đều có PermissionGuard + @Permissions không rỗng, hoặc là route tự phục vụ dưới cua-toi', () => {
+    expect(quetPhanQuyenRoute(DonChamCong_Controller)).toEqual([]);
+  });
+
+  it('bảng quyền + danh sách tự phục vụ phủ đúng toàn bộ route của controller', () => {
+    const routeThucTe = Object.getOwnPropertyNames(proto).filter(
+      (ten) => httpMethodOf(proto[ten]) !== undefined,
+    );
+    expect(routeThucTe.sort()).toEqual(
+      [...BANG_QUYEN.map(([t]) => t), ...ROUTE_TU_PHUC_VU].sort(),
+    );
   });
 });
 

@@ -7,7 +7,6 @@ import {
 } from './thiet-bi-cham-cong.service';
 import { ThietBiChamCong_Controller } from './thiet-bi-cham-cong.controller';
 import { EmployeeDevice } from '@app/entities';
-import { AdminGuard, JwtGuard } from '@app/auth';
 
 const NV: any = {
   _id: 'emp-1',
@@ -532,34 +531,9 @@ describe('ThietBiChamCong_Service', () => {
   });
 });
 
-/**
- * Critical 1 — hàng rào phân quyền của controller. Không có các assert này
- * thì việc gỡ `AdminGuard` khỏi `duyet` (nhân viên tự duyệt máy của chính
- * mình) trôi qua CI hoàn toàn im lặng.
- */
-describe('ThietBiChamCong_Controller — phân quyền', () => {
-  const guardsOf = (fn: any): any[] =>
-    Reflect.getMetadata('__guards__', fn) ?? [];
-
-  it('class gắn JwtGuard cho toàn bộ route', () => {
-    expect(guardsOf(ThietBiChamCong_Controller)).toContain(JwtGuard);
-  });
-
-  it.each([['findAll'], ['duyet'], ['tuChoi'], ['thuHoi']])(
-    'route %s chỉ dành cho quản trị (AdminGuard)',
-    (ten) => {
-      expect(
-        guardsOf((ThietBiChamCong_Controller.prototype as any)[ten]),
-      ).toContain(AdminGuard);
-    },
-  );
-
-  it('route cua-toi là tự phục vụ nên KHÔNG gắn AdminGuard', () => {
-    expect(
-      guardsOf((ThietBiChamCong_Controller.prototype as any).cuaToi),
-    ).not.toContain(AdminGuard);
-  });
-});
+// Hàng rào phân quyền của controller (PermissionGuard + @Permissions) đã
+// chuyển sang spec riêng `thiet-bi-cham-cong.controller.spec.ts` — ở đó có
+// cả assert quét metadata bắt được route thêm sau này.
 
 describe('ThietBiChamCong_Controller — vết audit người thực hiện', () => {
   let controller: ThietBiChamCong_Controller;

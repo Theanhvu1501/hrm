@@ -12,7 +12,7 @@ import {
 import { ThietBiChamCong_Service } from './thiet-bi-cham-cong.service';
 import type { ThietBiFilter } from './thiet-bi-cham-cong.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
-import { AdminGuard, JwtGuard } from '@app/auth';
+import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 
 /**
  * Đây là cơ chế chống chấm công hộ của cả hệ thống: mỗi nhân viên chỉ chấm
@@ -20,8 +20,18 @@ import { AdminGuard, JwtGuard } from '@app/auth';
  * toàn bộ độ an toàn nằm ở luật "thiết bị lạ phải được HR duyệt" — nghĩa là
  * nằm ở hàng rào phân quyền của chính controller này.
  *
- * Dùng `AdminGuard` (kiểm `vaiTro`), KHÔNG dùng `@Roles(...)`: `RoleGuard`
- * trong repo hiện chỉ `return true` nên mọi `@Roles` đều vô hiệu.
+ * Hàng rào là `PermissionGuard` + `@Permissions('/cham-cong/thiet-bi:...')`,
+ * KHÔNG phải `AdminGuard`: `AdminGuard` chỉ cho qua khi `vaiTro` viết hoa lên
+ * bằng `'ADMIN'`/`'SUPER_ADMIN'`, nhưng `vaiTro` do `JwtGuard` nạp từ
+ * `app_user_roles.role` — là TÊN VAI TRÒ tự do từng tenant tự đặt ("Quản trị
+ * hệ thống", "Quản lý"...). Trên production không ai có đúng chuỗi "ADMIN"
+ * nên AdminGuard chặn cả HR thật, không ai duyệt được thiết bị.
+ * KHÔNG dùng `@Roles(...)`: `RoleGuard` trong repo hiện chỉ `return true`.
+ *
+ * LƯU Ý dữ liệu: module `/cham-cong/thiet-bi` được thêm vào catalog SAU khi
+ * các hàng `phan_quyen` trên production được tạo, nên chúng thiếu đúng bộ 5
+ * quyền này. Phải chạy `ops/grant-quyen-module-moi.ts` cùng lần deploy, nếu
+ * không màn hình Thiết bị vẫn 403 với mọi người.
  */
 @Controller('thiet-bi-cham-cong')
 @UseGuards(JwtGuard)
@@ -50,7 +60,7 @@ export class ThietBiChamCong_Controller {
    * mọi nhân viên (không riêng gì HR) đều phải xem được danh sách thiết bị
    * của CHÍNH MÌNH để biết máy đang chờ duyệt hay đã được duyệt. Dữ liệu đã
    * được lọc theo nhân viên đang đăng nhập nên không lộ thiết bị của người
-   * khác. Toàn bộ route còn lại đều gắn thêm `AdminGuard`.
+   * khác. Toàn bộ route còn lại đều gắn thêm `PermissionGuard`.
    *
    * Phải đặt TRƯỚC các route có tham số (":id"), nếu không NestJS sẽ
    * khớp "cua-toi" thành :id.
@@ -65,24 +75,34 @@ export class ThietBiChamCong_Controller {
   // Danh sách toàn tenant chứa employeeName/employeeCode/userAgent của mọi
   // nhân viên → chỉ quản trị được đọc.
   @Get()
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/thiet-bi:xem')
   async findAll(@Query() query: ThietBiFilter) {
     const data = await this.thietBi_Service.findAll(query);
     return { success: true, data };
   }
 
+  // Ba route duyệt/từ chối/thu hồi dưới đây đều là `@Post` nên nhận quyền
+  // `:them` theo đúng bảng ánh xạ động-từ→quyền dùng chung cho cả 7 controller
+  // (@Get→:xem, @Post→:them, @Put→:sua, @Delete/@Patch đổi trạng thái→:xoa).
+  // Cố ý KHÔNG tự chế `:sua` cho riêng module này: quyền là dữ liệu có sẵn
+  // trên production, lệch khỏi bảng là lệch khỏi thứ FE và script cấp quyền
+  // đang dựa vào.
+  //
   // Nếu nhân viên tự duyệt được máy của chính mình thì luật chống chấm hộ
   // biến mất hoàn toàn: mở app trên máy đồng nghiệp → tự tạo dòng cho_duyet
   // → tự duyệt → đồng nghiệp chấm hộ hợp lệ.
   @Post(':id/duyet')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/thiet-bi:them')
   async duyet(@Param('id') id: string, @Req() req: any) {
     const data = await this.thietBi_Service.duyet(id, this.nguoiThucHien(req));
     return { success: true, data };
   }
 
   @Post(':id/tu-choi')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/thiet-bi:them')
   async tuChoi(@Param('id') id: string, @Req() req: any) {
     const data = await this.thietBi_Service.tuChoi(id, this.nguoiThucHien(req));
     return { success: true, data };
@@ -91,7 +111,8 @@ export class ThietBiChamCong_Controller {
   // Thu hồi là thao tác khoá chấm công — để hở thì bất kỳ ai cũng khoá được
   // cả công ty bằng vài request.
   @Post(':id/thu-hoi')
-  @UseGuards(AdminGuard)
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/thiet-bi:them')
   async thuHoi(
     @Param('id') id: string,
     @Body() body: { lyDo?: string },

@@ -1,6 +1,11 @@
-import { METHOD_METADATA } from '@nestjs/common/constants';
 import { RequestMethod } from '@nestjs/common';
-import { AdminGuard, JwtGuard } from '@app/auth';
+import { JwtGuard, PermissionGuard } from '@app/auth';
+import {
+  guardsOf,
+  httpMethodOf,
+  permissionsOf,
+  quetPhanQuyenRoute,
+} from '../testing/quet-phan-quyen-route';
 import { DiaDiemChamCong_Controller } from './dia-diem-cham-cong.controller';
 
 /**
@@ -10,23 +15,20 @@ import { DiaDiemChamCong_Controller } from './dia-diem-cham-cong.controller';
  * mọi lúc, và toàn bộ tín hiệu đối chiếu vị trí mà HR dựa vào mất sạch —
  * không chỉ với người tạo mà với mọi ai đứng trong bán kính đó.
  *
- * Nên mọi thao tác GHI là quản trị. `@Get` giữ JwtGuard để màn hình quản lý
- * địa điểm (và các màn dùng chung sau này) không phải phụ thuộc vaiTro.
+ * Hàng rào là `PermissionGuard` chứ KHÔNG phải `AdminGuard`: `AdminGuard` so
+ * `vaiTro` với đúng chuỗi 'ADMIN'/'SUPER_ADMIN', trong khi `vaiTro` là tên vai
+ * trò tự do từng tenant đặt nên trên production nó chặn cả HR thật.
  */
-
-const guardsOf = (fn: any): any[] =>
-  Reflect.getMetadata('__guards__', fn) ?? [];
-
-const httpMethodOf = (fn: any): RequestMethod =>
-  Reflect.getMetadata(METHOD_METADATA, fn);
 
 const proto = DiaDiemChamCong_Controller.prototype as any;
 
-const VERB_GHI = [
-  RequestMethod.POST,
-  RequestMethod.PUT,
-  RequestMethod.PATCH,
-  RequestMethod.DELETE,
+/** Toàn bộ route của controller kèm động từ HTTP và quyền BẮT BUỘC. */
+const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
+  ['findAll', RequestMethod.GET, '/cham-cong/dia-diem:xem'],
+  ['findOne', RequestMethod.GET, '/cham-cong/dia-diem:xem'],
+  ['create', RequestMethod.POST, '/cham-cong/dia-diem:them'],
+  ['update', RequestMethod.PUT, '/cham-cong/dia-diem:sua'],
+  ['remove', RequestMethod.DELETE, '/cham-cong/dia-diem:xoa'],
 ];
 
 describe('DiaDiemChamCong_Controller — phân quyền', () => {
@@ -34,24 +36,23 @@ describe('DiaDiemChamCong_Controller — phân quyền', () => {
     expect(guardsOf(DiaDiemChamCong_Controller)).toContain(JwtGuard);
   });
 
-  it.each([['create'], ['update'], ['remove']])(
-    'route ghi %s phải có AdminGuard',
-    (ten) => {
-      expect(guardsOf(proto[ten])).toContain(AdminGuard);
+  it.each(BANG_QUYEN)(
+    'route %s có PermissionGuard và đòi đúng quyền',
+    (ten, method, quyen) => {
+      expect(httpMethodOf(proto[ten])).toBe(method);
+      expect(guardsOf(proto[ten])).toContain(PermissionGuard);
+      expect(permissionsOf(proto[ten])).toEqual([quyen]);
     },
   );
 
-  it.each([['findAll'], ['findOne']])(
-    'route đọc %s KHÔNG gắn AdminGuard',
-    (ten) => {
-      expect(guardsOf(proto[ten])).not.toContain(AdminGuard);
-    },
-  );
+  it('không route nào bị bỏ sót, kể cả route thêm sau này', () => {
+    expect(quetPhanQuyenRoute(DiaDiemChamCong_Controller)).toEqual([]);
+  });
 
-  it('mọi route ghi đều có AdminGuard, kể cả route thêm sau này', () => {
-    const thieuGuard = Object.getOwnPropertyNames(proto)
-      .filter((ten) => VERB_GHI.includes(httpMethodOf(proto[ten])))
-      .filter((ten) => !guardsOf(proto[ten]).includes(AdminGuard));
-    expect(thieuGuard).toEqual([]);
+  it('bảng quyền ở trên phủ đúng toàn bộ route của controller', () => {
+    const routeThucTe = Object.getOwnPropertyNames(proto).filter(
+      (ten) => httpMethodOf(proto[ten]) !== undefined,
+    );
+    expect(routeThucTe.sort()).toEqual(BANG_QUYEN.map(([t]) => t).sort());
   });
 });
