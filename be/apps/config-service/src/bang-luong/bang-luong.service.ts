@@ -117,7 +117,9 @@ export class BangLuong_Service {
    * mức khai báo (base = `mucKhaiBao`) và mức thực tế (base = `luongThoaThuan`)
    * — rồi upsert một `DongLuong`/NV theo khoá {thang, employeeId}. Khoản biến
    * động đã nhập tay ở lần chạy trước (`nhapTheoKy`/`tamUng`/`khauTruKhac`)
-   * được giữ nguyên, không bị ghi đè về 0.
+   * được giữ nguyên, không bị ghi đè về 0. Dòng đã `chot` được coi là snapshot
+   * bất biến — bỏ qua (không tính lại/ghi đè), trả về nguyên trạng; chỉ dòng
+   * mới hoặc `nhap` mới được (tính lại và) lưu.
    */
   async tongHop(thang: string): Promise<DongLuong[]> {
     const chEntity = await this.layCauHinh();
@@ -132,6 +134,12 @@ export class BangLuong_Service {
 
       const existingRows = await this.dongLuongRepo.find({ where: { thang, employeeId } });
       const existing = existingRows[0];
+
+      // Kỳ đã chốt là snapshot bất biến — bỏ qua, không tính lại/ghi đè.
+      if (existing?.trangThai === 'chot') {
+        rows.push(existing);
+        continue;
+      }
 
       const mucKhaiBao = emp.mucKhaiBao ?? ch.mucKhaiBaoMacDinh;
       const luongThoaThuan = emp.luongThoaThuan ?? 0;
@@ -207,7 +215,9 @@ export class BangLuong_Service {
   /**
    * Sửa khoản biến động theo kỳ (`nhapTheoKy`/`tamUng`/`khauTruKhac`) của một
    * dòng rồi tính lại `khaiBao`/`thucTe` từ snapshot (không tổng hợp lại cả
-   * kỳ). Từ chối nếu kỳ đã chốt — phải `moLai` trước.
+   * kỳ). Từ chối nếu kỳ đã chốt — phải `moLai` trước. `dto.nhapTheoKy` được
+   * GỘP (merge) vào khoản hiện có theo khoá, không thay thế toàn bộ — khoản
+   * khác đã nhập ở lần trước không bị mất.
    */
   async capNhatDong(id: string, dto: CapNhatDongLuongDto): Promise<DongLuong> {
     const item = await this.findOneDong(id);
@@ -216,7 +226,9 @@ export class BangLuong_Service {
       throw new BadRequestException('Kỳ đã chốt, mở lại để sửa');
     }
 
-    if (dto.nhapTheoKy !== undefined) item.nhapTheoKy = dto.nhapTheoKy;
+    if (dto.nhapTheoKy !== undefined) {
+      item.nhapTheoKy = { ...(item.nhapTheoKy ?? {}), ...dto.nhapTheoKy };
+    }
     if (dto.tamUng !== undefined) item.tamUng = dto.tamUng;
     if (dto.khauTruKhac !== undefined) item.khauTruKhac = dto.khauTruKhac;
 

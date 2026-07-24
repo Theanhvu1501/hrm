@@ -300,6 +300,68 @@ describe('BangLuong_Service', () => {
       expect(row.khaiBao.giaTriTungKhoan.HIEU_SUAT).toBe(2_000_000);
     });
 
+    it('dòng đã chốt (trangThai=chot) → bỏ qua, không tính lại/ghi đè; dòng nhap của NV khác vẫn được tính lại', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 15_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+        },
+        {
+          _id: EMP2,
+          employeeId: 'NV0002',
+          hoTen: 'Nguyen Van B',
+          luongThoaThuan: 10_000_000,
+          mucKhaiBao: 5_000_000,
+          isActive: true,
+        },
+      ]);
+
+      const chotKhaiBao = { giaTriTungKhoan: { LUONG_CONG: 999_999 } } as any;
+      const chotThucTe = { giaTriTungKhoan: { LUONG_CONG: 888_888 } } as any;
+      dongLuongStore = [
+        {
+          _id: 'd-chot',
+          thang: '2026-06',
+          employeeId: EMP1,
+          congThuong: 24,
+          trangThai: 'chot',
+          isActive: true,
+          khaiBao: chotKhaiBao,
+          thucTe: chotThucTe,
+          nhapTheoKy: { HIEU_SUAT: 2_000_000 },
+        },
+      ];
+
+      // Đổi công trong tháng để nếu bị tính lại thì kết quả CHẮC CHẮN khác.
+      timesheetStore = [
+        { thang: '2026-06', employeeId: EMP1, soNgayCong: 10 },
+        { thang: '2026-06', employeeId: EMP2, soNgayCong: 22 },
+      ];
+
+      const rows = await service.tongHop('2026-06');
+
+      const rowEmp1 = rows.find((r) => r.employeeId === EMP1)!;
+      const rowEmp2 = rows.find((r) => r.employeeId === EMP2)!;
+
+      // Dòng chốt giữ nguyên snapshot cũ — không bị tính lại/ghi đè.
+      expect(rowEmp1.trangThai).toBe('chot');
+      expect(rowEmp1.khaiBao).toBe(chotKhaiBao);
+      expect(rowEmp1.thucTe).toBe(chotThucTe);
+      expect(rowEmp1.nhapTheoKy).toEqual({ HIEU_SUAT: 2_000_000 });
+      expect(rowEmp1.congThuong).toBe(24); // không bị ghi đè bằng công mới (10)
+      expect(mockDongLuongRepo.save).not.toHaveBeenCalledWith(
+        expect.objectContaining({ _id: 'd-chot' }),
+      );
+
+      // Dòng mới (NV2, chưa có bản ghi) vẫn được tính bình thường.
+      expect(rowEmp2.congThuong).toBe(22);
+      expect(rowEmp2.trangThai).toBe('nhap');
+    });
+
     it('tạo một dòng cho mỗi NV active', async () => {
       mockEmployeeRepo.find.mockResolvedValue([
         { _id: EMP1, employeeId: 'NV0001', hoTen: 'A', isActive: true },
@@ -394,6 +456,68 @@ describe('BangLuong_Service', () => {
       expect(result.khaiBao).toEqual(expectedKhaiBao);
       expect(result.thucTe).toEqual(expectedThucTe);
       expect(result.khaiBao.giaTriTungKhoan.HIEU_SUAT).toBe(2_000_000);
+    });
+
+    it('nhapTheoKy được GỘP vào khoản hiện có, không thay thế toàn bộ', async () => {
+      const id = '507f1f77bcf86cd799439004';
+      const existing: Partial<DongLuong> = {
+        _id: id,
+        thang: '2026-06',
+        employeeId: EMP1,
+        congThuong: 24,
+        congThuViec: 0,
+        congKhac: 0,
+        luongThoaThuan: 15_000_000,
+        mucKhaiBao: 5_500_000,
+        phuCapCoDinh: 0,
+        soNguoiPhuThuoc: 0,
+        dongBH: false,
+        thoiVu: false,
+        camKet: false,
+        tamUng: 0,
+        khauTruKhac: 0,
+        nhapTheoKy: { HIEU_SUAT: 2_000_000 },
+        trangThai: 'nhap',
+        isActive: true,
+      };
+      mockDongLuongRepo.findOne.mockResolvedValue(existing);
+
+      const result = await service.capNhatDong(id, {
+        nhapTheoKy: { THUONG: 500_000 },
+      });
+
+      expect(result.nhapTheoKy).toEqual({
+        HIEU_SUAT: 2_000_000,
+        THUONG: 500_000,
+      });
+
+      const ch = CAU_HINH_LUONG_MAC_DINH as CauHinhLuongData;
+      const congChung = {
+        congThuong: 24,
+        congThuViec: 0,
+        congKhac: 0,
+        phuCapCoDinh: 0,
+        soNguoiPhuThuoc: 0,
+        tamUng: 0,
+        khauTruKhac: 0,
+        dongBH: false,
+        thoiVu: false,
+        camKet: false,
+        nhapTheoKy: { HIEU_SUAT: 2_000_000, THUONG: 500_000 },
+      };
+      const expectedKhaiBao = tinhDongLuong(
+        { base: 5_500_000, mucKhaiBao: 5_500_000, ...congChung },
+        ch,
+      );
+      const expectedThucTe = tinhDongLuong(
+        { base: 15_000_000, mucKhaiBao: 5_500_000, ...congChung },
+        ch,
+      );
+
+      expect(result.khaiBao).toEqual(expectedKhaiBao);
+      expect(result.thucTe).toEqual(expectedThucTe);
+      expect(result.khaiBao.giaTriTungKhoan.HIEU_SUAT).toBe(2_000_000);
+      expect(result.khaiBao.giaTriTungKhoan.THUONG).toBe(500_000);
     });
 
     it('kỳ đã chốt → từ chối sửa', async () => {
