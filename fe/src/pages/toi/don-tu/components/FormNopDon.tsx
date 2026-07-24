@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Alert, Button, Modal } from "antd";
+import { LeftOutlined } from "@ant-design/icons";
 import {
   useDonTuCuaToiHandler,
   useDonTuCuaToiState,
@@ -8,6 +9,7 @@ import {
   BUOI_OPTIONS,
   LOAI_DON_OPTIONS,
   LOAI_NGHI_OPTIONS,
+  labelFor,
 } from "@/pages/cham-cong/don-cham-cong/constants";
 import { homNayVN } from "@/ultils/thoiGianVN";
 import {
@@ -15,7 +17,7 @@ import {
   GiaTriFormDon,
   hienTruong,
 } from "../truongDon";
-import { AttendanceRequestType } from "@/services/attendanceRequestService";
+import { MAT_HINH_LOAI } from "../loaiDonUI";
 import "./FormNopDon.state";
 import "../don-tu.css";
 
@@ -30,25 +32,54 @@ import "../don-tu.css";
 export function FormNopDon() {
   const handler = useDonTuCuaToiHandler();
   const [formMo] = useDonTuCuaToiState("formMo", false);
+  const [loaiDaChon] = useDonTuCuaToiState("loaiDaChon", "");
   const [dangGui] = useDonTuCuaToiState("dangGui", false);
   const [loiGui] = useDonTuCuaToiState("loiGui", "");
   const [v, setV] = useState<GiaTriFormDon>(GIA_TRI_MAC_DINH);
 
-  // Mỗi lần mở lại là một tờ đơn mới. Ngày mặc định là hôm nay: phần lớn đơn
-  // giải trình/OT nói về chính ngày hôm nay, còn đơn nghỉ thì người dùng sửa.
+  // Mỗi lần mở lại là một tờ đơn mới, ĐÚNG loại đã chọn ở bước trước. Ngày mặc
+  // định là hôm nay: phần lớn đơn giải trình/OT nói về chính ngày hôm nay, còn
+  // đơn nghỉ thì người dùng sửa. Phụ thuộc `loaiDaChon` để đổi loại (Đổi loại →
+  // chọn lại) cũng đặt lại form sang loại mới.
   useEffect(() => {
-    if (formMo) setV({ ...GIA_TRI_MAC_DINH, ngay: homNayVN() });
-  }, [formMo]);
+    if (formMo && loaiDaChon) {
+      setV({ ...GIA_TRI_MAC_DINH, loaiDon: loaiDaChon, ngay: homNayVN() });
+    }
+  }, [formMo, loaiDaChon]);
 
   const sua = <K extends keyof GiaTriFormDon>(k: K, giaTri: GiaTriFormDon[K]) =>
     setV((truoc) => ({ ...truoc, [k]: giaTri }));
 
   const laDonNghi = v.loaiDon === "nghi_phep" || v.loaiDon === "nghi_bu";
+  const matHinh = loaiDaChon ? MAT_HINH_LOAI[loaiDaChon] : null;
+  const nhanLoai = labelFor(LOAI_DON_OPTIONS, loaiDaChon || undefined);
 
   return (
     <Modal
       open={!!formMo}
-      title="Nộp đơn"
+      // Đầu form nhắc lại loại đơn đã chọn (icon + tên) kèm nút "Đổi loại" quay
+      // về tấm chọn — người dùng luôn thấy mình đang điền đơn gì, và đổi ý
+      // không phải đóng hết đi làm lại.
+      title={
+        <div className="flex items-center gap-2">
+          {matHinh && (
+            <span
+              className="don-tu-icon don-tu-icon-nho"
+              style={{ background: matHinh.gradient }}
+            >
+              {matHinh.icon}
+            </span>
+          )}
+          <span>{nhanLoai}</span>
+          <button
+            type="button"
+            className="don-tu-doi-loai"
+            onClick={() => handler.executeEvent("doiLoai", {})}
+          >
+            <LeftOutlined /> Đổi loại
+          </button>
+        </div>
+      }
       onCancel={() => handler.executeEvent("dongForm", {})}
       centered
       destroyOnHidden
@@ -76,23 +107,6 @@ export function FormNopDon() {
         </Button>,
       ]}
     >
-      <div className="mb-3">
-        <span className="don-tu-label">Loại đơn</span>
-        <div className="grid grid-cols-2 gap-2">
-          {LOAI_DON_OPTIONS.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              className="don-tu-loai"
-              aria-pressed={v.loaiDon === o.value}
-              onClick={() => sua("loaiDon", o.value as AttendanceRequestType)}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       <div className="mb-3">
         <label className="don-tu-label" htmlFor="don-ngay">
           {laDonNghi ? "Từ ngày" : "Ngày"}

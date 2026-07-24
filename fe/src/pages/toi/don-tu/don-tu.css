@@ -36,19 +36,72 @@
   color: var(--emp-text-phu, #64748b);
 }
 
-/* Hàng chọn loại đơn: 4 viên thuốc, viên đang chọn tô accent. */
-.don-tu-loai {
-  padding: 8px 10px;
-  font-size: 13px;
-  font-weight: 600;
-  border-radius: 999px;
+/*
+ * Tấm chọn loại đơn (bước 1): lưới thẻ kiểu app iOS. Mỗi thẻ là một ô icon bo
+ * góc nền gradient + nhãn chữ bên dưới. Chạm cả thẻ để chọn.
+ */
+.don-tu-the-loai {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  border-radius: 16px;
   border: 1px solid var(--emp-border, #e2e8f0);
   background: var(--emp-surface, #ffffff);
-  color: var(--emp-text-phu, #64748b);
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.15s ease;
 }
 
-.don-tu-loai[aria-pressed='true'] {
-  background: var(--emp-accent, #1f7769);
-  border-color: var(--emp-accent, #1f7769);
+.don-tu-the-loai:hover {
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+}
+
+/* Phản hồi chạm kiểu iOS: ô lún nhẹ khi nhấn. */
+.don-tu-the-loai:active {
+  transform: scale(0.96);
+}
+
+.don-tu-the-nhan {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--emp-text, #1e293b);
+}
+
+/*
+ * Ô icon kiểu iOS: hình vuông bo góc mềm (~22% cạnh), nền gradient, glyph
+ * trắng ở giữa. `don-tu-icon-nho` là biến thể nhỏ dùng ở tiêu đề form.
+ */
+.don-tu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
   color: #ffffff;
+  font-size: 24px;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.18);
+}
+
+.don-tu-icon-nho {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 15px;
+  box-shadow: none;
+}
+
+/* Nút "Đổi loại" ở tiêu đề form: chữ nhỏ, đẩy về cuối hàng. */
+.don-tu-doi-loai {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--emp-accent, #1f7769);
+  background: transparent;
+  border: none;
+  cursor: pointer;
 }

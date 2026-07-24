@@ -6,6 +6,7 @@ import {
   useDonTuCuaToiHandler,
 } from "./DonTuCuaToiHandlerContext";
 import { DanhSachDon } from "./components/DanhSachDon";
+import { ChonLoaiDon } from "./components/ChonLoaiDon";
 import { FormNopDon } from "./components/FormNopDon";
 
 /**
@@ -42,12 +43,13 @@ function DonTuCuaToiPageInner() {
           backgroundColor: "#1f7769",
           borderColor: "#1f7769",
         }}
-        onClick={() => handler.executeEvent("moForm", {})}
+        onClick={() => handler.executeEvent("moChonLoai", {})}
       >
         Nộp đơn
       </Button>
 
       <DanhSachDon />
+      <ChonLoaiDon />
       <FormNopDon />
     </div>
   );

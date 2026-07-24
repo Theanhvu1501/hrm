@@ -1,16 +1,44 @@
 import { HandlerDecorator, RegisterHandler } from "@/common";
 import { CSubHanlder } from "@/common/c-handler/core/sub-handler.ts/sub-handler";
-import { attendanceRequestService } from "@/services/attendanceRequestService";
+import {
+  attendanceRequestService,
+  AttendanceRequestType,
+} from "@/services/attendanceRequestService";
 import { GiaTriFormDon, dungDtoNopDon, kiemTraDon } from "../../truongDon";
 import { thongDiepLoiDon } from "../../thongDiepLoi";
 import "./nop.event";
 
 @RegisterHandler("don-tu-cua-toi-context")
 export class NopHandler extends CSubHanlder {
-  @HandlerDecorator("moForm")
-  moForm(): void {
+  // Bước 1: mở tấm chọn loại đơn. Người dùng chọn LOẠI trước, form chỉ mở sau
+  // khi đã chọn — nhờ vậy form không cần ô "Loại đơn" bên trong và mỗi loại có
+  // thể có bộ trường riêng ngay từ đầu.
+  @HandlerDecorator("moChonLoai")
+  moChonLoai(): void {
     this.setState("loiGui", "");
+    this.setState("chonLoaiMo", true);
+  }
+
+  @HandlerDecorator("dongChonLoai")
+  dongChonLoai(): void {
+    this.setState("chonLoaiMo", false);
+  }
+
+  // Bước 2: chọn xong một loại thì đóng tấm chọn và mở form của đúng loại đó.
+  @HandlerDecorator("chonLoai")
+  chonLoai({ loaiDon }: { loaiDon: AttendanceRequestType }): void {
+    this.setState("loaiDaChon", loaiDon);
+    this.setState("loiGui", "");
+    this.setState("chonLoaiMo", false);
     this.setState("formMo", true);
+  }
+
+  // Đổi loại: quay từ form về lại tấm chọn (form đóng, tấm chọn mở). Không đụng
+  // `loaiDaChon` — nó chỉ đổi khi người dùng thật sự chọn lại một loại khác.
+  @HandlerDecorator("doiLoai")
+  doiLoai(): void {
+    this.setState("formMo", false);
+    this.setState("chonLoaiMo", true);
   }
 
   @HandlerDecorator("dongForm")

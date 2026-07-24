@@ -170,11 +170,76 @@ describe('Đơn từ của tôi — huỷ đơn', () => {
   });
 });
 
-describe('Đơn từ của tôi — nộp đơn', () => {
-  async function moForm() {
+describe('Đơn từ của tôi — chọn loại đơn trước', () => {
+  it('bấm "Nộp đơn" mở tấm chọn loại (4 loại), form CHƯA mở', async () => {
+    vi.spyOn(attendanceRequestService, 'cuaToi').mockResolvedValue([]);
+
     render(<DonTuCuaToiPage />);
     await screen.findByText('Chưa có đơn nào');
     fireEvent.click(screen.getByRole('button', { name: /Nộp đơn/ }));
+
+    // Tấm chọn hiện đủ 4 loại (regex neo cuối: icon antd thêm aria-label vào
+    // tên khả truy cập của nút — xem chú thích ở moForm).
+    expect(await screen.findByText('Chọn loại đơn')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Giải trình$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Làm thêm giờ$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Nghỉ phép$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Nghỉ bù$/ })).toBeTruthy();
+    // ...nhưng form thì CHƯA mở (chưa có ô Lý do) — đúng yêu cầu "chọn xong mới
+    // show modal tạo".
+    expect(screen.queryByLabelText('Lý do')).toBeNull();
+  });
+
+  it('chọn một loại mới mở form của đúng loại đó', async () => {
+    vi.spyOn(attendanceRequestService, 'cuaToi').mockResolvedValue([]);
+
+    render(<DonTuCuaToiPage />);
+    await screen.findByText('Chưa có đơn nào');
+    fireEvent.click(screen.getByRole('button', { name: /Nộp đơn/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Nghỉ phép$/ }));
+
+    // Form mở ra ĐÚNG loại nghỉ phép: có ô của đơn nghỉ (Đến ngày, Loại nghỉ),
+    // không có ô giờ của đơn OT/giải trình.
+    expect(await screen.findByLabelText('Lý do')).toBeTruthy();
+    expect(screen.getByLabelText('Đến ngày')).toBeTruthy();
+    expect(screen.getByLabelText('Loại nghỉ')).toBeTruthy();
+    expect(screen.queryByLabelText('Từ giờ')).toBeNull();
+  });
+
+  it('"Đổi loại" quay về tấm chọn và chọn loại khác thì form đổi theo', async () => {
+    vi.spyOn(attendanceRequestService, 'cuaToi').mockResolvedValue([]);
+
+    render(<DonTuCuaToiPage />);
+    await screen.findByText('Chưa có đơn nào');
+    fireEvent.click(screen.getByRole('button', { name: /Nộp đơn/ }));
+    // Chọn nghỉ phép trước...
+    fireEvent.click(await screen.findByRole('button', { name: /Nghỉ phép$/ }));
+    expect(await screen.findByLabelText('Loại nghỉ')).toBeTruthy();
+
+    // ...rồi bấm Đổi loại, chọn lại Làm thêm giờ.
+    fireEvent.click(screen.getByRole('button', { name: /Đổi loại/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Làm thêm giờ$/ }));
+
+    // Form giờ là đơn OT: có ô giờ, không còn ô của đơn nghỉ.
+    expect(await screen.findByLabelText('Từ giờ')).toBeTruthy();
+    expect(screen.queryByLabelText('Loại nghỉ')).toBeNull();
+    expect(screen.queryByLabelText('Đến ngày')).toBeNull();
+  });
+});
+
+describe('Đơn từ của tôi — nộp đơn', () => {
+  // Luồng hai bước: bấm "Nộp đơn" mở TẤM CHỌN LOẠI (lưới icon), chọn một loại
+  // mới mở form. `loai` là NHÃN của thẻ loại đơn cần chọn (mặc định Giải trình).
+  // Dùng regex neo cuối chuỗi: icon antd trong thẻ có aria-label (vd
+  // "file-text") nên tên khả truy cập của nút là "file-text Giải trình" — khớp
+  // đúng chuỗi sẽ trượt.
+  async function moForm(loai = 'Giải trình') {
+    render(<DonTuCuaToiPage />);
+    await screen.findByText('Chưa có đơn nào');
+    fireEvent.click(screen.getByRole('button', { name: /Nộp đơn/ }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: new RegExp(`${loai}$`) }),
+    );
     return await screen.findByLabelText('Lý do');
   }
 
@@ -184,9 +249,8 @@ describe('Đơn từ của tôi — nộp đơn', () => {
       .spyOn(attendanceRequestService, 'taoDonCuaToi')
       .mockResolvedValue(don());
 
-    const lyDo = await moForm();
+    const lyDo = await moForm('Nghỉ phép');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Nghỉ phép' }));
     fireEvent.change(screen.getByLabelText('Từ ngày'), {
       target: { value: '2026-08-03' },
     });
@@ -257,9 +321,8 @@ describe('Đơn từ của tôi — nộp đơn', () => {
       .spyOn(attendanceRequestService, 'taoDonCuaToi')
       .mockResolvedValue(don());
 
-    const lyDo = await moForm();
+    const lyDo = await moForm('Làm thêm giờ');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Làm thêm giờ' }));
     fireEvent.change(lyDo, { target: { value: 'Chạy deadline' } });
     fireEvent.click(screen.getByRole('button', { name: /Gửi đơn/ }));
 
