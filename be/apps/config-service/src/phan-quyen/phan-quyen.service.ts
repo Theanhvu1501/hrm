@@ -6,12 +6,14 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PhanQuyen } from '@app/entities';
+import { TenantContextService } from '@app/core';
 
 @Injectable()
 export class PhanQuyen_Service {
   constructor(
     @InjectRepository(PhanQuyen)
     private readonly repo: Repository<PhanQuyen>,
+    private readonly tenantContext: TenantContextService,
   ) {}
 
   async findAll(): Promise<PhanQuyen[]> {
@@ -31,8 +33,27 @@ export class PhanQuyen_Service {
     return item;
   }
 
+  /**
+   * Lọc `tenantId` TƯỜNG MINH chứ không phó mặc cho proxy tenant của
+   * `DatabaseModule.forFeature` (libs/database/src/database.module.ts): proxy
+   * đó là một lớp bọc vô hình, no-op im lặng khi không có tenant context và
+   * biến mất hoàn toàn nếu ai đó đổi module sang `TypeOrmModule.forFeature`
+   * hay `forFeatureRaw`. Với hàm này thì mất lọc không chỉ là lộ dữ liệu:
+   * `vaiTro` là tên tự do từng tenant tự đặt ("Quản lý", "HR Admin"), nên hai
+   * tenant trùng tên vai trò là chuyện thường, và cả ba nơi gọi hàm này đều
+   * GHI theo kết quả nó trả về — `upsertPermissions()` ghi đè `permissions`
+   * lên đúng hàng nó tìm thấy, `create()`/`update()` dựa vào nó để kết luận
+   * "tên vai trò đã tồn tại". Trả nhầm hàng của tenant khác là sửa bảng thẩm
+   * quyền của công ty khác.
+   */
   async findByVaiTro(vaiTro: string): Promise<PhanQuyen | null> {
-    return this.repo.findOne({ where: { vaiTro } });
+    const tenantId = this.tenantContext.getCurrentTenantId();
+    return this.repo.findOne({
+      // Không có tenant context (tiến trình nền, script) thì KHÔNG thêm
+      // `tenantId: undefined` vào điều kiện — Mongo sẽ hiểu thành "khớp hàng
+      // không có tenantId" và trả về nhầm hàng, tệ hơn là không lọc.
+      where: tenantId ? { vaiTro, tenantId } : { vaiTro },
+    });
   }
 
   async create(data: Partial<PhanQuyen>): Promise<PhanQuyen> {
