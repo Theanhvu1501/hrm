@@ -347,9 +347,19 @@ export class BanGhiChamCong_Service {
   ): boolean {
     if (cuoi?.loai !== 'vao') return false;
     const homNay = ngayVN(bayGio);
+    if (cuoi.ngay === homNay) return true;
+    // Lượt vào từ HÔM QUA chỉ còn hiệu lực nếu đó là CA QUA ĐÊM (22:00–06:00):
+    // lượt vào 22:00 ngày X phải chấm ra được lúc 06:00 ngày X+1.
+    //
+    // Ca THƯỜNG có lượt vào treo từ hôm qua = quên chấm ra. Coi nó là còn
+    // hiệu lực thì hôm nay `ngayCong` bị kéo về hôm qua, 3 ô hiện dữ liệu
+    // ngày cũ như thể hôm nay đã chấm (bug NV0009 báo), và người dùng không
+    // mở được ngày công mới. Đúng nghiệp vụ: hôm nay là ngày mới, nút hiện
+    // "chấm VÀO"; lượt treo hôm qua chờ HR nhập bù giờ ra.
+    //
     // VN không có DST nên trừ đúng 24h luôn ra ngày lịch liền trước.
     const homQua = ngayVN(new Date(bayGio.getTime() - MOT_NGAY_MS));
-    return cuoi.ngay === homNay || cuoi.ngay === homQua;
+    return cuoi.ngay === homQua && (cuoi.laCaQuaDem ?? false);
   }
 
   /**

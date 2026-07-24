@@ -390,12 +390,14 @@ describe('BanGhiChamCong_Service', () => {
     });
 
     it('lấy ngay từ bản ghi vao đang mở — ca qua đêm tự đúng', async () => {
-      // Lượt vao tối HÔM QUA (ca 22:00–06:00) vẫn còn hiệu lực sáng nay.
+      // Lượt vao tối HÔM QUA (ca 22:00–06:00, laCaQuaDem: true) vẫn còn hiệu
+      // lực sáng nay — chỉ ca qua đêm mới được đóng sang ngày lịch hôm sau.
       recordRepo.find.mockResolvedValue([
         {
           loai: 'vao',
           ngay: homQuaVN(),
           thoiDiem: new Date(Date.now() - 8 * 3600 * 1000).toISOString(),
+          laCaQuaDem: true,
         },
       ]);
 
@@ -671,17 +673,51 @@ describe('BanGhiChamCong_Service', () => {
       expect(kq.hanhDongKeTiep).toBe('vao');
     });
 
-    it('hanhDongKeTiep là ra khi lượt vao mở từ hôm qua vẫn còn hiệu lực', async () => {
+    it('hanhDongKeTiep là ra khi lượt vao mở từ hôm qua là CA QUA ĐÊM', async () => {
+      // Ca qua đêm (laCaQuaDem: true) 22:00–06:00: lượt vào hôm qua vẫn đang
+      // trong ca, phải chấm ra được sang hôm sau.
       recordRepo.find.mockResolvedValue([
         {
           loai: 'vao',
           ngay: homQuaVN(),
           thoiDiem: new Date(Date.now() - 8 * 3600 * 1000).toISOString(),
+          laCaQuaDem: true,
         },
       ]);
 
       const kq = await service.homNay(USER);
       expect(kq.hanhDongKeTiep).toBe('ra');
+    });
+
+    it('hanhDongKeTiep là vao khi lượt vao treo từ hôm qua là CA THƯỜNG (quên chấm ra)', async () => {
+      // Ca thường (laCaQuaDem: false) quên chấm ra hôm qua: hôm nay là NGÀY
+      // MỚI, không phải phần đuôi của ngày công cũ. Nút phải hiện "chấm VÀO"
+      // và 3 ô hôm nay phải rỗng — nếu vẫn coi lượt treo là còn hiệu lực thì
+      // dữ liệu hôm qua hiện lên như thể hôm nay đã chấm (đúng bug NV0009 báo
+      // trên production). Lượt treo chờ HR nhập bù giờ ra cho ngày cũ.
+      //
+      // Mock PHẢI lọc theo where.ngay như DB thật: nếu không, banGhi của ngày
+      // công vẫn rỗng dù ngayCong bị kéo về hôm qua, và test xanh cả trước
+      // khi sửa — che mất chính bug đang chữa.
+      const luotVaoTreo = {
+        loai: 'vao',
+        ngay: homQuaVN(),
+        thoiDiem: new Date(Date.now() - 8 * 3600 * 1000).toISOString(),
+        laCaQuaDem: false,
+      };
+      recordRepo.find.mockImplementation((opts: any) => {
+        const ngay = opts?.where?.ngay;
+        // banGhiCuoiCung: không lọc theo ngay → trả lượt cuối cùng.
+        if (ngay === undefined) return Promise.resolve([luotVaoTreo]);
+        // Danh sách của một NGÀY CÔNG cụ thể: chỉ hôm qua mới có lượt treo.
+        if (ngay === homQuaVN()) return Promise.resolve([luotVaoTreo]);
+        return Promise.resolve([]);
+      });
+
+      const kq = await service.homNay(USER);
+      expect(kq.hanhDongKeTiep).toBe('vao');
+      expect(kq.banGhi).toEqual([]);
+      expect(kq.ngayCong).toBe(homNayVN());
     });
 
     it('hanhDongKeTiep là vao khi lượt vao mở đã quá hạn — không dẫn NV vào cái bẫy check-out', async () => {
@@ -720,6 +756,7 @@ describe('BanGhiChamCong_Service', () => {
         loai: 'vao',
         ngay: homQuaVN(),
         thoiDiem: new Date(Date.now() - 2.5 * 3600 * 1000).toISOString(),
+        laCaQuaDem: true,
       };
       // Lần find đầu = banGhiCuoiCung (DESC, take 1); lần sau = danh sách
       // bản ghi của ngày công.
