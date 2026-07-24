@@ -200,7 +200,11 @@ describe('Đơn từ của tôi — nộp đơn', () => {
     fireEvent.click(screen.getByRole('button', { name: /Gửi đơn/ }));
 
     await waitFor(() => expect(tao).toHaveBeenCalledTimes(1));
-    expect(tao.mock.calls[0][0]).toEqual({
+    // toStrictEqual, không phải toEqual: toEqual coi { a: 1, b: undefined }
+    // và { a: 1 } là bằng nhau, nên nếu dungDtoNopDon() lỡ lọt một khoá
+    // `key: undefined` vào payload, test này vẫn xanh — trong khi backend
+    // forbidNonWhitelisted lại 400 vì thấy khoá đó (dù giá trị undefined).
+    expect(tao.mock.calls[0][0]).toStrictEqual({
       loaiDon: 'nghi_phep',
       ngay: '2026-08-03',
       denNgay: '2026-08-05',
@@ -231,7 +235,8 @@ describe('Đơn từ của tôi — nộp đơn', () => {
     fireEvent.click(screen.getByRole('button', { name: /Gửi đơn/ }));
 
     await waitFor(() => expect(tao).toHaveBeenCalledTimes(1));
-    expect(tao.mock.calls[0][0]).toEqual({
+    // toStrictEqual — xem giải thích ở test "nghỉ phép" phía trên.
+    expect(tao.mock.calls[0][0]).toStrictEqual({
       loaiDon: 'giai_trinh',
       ngay: '2026-07-20',
       gioTu: '08:00',
@@ -293,6 +298,11 @@ describe('Đơn từ của tôi — nộp đơn', () => {
 
     // Nạp lại thay vì tự chèn: soNgayNghi/soGioOt/heSoOt do backend tính.
     await waitFor(() => expect(cuaToi).toHaveBeenCalledTimes(2));
+    // Và form phải ĐÓNG — đây là điều tên test hứa hẹn ("đóng form"), không
+    // chỉ suy ra được từ việc cuaToi gọi 2 lần. Nếu ai đó lỡ xoá dòng
+    // `setState("formMo", false)` trong nop.handler.ts, cuaToi vẫn được gọi
+    // 2 lần y hệt nhưng form vẫn còn mở — assert cũ không bắt được.
+    expect(screen.queryByLabelText('Lý do')).toBeNull();
   });
 });
 
