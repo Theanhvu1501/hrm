@@ -15,6 +15,7 @@ import MainLayout from "./components/layout/MainLayout";
 import EmployeeLayout from "./components/layout/EmployeeLayout";
 import InstallPWA from "./components/shared/InstallPWA";
 import PWAUpdatePrompt from "./components/shared/PWAUpdatePrompt";
+import ManifestSync from "./pwa/ManifestSync";
 import {
   LoginPage,
   ProfilePage,
@@ -74,6 +75,7 @@ const App = () => (
         <PWAUpdatePrompt />
         <InstallPWA />
         <BrowserRouter>
+          <ManifestSync />
           <AuthProvider>
             <TermProvider>
               <Routes>
