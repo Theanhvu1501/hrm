@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Alert, Button, Card, Input, Space, Spin, Typography } from "antd";
 import {
   LoginOutlined,
@@ -20,7 +20,7 @@ import {
   AttendanceRecord,
   TrangThaiHomNay,
 } from "@/services/attendanceRecordService";
-import { gioVN } from "@/ultils/thoiGianVN";
+import { KetQuaChamCongDialog } from "./KetQuaChamCongDialog";
 import "./NutCham.state";
 
 const { Text } = Typography;
@@ -47,8 +47,13 @@ const LOI_TAM_THOI: ReadonlySet<TrangThai> = new Set<TrangThai>([
   TrangThai.NGOAI_BAN_KINH,
 ]);
 
-/** Cao 96px: ngón cái bấm được mà không cần nhìn, kể cả khi đang vội. */
-const CAO_NUT_CHAM = 96;
+/**
+ * Cao 64px, bo tròn hết cỡ (xem `borderRadius: 999` bên dưới). 64px vẫn là
+ * đích ngón cái thoải mái trên điện thoại (chuẩn touch-target ~44-48px của
+ * iOS/Android còn dư biên) — không cần tới 96px như trước mới bấm được mà
+ * không cần nhìn.
+ */
+const CAO_NUT_CHAM = 64;
 
 export function NutCham() {
   const handler = useChamCongCuaToiHandler();
@@ -66,6 +71,25 @@ export function NutCham() {
   // Điền sẵn tên suy từ trình duyệt để người đang vội chỉ cần bấm gửi; ai
   // muốn tên dễ nhận hơn thì sửa lại.
   const [tenThietBi, setTenThietBi] = useState(() => tenThietBiMacDinh());
+
+  // Dialog kết quả chỉ mở khi RÌA XUỐNG của `dangCham` (true → false) rơi
+  // đúng vào một trong ba kết quả biết trước (thành công/ngoài vùng, lỗi tạm
+  // thời, sai thứ tự). Không mở lúc mount (dangCham khởi tạo là false, không
+  // có rìa xuống nào để bắt) và không tự mở lại khi trạng thái đổi vì lý do
+  // khác cú bấm (vd nạp lại lịch tuần).
+  const [dialogMo, setDialogMo] = useState(false);
+  const dangChamTruocRef = useRef(dangCham);
+  useEffect(() => {
+    const laKetQuaChamCong =
+      !!banGhiVuaTao ||
+      LOI_TAM_THOI.has(trangThai) ||
+      trangThai === TrangThai.SAI_THU_TU;
+    if (dangChamTruocRef.current && !dangCham && laKetQuaChamCong) {
+      setDialogMo(true);
+    }
+    dangChamTruocRef.current = dangCham;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dangCham]);
 
   const cau = thongBao || THONG_DIEP[trangThai];
 
@@ -162,47 +186,22 @@ export function NutCham() {
 
   return (
     <div>
+      {/*
+        Kết quả của lượt bấm gần nhất (thành công/ngoài vùng, lỗi tạm thời,
+        sai thứ tự vào/ra) giờ dồn về MỘT dialog thay vì 3 Alert nội dòng —
+        `dialogMo` chỉ bật ở rìa xuống của `dangCham` (xem effect phía trên),
+        nên dialog luôn kể đúng chuyện của cú bấm vừa rồi, không phải dữ liệu
+        cũ còn sót từ lượt trước.
+      */}
+      <KetQuaChamCongDialog
+        open={dialogMo}
+        onClose={() => setDialogMo(false)}
+        banGhiVuaTao={banGhiVuaTao}
+        laSaiThuTu={trangThai === TrangThai.SAI_THU_TU}
+        cau={cau}
+      />
+
       <Space direction="vertical" size="middle" className="w-full">
-        {/*
-          Ngoài vùng KHÔNG phải lỗi: bản ghi đã vào sổ, chỉ là đứng ngoài khu
-          vực cho phép và HR sẽ xem xét. Hiện đỏ như lỗi thì người dùng bấm
-          lại nhiều lần và đẻ ra rác — nên vàng, kèm câu "không cần chấm lại".
-        */}
-        {banGhiVuaTao && (
-          <Alert
-            type={banGhiVuaTao.ngoaiVung ? "warning" : "success"}
-            showIcon
-            message={
-              banGhiVuaTao.ngoaiVung
-                ? "Đã ghi nhận — ngoài khu vực cho phép"
-                : `Đã chấm công ${banGhiVuaTao.loai === "vao" ? "vào" : "ra"} thành công`
-            }
-            description={
-              banGhiVuaTao.ngoaiVung
-                ? `Ghi lúc ${gioVN(banGhiVuaTao.thoiDiem)}${
-                    banGhiVuaTao.khoangCachMet !== undefined
-                      ? `, cách điểm chấm công gần nhất khoảng ${Math.round(banGhiVuaTao.khoangCachMet)}m`
-                      : ""
-                  }. Bạn đang ở ngoài khu vực cho phép, HR sẽ xem xét. Không cần chấm lại.`
-                : `Ghi lúc ${gioVN(banGhiVuaTao.thoiDiem)}${
-                    banGhiVuaTao.locationTen ? ` tại ${banGhiVuaTao.locationTen}` : ""
-                  }.`
-            }
-          />
-        )}
-
-        {LOI_TAM_THOI.has(trangThai) && (
-          <Alert type="error" showIcon message="Chưa chấm công được" description={cau} />
-        )}
-
-        {/*
-          Sai thứ tự vào/ra là hiểu nhầm chứ không phải hỏng — vàng, và hiện
-          nguyên văn câu backend vì chỉ backend biết ngày nào đang treo.
-        */}
-        {trangThai === TrangThai.SAI_THU_TU && (
-          <Alert type="warning" showIcon message="Sai thứ tự vào/ra" description={cau} />
-        )}
-
         <Button
           type="primary"
           size="large"
@@ -214,9 +213,11 @@ export function NutCham() {
           // sẽ khiến người dùng ngần ngại bấm.
           style={{
             height: CAO_NUT_CHAM,
-            fontSize: 22,
+            fontSize: 18,
             fontWeight: 700,
-            borderRadius: 12,
+            // 999 > nửa chiều cao ở mọi kích cỡ nên luôn ra viên thuốc
+            // (pill) trọn vẹn, không phụ thuộc phải tính lại theo CAO_NUT_CHAM.
+            borderRadius: 999,
             backgroundColor: dangCham ? undefined : laVao ? "#1f7769" : "#ea580c",
             borderColor: dangCham ? undefined : laVao ? "#1f7769" : "#ea580c",
             touchAction: "manipulation",

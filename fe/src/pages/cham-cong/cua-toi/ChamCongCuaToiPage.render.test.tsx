@@ -239,10 +239,16 @@ describe('Chấm công của tôi — ngoài vùng KHÔNG phải lỗi', () => {
     expect(screen.getByText(/Không cần chấm lại/)).toBeTruthy();
     expect(screen.getByText(/khoảng 842m/)).toBeTruthy();
 
-    // Vàng (warning), KHÔNG đỏ (error): hiện như lỗi thì người dùng sẽ bấm
-    // lại nhiều lần và tạo rác.
-    expect(container.querySelector('.ant-alert-warning')).toBeTruthy();
-    expect(container.querySelector('.ant-alert-error')).toBeNull();
+    // Kết quả giờ hiện trong dialog (KetQuaChamCongDialog), không còn là
+    // Alert nội dòng — antd Modal render vào portal (gắn thẳng vào
+    // document.body) nên không nằm trong `container` của render(); phải tìm
+    // qua `document`. Vàng (ExclamationCircleFilled), KHÔNG đỏ
+    // (CloseCircleFilled): hiện như lỗi thì người dùng sẽ bấm lại nhiều lần
+    // và tạo rác.
+    expect(container.querySelector('.ant-alert-warning')).toBeNull();
+    expect(document.querySelector('.ant-modal')).toBeTruthy();
+    expect(document.querySelector('.anticon-exclamation-circle')).toBeTruthy();
+    expect(document.querySelector('.anticon-close-circle')).toBeNull();
   });
 });
 
@@ -750,5 +756,75 @@ describe('Chấm công của tôi — bấm ngày trong lịch tuần', () => {
     // mới tới chữ "Chấm công" — đúng quy ước mọi assertion khác trong file
     // này đã dùng (`/Chấm công$/`, không neo đầu).
     expect(screen.getByRole('button', { name: /Chấm công$/ })).toBeTruthy();
+  });
+});
+
+/**
+ * KetQuaChamCongDialog thay 3 Alert nội dòng cũ. Các test ở trên (đường hạnh
+ * phúc, ngoài vùng, 409 sai thứ tự, 403 ngoài bán kính...) chỉ khẳng định câu
+ * chữ vẫn đúng — antd Modal render câu chữ y hệt Alert cũ nên riêng chuyện
+ * "còn đọc đúng" không phân biệt được dialog thật với việc lỡ tay khôi phục
+ * lại Alert. Nhóm test này khoá thêm phần đã đổi: có `.ant-modal` thật, đúng
+ * icon theo biến thể, và KHÔNG mở dialog cho nhánh CHAN_CHAM_CONG.
+ */
+describe('Chấm công của tôi — kết quả hiện trong dialog (không phải Alert)', () => {
+  it('chấm công vào thành công → mở dialog, đúng icon CheckCircleFilled và giờ ghi nhận', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+    vi.spyOn(attendanceRecordService, 'checkIn').mockResolvedValue(banGhiMau());
+
+    render(<ChamCongCuaToiPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
+
+    await screen.findByText(/Đã chấm công vào thành công/);
+    // `.ant-modal` chỉ có khi antd Modal thật sự mở — Alert cũ không bao giờ
+    // tạo ra class này. Xoá phần mở dialog (revert về Alert) làm dòng này đỏ
+    // dù câu chữ phía trên vẫn đúng.
+    expect(document.querySelector('.ant-modal')).toBeTruthy();
+    expect(document.querySelector('.anticon-check-circle')).toBeTruthy();
+    expect(screen.getByText(/Ghi lúc 08:05/)).toBeTruthy();
+  });
+
+  it('lỗi tạm thời (403 NGOAI_BAN_KINH_CHO_PHEP) → dialog lỗi nêu khoảng cách, nút chấm vẫn còn phía sau', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+    vi.spyOn(attendanceRecordService, 'checkIn').mockRejectedValue(
+      loiBackend(403, 'NGOAI_BAN_KINH_CHO_PHEP', 'Bạn đang cách 480m'),
+    );
+
+    render(<ChamCongCuaToiPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
+
+    await screen.findByText(/480m/);
+    expect(document.querySelector('.ant-modal')).toBeTruthy();
+    // Nhóm "lỗi tạm thời" dùng CloseCircleFilled/đỏ theo đúng bảng biến thể
+    // trong brief — không phải icon vàng của biến thể sai-thứ-tự/ngoài-vùng.
+    expect(document.querySelector('.anticon-close-circle')).toBeTruthy();
+    expect(document.querySelector('.anticon-exclamation-circle')).toBeNull();
+    expect(screen.getByText('Chưa chấm công được')).toBeTruthy();
+    // Dialog không được unmount nút chấm công đứng phía sau nó — nếu không,
+    // người dùng đóng dialog xong sẽ thấy màn hình trắng thay vì nút để bấm
+    // lại (đứng ngoài bán kính là lỗi tạm thời, đi lại gần là hết).
+    expect(screen.getByRole('button', { name: /Chấm công$/ })).toBeTruthy();
+  });
+
+  it('thiết bị đang chờ HR duyệt (CHAN_CHAM_CONG) → KHÔNG mở dialog, alert lối ra vẫn hiện inline', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+    vi.spyOn(attendanceRecordService, 'checkIn').mockRejectedValue(
+      loiBackend(
+        403,
+        'THIET_BI_CHO_DUYET',
+        'Thiết bị của bạn đang chờ HR duyệt.',
+      ),
+    );
+
+    render(<ChamCongCuaToiPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
+
+    // THIET_BI_CHO_DUYET là trạng thái ĐỨNG YÊN có lối ra (ô đặt tên máy +
+    // nút gửi HR duyệt), không phải kết quả một cú bấm — brief cấm biến nhánh
+    // này thành dialog vì đóng dialog sẽ để lại màn hình câm.
+    await screen.findByText(/đang chờ HR duyệt/);
+    expect(document.querySelector('.ant-modal')).toBeNull();
+    expect(screen.getByRole('button', { name: /Gửi HR duyệt máy này/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Kiểm tra lại/ })).toBeTruthy();
   });
 });
