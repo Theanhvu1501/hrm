@@ -34,6 +34,7 @@ import {
   TabletOutlined,
   AuditOutlined,
   CheckCircleOutlined,
+  DollarOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
@@ -264,7 +265,7 @@ const MainLayout: React.FC = () => {
     }] : []),
   ];
 
-  const canManageConfig = hasPermission('/cau-hinh/vai-tro:xem') || hasPermission('/cau-hinh/phan-quyen:xem') || hasPermission('/cau-hinh/thanh-vien:xem') || user?.isSuperAdmin;
+  const canManageConfig = hasPermission('/cau-hinh/vai-tro:xem') || hasPermission('/cau-hinh/phan-quyen:xem') || hasPermission('/cau-hinh/thanh-vien:xem') || hasPermission('/luong/cau-hinh:xem') || user?.isSuperAdmin;
 
   // Settings menu items for gear icon dropdown
   const settingsMenuItems: MenuProps["items"] = [
@@ -286,6 +287,12 @@ const MainLayout: React.FC = () => {
         icon: <UserOutlined />,
         label: "Quản lý Thành viên",
         onClick: () => navigate("/cau-hinh/thanh-vien"),
+      }] : []),
+      ...(hasPermission('/luong/cau-hinh:xem') || user?.isSuperAdmin ? [{
+        key: "cau-hinh-luong",
+        icon: <DollarOutlined />,
+        label: "Cấu hình lương",
+        onClick: () => navigate("/cau-hinh/cau-hinh-luong"),
       }] : []),
     ] : []),
   ];

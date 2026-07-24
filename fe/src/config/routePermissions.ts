@@ -4,6 +4,7 @@ export const routePermissions: Record<string, string> = {
   '/cau-hinh/phan-quyen': '/cau-hinh/phan-quyen:xem',
   '/cau-hinh/vai-tro': '/cau-hinh/vai-tro:xem',
   '/cau-hinh/thanh-vien': '/cau-hinh/thanh-vien:xem',
+  '/cau-hinh/cau-hinh-luong': '/luong/cau-hinh:xem',
   '/nhan-su/ho-so-nhan-vien': '/nhan-su/ho-so-nhan-vien:xem',
   '/nhan-su/hop-dong-lao-dong': '/nhan-su/hop-dong-lao-dong:xem',
   '/nhan-su/qua-trinh-cong-tac': '/nhan-su/qua-trinh-cong-tac:xem',

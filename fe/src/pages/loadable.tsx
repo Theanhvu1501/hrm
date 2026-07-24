@@ -30,6 +30,10 @@ export const ThanhVienPage = loadable(() => import('./cau-hinh/thanh-vien/ThanhV
   fallback: <PageLoader />
 });
 
+export const CauHinhLuongPage = loadable(() => import('./luong/cau-hinh-luong/CauHinhLuongPage'), {
+  fallback: <PageLoader />
+});
+
 // Nhân sự
 export const HoSoNhanVienPage = loadable(() => import('./nhan-su/ho-so-nhan-vien/HoSoNhanVienPage'), {
   fallback: <PageLoader />

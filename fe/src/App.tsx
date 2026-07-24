@@ -23,6 +23,7 @@ import {
   PhanQuyenPage,
   VaiTroPage,
   ThanhVienPage,
+  CauHinhLuongPage,
   HoSoNhanVienPage,
   HopDongLaoDongPage,
   QuaTrinhCongTacPage,
@@ -122,6 +123,14 @@ const App = () => (
                     element={
                       <ProtectedRoute requiredPermission="/cau-hinh/thanh-vien:xem">
                         <ThanhVienPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="cau-hinh-luong"
+                    element={
+                      <ProtectedRoute requiredPermission="/luong/cau-hinh:xem">
+                        <CauHinhLuongPage />
                       </ProtectedRoute>
                     }
                   />
