@@ -74,41 +74,45 @@ function EmployeeShell() {
   return (
     <div className="emp-shell mx-auto w-full max-w-[480px]">
       {/*
-        Header hai dòng thay vì ba tầng như trước (tên/phòng ban → badge công
-        ty → ngày riêng một dòng). Đây là màn hình mà việc chính nằm ở NÚT
-        chấm công phía dưới — header càng ăn ít chiều dọc thì nút càng sớm
-        nằm trong tầm ngón cái. Phòng ban và ngày gộp một dòng phụ vì cả hai
-        đều là thông tin liếc qua, không phải thứ để đọc kỹ.
+        Hai tầng như bản gốc: hàng danh tính, rồi ngày ở dòng riêng.
+        Đã thử gộp `phòng ban · ngày` vào một dòng 11px cho gọn — hỏng: trên
+        màn hẹp `truncate` cắt cụt giữa chừng ("… · Thứ Nă…"), đọc như vỡ
+        giao diện. Ngày là chuỗi dài cố định nên phải có dòng của riêng nó.
+
+        Phần thực sự đáng sửa là chống tràn, không phải dồn tầng: tên người và
+        tên công ty đều do người dùng nhập nên đều có thể dài.
       */}
       <div className="emp-header sticky top-0 z-10 px-4 pb-3 pt-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-white/40 bg-white/20 text-sm font-semibold">
+        <div className="mb-2 flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-white/40 bg-white/20 text-[15px] font-semibold">
             {chuDau(user?.hoTen)}
           </div>
-          {/* min-w-0 để `truncate` bên trong hoạt động: thiếu nó thì tên dài
-              đẩy badge công ty tràn ra khỏi màn hình thay vì bị cắt. */}
+          {/* min-w-0 là thứ khiến `truncate` bên trong hoạt động — thiếu nó
+              thì tên dài đẩy badge công ty tràn khỏi màn hình thay vì bị cắt. */}
           <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-semibold leading-tight">
               {user?.hoTen}
             </div>
-            <div className="truncate text-[11px] leading-tight opacity-80">
-              {/* Thiếu phòng ban (chưa tải xong, chưa gắn hồ sơ, hoặc lỗi
-                  khác) thì KHÔNG hiện dấu chấm ngăn cách lửng lơ. */}
-              {hoSo?.phongBan && (
-                <>
-                  <span data-testid="header-phong-ban">{hoSo.phongBan}</span>
-                  {" · "}
-                </>
-              )}
-              {ngayDayDu(homNayVN())}
-            </div>
+            {/* Thiếu phòng ban (chưa tải xong, chưa gắn hồ sơ, hoặc lỗi khác)
+                thì KHÔNG hiện dòng rỗng. */}
+            {hoSo?.phongBan && (
+              <div
+                data-testid="header-phong-ban"
+                className="truncate text-[11px] leading-tight opacity-80"
+              >
+                {hoSo.phongBan}
+              </div>
+            )}
           </div>
+          {/* max-w-[40%]: tên công ty dài không được phép nuốt hết chỗ của tên
+              người — badge co lại và tự cắt trước. */}
           {currentTenant?.tenantName && (
-            <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-[11px]">
+            <span className="max-w-[40%] shrink-0 truncate rounded-full bg-white/15 px-2.5 py-1 text-[11px]">
               {currentTenant.tenantName}
             </span>
           )}
         </div>
+        <div className="text-[13px] opacity-85">{ngayDayDu(homNayVN())}</div>
       </div>
 
       {/* pb chừa chỗ cho thanh tab dính đáy, cộng thêm nhịp thở. */}
