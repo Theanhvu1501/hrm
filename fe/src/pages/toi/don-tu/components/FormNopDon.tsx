@@ -218,7 +218,8 @@ export function FormNopDon() {
           className="mt-2"
           type="error"
           showIcon
-          message={loiGui}
+          // antd v6: `message` đã deprecated, dùng `title`.
+          title={loiGui}
           style={{ borderRadius: 10 }}
         />
       )}
