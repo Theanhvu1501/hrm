@@ -87,21 +87,16 @@ const App = () => (
               <Route
                 path="/"
                 element={
-                  <ProtectedRoute>
-                    <MainLayout />
-                  </ProtectedRoute>
+                  isChamCongApp ? (
+                    <Navigate to={getHomePath()} replace />
+                  ) : (
+                    <ProtectedRoute>
+                      <MainLayout />
+                    </ProtectedRoute>
+                  )
                 }
               >
-                <Route
-                  index
-                  element={
-                    isChamCongApp ? (
-                      <Navigate to={getHomePath()} replace />
-                    ) : (
-                      <TrangChuTheoQuyen />
-                    )
-                  }
-                />
+                <Route index element={<TrangChuTheoQuyen />} />
                 <Route path="profile" element={<ProfilePage />} />
 
                 {/* Cấu hình */}
