@@ -1,8 +1,19 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AttendanceRequest, Employee } from '@app/entities';
 import { CreateDonChamCongDto, UpdateDonChamCongDto } from './dto';
+import { NgayLe_Service } from '../ngay-le/ngay-le.service';
+import { suyHeSoOt, tinhSoGioOt, tinhSoNgayNghi } from './luat-don';
+
+// Khoảng nghỉ vượt quá ngần này thì từ chối luôn thay vì âm thầm quét hàng
+// nghìn ngày lễ — một đơn nghỉ nhiều ngày là chuyện thường, nhưng vài chục
+// ngày đến vài năm là bất thường, gần chắc là lỗi nhập liệu.
+const GIOI_HAN_NGAY_NGHI = 60;
 
 export interface DonChamCongFilter {
   employeeId?: string;
@@ -20,6 +31,7 @@ export class DonChamCong_Service {
     private readonly repo: Repository<AttendanceRequest>,
     @InjectRepository(Employee)
     private readonly employeeRepo: Repository<Employee>,
+    private readonly ngayLeService: NgayLe_Service,
   ) {}
 
   private async findEmployee(employeeId: string): Promise<Employee> {
@@ -35,8 +47,97 @@ export class DonChamCong_Service {
     return emp;
   }
 
+  /** 0=CN…6=T7, đọc trên trục UTC thuần — cùng quy ước với luat-don.ts. */
+  private ngayThanhMocUTC(ngay: string): number {
+    const [nam, thang, ngayTrongThang] = ngay.split('-').map(Number);
+    return Date.UTC(nam, thang - 1, ngayTrongThang);
+  }
+
+  /** Danh sách "YYYY-MM-DD" từ tuNgay đến denNgay (tính cả hai đầu). */
+  private cacNgayTrongKhoang(tuNgay: string, denNgay: string): string[] {
+    const moc = this.ngayThanhMocUTC(tuNgay);
+    const mocDen = this.ngayThanhMocUTC(denNgay);
+    const hai = (n: number) => String(n).padStart(2, '0');
+
+    const ds: string[] = [];
+    for (let t = moc; t <= mocDen; t += 24 * 60 * 60 * 1000) {
+      const d = new Date(t);
+      ds.push(`${d.getUTCFullYear()}-${hai(d.getUTCMonth() + 1)}-${hai(d.getUTCDate())}`);
+    }
+    return ds;
+  }
+
+  /**
+   * Hỏi NgayLe_Service từng ngày trong khoảng nghỉ để lấy danh sách ngày lễ
+   * cần loại khỏi soNgayNghi. N truy vấn (một cho mỗi ngày) chấp nhận được vì
+   * đã chặn khoảng ở GIOI_HAN_NGAY_NGHI trước khi gọi hàm này.
+   */
+  private async layNgayLeTrongKhoang(
+    tuNgay: string,
+    denNgay: string,
+  ): Promise<string[]> {
+    const cacNgay = this.cacNgayTrongKhoang(tuNgay, denNgay);
+    const ketQua = await Promise.all(
+      cacNgay.map((ngay) => this.ngayLeService.timTheoNgay(ngay)),
+    );
+    return cacNgay.filter((_, i) => ketQua[i] !== null);
+  }
+
+  /**
+   * Tính các trường BACKEND TỰ TÍNH (soGioOt/heSoOt/loaiNgayOt cho OT,
+   * soNgayNghi cho nghỉ phép) — snapshot NGAY LÚC TẠO đơn, không tính lại khi
+   * đọc. Nếu tính lại lúc đọc, HR sửa lịch lễ tháng sau sẽ âm thầm đổi hệ số
+   * của đơn đã nộp từ tháng trước, và không ai biết số nào mới là số đã trả
+   * lương. Trả về object rời — gọi nơi tạo entity SAU khi spread `...dto`, để
+   * giá trị backend tính luôn đè giá trị client gửi kèm (nếu có).
+   */
+  private async tinhCacTruongSnapshot(
+    dto: CreateDonChamCongDto,
+    emp: Employee,
+  ): Promise<
+    Partial<
+      Pick<AttendanceRequest, 'soGioOt' | 'heSoOt' | 'loaiNgayOt' | 'soNgayNghi'>
+    >
+  > {
+    if (dto.loaiDon === 'lam_them_gio') {
+      const soGioOt = tinhSoGioOt(dto.gioTu!, dto.gioDen!);
+      const ngayLe = await this.ngayLeService.timTheoNgay(dto.ngay);
+      const { loaiNgayOt, heSoOt } = suyHeSoOt({
+        ngay: dto.ngay,
+        laNgayLe: ngayLe !== null,
+        ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
+      });
+      return { soGioOt, heSoOt, loaiNgayOt };
+    }
+
+    if (dto.loaiDon === 'nghi_phep' || dto.loaiDon === 'nghi_bu') {
+      const tuNgay = dto.ngay;
+      const denNgay = dto.denNgay ?? dto.ngay;
+      const soNgayTrongKhoang = this.cacNgayTrongKhoang(tuNgay, denNgay).length;
+      if (soNgayTrongKhoang > GIOI_HAN_NGAY_NGHI) {
+        throw new BadRequestException(
+          `Khoảng nghỉ không được vượt quá ${GIOI_HAN_NGAY_NGHI} ngày`,
+        );
+      }
+
+      const ngayLeTrongKhoang = await this.layNgayLeTrongKhoang(tuNgay, denNgay);
+      const soNgayNghi = tinhSoNgayNghi({
+        tuNgay,
+        denNgay,
+        buoi: dto.buoi,
+        ngayLeTrongKhoang,
+        ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
+      });
+      return { soNgayNghi };
+    }
+
+    // giai_trinh: không tính gì.
+    return {};
+  }
+
   async create(dto: CreateDonChamCongDto): Promise<AttendanceRequest> {
     const emp = await this.findEmployee(dto.employeeId);
+    const truongTinhToan = await this.tinhCacTruongSnapshot(dto, emp);
 
     const entity = this.repo.create({
       ...dto,
@@ -44,6 +145,10 @@ export class DonChamCong_Service {
       employeeCode: emp.employeeId,
       trangThai: dto.trangThai ?? 'cho_duyet',
       isActive: true,
+      // Đặt SAU `...dto` — dù DTO đã cố tình không có các trường này (xem
+      // CreateDonChamCongDto), việc gán tường minh ở đây đảm bảo backend luôn
+      // thắng ngay cả khi pipe forbidNonWhitelisted có bị nới lỏng sau này.
+      ...truongTinhToan,
     } as Partial<AttendanceRequest>);
 
     return this.repo.save(entity);
