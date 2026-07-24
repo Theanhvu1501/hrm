@@ -81,7 +81,10 @@ export function LichTuan() {
               // Mockup cho .week-day `cursor: pointer` (dòng 71) — mỗi ngày
               // phải bấm được để xem lịch sử ngày đó, không chỉ hai nút ‹ ›.
               onClick={() => handler.executeEvent("chonNgay", { ngay: n })}
-              className="rounded-lg border-0 bg-transparent py-1.5 text-center"
+              // Bo tròn rõ (16px) cho khớp nhịp bo mềm của nút chấm công dạng
+              // viên thuốc. Cố ý KHÔNG bo tròn hoàn toàn: ô ngày cao hơn rộng
+              // (thứ + số + chấm) nên rounded-full sẽ kéo thành viên thuốc dọc.
+              className="rounded-2xl border-0 bg-transparent py-1.5 text-center"
               style={style}
             >
               <div className="mb-0.5 text-[10px] text-[color:var(--emp-muted)]">{TEN_THU[i]}</div>
