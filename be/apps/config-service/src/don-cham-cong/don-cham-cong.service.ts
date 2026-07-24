@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -14,6 +15,24 @@ import { suyHeSoOt, tinhSoGioOt, tinhSoNgayNghi } from './luat-don';
 // nghìn ngày lễ — một đơn nghỉ nhiều ngày là chuyện thường, nhưng vài chục
 // ngày đến vài năm là bất thường, gần chắc là lỗi nhập liệu.
 const GIOI_HAN_NGAY_NGHI = 60;
+
+/**
+ * Mã lỗi Task 4 — vá lỗ hổng phân quyền đơn từ. FE đọc `code` để hiện đúng
+ * thông báo, không so khớp chuỗi tiếng Việt (đổi câu chữ một lần là FE hỏng
+ * im lặng) — cùng quy ước với `MA_LOI_THIET_BI` ở thiet-bi-cham-cong.service.ts.
+ */
+export const MA_LOI_DON_CHAM_CONG = {
+  /**
+   * Người bấm duyệt/từ chối trùng với chủ đơn (so theo `userId` của hồ sơ
+   * nhân viên, KHÔNG theo permission/vaiTro) — một mình vừa nộp vừa duyệt
+   * khiến bước phê duyệt trở thành hình thức.
+   */
+  KHONG_TU_DUYET_DON: 'KHONG_TU_DUYET_DON',
+  /** Tự huỷ đơn KHÔNG đứng tên mình. */
+  KHONG_PHAI_DON_CUA_MINH: 'KHONG_PHAI_DON_CUA_MINH',
+  /** Tự huỷ đơn đã da_duyet/tu_choi — quyết định đã có hiệu lực, không cho xoá dấu vết. */
+  DON_DA_XU_LY_KHONG_THE_HUY: 'DON_DA_XU_LY_KHONG_THE_HUY',
+} as const;
 
 export interface DonChamCongFilter {
   employeeId?: string;
@@ -154,19 +173,83 @@ export class DonChamCong_Service {
     return this.repo.save(entity);
   }
 
+  /**
+   * Đổi trạng thái đơn — luồng DUYỆT/TỪ CHỐI (`PATCH :id/trang-thai`).
+   *
+   * `nguoiThucHien` LUÔN phải là `req.user` thật của người gọi (controller
+   * gắn `AdminGuard`, không phải body/query) — đây là chỗ duy nhất chặn
+   * được tự duyệt: `AdminGuard` chỉ kiểm `vaiTro`, hoàn toàn không biết đơn
+   * đang xử lý có phải của chính người gọi hay không.
+   */
   async updateStatus(
     id: string,
     trangThai: string,
-    nguoiDuyet?: string,
+    nguoiDuyet: string | undefined,
+    nguoiThucHien: { id: string; [k: string]: unknown },
   ): Promise<AttendanceRequest> {
     const item = await this.findOne(id);
+    const laHanhDongDuyet = trangThai === 'da_duyet' || trangThai === 'tu_choi';
+
+    if (laHanhDongDuyet) {
+      // So theo userId của HỒ SƠ NHÂN VIÊN đứng tên đơn, không so theo
+      // `nguoiDuyet` (chuỗi tên hiển thị, client tự gõ, không tin cậy được).
+      const chuDon = await this.findEmployee(item.employeeId);
+      const idNguoiGoi = String(nguoiThucHien?.id ?? '').trim();
+
+      if (chuDon.userId && idNguoiGoi && chuDon.userId === idNguoiGoi) {
+        // Fail-closed kể cả khi người gọi có vaiTro ADMIN/quyền duyệt: quyền
+        // duyệt KHÔNG đồng nghĩa được duyệt đơn của chính mình.
+        throw new ForbiddenException({
+          code: MA_LOI_DON_CHAM_CONG.KHONG_TU_DUYET_DON,
+          message: 'Không được tự duyệt đơn của chính mình',
+        });
+      }
+    }
 
     item.trangThai = trangThai;
     if (nguoiDuyet !== undefined) {
       item.nguoiDuyet = nguoiDuyet;
     }
+    if (laHanhDongDuyet) {
+      // Vết duyệt: ai bấm và lúc nào — chỉ ghi khi đây thực sự là hành động
+      // duyệt/từ chối, không ghi đè khi trạng thái bị trả lại cho_duyet.
+      item.nguoiDuyetId = String(nguoiThucHien?.id ?? '').trim() || undefined;
+      item.thoiDiemDuyet = new Date().toISOString();
+    }
 
     return this.repo.save(item);
+  }
+
+  /**
+   * Tự huỷ đơn CỦA CHÍNH MÌNH — route `DELETE /don-cham-cong/cua-toi/:id`.
+   * `employeeId` truyền vào PHẢI suy từ token ở controller (qua
+   * `NhanVien_Service.resolveEmployeeFromUser`), không phải tham số client
+   * tự khai — nếu không thì test "chặn huỷ đơn người khác" bên dưới vô nghĩa.
+   *
+   * Hai điều kiện, thiếu một là chặn:
+   *  - đơn phải đứng tên `employeeId` của người gọi;
+   *  - đơn còn `cho_duyet` — đã `da_duyet`/`tu_choi` thì không cho tự huỷ,
+   *    tránh xoá dấu vết một quyết định đã có hiệu lực (vd đã tính lương).
+   */
+  async huyDonCuaToi(id: string, employeeId: string): Promise<void> {
+    const item = await this.findOne(id);
+
+    if (item.employeeId !== employeeId) {
+      throw new ForbiddenException({
+        code: MA_LOI_DON_CHAM_CONG.KHONG_PHAI_DON_CUA_MINH,
+        message: 'Không thể huỷ đơn của người khác',
+      });
+    }
+
+    if (item.trangThai !== 'cho_duyet') {
+      throw new ForbiddenException({
+        code: MA_LOI_DON_CHAM_CONG.DON_DA_XU_LY_KHONG_THE_HUY,
+        message: 'Chỉ có thể tự huỷ đơn đang ở trạng thái chờ duyệt',
+      });
+    }
+
+    item.isActive = false;
+    await this.repo.save(item);
   }
 
   private coerceIsActive(value?: boolean | string): boolean {

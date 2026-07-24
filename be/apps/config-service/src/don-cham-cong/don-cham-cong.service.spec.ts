@@ -1,9 +1,24 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { DonChamCong_Service } from './don-cham-cong.service';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { AttendanceRequest, Employee } from '@app/entities';
+
+/** Lấy `code` ra khỏi ForbiddenException để assert cho gọn — cùng tiện ích
+ * đã dùng ở thiet-bi-cham-cong.service.spec.ts. */
+async function batMaLoi(fn: () => Promise<unknown>): Promise<string> {
+  try {
+    await fn();
+  } catch (e: any) {
+    return e?.response?.code ?? e?.getResponse?.()?.code;
+  }
+  throw new Error('Không ném lỗi như kỳ vọng');
+}
 
 describe('DonChamCong_Service', () => {
   let service: DonChamCong_Service;
@@ -238,29 +253,91 @@ describe('DonChamCong_Service', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // updateStatus
+  // updateStatus — Task 4: chặn tự duyệt + ghi vết nguoiDuyetId/thoiDiemDuyet
   // ──────────────────────────────────────────────────────────────────────────
   describe('updateStatus', () => {
-    it('sets trangThai to da_duyet and records nguoiDuyet', async () => {
-      const existing = {
-        _id: '507f1f77bcf86cd799439099',
+    const REQ_ID = '507f1f77bcf86cd799439099';
+
+    beforeEach(() => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: REQ_ID,
         employeeId: EMP_ID,
         trangThai: 'cho_duyet',
         isActive: true,
-      };
-      mockRequestRepo.findOne.mockResolvedValue(existing);
+      });
+    });
 
-      const result = await service.updateStatus(
-        '507f1f77bcf86cd799439099',
-        'da_duyet',
-        'Manager A',
-      );
+    it('người duyệt KHÁC chủ đơn: set da_duyet, ghi nguoiDuyet/nguoiDuyetId/thoiDiemDuyet', async () => {
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        _id: EMP_ID,
+        userId: 'sso-chu-don',
+      });
+
+      const result = await service.updateStatus(REQ_ID, 'da_duyet', 'Manager A', {
+        id: 'sso-nguoi-duyet-khac',
+      });
 
       expect(result.trangThai).toBe('da_duyet');
       expect(result.nguoiDuyet).toBe('Manager A');
+      expect(result.nguoiDuyetId).toBe('sso-nguoi-duyet-khac');
+      expect(typeof result.thoiDiemDuyet).toBe('string');
       expect(mockRequestRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ trangThai: 'da_duyet', nguoiDuyet: 'Manager A' }),
+        expect.objectContaining({
+          trangThai: 'da_duyet',
+          nguoiDuyet: 'Manager A',
+          nguoiDuyetId: 'sso-nguoi-duyet-khac',
+        }),
       );
+    });
+
+    it.each(['da_duyet', 'tu_choi'])(
+      'từ chối tự duyệt (trangThai=%s) khi req.user.id trùng userId của chủ đơn',
+      async (trangThai) => {
+        mockEmployeeRepo.findOne.mockResolvedValue({
+          _id: EMP_ID,
+          userId: 'sso-chu-don',
+        });
+
+        const code = await batMaLoi(() =>
+          service.updateStatus(REQ_ID, trangThai, undefined, {
+            id: 'sso-chu-don',
+          }),
+        );
+
+        expect(code).toBe('KHONG_TU_DUYET_DON');
+        // Tự duyệt bị chặn TRƯỚC khi ghi gì xuống DB — không được để lọt.
+        expect(mockRequestRepo.save).not.toHaveBeenCalled();
+      },
+    );
+
+    it('vẫn chặn tự duyệt dù người gọi có role quản trị (AdminGuard chỉ biết vaiTro, không biết đơn của ai)', async () => {
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        _id: EMP_ID,
+        userId: 'sso-chu-don',
+      });
+
+      const code = await batMaLoi(() =>
+        service.updateStatus(REQ_ID, 'da_duyet', undefined, {
+          id: 'sso-chu-don',
+          vaiTro: 'ADMIN',
+        } as any),
+      );
+
+      expect(code).toBe('KHONG_TU_DUYET_DON');
+    });
+
+    it('người khác duyệt: KHÔNG bị chặn dù cùng vaiTro ADMIN như chủ đơn', async () => {
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        _id: EMP_ID,
+        userId: 'sso-chu-don',
+      });
+
+      const result = await service.updateStatus(REQ_ID, 'tu_choi', undefined, {
+        id: 'sso-nguoi-khac',
+        vaiTro: 'ADMIN',
+      } as any);
+
+      expect(result.trangThai).toBe('tu_choi');
     });
   });
 
@@ -318,5 +395,58 @@ describe('DonChamCong_Service', () => {
         service.findOne('507f1f77bcf86cd799439011'),
       ).rejects.toThrow(NotFoundException);
     });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // huyDonCuaToi — Task 4: tự huỷ đơn CỦA CHÍNH MÌNH, chỉ khi còn cho_duyet
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('huyDonCuaToi', () => {
+    const REQ_ID = '507f1f77bcf86cd799439099';
+
+    it('huỷ thành công (isActive=false) khi đúng chủ đơn và đơn còn cho_duyet', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: REQ_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        isActive: true,
+      });
+
+      await service.huyDonCuaToi(REQ_ID, EMP_ID);
+
+      expect(mockRequestRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isActive: false }),
+      );
+    });
+
+    it('chặn huỷ đơn của người khác (employeeId không khớp)', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: REQ_ID,
+        employeeId: 'emp-nguoi-khac',
+        trangThai: 'cho_duyet',
+        isActive: true,
+      });
+
+      await expect(
+        service.huyDonCuaToi(REQ_ID, EMP_ID),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it.each(['da_duyet', 'tu_choi'])(
+      'chặn tự huỷ khi đơn đã xử lý (trangThai=%s)',
+      async (trangThai) => {
+        mockRequestRepo.findOne.mockResolvedValue({
+          _id: REQ_ID,
+          employeeId: EMP_ID,
+          trangThai,
+          isActive: true,
+        });
+
+        await expect(
+          service.huyDonCuaToi(REQ_ID, EMP_ID),
+        ).rejects.toThrow(ForbiddenException);
+        expect(mockRequestRepo.save).not.toHaveBeenCalled();
+      },
+    );
   });
 });
