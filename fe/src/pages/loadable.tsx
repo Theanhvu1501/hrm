@@ -90,9 +90,10 @@ export const DangNhapChamCongPage = loadable(() => import('./toi/DangNhapChamCon
   fallback: <PageLoader />
 });
 
-// Chỗ tạm cho tab Bảng công trong vỏ /toi — iOS-native, không dùng
-// ComingSoonPage của khu kế toán (nút "Về trang chủ" đá người dùng khỏi app).
-export const BangCongSapCoPage = loadable(() => import('./toi/BangCongSapCo'), {
+// Tab Bảng công trong vỏ /toi — lịch tháng kiểu iOS (P3.1). Giữ tên export
+// `BangCongSapCoPage` để không phải đụng route ở App.tsx; component thật
+// sự hiện là BangCongThang (chỗ tạm BangCongSapCo.tsx đã bị xoá).
+export const BangCongSapCoPage = loadable(() => import('./toi/bang-cong/BangCongThang'), {
   fallback: <PageLoader />
 });
 

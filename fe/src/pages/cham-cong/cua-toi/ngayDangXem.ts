@@ -18,7 +18,12 @@ export function ngayMacDinhCuaTuan(dauTuan: string, homNay: string): string {
   return bayNgay.includes(homNay) ? homNay : dauTuan;
 }
 
-function suySoCong(banGhi: AttendanceRecord[]): number | null {
+/**
+ * Xuất công khai để `pages/toi/bang-cong/thangCong.ts` (lịch tháng của vỏ
+ * nhân viên) tái dùng ĐÚNG cùng một luật thay vì chép lại — hai nơi tính
+ * khác luật là nguồn lỗi âm thầm khó phát hiện qua review.
+ */
+export function suySoCong(banGhi: AttendanceRecord[]): number | null {
   const coVao = banGhi.some((b) => b.loai === 'vao');
   const coRa = banGhi.some((b) => b.loai === 'ra');
   if (coVao && coRa) return 1;
