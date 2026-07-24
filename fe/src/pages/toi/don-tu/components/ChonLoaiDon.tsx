@@ -7,6 +7,7 @@ import { LOAI_DON_OPTIONS } from "@/pages/cham-cong/don-cham-cong/constants";
 import { MAT_HINH_LOAI } from "../loaiDonUI";
 import { AttendanceRequestType } from "@/services/attendanceRequestService";
 import "../don-tu.css";
+import "@/components/layout/emp-modal.css";
 
 /**
  * Bước 1 của việc nộp đơn: chọn loại đơn.
@@ -25,12 +26,11 @@ export function ChonLoaiDon() {
       open={!!chonLoaiMo}
       title="Chọn loại đơn"
       onCancel={() => handler.executeEvent("dongChonLoai", {})}
-      centered
       destroyOnHidden
       footer={null}
-      // Bo góc override tại chỗ (ConfigProvider ở App.tsx đặt borderRadius 0 cho
-      // toàn dự án — xem chú thích ở FormNopDon).
-      styles={{ content: { borderRadius: 16 } }}
+      // Tấm trượt đáy kiểu iOS: neo đáy, bo góc trên, có grabber, padding gọn
+      // (xem emp-modal.css). KHÔNG dùng `centered` — sẽ đánh nhau với neo đáy.
+      rootClassName="emp-sheet"
     >
       <div className="grid grid-cols-2 gap-3 pt-1">
         {LOAI_DON_OPTIONS.map((o) => {
@@ -46,7 +46,7 @@ export function ChonLoaiDon() {
                 })
               }
             >
-              <span className="don-tu-icon" style={{ background: mh.gradient }}>
+              <span className="emp-icon-tile" style={{ background: mh.gradient }}>
                 {mh.icon}
               </span>
               <span className="don-tu-the-nhan">{o.label}</span>

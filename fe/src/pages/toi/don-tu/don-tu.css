@@ -1,5 +1,5 @@
 /*
- * Ô nhập của form nộp đơn.
+ * Ô nhập của form nộp đơn (kiểu iOS) + tấm chọn loại đơn.
  *
  * Cố ý dùng <input type="date|time"> và <select> NGUYÊN BẢN thay vì
  * DatePicker/TimePicker/Select của antd: màn này chỉ mở trên điện thoại, và
@@ -11,85 +11,97 @@
  * cùng màn hình nếu sau này màn hình bị thay.
  */
 .don-tu-field {
+  box-sizing: border-box;
   width: 100%;
-  padding: 10px 12px;
-  font-size: 15px;
-  color: var(--emp-text, #1e293b);
+  /* min-width:0 để trong lưới 2 cột (Từ giờ / Đến giờ) ô co lại được thay vì
+     tràn ra ngoài — <input type=time|date> có min-width nội tại, thiếu dòng
+     này là hai ô giờ đè lên nhau, đúng lỗi cần sửa. */
+  min-width: 0;
+  height: 46px;
+  padding: 0 14px;
+  font-size: 16px; /* ≥16 để iOS không tự phóng to trang khi focus */
+  font-family: inherit;
+  color: var(--emp-text, #1c1c1e);
   background: var(--emp-surface, #ffffff);
-  border: 1px solid var(--emp-border, #e2e8f0);
-  /* 10px, không phải 12px của thẻ: ô nhập nhỏ hơn thẻ nên cùng bán kính sẽ
-     trông tròn hơn thẻ bao ngoài. */
-  border-radius: 10px;
+  border: 1px solid var(--emp-border, rgba(60, 60, 67, 0.14));
+  border-radius: 12px;
   outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* textarea cần cao theo dòng, không ép về 46px như ô một dòng. */
+textarea.don-tu-field {
+  height: auto;
+  padding: 12px 14px;
+  line-height: 1.4;
+  resize: none;
+}
+
+/*
+ * SỬA LỖI GIAO DIỆN "Từ giờ / Đến giờ": trên iOS/Safari, phần giá trị của
+ * <input type="time|date"> mặc định căn GIỮA và có lề trong lệch, đọc như ô
+ * vỡ khi đứng cạnh nhãn căn trái. Ép căn trái + bỏ lề để giờ/ngày nằm ngay
+ * ngắn như mọi ô nhập khác.
+ */
+.don-tu-field::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
+}
+
+/* Chừa khoảng thở cho icon lịch/đồng hồ ở cuối ô, không dính sát mép. */
+.don-tu-field::-webkit-calendar-picker-indicator {
+  margin-left: 4px;
+  opacity: 0.5;
+}
+
+/* Ô trống (chưa chọn ngày/giờ) hiện chữ mờ như placeholder. */
+.don-tu-field:in-range,
+.don-tu-field:invalid {
+  color: var(--emp-text, #1c1c1e);
 }
 
 .don-tu-field:focus {
-  border-color: var(--emp-accent, #1f7769);
-  box-shadow: 0 0 0 2px rgba(31, 119, 105, 0.15);
+  border-color: var(--emp-accent, #12a594);
+  box-shadow: 0 0 0 3px rgba(18, 165, 148, 0.15);
 }
 
 .don-tu-label {
   display: block;
-  margin-bottom: 4px;
-  font-size: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--emp-text-phu, #64748b);
+  color: var(--emp-text-phu, #6c6c70);
 }
 
 /*
  * Tấm chọn loại đơn (bước 1): lưới thẻ kiểu app iOS. Mỗi thẻ là một ô icon bo
- * góc nền gradient + nhãn chữ bên dưới. Chạm cả thẻ để chọn.
+ * góc nền gradient (dùng chung class .emp-icon-tile ở employee-shell.css) +
+ * nhãn chữ bên dưới. Chạm cả thẻ để chọn.
  */
 .don-tu-the-loai {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 16px 8px;
+  gap: 10px;
+  padding: 18px 8px;
   border-radius: 16px;
-  border: 1px solid var(--emp-border, #e2e8f0);
+  border: none;
   background: var(--emp-surface, #ffffff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 10px rgba(0, 0, 0, 0.03);
   cursor: pointer;
   transition: transform 0.06s ease, box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.don-tu-the-loai:hover {
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
-}
-
-/* Phản hồi chạm kiểu iOS: ô lún nhẹ khi nhấn. */
 .don-tu-the-loai:active {
   transform: scale(0.96);
 }
 
 .don-tu-the-nhan {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--emp-text, #1e293b);
-}
-
-/*
- * Ô icon kiểu iOS: hình vuông bo góc mềm (~22% cạnh), nền gradient, glyph
- * trắng ở giữa. `don-tu-icon-nho` là biến thể nhỏ dùng ở tiêu đề form.
- */
-.don-tu-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
-  color: #ffffff;
-  font-size: 24px;
-  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.18);
-}
-
-.don-tu-icon-nho {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  font-size: 15px;
-  box-shadow: none;
+  color: var(--emp-text, #1c1c1e);
 }
 
 /* Nút "Đổi loại" ở tiêu đề form: chữ nhỏ, đẩy về cuối hàng. */
@@ -98,9 +110,9 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--emp-accent, #1f7769);
+  color: var(--emp-accent, #12a594);
   background: transparent;
   border: none;
   cursor: pointer;

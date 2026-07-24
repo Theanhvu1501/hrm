@@ -511,7 +511,9 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
     // Chỉ khoá được nút chấm công thì chưa đủ để chứng minh `cuaToi` thật sự
     // bị gọi và lỗi thật sự được bắt — dải lịch tuần phải rơi về "toàn xám"
     // (dọn về mảng rỗng), không phải bịa dữ liệu hay treo nửa vời.
-    const cham = container.querySelectorAll('.rounded-full');
+    // `.mx-auto` để chỉ lấy 7 chấm ngày, không dính hai nút ‹ › (nay cũng
+    // rounded-full sau khi đổi sang nút tròn iOS).
+    const cham = container.querySelectorAll('.rounded-full.mx-auto');
     expect(cham).toHaveLength(7);
     cham.forEach((el) => {
       expect((el as HTMLElement).style.background).toBe('var(--emp-border)');
@@ -544,7 +546,10 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
     const { container } = render(<ChamCongCuaToiPage />);
 
     await waitFor(() => expect(screen.getByText(/Chấm công/)).toBeTruthy());
-    const cham = container.querySelectorAll('.rounded-full');
+    // Chấm màu của mỗi ngày là <div mx-auto h-1.5 w-1.5 rounded-full>. Lọc
+    // theo `.mx-auto` để KHÔNG dính hai nút ‹ › (nay cũng rounded-full sau khi
+    // đổi sang nút tròn kiểu iOS) — chỉ 7 chấm ngày mới mang mx-auto.
+    const cham = container.querySelectorAll('.rounded-full.mx-auto');
     expect(cham).toHaveLength(7);
     // Có vào + ra trong ngày → xanh (var(--emp-accent)); ngày kế chỉ có vào,
     // chưa ra → đỏ (var(--emp-danger)). Đây là hai màu người dùng phân biệt

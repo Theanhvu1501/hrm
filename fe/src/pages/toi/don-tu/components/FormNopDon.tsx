@@ -20,6 +20,7 @@ import {
 import { MAT_HINH_LOAI } from "../loaiDonUI";
 import "./FormNopDon.state";
 import "../don-tu.css";
+import "@/components/layout/emp-modal.css";
 
 /**
  * Form nộp đơn của nhân viên.
@@ -64,7 +65,7 @@ export function FormNopDon() {
         <div className="flex items-center gap-2">
           {matHinh && (
             <span
-              className="don-tu-icon don-tu-icon-nho"
+              className="emp-icon-tile emp-icon-tile-sm"
               style={{ background: matHinh.gradient }}
             >
               {matHinh.icon}
@@ -81,18 +82,14 @@ export function FormNopDon() {
         </div>
       }
       onCancel={() => handler.executeEvent("dongForm", {})}
-      centered
       destroyOnHidden
-      // Bo góc phải override tại chỗ: ConfigProvider ở App.tsx đặt
-      // borderRadius 0 cho TOÀN dự án (quyết định của các màn quản trị). Sửa
-      // token toàn cục để làm mềm một dialog của vỏ nhân viên là phá mọi bảng
-      // và form bên khu quản trị.
-      styles={{ content: { borderRadius: 16 } }}
+      // Tấm trượt đáy kiểu iOS (neo đáy, bo góc trên, grabber, padding gọn —
+      // xem emp-modal.css). KHÔNG dùng `centered` — đánh nhau với neo đáy.
+      rootClassName="emp-sheet"
       footer={[
         <Button
           key="huy"
           onClick={() => handler.executeEvent("dongForm", {})}
-          style={{ borderRadius: 999 }}
         >
           Đóng
         </Button>,
@@ -101,7 +98,7 @@ export function FormNopDon() {
           type="primary"
           loading={!!dangGui}
           onClick={() => handler.executeEvent("nopDon", v)}
-          style={{ borderRadius: 999, backgroundColor: "#1f7769", borderColor: "#1f7769" }}
+          style={{ backgroundColor: "var(--emp-accent)", borderColor: "var(--emp-accent)" }}
         >
           Gửi đơn
         </Button>,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Button, Form, Input, Spin } from 'antd';
+import { ClockCircleFilled } from '@ant-design/icons';
 import { diToi } from '@/ultils/dieuHuong';
 import {
   identityLogin,
@@ -33,11 +34,35 @@ const CAU_LOI = {
 } as const;
 
 /** Màu nhấn chung cho các nút hành động chính của cổng này (nút Đăng nhập và
- * các nút chọn công ty) — để hai màn hình trông cùng một hệ thống. */
+ * các nút chọn công ty) — để hai màn hình trông cùng một hệ thống. Teal tint
+ * iOS + bo viên thuốc (ghi đè borderRadius 0 toàn cục của ConfigProvider). */
 const KIEU_NUT_NHAN: React.CSSProperties = {
-  backgroundColor: '#1f7769',
-  borderColor: '#1f7769',
+  backgroundColor: '#12a594',
+  borderColor: '#12a594',
+  borderRadius: 999,
 };
+
+/** Icon app kiểu iOS (ô teal bo góc, đồng hồ trắng) — mở đầu cổng đăng nhập
+ * để nó đọc ra là "app chấm công" ngay từ màn đầu. */
+function IconApp() {
+  return (
+    <div className="mb-4 flex flex-col items-center">
+      <span
+        className="emp-icon-tile"
+        style={{
+          background: 'linear-gradient(135deg, #16c2ad, #0e8c7f)',
+          width: 64,
+          height: 64,
+          borderRadius: 17,
+          fontSize: 30,
+        }}
+      >
+        <ClockCircleFilled />
+      </span>
+      <div className="mt-3 text-[22px] font-bold">Chấm công</div>
+    </div>
+  );
+}
 
 /**
  * Cầu chì chống vòng lặp reload vô hạn. `diToi()` là
@@ -276,7 +301,7 @@ export default function DangNhapChamCong() {
   if (man === 'loi_vao') {
     return khung(
       <>
-        <div className="mb-4 text-center text-lg font-semibold">Chấm công</div>
+        <IconApp />
         <Alert type="error" showIcon message={loi} className="mb-3" />
         <Button block size="large" style={KIEU_NUT_NHAN} type="primary" onClick={thuLaiSauLoiVao}>
           Thử lại
@@ -310,7 +335,7 @@ export default function DangNhapChamCong() {
           block
           size="large"
           loading={dangGui}
-          style={{ height: 48, ...KIEU_NUT_NHAN }}
+          style={{ height: 50, ...KIEU_NUT_NHAN }}
         >
           Đăng nhập
         </Button>

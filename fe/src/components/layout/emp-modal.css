@@ -1,0 +1,101 @@
+/*
+ * Modal kiểu TẤM TRƯỢT ĐÁY (bottom sheet) của iOS.
+ *
+ * Dùng qua `rootClassName="emp-sheet"` trên <Modal> (KHÔNG kèm prop `centered`
+ * — tấm này neo đáy, không căn giữa). Vì Modal render trong portal ở body,
+ * ngoài `.emp-shell`, nên class gốc phải đặt ngay trên root của Modal; CSS ở
+ * đây nhắm các lớp nội bộ của antd, khoanh dưới `.emp-sheet`.
+ *
+ * Lý do tồn tại: padding mặc định 24px của antd Modal quá rộng cho màn hình
+ * điện thoại, và modal vuông/căn-giữa không giống app iOS. Tấm này neo đáy, bo
+ * góc TRÊN, có thanh kéo (grabber), padding gọn.
+ */
+
+/*
+ * Modal render trong portal ở body, NGOÀI .emp-shell — nên các biến --emp-*
+ * (định nghĩa trên .emp-shell) không tới được nội dung tấm. Khai lại ở đây để
+ * var(--emp-accent) v.v. bên trong tấm phân giải đúng.
+ */
+.emp-sheet {
+  --emp-accent: #12a594;
+  --emp-accent-nhat: #e5f6f3;
+  --emp-text: #1c1c1e;
+  --emp-text-phu: #6c6c70;
+  --emp-muted: #a1a1a6;
+  --emp-border: rgba(60, 60, 67, 0.14);
+  --emp-surface: #ffffff;
+  --emp-surface-2: #f2f2f7;
+  --emp-danger: #ff3b30;
+}
+
+/* Huỷ mọi canh giữa của lớp bọc để .ant-modal tự do neo đáy. */
+.emp-sheet .ant-modal-wrap {
+  display: block;
+  text-align: initial;
+}
+
+/* Neo tấm xuống đáy, rộng hết ngang (giới hạn theo bề rộng vỏ 480px). */
+.emp-sheet .ant-modal {
+  position: fixed;
+  inset: auto 0 0 0;
+  top: auto;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.emp-sheet .ant-modal-content {
+  border-radius: 20px 20px 0 0;
+  /* Gọn: 18 hai bên, safe-area dưới cho thanh gạt iPhone. */
+  padding: 6px 18px calc(20px + env(safe-area-inset-bottom, 0));
+  /* Tấm cao (form nghỉ phép nhiều ô) không được tràn lên quá đỉnh màn hình:
+     giới hạn chiều cao và cho cuộn trong tấm. */
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+/* Thanh kéo kiểu iOS ở đỉnh tấm. */
+.emp-sheet .ant-modal-content::before {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 5px;
+  margin: 8px auto 4px;
+  border-radius: 999px;
+  background: rgba(60, 60, 67, 0.3);
+}
+
+.emp-sheet .ant-modal-header {
+  margin-bottom: 12px;
+  background: transparent;
+}
+
+.emp-sheet .ant-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    Roboto, sans-serif;
+}
+
+.emp-sheet .ant-modal-body {
+  font-size: 15px;
+}
+
+/* Footer: các nút viên thuốc, chia đều, cao thoải mái cho ngón tay. */
+.emp-sheet .ant-modal-footer {
+  margin-top: 16px;
+  display: flex;
+  gap: 10px;
+}
+
+.emp-sheet .ant-modal-footer .ant-btn {
+  flex: 1;
+  height: 46px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+/* Nền mờ đậm hơn chút cho tấm nổi bật kiểu iOS. */
+.emp-sheet .ant-modal-mask {
+  background: rgba(0, 0, 0, 0.45);
+}

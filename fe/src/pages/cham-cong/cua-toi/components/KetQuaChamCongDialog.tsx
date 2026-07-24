@@ -7,6 +7,7 @@ import {
 } from "@ant-design/icons";
 import { AttendanceRecord } from "@/services/attendanceRecordService";
 import { gioGiayVN } from "@/ultils/thoiGianVN";
+import "@/components/layout/emp-modal.css";
 
 export interface KetQuaChamCongDialogProps {
   open: boolean;
@@ -63,7 +64,9 @@ export function KetQuaChamCongDialog({
   > = {
     thanh_cong: {
       icon: <CheckCircleFilled />,
-      mau: "#1f7769",
+      // Xanh lá hệ thống iOS cho "thành công" — tách khỏi teal thương hiệu để
+      // ✓ đọc ra ngay là kết quả tốt.
+      mau: "#34c759",
       // Không nêu vào/ra: người vừa bấm biết mình đang làm gì, và ba ô trạng
       // thái ngay phía sau dialog đã hiện đủ giờ vào/giờ ra. Thêm chữ chỉ làm
       // câu dài ra chứ không nói thêm được điều gì.
@@ -71,17 +74,17 @@ export function KetQuaChamCongDialog({
     },
     ngoai_vung: {
       icon: <ExclamationCircleFilled />,
-      mau: "#faad14",
+      mau: "#ff9f0a",
       tieuDe: "Đã ghi nhận — ngoài khu vực cho phép",
     },
     sai_thu_tu: {
       icon: <ExclamationCircleFilled />,
-      mau: "#faad14",
+      mau: "#ff9f0a",
       tieuDe: "Sai thứ tự vào/ra",
     },
     loi: {
       icon: <CloseCircleFilled />,
-      mau: "#ef4444",
+      mau: "#ff3b30",
       tieuDe: "Chưa chấm công được",
     },
   };
@@ -108,21 +111,20 @@ export function KetQuaChamCongDialog({
     <Modal
       open={open}
       onCancel={onClose}
-      centered
       closable
       maskClosable
-      // PHẢI override bo góc ở đây: `ConfigProvider` trong App.tsx đặt
-      // `borderRadius: 0` cho TOÀN dự án (quyết định của các màn quản trị),
-      // nên Modal mặc định vuông góc và lạc lõng giữa vỏ nhân viên vốn bo mềm
-      // 12px với nút chấm công dạng viên thuốc. Không sửa token toàn cục —
-      // làm vậy là phá mọi bảng và form bên khu quản trị.
-      styles={{ content: { borderRadius: 16 } }}
+      // Tấm trượt đáy kiểu iOS (neo đáy, bo góc trên, grabber, padding gọn —
+      // xem emp-modal.css). KHÔNG dùng `centered` — đánh nhau với neo đáy.
+      rootClassName="emp-sheet"
       footer={[
         <Button
           key="dong"
           type="primary"
           onClick={onClose}
-          style={{ borderRadius: 999 }}
+          style={{
+            backgroundColor: "var(--emp-accent)",
+            borderColor: "var(--emp-accent)",
+          }}
         >
           Đóng
         </Button>,
@@ -130,10 +132,10 @@ export function KetQuaChamCongDialog({
     >
       {/* Màn hình điện thoại: icon lớn + căn giữa toàn bộ, không phải bảng
           chữ căn trái như dialog trên desktop thường thấy. */}
-      <div className="text-center py-4">
-        <div style={{ fontSize: 48, color: mau, lineHeight: 1 }}>{icon}</div>
-        <div className="mt-3 text-lg font-semibold">{tieuDe}</div>
-        <div className="mt-2 text-sm text-gray-500">{moTa}</div>
+      <div className="text-center pt-1 pb-2">
+        <div style={{ fontSize: 52, color: mau, lineHeight: 1 }}>{icon}</div>
+        <div className="mt-3 text-[19px] font-bold">{tieuDe}</div>
+        <div className="mt-2 text-[15px] text-[color:var(--emp-text-phu)]">{moTa}</div>
       </div>
     </Modal>
   );

@@ -213,8 +213,9 @@ export function NutCham() {
             // 999 > nửa chiều cao ở mọi kích cỡ nên luôn ra viên thuốc
             // (pill) trọn vẹn, không phụ thuộc phải tính lại theo CAO_NUT_CHAM.
             borderRadius: 999,
-            backgroundColor: dangCham ? undefined : laVao ? "#1f7769" : "#ea580c",
-            borderColor: dangCham ? undefined : laVao ? "#1f7769" : "#ea580c",
+            // Teal (tint iOS) cho VÀO, cam hệ thống iOS (#ff9500) cho RA.
+            backgroundColor: dangCham ? undefined : laVao ? "#12a594" : "#ff9500",
+            borderColor: dangCham ? undefined : laVao ? "#12a594" : "#ff9500",
             touchAction: "manipulation",
           }}
           onClick={() => handler.executeEvent("cham", {})}

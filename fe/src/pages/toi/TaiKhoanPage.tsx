@@ -1,6 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tag } from "antd";
+import {
+  UserOutlined,
+  AppstoreOutlined,
+  LogoutOutlined,
+  MobileOutlined,
+} from "@ant-design/icons";
 import { useAuth } from "@/contexts/AuthContext";
 import { coQuyenQuanTri } from "@/config/coQuyenQuanTri";
 import {
@@ -70,18 +76,31 @@ export default function TaiKhoanPage() {
   const hoTen = homNay?.nhanVien.hoTen ?? user?.hoTen ?? "";
   const quanTri = Boolean(user?.isSuperAdmin) || coQuyenQuanTri(hasPermission);
 
-  const dong = (nhan: string, icon: string, onClick: () => void, nguyHiem = false) => (
+  // Hàng kiểu iOS Settings: ô icon vuông bo góc màu (glyph trắng) dẫn đầu, nhãn,
+  // chevron cuối. `gradient` cho từng hàng một danh tính màu như app iOS.
+  const dong = (
+    nhan: string,
+    icon: ReactNode,
+    gradient: string,
+    onClick: () => void,
+    nguyHiem = false
+  ) => (
     <button
       key={nhan}
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between border-b border-[color:var(--emp-border)] px-5 py-4 text-left last:border-b-0"
+      className="emp-row emp-row-co-icon"
     >
-      <span className="flex items-center gap-3">
-        <span>{icon}</span>
-        <span style={nguyHiem ? { color: "var(--emp-danger)" } : undefined}>{nhan}</span>
+      <span className="emp-icon-tile-md" style={{ background: gradient }}>
+        {icon}
       </span>
-      <span className="text-[color:var(--emp-muted)]">›</span>
+      <span
+        className="text-[15px]"
+        style={nguyHiem ? { color: "var(--emp-danger)" } : undefined}
+      >
+        {nhan}
+      </span>
+      <span className="emp-chevron">›</span>
     </button>
   );
 
@@ -112,28 +131,31 @@ export default function TaiKhoanPage() {
         )}
       </div>
 
-      <div className="emp-card mb-4">
-        <div className="border-b border-[color:var(--emp-border)] px-5 py-3 text-[13px] font-semibold text-[color:var(--emp-text-phu)]">
-          📱 Thiết bị của tôi
-        </div>
+      <div className="emp-section-title">Thiết bị của tôi</div>
+      <div className="emp-card mb-6">
         {loiTaiThietBi ? (
-          <div className="px-5 py-4 text-[13px]" style={{ color: "var(--emp-danger)" }}>
+          <div className="px-4 py-4 text-[13px]" style={{ color: "var(--emp-danger)" }}>
             Không tải được danh sách thiết bị. Thử tải lại trang.
           </div>
         ) : thietBi.length === 0 ? (
-          <div className="px-5 py-4 text-[13px] text-[color:var(--emp-muted)]">
+          <div className="px-4 py-4 text-[13px] text-[color:var(--emp-muted)]">
             Chưa có thiết bị nào được đăng ký.
           </div>
         ) : (
           thietBi.map((t) => {
             const tt = NHAN_TRANG_THAI[t.trangThai] ?? { nhan: t.trangThai, mau: "default" };
             return (
-              <div
-                key={t.id}
-                className="flex items-center justify-between border-b border-[color:var(--emp-border)] px-5 py-3 last:border-b-0"
-              >
-                <span className="text-sm">{t.tenThietBi || "Thiết bị không tên"}</span>
-                <Tag color={tt.mau}>{tt.nhan}</Tag>
+              <div key={t.id} className="emp-row emp-row-co-icon">
+                <span
+                  className="emp-icon-tile-md"
+                  style={{ background: "linear-gradient(135deg, #8e8e93, #636366)" }}
+                >
+                  <MobileOutlined />
+                </span>
+                <span className="text-[15px]">{t.tenThietBi || "Thiết bị không tên"}</span>
+                <span className="ml-auto">
+                  <Tag color={tt.mau}>{tt.nhan}</Tag>
+                </span>
               </div>
             );
           })
@@ -141,12 +163,29 @@ export default function TaiKhoanPage() {
       </div>
 
       <div className="emp-card">
-        {dong("Thông tin cá nhân", "👤", () => navigate("/profile"))}
+        {dong(
+          "Thông tin cá nhân",
+          <UserOutlined />,
+          "linear-gradient(135deg, #4aa3ff, #0a84ff)",
+          () => navigate("/profile")
+        )}
         {/* HR mở app trên điện thoại phải có lối về khu quản trị — không có
             mục này họ chỉ thoát được /toi bằng cách gõ tay URL. Dùng chung
             phép kiểm với TrangChuTheoQuyen để hai chỗ không lệch nhau. */}
-        {quanTri && dong("Khu quản trị", "🗂", () => navigate("/cau-hinh/vai-tro"))}
-        {dong("Đăng xuất", "🚪", dangXuat, true)}
+        {quanTri &&
+          dong(
+            "Khu quản trị",
+            <AppstoreOutlined />,
+            "linear-gradient(135deg, #7d7bff, #5856d6)",
+            () => navigate("/cau-hinh/vai-tro")
+          )}
+        {dong(
+          "Đăng xuất",
+          <LogoutOutlined />,
+          "linear-gradient(135deg, #ff6b60, #ff3b30)",
+          dangXuat,
+          true
+        )}
       </div>
     </div>
   );

@@ -42,7 +42,7 @@ export function LichTuan() {
             type="button"
             aria-label="Tuần trước"
             disabled={dangTaiTuan}
-            className="h-[26px] w-[26px] rounded-md border border-[color:var(--emp-border)] text-[color:var(--emp-text-phu)]"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-[color:var(--emp-surface-2)] text-[15px] text-[color:var(--emp-text-phu)] disabled:opacity-40"
             onClick={() => handler.executeEvent("doiTuan", { lech: -1 })}
           >
             ‹
@@ -51,7 +51,7 @@ export function LichTuan() {
             type="button"
             aria-label="Tuần sau"
             disabled={dangTaiTuan}
-            className="h-[26px] w-[26px] rounded-md border border-[color:var(--emp-border)] text-[color:var(--emp-text-phu)]"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-[color:var(--emp-surface-2)] text-[15px] text-[color:var(--emp-text-phu)] disabled:opacity-40"
             onClick={() => handler.executeEvent("doiTuan", { lech: 1 })}
           >
             ›

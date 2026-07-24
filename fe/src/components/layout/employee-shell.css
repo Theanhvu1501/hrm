@@ -1,45 +1,198 @@
 /*
- * Biến của vỏ nhân viên, khoanh trong .emp-shell.
+ * Hệ thiết kế kiểu iOS cho vỏ nhân viên, khoanh trong .emp-shell.
  *
- * CỐ Ý không đụng ConfigProvider ở App.tsx: borderRadius 0 và
- * controlHeight 28 là quyết định toàn dự án cho các bảng/form quản trị.
- * Màn hình điện thoại cần bo góc mềm và vùng bấm to hơn, nên nhịp riêng
- * sống ở đây và chỉ áp cho cây DOM bên trong vỏ.
+ * CỐ Ý không đụng ConfigProvider ở App.tsx: borderRadius 0 và controlHeight
+ * 28 là quyết định toàn dự án cho bảng/form quản trị. App này chỉ mở trên
+ * điện thoại nên có nhịp riêng — bo mềm, vùng bấm to, nền xám nhóm kiểu iOS —
+ * và nhịp đó sống ở đây, chỉ áp cho cây DOM trong vỏ.
  *
- * Accent là teal MasterCEO (#1f7769), không phải #10B981 của bản mockup.
+ * Giữ nguyên tên biến `--emp-*` (nhiều component đang tham chiếu var(--emp-*)),
+ * chỉ đổi GIÁ TRỊ sang bảng màu hệ thống iOS. Tint thương hiệu là teal, đổi
+ * sang tông tươi hơn (#12A594) cho hợp ngôn ngữ iOS — sáng và "sống" hơn teal
+ * cũ #1f7769.
  */
 .emp-shell {
-  --emp-accent: #1f7769;
-  --emp-accent-nhat: #e6f2f0;
-  --emp-bg: #f8fafc;
+  /* Nền nhóm iOS (systemGroupedBackground) — cố ý KHÔNG trắng: thẻ trắng nổi
+     trên nền xám nhạt là dấu hiệu nhận ra tức thì của app iOS. */
+  --emp-bg: #f2f2f7;
   --emp-surface: #ffffff;
-  --emp-text: #1e293b;
-  --emp-text-phu: #64748b;
-  --emp-muted: #94a3b8;
-  --emp-border: #e2e8f0;
-  --emp-danger: #ef4444;
-  --emp-danger-nhat: #fef2f2;
-  --emp-radius: 12px;
+  --emp-surface-2: #f2f2f7;
+
+  /* Nhãn theo 3 cấp của iOS (label / secondaryLabel / tertiaryLabel). */
+  --emp-text: #1c1c1e;
+  --emp-text-phu: #6c6c70;
+  --emp-muted: #a1a1a6;
+
+  /* Đường kẻ mảnh kiểu iOS (opaqueSeparator) — hairline, hơi trong. */
+  --emp-border: rgba(60, 60, 67, 0.14);
+
+  /* Tint thương hiệu + các màu hệ thống iOS cho ngữ nghĩa. */
+  --emp-accent: #12a594;
+  --emp-accent-nhat: #e5f6f3;
+  --emp-cam: #ff9500;
+  --emp-green: #34c759;
+  --emp-green-nhat: #e7f9ec;
+  --emp-danger: #ff3b30;
+  --emp-danger-nhat: #ffeceb;
+  --emp-vang: #ff9f0a;
+
+  --emp-radius: 14px;
+  --emp-radius-lg: 20px;
   --emp-tab-height: 64px;
+
+  /* Font hệ thống Apple: trên iPhone (thiết bị đích) render đúng SF Pro —
+     nước đi iOS thật nhất, không cần tải font ngoài (an toàn CSP). */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 
   background: var(--emp-bg);
   color: var(--emp-text);
   min-height: 100vh;
 }
 
+/* ── Header ──────────────────────────────────────────────────────────────
+   Dải nhận diện (avatar, tên, công ty, ngày). Gradient teal dịu, bo đáy để
+   nội dung bên dưới trông như trượt ra từ một thẻ — mềm hơn dải chữ nhật cũ. */
 .emp-header {
-  background: linear-gradient(135deg, #0f3d36 0%, #145d52 60%, var(--emp-accent) 100%);
+  background: linear-gradient(165deg, #0e8c7f 0%, #12a594 100%);
   color: #ffffff;
+  border-bottom-left-radius: 20px;
+  border-bottom-right-radius: 20px;
+  box-shadow: 0 6px 20px rgba(18, 165, 148, 0.18);
 }
 
+/* ── Thẻ nhóm kiểu iOS ────────────────────────────────────────────────────
+   KHÔNG viền: nền trắng nổi trên nền xám + đổ bóng rất nhẹ, đúng cảm giác
+   inset grouped list của iOS. */
 .emp-card {
   background: var(--emp-surface);
-  border: 1px solid var(--emp-border);
   border-radius: var(--emp-radius);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 1px 10px rgba(0, 0, 0, 0.03);
 }
 
-/* Thanh tab dính đáy. padding-bottom ăn theo safe-area để tab không nằm
-   dưới thanh gạt của iPhone. */
+/* ── Hàng danh sách kiểu iOS ──────────────────────────────────────────────
+   Cao tối thiểu 44 (chuẩn chạm iOS), kẻ ngăn mảnh THỤT vào từ trái để chừa
+   chỗ cho icon dẫn đầu — đúng kiểu separator của iOS Settings. */
+.emp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 11px 16px;
+  position: relative;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  color: var(--emp-text);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.emp-row:active {
+  background: rgba(60, 60, 67, 0.06);
+}
+
+.emp-row:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--emp-border);
+}
+
+/* Biến thể kẻ ngăn thụt sâu hơn khi hàng có icon dẫn đầu (thụt qua icon). */
+.emp-row-co-icon:not(:last-child)::after {
+  left: 56px;
+}
+
+/* Mũi chevron › cuối hàng, màu xám tertiary như iOS. */
+.emp-chevron {
+  margin-left: auto;
+  color: var(--emp-muted);
+  font-size: 17px;
+  line-height: 1;
+}
+
+/* ── Tiêu đề mục (section header) ─────────────────────────────────────────
+   Footnote in hoa, xám — nhãn nhóm của inset list iOS. */
+.emp-section-title {
+  padding: 0 16px 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--emp-text-phu);
+}
+
+/* ── Ô icon kiểu app iOS ──────────────────────────────────────────────────
+   Hình vuông bo góc mềm (~27% cạnh), nền gradient, glyph trắng ở giữa. Đây là
+   MÔ-TÍP xuyên suốt: dùng ở tấm chọn loại đơn, và làm icon dẫn đầu ở các hàng
+   danh sách (kiểu iOS Settings). */
+.emp-icon-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  color: #ffffff;
+  font-size: 24px;
+  flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.16);
+}
+
+.emp-icon-tile-sm {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 16px;
+  box-shadow: none;
+}
+
+.emp-icon-tile-md {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  font-size: 19px;
+  box-shadow: none;
+}
+
+/* ── Nút chính dạng viên thuốc ────────────────────────────────────────────
+   Cao 50, bo tròn hết, chữ đậm — nút hành động chuẩn của app iOS. */
+.emp-btn-pill {
+  width: 100%;
+  height: 50px;
+  border: none;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--emp-accent);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.06s ease, opacity 0.15s ease;
+}
+
+.emp-btn-pill:active {
+  transform: scale(0.98);
+}
+
+.emp-btn-pill:disabled {
+  opacity: 0.5;
+}
+
+/* Nút phụ: nền xám nhạt, chữ tint — kiểu nút thứ cấp của iOS. */
+.emp-btn-nhe {
+  background: var(--emp-surface-2);
+  color: var(--emp-accent);
+}
+
+/* ── Thanh tab dính đáy ───────────────────────────────────────────────────
+   Nền mờ kiểu iOS tab bar (kính mờ + kẻ mảnh trên). */
 .emp-tabs {
   position: fixed;
   bottom: 0;
@@ -48,7 +201,9 @@
   width: 100%;
   max-width: 480px;
   height: var(--emp-tab-height);
-  background: var(--emp-surface);
+  background: rgba(255, 255, 255, 0.9);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
   border-top: 1px solid var(--emp-border);
   padding-bottom: env(safe-area-inset-bottom, 0);
   z-index: 100;
@@ -57,9 +212,10 @@
 .emp-tab {
   color: var(--emp-muted);
   -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease;
 }
 
-.emp-tab[aria-current='page'] {
+.emp-tab[aria-current="page"] {
   color: var(--emp-accent);
   font-weight: 600;
 }

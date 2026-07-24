@@ -90,6 +90,12 @@ export const DangNhapChamCongPage = loadable(() => import('./toi/DangNhapChamCon
   fallback: <PageLoader />
 });
 
+// Chỗ tạm cho tab Bảng công trong vỏ /toi — iOS-native, không dùng
+// ComingSoonPage của khu kế toán (nút "Về trang chủ" đá người dùng khỏi app).
+export const BangCongSapCoPage = loadable(() => import('./toi/BangCongSapCo'), {
+  fallback: <PageLoader />
+});
+
 // Đường nộp đơn DUY NHẤT của nhân viên thường: từ P3.6 Task 4, các route
 // quản trị /don-cham-cong đòi quyền /cham-cong/don-tu:* mà nhân viên không có.
 export const DonTuCuaToiPage = loadable(() => import('./toi/don-tu/DonTuCuaToiPage'), {
