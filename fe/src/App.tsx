@@ -37,6 +37,7 @@ import {
   ComingSoonPage,
   TaiKhoanPage,
   DangNhapChamCongPage,
+  DonTuCuaToiPage,
   NotFound
 } from "./pages/loadable";
 
@@ -262,7 +263,7 @@ const App = () => (
               >
                 <Route index element={<Navigate to="cham-cong" replace />} />
                 <Route path="cham-cong" element={<ChamCongCuaToiPage />} />
-                <Route path="don-tu" element={<ComingSoonPage />} />
+                <Route path="don-tu" element={<DonTuCuaToiPage />} />
                 <Route path="bang-cong" element={<ComingSoonPage />} />
                 <Route path="tai-khoan" element={<TaiKhoanPage />} />
               </Route>

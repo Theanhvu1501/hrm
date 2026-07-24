@@ -1,0 +1,54 @@
+/*
+ * Ô nhập của form nộp đơn.
+ *
+ * Cố ý dùng <input type="date|time"> và <select> NGUYÊN BẢN thay vì
+ * DatePicker/TimePicker/Select của antd: màn này chỉ mở trên điện thoại, và
+ * điều khiển nguyên bản gọi thẳng bánh xe chọn ngày/giờ của iOS/Android —
+ * thao tác quen tay, không kéo nhầm, không cần tải thêm panel lịch. Đổi lại
+ * phải tự kẻ lại đường viền cho khớp vỏ /toi, việc đó nằm ở đây.
+ *
+ * Đặt trong file riêng (không nhét vào employee-shell.css) để lớp này chết
+ * cùng màn hình nếu sau này màn hình bị thay.
+ */
+.don-tu-field {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 15px;
+  color: var(--emp-text, #1e293b);
+  background: var(--emp-surface, #ffffff);
+  border: 1px solid var(--emp-border, #e2e8f0);
+  /* 10px, không phải 12px của thẻ: ô nhập nhỏ hơn thẻ nên cùng bán kính sẽ
+     trông tròn hơn thẻ bao ngoài. */
+  border-radius: 10px;
+  outline: none;
+}
+
+.don-tu-field:focus {
+  border-color: var(--emp-accent, #1f7769);
+  box-shadow: 0 0 0 2px rgba(31, 119, 105, 0.15);
+}
+
+.don-tu-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--emp-text-phu, #64748b);
+}
+
+/* Hàng chọn loại đơn: 4 viên thuốc, viên đang chọn tô accent. */
+.don-tu-loai {
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 999px;
+  border: 1px solid var(--emp-border, #e2e8f0);
+  background: var(--emp-surface, #ffffff);
+  color: var(--emp-text-phu, #64748b);
+}
+
+.don-tu-loai[aria-pressed='true'] {
+  background: var(--emp-accent, #1f7769);
+  border-color: var(--emp-accent, #1f7769);
+  color: #ffffff;
+}

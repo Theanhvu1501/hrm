@@ -90,6 +90,12 @@ export const DangNhapChamCongPage = loadable(() => import('./toi/DangNhapChamCon
   fallback: <PageLoader />
 });
 
+// Đường nộp đơn DUY NHẤT của nhân viên thường: từ P3.6 Task 4, các route
+// quản trị /don-cham-cong đòi quyền /cham-cong/don-tu:* mà nhân viên không có.
+export const DonTuCuaToiPage = loadable(() => import('./toi/don-tu/DonTuCuaToiPage'), {
+  fallback: <PageLoader />
+});
+
 // Other pages
 export const TrangChuTheoQuyen = loadable(() => import('./TrangChuTheoQuyen'), {
   fallback: <PageLoader />
