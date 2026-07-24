@@ -60,4 +60,13 @@ export const permissionModules: PermissionModule[] = [
       // sung cho đủ bộ" ở đây, route đó không nhận quyền.
     ],
   },
+  {
+    key: 'luong',
+    label: 'LƯƠNG',
+    isSection: true,
+    children: [
+      { key: '/luong/bang-luong', label: 'Bảng lương' },
+      { key: '/luong/cau-hinh', label: 'Cấu hình lương' },
+    ],
+  },
 ];

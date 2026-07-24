@@ -21,6 +21,7 @@ import { BangCong_Module } from './bang-cong/bang-cong.module';
 import { NgayLe_Module } from './ngay-le/ngay-le.module';
 import { ThietBiChamCong_Module } from './thiet-bi-cham-cong/thiet-bi-cham-cong.module';
 import { BanGhiChamCong_Module } from './ban-ghi-cham-cong/ban-ghi-cham-cong.module';
+import { BangLuong_Module } from './bang-luong/bang-luong.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { BanGhiChamCong_Module } from './ban-ghi-cham-cong/ban-ghi-cham-cong.mod
     NgayLe_Module,
     ThietBiChamCong_Module,
     BanGhiChamCong_Module,
+    BangLuong_Module,
   ],
 })
 export class ConfigServiceModule {}
