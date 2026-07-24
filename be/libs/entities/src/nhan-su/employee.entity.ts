@@ -41,6 +41,14 @@ export class Employee extends BaseEntity {
    * chặn, không tẩy dấu vết.
    */
   @Column({ default: false }) choPhepChamNgoaiVung: boolean;
+  // ── Lương (P4) ──
+  @Column({ default: 0 }) luongThoaThuan: number;
+  @Column({ nullable: true }) mucKhaiBao?: number; // rỗng → dùng mucKhaiBaoMacDinh
+  @Column({ default: 0 }) phuCapCoDinh: number;
+  @Column({ default: 0 }) soNguoiPhuThuoc: number;
+  @Column({ default: false }) dongBH: boolean;
+  @Column({ default: false }) thoiVu: boolean;
+  @Column({ default: false }) camKet: boolean;
   @Column({ default: true }) isActive: boolean;
 }
 
