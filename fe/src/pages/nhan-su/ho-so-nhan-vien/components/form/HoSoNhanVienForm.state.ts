@@ -21,6 +21,13 @@ export interface HoSoNhanVienFormValues {
   workShiftId?: string;
   ngayLamViecTrongTuan?: number[];
   choPhepChamNgoaiVung?: boolean;
+  luongThoaThuan: number;
+  mucKhaiBao?: number;
+  phuCapCoDinh: number;
+  soNguoiPhuThuoc: number;
+  dongBH: boolean;
+  thoiVu: boolean;
+  camKet: boolean;
 }
 
 export interface FormStates extends BaseStates {

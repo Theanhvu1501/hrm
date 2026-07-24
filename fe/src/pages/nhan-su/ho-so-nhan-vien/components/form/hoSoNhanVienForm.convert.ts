@@ -63,5 +63,18 @@ export function toCreateEmployeeDto(
     // xem docblock ở hàm `choPhepChamNgoaiVungToDto` để biết vì sao không
     // được dùng `||` hay để lọt `undefined` ở đây.
     ...choPhepChamNgoaiVungToDto(values),
+
+    // Tab "Lương". Cùng quy tắc `??`/không dùng `||`: 0 và `false` là giá
+    // trị hợp lệ (lương 0, không đóng BHXH…) và không được rơi rụng thành
+    // `undefined` rồi bị `JSON.stringify` xoá khỏi body. Riêng `mucKhaiBao`
+    // CỐ Ý giữ `undefined` khi trống — nó có nghĩa "dùng mức mặc định trong
+    // Cấu hình lương", ép về 0 sẽ đổi hẳn ý nghĩa nghiệp vụ.
+    luongThoaThuan: values.luongThoaThuan ?? 0,
+    mucKhaiBao: values.mucKhaiBao,
+    phuCapCoDinh: values.phuCapCoDinh ?? 0,
+    soNguoiPhuThuoc: values.soNguoiPhuThuoc ?? 0,
+    dongBH: values.dongBH ?? false,
+    thoiVu: values.thoiVu ?? false,
+    camKet: values.camKet ?? false,
   };
 }

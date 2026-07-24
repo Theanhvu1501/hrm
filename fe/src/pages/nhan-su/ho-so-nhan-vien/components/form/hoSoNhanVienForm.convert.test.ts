@@ -115,6 +115,24 @@ describe("toCreateEmployeeDto — các trường tuỳ chọn khác giữ nguyê
     expect("soDienThoai" in body).toBe(false);
   });
 
+  it("tab Lương: gửi đúng giá trị số/cờ, mucKhaiBao trống thì không bị ép thành 0", () => {
+    const body = bodyThucGui(
+      toCreateEmployeeDto(
+        values({
+          luongThoaThuan: 15000000,
+          dongBH: true,
+          soNguoiPhuThuoc: 2,
+          mucKhaiBao: undefined,
+        })
+      )
+    );
+
+    expect(body.luongThoaThuan).toBe(15000000);
+    expect(body.dongBH).toBe(true);
+    expect(body.soNguoiPhuThuoc).toBe(2);
+    expect("mucKhaiBao" in body).toBe(false);
+  });
+
   it("lọc bằng cấp / người phụ thuộc rỗng như trước", () => {
     const body = bodyThucGui(
       toCreateEmployeeDto(

@@ -46,6 +46,14 @@ export interface Employee {
   // trình/làm tại nhà — nếu tắt (mặc định), nhân viên đứng ngoài bán kính
   // địa điểm sẽ bị BE chặn chấm công (xem `employee.entity.ts`, Task 1/2).
   choPhepChamNgoaiVung?: boolean;
+  // Tab "Lương" — dùng cho tính lương/thuế TNCN (xem `employee.entity.ts`).
+  luongThoaThuan: number;
+  mucKhaiBao?: number;
+  phuCapCoDinh: number;
+  soNguoiPhuThuoc: number;
+  dongBH: boolean;
+  thoiVu: boolean;
+  camKet: boolean;
 }
 
 export interface EmployeeFilter {
@@ -76,6 +84,13 @@ export interface CreateEmployeeDto {
   workShiftId?: string;
   ngayLamViecTrongTuan?: number[];
   choPhepChamNgoaiVung?: boolean;
+  luongThoaThuan?: number;
+  mucKhaiBao?: number;
+  phuCapCoDinh?: number;
+  soNguoiPhuThuoc?: number;
+  dongBH?: boolean;
+  thoiVu?: boolean;
+  camKet?: boolean;
 }
 
 export type UpdateEmployeeDto = Partial<CreateEmployeeDto>;
@@ -146,6 +161,13 @@ class EmployeeService extends ServiceBase {
       // `??` (không phải `||`) để không nuốt mất giá trị `false` hợp lệ đọc
       // từ BE — hồ sơ chưa từng lưu trường này mới rơi vào mặc định an toàn.
       choPhepChamNgoaiVung: (x.choPhepChamNgoaiVung as boolean) ?? false,
+      luongThoaThuan: (x.luongThoaThuan as number) ?? 0,
+      mucKhaiBao: x.mucKhaiBao as number | undefined,
+      phuCapCoDinh: (x.phuCapCoDinh as number) ?? 0,
+      soNguoiPhuThuoc: (x.soNguoiPhuThuoc as number) ?? 0,
+      dongBH: (x.dongBH as boolean) ?? false,
+      thoiVu: (x.thoiVu as boolean) ?? false,
+      camKet: (x.camKet as boolean) ?? false,
     };
   }
 }

@@ -10,6 +10,7 @@ import { CaNhanTab } from "./tabs/CaNhanTab";
 import { BangCapGiaCanhTab } from "./tabs/BangCapGiaCanhTab";
 import { CongViecTab } from "./tabs/CongViecTab";
 import { ChamCongTab } from "./tabs/ChamCongTab";
+import { LuongTab } from "./tabs/LuongTab";
 import { HoSoNhanVienFormValues } from "./HoSoNhanVienForm.state";
 import { toCreateEmployeeDto } from "./hoSoNhanVienForm.convert";
 import "./HoSoNhanVienForm.state";
@@ -36,6 +37,13 @@ const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   // Mặc định an toàn: nhân viên mới chưa được phép chấm công ngoài khu vực
   // cho tới khi HR chủ động bật (xem chamCongTab.convert.ts).
   choPhepChamNgoaiVung: false,
+  luongThoaThuan: 0,
+  mucKhaiBao: undefined,
+  phuCapCoDinh: 0,
+  soNguoiPhuThuoc: 0,
+  dongBH: false,
+  thoiVu: false,
+  camKet: false,
 };
 
 function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
@@ -64,6 +72,16 @@ function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
     // tường minh — không được đảo ngược nó về mặc định. Hồ sơ cũ chưa từng
     // có trường này (undefined) mới rơi vào mặc định an toàn `false`.
     choPhepChamNgoaiVung: employee.choPhepChamNgoaiVung ?? false,
+    // Cùng quy tắc `??`: 0/false đọc từ BE là giá trị hợp lệ, không phải
+    // "chưa có". `mucKhaiBao` là ngoại lệ — để `undefined` khi vắng mặt vì
+    // nó có nghĩa "dùng mức mặc định trong Cấu hình lương", khác với 0.
+    luongThoaThuan: employee.luongThoaThuan ?? 0,
+    mucKhaiBao: employee.mucKhaiBao,
+    phuCapCoDinh: employee.phuCapCoDinh ?? 0,
+    soNguoiPhuThuoc: employee.soNguoiPhuThuoc ?? 0,
+    dongBH: employee.dongBH ?? false,
+    thoiVu: employee.thoiVu ?? false,
+    camKet: employee.camKet ?? false,
   };
 }
 
@@ -115,6 +133,7 @@ export function HoSoNhanVienForm() {
     },
     { key: "cong-viec", label: "Công việc", children: <CongViecTab /> },
     { key: "cham-cong", label: "Chấm công", children: <ChamCongTab /> },
+    { key: "luong", label: "Lương", children: <LuongTab /> },
   ];
 
   return (
