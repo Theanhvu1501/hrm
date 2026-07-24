@@ -17,11 +17,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { AttendanceRequest } from "@/services/attendanceRequestService";
 import { Employee } from "@/services/employeeService";
 import {
+  BUOI_OPTIONS,
   LOAI_DON_OPTIONS,
+  LOAI_NGHI_OPTIONS,
   TRANG_THAI_OPTIONS,
   TRANG_THAI_TAG_COLOR,
   labelFor,
 } from "../../constants";
+import { khoangNgay, soLieuDon } from "../../hienThiDon";
 import "./DonChamCongTable.state";
 
 export function DonChamCongTable() {
@@ -101,18 +104,34 @@ export function DonChamCongTable() {
     },
     {
       title: "Loại đơn",
-      dataIndex: "loaiDon",
       key: "loaiDon",
       width: 150,
       align: "center",
-      render: (value: string) => labelFor(LOAI_DON_OPTIONS, value),
+      render: (_: unknown, record: AttendanceRequest) => (
+        <div>
+          <div>{labelFor(LOAI_DON_OPTIONS, record.loaiDon)}</div>
+          {/* Loại nghỉ và nửa buổi là hai thứ đổi hẳn ý nghĩa của đơn nghỉ —
+              "Nghỉ phép · Không lương" khác xa "Nghỉ phép · Phép năm". */}
+          {record.loaiNghi && (
+            <div className="text-xs text-muted-foreground">
+              {labelFor(LOAI_NGHI_OPTIONS, record.loaiNghi)}
+            </div>
+          )}
+          {record.buoi && record.buoi !== "ca_ngay" && (
+            <div className="text-xs text-muted-foreground">
+              {labelFor(BUOI_OPTIONS, record.buoi)}
+            </div>
+          )}
+        </div>
+      ),
     },
     {
       title: "Ngày",
-      dataIndex: "ngay",
       key: "ngay",
-      width: 120,
-      render: (value?: string) => value || "-",
+      width: 180,
+      // Đơn nghỉ nhiều ngày phải thấy được cả hai đầu khoảng: cột cũ chỉ hiện
+      // `ngay` nên đơn nghỉ 5 ngày trông y hệt đơn nghỉ 1 ngày.
+      render: (_: unknown, record: AttendanceRequest) => khoangNgay(record),
     },
     {
       title: "Giờ",
@@ -122,6 +141,16 @@ export function DonChamCongTable() {
         record.loaiDon === "lam_them_gio" && (record.gioTu || record.gioDen)
           ? `${record.gioTu || "?"}–${record.gioDen || "?"}`
           : "-",
+    },
+    {
+      title: "Số liệu",
+      key: "soLieu",
+      width: 130,
+      align: "center",
+      // Số ngày nghỉ / số giờ OT × hệ số — do backend tính (luat-don.ts). HR
+      // cần thấy con số này TRƯỚC khi bấm Duyệt, vì duyệt xong là nó đi thẳng
+      // vào bảng công.
+      render: (_: unknown, record: AttendanceRequest) => soLieuDon(record),
     },
     {
       title: "Lý do",
@@ -205,7 +234,8 @@ export function DonChamCongTable() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Đơn chấm công</h1>
           <p className="text-muted-foreground">
-            Quản lý đơn giải trình và làm thêm giờ của nhân viên
+            Quản lý đơn giải trình, làm thêm giờ, nghỉ phép và nghỉ bù của
+            nhân viên
           </p>
         </div>
         {canCreate && (
