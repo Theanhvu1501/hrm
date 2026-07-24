@@ -1,4 +1,5 @@
-import { Alert, Button, Popconfirm, Spin, Tag } from "antd";
+import { useState } from "react";
+import { Alert, Button, Modal, Tag } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import {
   useDonTuCuaToiHandler,
@@ -13,6 +14,7 @@ import {
 } from "@/pages/cham-cong/don-cham-cong/constants";
 import { dongPhu, khoangNgay } from "../moTaDon";
 import "./DanhSachDon.state";
+import "@/components/layout/emp-modal.css";
 
 /**
  * Danh sách đơn của chính mình.
@@ -36,12 +38,20 @@ export function DanhSachDon() {
   const [loiHuy] = useDonTuCuaToiState("loiHuy", "");
   const [dangHuyId] = useDonTuCuaToiState("dangHuyId", null as string | null);
 
+  // Đơn đang chờ xác nhận huỷ (mở dialog). null = không có dialog nào mở.
+  const [donXacNhanHuy, setDonXacNhanHuy] = useState<AttendanceRequest | null>(
+    null
+  );
+
   if (dangTai) {
+    // Spinner iOS mượt, KHÔNG kèm chữ (aria-label cho trình đọc màn hình).
     return (
       <div className="flex justify-center py-16">
-        <Spin tip="Đang tải đơn của bạn…">
-          <div className="h-8 w-8" />
-        </Spin>
+        <span
+          className="emp-spinner emp-spinner-lon"
+          role="status"
+          aria-label="Đang tải"
+        />
       </div>
     );
   }
@@ -61,7 +71,6 @@ export function DanhSachDon() {
           block
           size="large"
           icon={<ReloadOutlined />}
-          style={{ borderRadius: 999 }}
           onClick={() => handler.executeEvent("init", {})}
         >
           Thử lại
@@ -71,6 +80,13 @@ export function DanhSachDon() {
   }
 
   const ds = danhSach ?? [];
+
+  const xacNhanHuy = () => {
+    if (donXacNhanHuy) {
+      handler.executeEvent("huyDon", { id: donXacNhanHuy.id });
+    }
+    setDonXacNhanHuy(null);
+  };
 
   return (
     <div>
@@ -83,7 +99,6 @@ export function DanhSachDon() {
           showIcon
           // antd v6: `message` đã deprecated, dùng `title`.
           title={loiHuy}
-          style={{ borderRadius: 12 }}
         />
       )}
 
@@ -100,10 +115,33 @@ export function DanhSachDon() {
             key={don.id}
             don={don}
             dangHuy={dangHuyId === don.id}
-            onHuy={() => handler.executeEvent("huyDon", { id: don.id })}
+            onHuy={() => setDonXacNhanHuy(don)}
           />
         ))
       )}
+
+      {/* Xác nhận huỷ bằng dialog (thay Popconfirm): rõ ràng, đồng bộ kiểu iOS
+          với các modal khác. */}
+      <Modal
+        open={!!donXacNhanHuy}
+        title="Huỷ đơn này?"
+        onCancel={() => setDonXacNhanHuy(null)}
+        centered
+        destroyOnHidden
+        rootClassName="emp-sheet"
+        footer={[
+          <Button key="khong" onClick={() => setDonXacNhanHuy(null)}>
+            Không
+          </Button>,
+          <Button key="huy" danger type="primary" onClick={xacNhanHuy}>
+            Xác nhận huỷ
+          </Button>,
+        ]}
+      >
+        <div className="text-[15px] text-[color:var(--emp-text-phu)]">
+          Đơn sẽ bị gỡ khỏi hàng chờ duyệt.
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -141,7 +179,7 @@ function TheDon({
         </div>
         <Tag
           color={TRANG_THAI_TAG_COLOR[don.trangThai]}
-          style={{ borderRadius: 999, marginInlineEnd: 0 }}
+          style={{ marginInlineEnd: 0 }}
         >
           {labelFor(TRANG_THAI_OPTIONS, don.trangThai)}
         </Tag>
@@ -162,25 +200,9 @@ function TheDon({
       )}
 
       {huyDuoc && (
-        <Popconfirm
-          title="Huỷ đơn này?"
-          description="Đơn sẽ bị gỡ khỏi hàng chờ duyệt."
-          // KHÔNG để okText trùng nhãn nút mở ("Huỷ đơn"): trùng thì trên màn
-          // hình lúc đó có hai nút cùng chữ, người dùng bấm nhầm cái mở lại.
-          okText="Xác nhận huỷ"
-          cancelText="Không"
-          onConfirm={onHuy}
-        >
-          <Button
-            className="mt-3"
-            block
-            danger
-            loading={dangHuy}
-            style={{ borderRadius: 999 }}
-          >
-            Huỷ đơn
-          </Button>
-        </Popconfirm>
+        <Button className="mt-3" block danger loading={dangHuy} onClick={onHuy}>
+          Huỷ đơn
+        </Button>
       )}
     </div>
   );

@@ -72,22 +72,20 @@ describe('TaiKhoanPage', () => {
    * HR mở app trên điện thoại phải có lối về khu quản trị. Không có mục này
    * thì họ mắc kẹt trong /toi và chỉ thoát được bằng cách gõ tay URL.
    */
-  it('hiện "Khu quản trị" cho người có quyền quản trị', async () => {
+  // "Khu quản trị" và "Thông tin cá nhân" đã bị gỡ khỏi màn Tài khoản (yêu
+  // cầu nghiệp vụ): menu chỉ còn Đăng xuất, kể cả với tài khoản quản trị.
+  it('không còn "Khu quản trị" và "Thông tin cá nhân", kể cả với admin', async () => {
     mockAuth.mockReturnValue({
-      user: { hoTen: 'Trần Thị HR', isSuperAdmin: false },
+      user: { hoTen: 'Trần Thị HR', isSuperAdmin: true },
       logout: vi.fn(),
-      hasPermission: (q: string) => q === '/cau-hinh/vai-tro:xem',
+      hasPermission: () => true,
     });
 
     ve();
 
-    await waitFor(() => expect(screen.getByText('Khu quản trị')).toBeTruthy());
-  });
-
-  it('ẩn "Khu quản trị" với nhân viên thường', async () => {
-    ve();
     await waitFor(() => expect(screen.getByText('Đăng xuất')).toBeTruthy());
     expect(screen.queryByText('Khu quản trị')).toBeNull();
+    expect(screen.queryByText('Thông tin cá nhân')).toBeNull();
   });
 
   /**

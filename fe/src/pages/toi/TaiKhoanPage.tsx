@@ -1,14 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
 import { Tag } from "antd";
-import {
-  UserOutlined,
-  AppstoreOutlined,
-  LogoutOutlined,
-  MobileOutlined,
-} from "@ant-design/icons";
+import { LogoutOutlined, MobileOutlined } from "@ant-design/icons";
 import { useAuth } from "@/contexts/AuthContext";
-import { coQuyenQuanTri } from "@/config/coQuyenQuanTri";
 import {
   employeeDeviceService,
   EmployeeDevice,
@@ -30,8 +23,7 @@ function chuDau(ten?: string): string {
 }
 
 export default function TaiKhoanPage() {
-  const { user, logout, hasPermission } = useAuth();
-  const navigate = useNavigate();
+  const { user, logout } = useAuth();
   // Hồ sơ chấm công hôm nay giờ nạp MỘT LẦN ở cấp vỏ /toi
   // (HoSoChamCongProvider, xem EmployeeLayout.tsx) và chia sẻ cho cả header
   // lẫn màn hình này — bỏ lời gọi /hom-nay riêng của trang này (Task 7).
@@ -74,7 +66,6 @@ export default function TaiKhoanPage() {
   };
 
   const hoTen = homNay?.nhanVien.hoTen ?? user?.hoTen ?? "";
-  const quanTri = Boolean(user?.isSuperAdmin) || coQuyenQuanTri(hasPermission);
 
   // Hàng kiểu iOS Settings: ô icon vuông bo góc màu (glyph trắng) dẫn đầu, nhãn,
   // chevron cuối. `gradient` cho từng hàng một danh tính màu như app iOS.
@@ -148,7 +139,7 @@ export default function TaiKhoanPage() {
               <div key={t.id} className="emp-row emp-row-co-icon">
                 <span
                   className="emp-icon-tile-md"
-                  style={{ background: "linear-gradient(135deg, #8e8e93, #636366)" }}
+                  style={{ background: "linear-gradient(135deg, #4aa3ff, #0a84ff)" }}
                 >
                   <MobileOutlined />
                 </span>
@@ -163,22 +154,6 @@ export default function TaiKhoanPage() {
       </div>
 
       <div className="emp-card">
-        {dong(
-          "Thông tin cá nhân",
-          <UserOutlined />,
-          "linear-gradient(135deg, #4aa3ff, #0a84ff)",
-          () => navigate("/profile")
-        )}
-        {/* HR mở app trên điện thoại phải có lối về khu quản trị — không có
-            mục này họ chỉ thoát được /toi bằng cách gõ tay URL. Dùng chung
-            phép kiểm với TrangChuTheoQuyen để hai chỗ không lệch nhau. */}
-        {quanTri &&
-          dong(
-            "Khu quản trị",
-            <AppstoreOutlined />,
-            "linear-gradient(135deg, #7d7bff, #5856d6)",
-            () => navigate("/cau-hinh/vai-tro")
-          )}
         {dong(
           "Đăng xuất",
           <LogoutOutlined />,
