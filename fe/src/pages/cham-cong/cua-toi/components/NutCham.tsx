@@ -178,11 +178,6 @@ export function NutCham() {
 
   // ── 4. Màn hình chính ──────────────────────────────────────────────────
   const laVao = homNay.hanhDongKeTiep === "vao";
-  // Đủ công = ngày công có cả lượt vào lẫn lượt ra. Nút VẪN bấm được: bấm
-  // thêm là cập nhật giờ ra, lối thoát cho người lỡ bấm ra sớm.
-  const daDuCong =
-    homNay.banGhi.some((b) => b.loai === "vao") &&
-    homNay.banGhi.some((b) => b.loai === "ra");
 
   return (
     <div>
@@ -232,20 +227,6 @@ export function NutCham() {
           */}
           Chấm công
         </Button>
-
-        {daDuCong && (
-          <div className="text-center">
-            <Text type="secondary" className="text-xs">
-              Đã đủ công — bấm lại nếu cần cập nhật giờ ra
-            </Text>
-          </div>
-        )}
-
-        <div className="text-center">
-          <Text type="secondary" className="text-xs">
-            Thời gian ghi nhận lấy từ máy chủ, không lấy từ đồng hồ điện thoại.
-          </Text>
-        </div>
       </Space>
     </div>
   );

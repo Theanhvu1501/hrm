@@ -1,6 +1,6 @@
 import { useChamCongCuaToiState } from "../ChamCongCuaToiHandlerContext";
 import { AttendanceRecord, TrangThaiHomNay } from "@/services/attendanceRecordService";
-import { gioVN, homNayVN } from "@/ultils/thoiGianVN";
+import { gioGiayVN, homNayVN } from "@/ultils/thoiGianVN";
 import { duLieuNgay } from "../ngayDangXem";
 import "./NutCham.state";
 import "./LichTuan.state";
@@ -77,7 +77,7 @@ export function ChiTietChamCong() {
                   {b.loai === "vao" ? "Vào" : "Ra"}
                 </span>
                 <div>
-                  <div className="text-[15px] font-semibold">{gioVN(b.thoiDiem)}</div>
+                  <div className="text-[15px] font-semibold">{gioGiayVN(b.thoiDiem)}</div>
                   <div className="mt-0.5 text-[11px] text-[color:var(--emp-muted)]">{b.ngay}</div>
                   {/* Có nhiều lượt vào/ra trong ngày thì muộn/sớm phải gắn
                       đúng vào lượt gây ra nó — ô ba trạng thái chỉ nói được

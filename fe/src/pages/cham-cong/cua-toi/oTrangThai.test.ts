@@ -49,7 +49,7 @@ describe('baOTrangThai', () => {
       homNay({ banGhi: [banGhi({ loai: 'vao' })], soCong: null })
     );
 
-    expect(vao.giaTri).toBe('08:02');
+    expect(vao.giaTri).toBe('08:02:00');
     expect(vao.ghiChu).toBe('Đúng giờ');
     expect(vao.xanh).toBe(true);
     expect(ra.xanh).toBe(false);
@@ -76,7 +76,7 @@ describe('baOTrangThai', () => {
     );
 
     expect(vao.xanh).toBe(true);
-    expect(ra.giaTri).toBe('17:05');
+    expect(ra.giaTri).toBe('17:05:00');
     expect(ra.ghiChu).toBe('Đúng giờ');
     expect(ra.xanh).toBe(true);
     expect(cong).toEqual({ nhan: 'Công', giaTri: '1', ghiChu: 'Đủ công', xanh: true });
@@ -114,7 +114,7 @@ describe('baOTrangThai', () => {
       })
     );
 
-    expect(vao.giaTri).toBe('08:00');
-    expect(ra.giaTri).toBe('17:00');
+    expect(vao.giaTri).toBe('08:00:00');
+    expect(ra.giaTri).toBe('17:00:00');
   });
 });

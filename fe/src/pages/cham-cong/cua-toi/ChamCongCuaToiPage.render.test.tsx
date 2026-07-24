@@ -134,7 +134,7 @@ describe('Chấm công của tôi — đường hạnh phúc', () => {
     const nut = await screen.findByRole('button', { name: /Chấm công$/ });
     fireEvent.click(nut);
 
-    expect(await screen.findByText(/Đã chấm công vào thành công/)).toBeTruthy();
+    expect(await screen.findByText(/Chấm công thành công/)).toBeTruthy();
     // Giờ hiện ra phải theo múi giờ VN, không theo múi giờ máy chạy test.
     expect(screen.getByText(/Ghi lúc 08:05/)).toBeTruthy();
     expect(checkIn).toHaveBeenCalledTimes(1);
@@ -147,10 +147,6 @@ describe('Chấm công của tôi — đường hạnh phúc', () => {
     expect(dto.deviceId).toBeTruthy();
     // Tên máy luôn được gửi kèm để dòng chờ duyệt tự sinh của BE không trống.
     expect(dto.tenThietBi).toBeTruthy();
-    // Ca fixture: banGhi rỗng, soCong 0 → chưa đủ công, KHÔNG được hiện dòng
-    // nhắc "bấm lại nếu cần cập nhật giờ ra". Thay điều kiện `daDuCong` bằng
-    // `true` sẽ làm test này đỏ.
-    expect(screen.queryByText(/bấm lại nếu cần cập nhật giờ ra/)).toBeNull();
   });
 
   it('tin hanhDongKeTiep của backend: "ra" → bấm nút gọi checkOut', async () => {
@@ -202,10 +198,6 @@ describe('Chấm công của tôi — ca qua đêm', () => {
     expect(screen.queryByText('Chưa có lượt chấm công nào')).toBeNull();
     // Tiêu đề nói rõ đây là ca của ngày công hôm trước, không đề ngày hôm nay.
     expect(screen.getByText(/Chi tiết ca ngày 2026-07-22 \(chưa kết thúc\)/)).toBeTruthy();
-    // Fixture chỉ có MỘT lượt vào → chưa đủ công, không được hiện dòng nhắc
-    // "bấm lại nếu cần cập nhật giờ ra". Thay điều kiện `daDuCong` bằng
-    // `true` sẽ làm test này đỏ.
-    expect(screen.queryByText(/bấm lại nếu cần cập nhật giờ ra/)).toBeNull();
     // hanhDongKeTiep là "ra" → nút phải mang icon logout (cam/RA), không
     // phải icon login (teal/VÀO). Nhãn nút giờ chỉ còn "Chấm công" nên chỉ
     // icon (và màu) còn nói được chiều chấm công.
@@ -465,7 +457,7 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
     // trạng thái + dòng chi tiết của chính lượt đó) — khoanh vùng vào ô ba
     // trạng thái (`.grid-cols-3`) để không lẫn với chi tiết.
     await waitFor(() =>
-      expect(screen.getByText('08:02', { selector: '.text-xl' })).toBeTruthy()
+      expect(screen.getByText('08:02:00', { selector: '.text-xl' })).toBeTruthy()
     );
     const baO = container.querySelector('.grid-cols-3') as HTMLElement;
     expect(within(baO).getByText('Muộn 2 phút')).toBeTruthy();
@@ -584,7 +576,7 @@ describe('Chấm công của tôi — dải lịch tuần đồng bộ sau khi c
 
     fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
-    expect(await screen.findByText(/Đã chấm công vào thành công/)).toBeTruthy();
+    expect(await screen.findByText(/Chấm công thành công/)).toBeTruthy();
     // Lần nạp thứ hai phải xảy ra SAU khi chấm công thành công — nếu không,
     // dải lịch tuần và ba ô trạng thái kể hai câu chuyện khác nhau về cùng
     // một cú bấm.
@@ -685,7 +677,6 @@ describe('Chấm công của tôi — nút một nhãn theo mockup, không bao g
     // tính DOM `disabled`, đúng cách columnFilterDropdown.render.test.tsx đã
     // làm ở chỗ khác trong repo.
     expect((nut as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByText(/bấm lại nếu cần cập nhật giờ ra/i)).toBeTruthy();
   });
 
   it('ngoài bán kính → hiện câu backend và nút vẫn còn', async () => {
@@ -775,7 +766,7 @@ describe('Chấm công của tôi — kết quả hiện trong dialog (không ph
     render(<ChamCongCuaToiPage />);
     fireEvent.click(await screen.findByRole('button', { name: /Chấm công$/ }));
 
-    await screen.findByText(/Đã chấm công vào thành công/);
+    await screen.findByText(/Chấm công thành công/);
     // `.ant-modal` chỉ có khi antd Modal thật sự mở — Alert cũ không bao giờ
     // tạo ra class này. Xoá phần mở dialog (revert về Alert) làm dòng này đỏ
     // dù câu chữ phía trên vẫn đúng.

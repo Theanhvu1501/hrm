@@ -2,7 +2,7 @@ import {
   AttendanceRecord,
   TrangThaiHomNay,
 } from '@/services/attendanceRecordService';
-import { gioVN } from '@/ultils/thoiGianVN';
+import { gioGiayVN } from '@/ultils/thoiGianVN';
 
 /**
  * Một ô trong hàng ba ô trên màn hình chấm công.
@@ -52,7 +52,7 @@ function oGio(
   }
   return {
     nhan,
-    giaTri: gioVN(ban.thoiDiem),
+    giaTri: gioGiayVN(ban.thoiDiem),
     ghiChu: soPhutLech > 0 ? `${cauLech} ${soPhutLech} phút` : 'Đúng giờ',
     xanh: true,
   };

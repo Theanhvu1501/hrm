@@ -23,6 +23,26 @@ export function gioVN(iso?: string): string {
   });
 }
 
+/**
+ * ISO → "08:05:23" theo giờ VN — có GIÂY.
+ *
+ * Tách khỏi `gioVN()` chứ không thêm giây vào đó: `gioVN` còn được dùng cho ô
+ * nhập giờ của màn HR nhập bù, mà DTO backend chỉ nhận `gio` dạng "HH:mm"
+ * (regex `^([01]\d|2[0-3]):([0-5]\d)$`) — thêm giây vào là hỏng cả đường nhập bù.
+ *
+ * Dùng cho các màn CHỈ HIỂN THỊ của nhân viên, nơi giây có ích: hai lượt bấm
+ * cách nhau vài giây mà cùng hiện "08:05" thì không phân biệt được.
+ */
+export function gioGiayVN(iso?: string): string {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('vi-VN', {
+    timeZone: TZ_VN,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
 /** ISO → ngày kèm giờ theo giờ VN. Chuỗi rỗng nếu không có giá trị. */
 export function ngayGioVN(iso?: string): string {
   if (!iso) return '';

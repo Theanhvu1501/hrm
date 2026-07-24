@@ -73,34 +73,42 @@ function EmployeeShell() {
 
   return (
     <div className="emp-shell mx-auto w-full max-w-[480px]">
-      <div className="emp-header sticky top-0 z-10 px-5 pb-4 pt-5">
-        <div className="mb-2.5 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-white/40 bg-white/20 text-[15px] font-semibold">
-              {chuDau(user?.hoTen)}
+      {/*
+        Header hai dòng thay vì ba tầng như trước (tên/phòng ban → badge công
+        ty → ngày riêng một dòng). Đây là màn hình mà việc chính nằm ở NÚT
+        chấm công phía dưới — header càng ăn ít chiều dọc thì nút càng sớm
+        nằm trong tầm ngón cái. Phòng ban và ngày gộp một dòng phụ vì cả hai
+        đều là thông tin liếc qua, không phải thứ để đọc kỹ.
+      */}
+      <div className="emp-header sticky top-0 z-10 px-4 pb-3 pt-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-white/40 bg-white/20 text-sm font-semibold">
+            {chuDau(user?.hoTen)}
+          </div>
+          {/* min-w-0 để `truncate` bên trong hoạt động: thiếu nó thì tên dài
+              đẩy badge công ty tràn ra khỏi màn hình thay vì bị cắt. */}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[15px] font-semibold leading-tight">
+              {user?.hoTen}
             </div>
-            <div>
-              <div className="text-base font-semibold">{user?.hoTen}</div>
+            <div className="truncate text-[11px] leading-tight opacity-80">
               {/* Thiếu phòng ban (chưa tải xong, chưa gắn hồ sơ, hoặc lỗi
-                  khác) thì KHÔNG hiện dòng rỗng — mockup có dòng này nhưng
-                  chỉ khi có dữ liệu thật. */}
+                  khác) thì KHÔNG hiện dấu chấm ngăn cách lửng lơ. */}
               {hoSo?.phongBan && (
-                <div
-                  data-testid="header-phong-ban"
-                  className="text-[11px] opacity-80"
-                >
-                  {hoSo.phongBan}
-                </div>
+                <>
+                  <span data-testid="header-phong-ban">{hoSo.phongBan}</span>
+                  {" · "}
+                </>
               )}
+              {ngayDayDu(homNayVN())}
             </div>
           </div>
           {currentTenant?.tenantName && (
-            <span className="rounded-full bg-white/15 px-2.5 py-1 text-[11px]">
+            <span className="shrink-0 rounded-full bg-white/15 px-2.5 py-1 text-[11px]">
               {currentTenant.tenantName}
             </span>
           )}
         </div>
-        <div className="text-[13px] opacity-85">{ngayDayDu(homNayVN())}</div>
       </div>
 
       {/* pb chừa chỗ cho thanh tab dính đáy, cộng thêm nhịp thở. */}

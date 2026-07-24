@@ -6,7 +6,7 @@ import {
   ExclamationCircleFilled,
 } from "@ant-design/icons";
 import { AttendanceRecord } from "@/services/attendanceRecordService";
-import { gioVN } from "@/ultils/thoiGianVN";
+import { gioGiayVN } from "@/ultils/thoiGianVN";
 
 export interface KetQuaChamCongDialogProps {
   open: boolean;
@@ -64,7 +64,10 @@ export function KetQuaChamCongDialog({
     thanh_cong: {
       icon: <CheckCircleFilled />,
       mau: "#1f7769",
-      tieuDe: `Đã chấm công ${banGhiVuaTao?.loai === "vao" ? "vào" : "ra"} thành công`,
+      // Không nêu vào/ra: người vừa bấm biết mình đang làm gì, và ba ô trạng
+      // thái ngay phía sau dialog đã hiện đủ giờ vào/giờ ra. Thêm chữ chỉ làm
+      // câu dài ra chứ không nói thêm được điều gì.
+      tieuDe: "Chấm công thành công",
     },
     ngoai_vung: {
       icon: <ExclamationCircleFilled />,
@@ -90,11 +93,11 @@ export function KetQuaChamCongDialog({
   // (giờ máy chủ, địa điểm, khoảng cách); hai biến thể lỗi dùng nguyên `cau`.
   let moTa = cau;
   if (bienThe === "thanh_cong" && banGhiVuaTao) {
-    moTa = `Ghi lúc ${gioVN(banGhiVuaTao.thoiDiem)}${
+    moTa = `Ghi lúc ${gioGiayVN(banGhiVuaTao.thoiDiem)}${
       banGhiVuaTao.locationTen ? ` tại ${banGhiVuaTao.locationTen}` : ""
     }.`;
   } else if (bienThe === "ngoai_vung" && banGhiVuaTao) {
-    moTa = `Ghi lúc ${gioVN(banGhiVuaTao.thoiDiem)}${
+    moTa = `Ghi lúc ${gioGiayVN(banGhiVuaTao.thoiDiem)}${
       banGhiVuaTao.khoangCachMet !== undefined
         ? `, cách điểm chấm công gần nhất khoảng ${Math.round(banGhiVuaTao.khoangCachMet)}m`
         : ""
@@ -108,8 +111,19 @@ export function KetQuaChamCongDialog({
       centered
       closable
       maskClosable
+      // PHẢI override bo góc ở đây: `ConfigProvider` trong App.tsx đặt
+      // `borderRadius: 0` cho TOÀN dự án (quyết định của các màn quản trị),
+      // nên Modal mặc định vuông góc và lạc lõng giữa vỏ nhân viên vốn bo mềm
+      // 12px với nút chấm công dạng viên thuốc. Không sửa token toàn cục —
+      // làm vậy là phá mọi bảng và form bên khu quản trị.
+      styles={{ content: { borderRadius: 16 } }}
       footer={[
-        <Button key="dong" type="primary" onClick={onClose}>
+        <Button
+          key="dong"
+          type="primary"
+          onClick={onClose}
+          style={{ borderRadius: 999 }}
+        >
           Đóng
         </Button>,
       ]}
