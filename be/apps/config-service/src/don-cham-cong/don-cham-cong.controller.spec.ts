@@ -1,4 +1,5 @@
-import { PATH_METADATA } from '@nestjs/common/constants';
+import { PATH_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
+import { RequestMethod } from '@nestjs/common';
 import { AdminGuard, JwtGuard } from '@app/auth';
 import { DonChamCong_Controller } from './don-cham-cong.controller';
 
@@ -18,7 +19,19 @@ import { DonChamCong_Controller } from './don-cham-cong.controller';
 const guardsOf = (fn: any): any[] =>
   Reflect.getMetadata('__guards__', fn) ?? [];
 
+const httpMethodOf = (fn: any): RequestMethod =>
+  Reflect.getMetadata(METHOD_METADATA, fn);
+
+const pathOf = (fn: any): string => Reflect.getMetadata(PATH_METADATA, fn) ?? '';
+
 const proto = DonChamCong_Controller.prototype as any;
+
+const VERB_GHI = [
+  RequestMethod.POST,
+  RequestMethod.PUT,
+  RequestMethod.PATCH,
+  RequestMethod.DELETE,
+];
 
 describe('DonChamCong_Controller — phân quyền', () => {
   it('class gắn JwtGuard cho toàn bộ route', () => {
@@ -42,6 +55,26 @@ describe('DonChamCong_Controller — phân quyền', () => {
       expect(guardsOf(proto[ten])).not.toContain(AdminGuard);
     },
   );
+
+  // Tiền lệ commit 05cc743 (ca-lam-viec/dia-diem-cham-cong/ngay-le/nhan-vien):
+  // hai it.each phía trên liệt kê tay tên method, nên route ghi thêm SAU NÀY
+  // (ai đó thêm @Patch mới mà quên AdminGuard) lọt lưới hoàn toàn — CI vẫn
+  // xanh vì test chỉ biết hỏi về 9 tên method đã có sẵn. Assert này quét
+  // TOÀN BỘ method có HTTP verb ghi (POST/PUT/PATCH/DELETE) bằng metadata,
+  // không quan tâm tên — nên route ghi thêm sau này bắt buộc phải tự chứng
+  // minh nó an toàn (AdminGuard, hoặc nằm dưới nhóm tự phục vụ cua-toi) thì
+  // mới qua được, thay vì mặc định lọt qua vì test không biết tới nó.
+  it('mọi route ghi đều có AdminGuard hoặc là route tự phục vụ dưới cua-toi, kể cả route thêm sau này', () => {
+    const khongDatDieuKien = Object.getOwnPropertyNames(proto)
+      .filter((ten) => VERB_GHI.includes(httpMethodOf(proto[ten])))
+      .filter((ten) => {
+        const coAdminGuard = guardsOf(proto[ten]).includes(AdminGuard);
+        const laTuPhucVu = pathOf(proto[ten]).startsWith('cua-toi');
+        return !coAdminGuard && !laTuPhucVu;
+      });
+
+    expect(khongDatDieuKien).toEqual([]);
+  });
 });
 
 describe('DonChamCong_Controller — thứ tự route', () => {
