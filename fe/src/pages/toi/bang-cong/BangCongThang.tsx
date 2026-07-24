@@ -161,11 +161,11 @@ export default function BangCongThang() {
           </div>
         </div>
 
-        <div className="grid grid-cols-7 gap-1 mb-1">
+        <div className="grid grid-cols-7 gap-1.5 mb-1.5">
           {TEN_THU.map((t) => (
             <div
               key={t}
-              className="py-1 text-center text-[10px] font-medium text-[color:var(--emp-muted)]"
+              className="py-1 text-center text-[12px] font-medium text-[color:var(--emp-muted)]"
             >
               {t}
             </div>
@@ -173,31 +173,38 @@ export default function BangCongThang() {
         </div>
 
         {luoi.map((tuan, i) => (
-          <div key={i} className="grid grid-cols-7 gap-1">
+          <div key={i} className="grid grid-cols-7 gap-1.5 mb-1.5 last:mb-0">
             {tuan.map((n, j) => {
               if (!n) return <div key={j} />;
 
               const o = oTheoNgay[n];
               const laHomNay = n === homNay;
               const { nen, chu, mo } = kieuO(o, laHomNay);
+              // Ô cao, đủ rộng — lịch lấp đầy màn thay vì co cụm trên cùng
+              // (mỗi ô ~64px, số ngày + số công đọc rõ trên điện thoại).
               const style: React.CSSProperties = {
                 background: laHomNay ? "var(--emp-accent-nhat)" : nen,
                 outline: laHomNay ? "1.5px solid var(--emp-accent)" : undefined,
                 opacity: mo && !laHomNay ? 0.45 : 1,
+                minHeight: 60,
               };
 
               return (
-                <div key={j} className="rounded-xl py-1.5 text-center" style={style}>
-                  <div className="text-[13px] font-semibold">{o.ngayTrongThang}</div>
+                <div
+                  key={j}
+                  className="flex flex-col items-center justify-center gap-0.5 rounded-2xl text-center"
+                  style={style}
+                >
+                  <div className="text-[16px] font-semibold leading-none">{o.ngayTrongThang}</div>
                   <div
-                    className="text-[11px] font-medium"
+                    className="text-[14px] font-semibold leading-none"
                     style={{ color: chu ?? "var(--emp-text-phu)" }}
                   >
                     {/* Khớp ảnh mẫu: số công kèm ký hiệu NHỎ trên góc (1ᵖ),
                         không thay số bằng chữ. Ngày không có ký hiệu chỉ hiện
                         hienThi ('1'|'0'|'N'|'•'|''). */}
                     {o.hienThi}
-                    {o.kyHieu && <sup className="text-[8px]">{o.kyHieu}</sup>}
+                    {o.kyHieu && <sup className="text-[10px]">{o.kyHieu}</sup>}
                   </div>
                 </div>
               );
