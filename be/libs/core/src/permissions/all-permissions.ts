@@ -27,7 +27,7 @@ export const PERMISSION_MODULES = [
   // AdminGuard). Đừng "bổ sung cho đủ bộ" ở đây, route đó không nhận quyền.
 ];
 
-const PERMISSION_ACTIONS = ['xem', 'them', 'sua', 'xoa', 'xuat'];
+export const PERMISSION_ACTIONS = ['xem', 'them', 'sua', 'xoa', 'xuat'];
 
 export function generateAllPermissions(): string[] {
   const permissions: string[] = [];

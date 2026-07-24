@@ -1,6 +1,7 @@
 import { RequestMethod } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { PermissionGuard, PERMISSIONS_KEY } from '@app/auth';
+import { generateAllPermissions } from '@app/core';
 
 /**
  * Bộ đọc metadata dùng chung cho các spec phân quyền của config-service.
@@ -51,6 +52,21 @@ const laTuPhucVu = (duongDan: string, tuPhucVuThem: string[]): boolean =>
     (tienTo) => duongDan === tienTo || duongDan.startsWith(`${tienTo}/`),
   );
 
+/**
+ * Catalog quyền hợp lệ = `PERMISSION_MODULES` × `PERMISSION_ACTIONS`
+ * (`libs/core/src/permissions/all-permissions.ts`) — chính bộ mà
+ * `generateAllPermissions()` cấp cho vai trò lúc provisioning tenant.
+ *
+ * Vì sao phải đối chiếu chứ không chỉ đòi "mảng quyền không rỗng": một chuỗi
+ * gõ sai như `'/cham-cong/don-tuu:sua'` qua được mọi assert cũ, mà vì KHÔNG
+ * AI có quyền đó nên route 403 với tất cả mọi người — hỏng im lặng, và hỏng
+ * theo chiều khó phát hiện nhất (không phải "mở toang" nên không ai kêu về
+ * bảo mật, chỉ có một màn hình tự nhiên không dùng được). Đối chiếu ở đây
+ * cũng chính là thứ giữ cho `@Permissions` trong code và catalog quyền không
+ * trôi ra xa nhau: thêm module mới mà quên khai vào catalog là đỏ ngay.
+ */
+const CATALOG_QUYEN = new Set(generateAllPermissions());
+
 export interface ViPhamPhanQuyen {
   route: string;
   lyDo: string;
@@ -61,8 +77,9 @@ export interface ViPhamPhanQuyen {
  * sau này) của một controller và trả về danh sách vi phạm. Luật:
  *
  *  - route tự phục vụ  -> phải KHÔNG có `@Permissions()`;
- *  - còn lại           -> phải có `PermissionGuard` trong `__guards__` VÀ
- *                         `@Permissions()` với mảng không rỗng.
+ *  - còn lại           -> phải có `PermissionGuard` trong `__guards__`,
+ *                         `@Permissions()` với mảng không rỗng, VÀ mọi chuỗi
+ *                         quyền phải thuộc catalog (xem `CATALOG_QUYEN`).
  *
  * @param tuPhucVuThem các đường dẫn tự phục vụ riêng của controller, ngoài
  *   `cua-toi`/`me` (vd `check-in` của bản ghi chấm công). Cố ý bắt khai tường
@@ -102,6 +119,18 @@ export function quetPhanQuyenRoute(
             lyDo:
               'thiếu @Permissions() — PermissionGuard cho qua khi route không ' +
               'khai quyền, nên route đang mở toang',
+          },
+        ];
+      }
+
+      const quyenLa = quyen.filter((chuoi) => !CATALOG_QUYEN.has(chuoi));
+      if (quyenLa.length > 0) {
+        return [
+          {
+            route: ten,
+            lyDo:
+              `chuỗi quyền không có trong catalog: ${quyenLa.join(', ')} — ` +
+              'không ai được cấp quyền này nên route 403 với tất cả mọi người',
           },
         ];
       }
