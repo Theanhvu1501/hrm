@@ -1,19 +1,21 @@
 /*
- * Modal kiểu TẤM TRƯỢT ĐÁY (bottom sheet) của iOS.
+ * Modal kiểu iOS cho vỏ nhân viên: thẻ căn giữa, bo góc vừa, padding gọn,
+ * phần thân tự cuộn nếu cao (KHÔNG tràn ra ngoài màn hình).
  *
- * Dùng qua `rootClassName="emp-sheet"` trên <Modal> (KHÔNG kèm prop `centered`
- * — tấm này neo đáy, không căn giữa).
+ * Dùng qua `rootClassName="emp-sheet"` + prop `centered` trên <Modal>.
  *
- * Vì sao gần như MỌI dòng ở đây đều `!important`: index.css (stylesheet toàn
- * cục của khu kế toán) ép rất nhiều thuộc tính của `.ant-modal*` bằng
- * `!important` — border-radius 0, padding 16px, viền header/footer, cả
- * max-width/margin của `.ant-modal` trong @media điện thoại. `!important`
- * thắng cả inline style, nên tấm trước đây ra vuông góc + padding to. Selector
- * ở đây đặc thù hơn (2 lớp `.emp-sheet .ant-modal*` so với 1 lớp của
- * index.css), nên khi cả hai cùng `!important`, cái đặc thù hơn (ở đây) thắng.
+ * CỐ Ý KHÔNG neo đáy bằng position:fixed nữa: cách đó đánh nhau với các rule
+ * !important của index.css (ép max-width/margin/padding modal) và gây TRÀN.
+ * Để antd + index.css lo canh giữa (đã có margin 16px an toàn hai bên trên
+ * điện thoại), ở đây chỉ chỉnh bo góc + padding + cho thân cuộn.
  *
- * Modal render trong portal ở body, ngoài .emp-shell — nên khai lại các biến
- * --emp-* ở đây để var(--emp-accent) v.v. bên trong tấm phân giải đúng.
+ * Vì sao gần như mọi dòng đều !important: index.css ép border-radius 0, padding
+ * 16px và viền header/footer của .ant-modal* bằng !important (thắng cả inline
+ * style). Selector 2 lớp `.emp-sheet .ant-modal*` đặc thù hơn rule 1 lớp của
+ * index.css nên khi cùng !important thì thắng.
+ *
+ * Modal render trong portal ngoài .emp-shell — khai lại biến --emp-* ở đây để
+ * var(--emp-accent) v.v. bên trong tấm phân giải đúng.
  */
 .emp-sheet {
   --emp-accent: #12a594;
@@ -27,46 +29,18 @@
   --emp-danger: #ff3b30;
 }
 
-/* Huỷ mọi canh giữa của lớp bọc để .ant-modal tự do neo đáy. */
-.emp-sheet .ant-modal-wrap {
-  display: block;
-  text-align: initial;
-}
-
-/* Neo tấm xuống đáy, rộng hết ngang (giới hạn theo bề rộng vỏ 480px). */
-.emp-sheet .ant-modal {
-  position: fixed !important;
-  inset: auto 0 0 0 !important;
-  top: auto !important;
-  max-width: 480px !important;
-  margin: 0 auto !important;
-  padding: 0 !important;
-}
-
-/* Nội dung tấm: bo góc TRÊN, cho cuộn trong tấm nếu cao. Không đặt padding ở
-   đây — để header/body/footer tự lo (index.css nhắm ba lớp đó). */
+/* Thẻ modal: bo góc vừa (18px), cắt gọn phần thừa để bo góc ăn cả header/
+   footer. Không đặt padding ở content — để header/body/footer tự lo. */
 .emp-sheet .ant-modal-content {
-  border-radius: 20px 20px 0 0 !important;
-  overflow-y: auto !important;
-  max-height: 88vh;
+  border-radius: 18px !important;
+  overflow: hidden !important;
   padding: 0 !important;
 }
 
-/* Thanh kéo kiểu iOS ở đỉnh tấm. */
-.emp-sheet .ant-modal-content::before {
-  content: "";
-  display: block;
-  width: 36px;
-  height: 5px;
-  margin: 8px auto 0;
-  border-radius: 999px;
-  background: rgba(60, 60, 67, 0.3);
-}
-
-/* Header gọn, KHÔNG viền dưới (iOS sheet không có đường kẻ header). */
+/* Header gọn, KHÔNG viền dưới (iOS không kẻ đường header). */
 .emp-sheet .ant-modal-header {
-  padding: 12px 18px 6px !important;
-  margin-bottom: 0 !important;
+  padding: 16px 18px 8px !important;
+  margin: 0 !important;
   border-bottom: none !important;
   background: transparent !important;
 }
@@ -78,16 +52,19 @@
     Roboto, sans-serif;
 }
 
-/* Body: padding gọn hai bên, thở vừa đủ trên/dưới. */
+/* Thân: padding gọn + tự cuộn khi cao. max-height chặn TRÀN — form nghỉ phép
+   nhiều ô chỉ cuộn trong thân, header/footer đứng yên. */
 .emp-sheet .ant-modal-body {
-  padding: 4px 18px 8px !important;
+  padding: 4px 18px 10px !important;
+  max-height: 62vh;
+  overflow-y: auto;
   font-size: 15px;
 }
 
-/* Footer: KHÔNG viền trên, nút viên thuốc chia đều, cao thoải mái. */
+/* Footer: KHÔNG viền trên, nút chia đều, bo nhẹ. */
 .emp-sheet .ant-modal-footer {
-  padding: 8px 18px calc(16px + env(safe-area-inset-bottom, 0)) !important;
-  margin-top: 0 !important;
+  padding: 8px 18px 16px !important;
+  margin: 0 !important;
   border-top: none !important;
   display: flex;
   gap: 10px;
@@ -95,20 +72,20 @@
 
 .emp-sheet .ant-modal-footer .ant-btn {
   flex: 1;
-  height: 46px;
-  border-radius: 999px !important;
+  height: 44px;
+  border-radius: 12px !important;
   font-weight: 600;
 }
 
-/* Nền mờ đậm hơn chút cho tấm nổi bật kiểu iOS. */
+/* Nền mờ đậm hơn chút. */
 .emp-sheet .ant-modal-mask {
   background: rgba(0, 0, 0, 0.45);
 }
 
-/* Bo tròn control antd bên trong tấm (index.css cũng ép 0 !important — phải
-   !important + đặc thù hơn để thắng). */
+/* Bo NHẸ control antd trong tấm (index.css ép 0 !important — phải !important +
+   đặc thù hơn để thắng). Nút bo 12px chứ không tròn hết. */
 .emp-sheet .ant-btn {
-  border-radius: 999px !important;
+  border-radius: 12px !important;
 }
 
 .emp-sheet .ant-input,

@@ -26,10 +26,10 @@ export function ChonLoaiDon() {
       open={!!chonLoaiMo}
       title="Chọn loại đơn"
       onCancel={() => handler.executeEvent("dongChonLoai", {})}
+      centered
       destroyOnHidden
       footer={null}
-      // Tấm trượt đáy kiểu iOS: neo đáy, bo góc trên, có grabber, padding gọn
-      // (xem emp-modal.css). KHÔNG dùng `centered` — sẽ đánh nhau với neo đáy.
+      // Modal iOS căn giữa, bo góc, padding gọn, thân tự cuộn (xem emp-modal.css).
       rootClassName="emp-sheet"
     >
       <div className="grid grid-cols-2 gap-3 pt-1">

@@ -111,10 +111,10 @@ export function KetQuaChamCongDialog({
     <Modal
       open={open}
       onCancel={onClose}
+      centered
       closable
       maskClosable
-      // Tấm trượt đáy kiểu iOS (neo đáy, bo góc trên, grabber, padding gọn —
-      // xem emp-modal.css). KHÔNG dùng `centered` — đánh nhau với neo đáy.
+      // Modal iOS căn giữa, bo góc, padding gọn (xem emp-modal.css).
       rootClassName="emp-sheet"
       footer={[
         <Button

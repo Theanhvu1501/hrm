@@ -125,9 +125,9 @@ function EmployeeShell() {
           <NavLink
             key={t.den}
             to={t.den}
-            className="emp-tab flex flex-col items-center gap-0.5 px-3 py-2"
+            className="emp-tab flex flex-col items-center gap-1 px-2 pt-1.5 pb-1"
           >
-            <span className="text-xl leading-none">{t.icon}</span>
+            <span className="emp-tab-icon">{t.icon}</span>
             <span className="text-[10px] font-medium">{t.nhan}</span>
           </NavLink>
         ))}

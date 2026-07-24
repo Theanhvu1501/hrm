@@ -211,9 +211,8 @@ export function NutCham() {
             height: CAO_NUT_CHAM,
             fontSize: 18,
             fontWeight: 700,
-            // Pill được ép ở .emp-shell .ant-btn (index.css ép 0 !important nên
-            // inline không đủ) — giữ lại đây làm dự phòng, vô hại.
-            borderRadius: 999,
+            // Bo góc do `.emp-shell .ant-btn` lo (12px — index.css ép 0
+            // !important nên đặt borderRadius inline ở đây vô ích).
             // Teal (tint iOS) cho VÀO, cam hệ thống iOS (#ff9500) cho RA.
             backgroundColor: dangCham ? undefined : laVao ? "#12a594" : "#ff9500",
             borderColor: dangCham ? undefined : laVao ? "#12a594" : "#ff9500",

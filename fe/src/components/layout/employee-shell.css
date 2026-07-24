@@ -215,9 +215,28 @@
   transition: color 0.15s ease;
 }
 
+/* Icon nằm trong "viên" bo tròn: tab đang chọn thì viên sáng lên nền tint —
+   kiểu highlight tab bar hiện đại, gọn gàng hơn chỉ đổi màu chữ. */
+.emp-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 20px;
+  line-height: 1;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
 .emp-tab[aria-current="page"] {
   color: var(--emp-accent);
   font-weight: 600;
+}
+
+.emp-tab[aria-current="page"] .emp-tab-icon {
+  background: var(--emp-accent-nhat);
+  transform: translateY(-1px);
 }
 
 /* ── Bo tròn control antd trong vỏ ────────────────────────────────────────
@@ -227,8 +246,10 @@
    đặt inline borderRadius:999). Selector ở đây 2 lớp (.emp-shell .ant-*) đặc
    thù hơn rule 1 lớp của index.css, nên khi CẢ HAI cùng !important, cái đặc
    thù hơn (ở đây) thắng — buộc phải dùng !important. */
+/* Nút bo NHẸ (12px), không tròn hết — index.css ép 0 !important nên phải
+   !important + đặc thù hơn (2 lớp) mới thắng. */
 .emp-shell .ant-btn {
-  border-radius: 999px !important;
+  border-radius: 12px !important;
 }
 
 .emp-shell .ant-input,
