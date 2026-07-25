@@ -28,11 +28,14 @@ import { MongoClient } from 'mongodb';
 /** Module dùng làm KHUÔN: bộ hành động của nó được sao sang các module mới. */
 const MODULE_KHUON = '/cham-cong/ca-lam-viec';
 
-/** Ba module thêm sau, đang thiếu trong `phan_quyen.permissions`. */
+/**
+ * Module thêm sau, đang thiếu trong `phan_quyen.permissions`.
+ * Đợt P4 (Bảng lương): cấp `/luong/*`. (3 module chấm công đã cấp ở đợt P3.6 —
+ * đổi lại danh sách này mỗi đợt deploy module mới; script chỉ THÊM, idempotent.)
+ */
 const MODULE_CAN_CAP = [
-  '/cham-cong/ngay-le',
-  '/cham-cong/thiet-bi',
-  '/cham-cong/ban-ghi',
+  '/luong/bang-luong',
+  '/luong/cau-hinh',
 ];
 
 const DRY_RUN = process.argv.includes('--dry-run');
