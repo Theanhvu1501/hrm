@@ -1,6 +1,6 @@
 import { BaseStates } from "@/common/c-handler/core/actions/c-state.action";
 import { DongLuong } from "@/services/bangLuongService";
-import { KhoanLuong } from "@/services/cauHinhLuongService";
+import { CauHinhLuong, KhoanLuong } from "@/services/cauHinhLuongService";
 
 // State dùng chung cho toàn màn (đọc/ghi ở cả Page, ThanhKy và BangLuongTable).
 export interface BangLuongPageStates extends BaseStates {
@@ -17,6 +17,12 @@ export interface BangLuongPageStates extends BaseStates {
    * hành vi cũ (xem BangLuongTable.tsx), không throw.
    */
   khoanLuong: KhoanLuong[];
+  /**
+   * Cả cấu hình lương chung (cùng một request với `khoanLuong`) — table so
+   * `DongLuong.cauHinhApDung` với nó để gắn nhãn "riêng". `null` khi tải lỗi:
+   * không có gì để so thì không gắn nhãn, chứ không đoán.
+   */
+  cauHinhChung: CauHinhLuong | null;
 }
 
 declare module "./bangLuongHandler" {

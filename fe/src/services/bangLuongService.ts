@@ -9,6 +9,9 @@ export interface KetQuaLuong {
   thuNhapTinhThue: number;
   thue: number;
   thucLinh: number;
+  /** Dòng chốt trước P4.1 không có 2 trường này → đọc `?? 0`. */
+  chiPhiBHCongTy?: number;
+  tongChiPhiCongTy?: number;
 }
 
 /** Mirror `DongLuong` entity (be/libs/entities/src/luong/dong-luong.entity.ts). */
@@ -28,6 +31,14 @@ export interface DongLuong {
   dongBH: boolean;
   thoiVu: boolean;
   camKet: boolean;
+  hopDongThu2: boolean;
+  /** Cấu hình đã resolve lúc tổng hợp — dòng trước P4.1 không có. */
+  cauHinhApDung?: {
+    congChuan: number;
+    thuViecTyLe: number;
+    bhxhTyLe: number;
+    bhxhCanCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN';
+  };
   tamUng: number;
   khauTruKhac: number;
   nhapTheoKy: Record<string, number>;
@@ -100,6 +111,9 @@ class BangLuongService extends ServiceBase {
       dongBH: (x.dongBH as boolean) ?? false,
       thoiVu: (x.thoiVu as boolean) ?? false,
       camKet: (x.camKet as boolean) ?? false,
+      hopDongThu2: (x.hopDongThu2 as boolean) ?? false,
+      cauHinhApDung:
+        (x.cauHinhApDung as DongLuong['cauHinhApDung']) ?? undefined,
       tamUng: (x.tamUng as number) ?? 0,
       khauTruKhac: (x.khauTruKhac as number) ?? 0,
       nhapTheoKy: (x.nhapTheoKy as Record<string, number>) ?? {},

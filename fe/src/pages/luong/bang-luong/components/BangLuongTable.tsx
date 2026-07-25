@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Empty, Table, Tooltip } from "antd";
+import { Empty, Table, Tag, Tooltip } from "antd";
 import { WarningOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -8,7 +8,7 @@ import {
 } from "../BangLuongHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
 import type { CapNhatDongLuongDto, DongLuong, KetQuaLuong } from "@/services/bangLuongService";
-import type { KhoanLuong } from "@/services/cauHinhLuongService";
+import type { CauHinhLuong, KhoanLuong } from "@/services/cauHinhLuongService";
 import { OSuaBienDong } from "./OSuaBienDong";
 import "../BangLuongPage.state";
 
@@ -33,6 +33,10 @@ export function BangLuongTable() {
   const [tabDangXem] = useBangLuongState("tabDangXem", "khaiBao" as "khaiBao" | "thucTe");
   const [daChot] = useBangLuongState("daChot", false);
   const [khoanLuong] = useBangLuongState("khoanLuong", [] as KhoanLuong[]);
+  const [cauHinhChung] = useBangLuongState(
+    "cauHinhChung",
+    null as CauHinhLuong | null
+  );
   const { canEdit } = usePagePermission("/luong/bang-luong");
 
   const chiSuaDuoc = canEdit && !daChot;
@@ -64,6 +68,33 @@ export function BangLuongTable() {
   const thieuCongHoacLuong = (dong: DongLuong) =>
     dong.congThuong + dong.congThuViec + dong.congKhac === 0 || !dong.luongThoaThuan;
 
+  /**
+   * Liệt kê tham số của dòng LỆCH so với cấu hình chung — để HR biết ngay vì
+   * sao số của NV này khác người khác, thay vì phải mở lại hồ sơ từng người.
+   * `undefined` khi trùng hoàn toàn, hoặc khi chưa tải được cấu hình chung
+   * (không có gì để so thì không gắn nhãn, không đoán).
+   */
+  const moTaCauHinhRieng = (dong: DongLuong): string | undefined => {
+    const ap = dong.cauHinhApDung;
+    if (!ap || !cauHinhChung) return undefined;
+
+    const khac: string[] = [];
+    if (ap.congChuan !== cauHinhChung.congChuan)
+      khac.push(`Công chuẩn ${ap.congChuan}`);
+    if (ap.thuViecTyLe !== cauHinhChung.thuViec.tyLe)
+      khac.push(`Thử việc ${ap.thuViecTyLe * 100}%`);
+    if (ap.bhxhTyLe !== cauHinhChung.bhxh.tyLe)
+      khac.push(`BHXH ${ap.bhxhTyLe * 100}%`);
+    if (ap.bhxhCanCu !== cauHinhChung.bhxh.canCu)
+      khac.push(
+        `Căn cứ ${
+          ap.bhxhCanCu === "MUC_KHAI_BAO" ? "mức khai báo" : "lương thoả thuận"
+        }`
+      );
+
+    return khac.length ? `Cấu hình riêng: ${khac.join(", ")}` : undefined;
+  };
+
   const columns: ColumnsType<DongLuong> = useMemo(() => {
     const fixedLeft: ColumnsType<DongLuong> = [
       {
@@ -88,16 +119,33 @@ export function BangLuongTable() {
         key: "employeeName",
         width: 180,
         fixed: "left",
-        render: (value: string | undefined, record: DongLuong) => (
-          <span>
-            {thieuCongHoacLuong(record) && (
-              <Tooltip title="Thiếu công hoặc chưa khai báo lương thoả thuận">
-                <WarningOutlined style={{ color: "#faad14", marginRight: 6 }} />
-              </Tooltip>
-            )}
-            {value || "-"}
-          </span>
-        ),
+        render: (value: string | undefined, record: DongLuong) => {
+          const moTaRieng = moTaCauHinhRieng(record);
+          return (
+            <span>
+              {thieuCongHoacLuong(record) && (
+                <Tooltip title="Thiếu công hoặc chưa khai báo lương thoả thuận">
+                  <WarningOutlined style={{ color: "#faad14", marginRight: 6 }} />
+                </Tooltip>
+              )}
+              {value || "-"}
+              {record.hopDongThu2 && (
+                <Tooltip title="HĐLĐ thứ 2: không trừ BHXH, không giảm trừ gia cảnh tại đây; công ty chỉ đóng BHTNLĐ-BNN">
+                  <Tag color="purple" style={{ marginLeft: 6 }}>
+                    HĐ2
+                  </Tag>
+                </Tooltip>
+              )}
+              {moTaRieng && (
+                <Tooltip title={moTaRieng}>
+                  <Tag color="blue" style={{ marginLeft: 6 }}>
+                    riêng
+                  </Tag>
+                </Tooltip>
+              )}
+            </span>
+          );
+        },
       },
       {
         title: "Công thường",
@@ -217,6 +265,16 @@ export function BangLuongTable() {
         ),
       },
       {
+        title: "CP BH công ty",
+        key: "chiPhiBHCongTy",
+        width: 130,
+        align: "right",
+        render: (_: unknown, record: DongLuong) =>
+          // `?? 0`: dòng chốt trước P4.1 không có trường này. 0 ở đây nghĩa là
+          // "chưa ghi nhận", KHÔNG phải "công ty không đóng gì".
+          renderTien(record[tabDangXem]?.chiPhiBHCongTy ?? 0),
+      },
+      {
         title: "Thực lĩnh",
         key: "thucLinh",
         width: 130,
@@ -229,10 +287,14 @@ export function BangLuongTable() {
 
     return [...fixedLeft, ...khoanColumns, ...tamUngColumn, ...ketQuaColumns];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maKhoanList, tabDangXem, chiSuaDuoc, khoanMap]);
+  }, [maKhoanList, tabDangXem, chiSuaDuoc, khoanMap, cauHinhChung]);
 
   const tongThucLinh = danhSach.reduce((sum, dong) => sum + (dong[tabDangXem]?.thucLinh ?? 0), 0);
   const tongThue = danhSach.reduce((sum, dong) => sum + (dong[tabDangXem]?.thue ?? 0), 0);
+  const tongChiPhiBH = danhSach.reduce(
+    (sum, dong) => sum + (dong[tabDangXem]?.chiPhiBHCongTy ?? 0),
+    0
+  );
 
   return (
     <div style={{ overflowX: "auto" }}>
@@ -256,13 +318,18 @@ export function BangLuongTable() {
           danhSach.length === 0 ? null : (
             <Table.Summary fixed>
               <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={columns.length - 2}>
+                {/* colSpan phải bằng số cột TRƯỚC 3 ô tổng bên dưới — chèn
+                    thêm cột vào bảng mà quên chỗ này là lệch cả hàng tổng. */}
+                <Table.Summary.Cell index={0} colSpan={columns.length - 3}>
                   <strong>Tổng cộng</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={1} align="right">
                   <strong>{renderTien(tongThue)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={2} align="right">
+                  <strong>{renderTien(tongChiPhiBH)}</strong>
+                </Table.Summary.Cell>
+                <Table.Summary.Cell index={3} align="right">
                   <strong>{renderTien(tongThucLinh)}</strong>
                 </Table.Summary.Cell>
               </Table.Summary.Row>

@@ -19,6 +19,7 @@ export class InitHandler extends CSubHanlder {
     this.setState("tabDangXem", "khaiBao");
     this.setState("daChot", false);
     this.setState("khoanLuong", []);
+    this.setState("cauHinhChung", null);
 
     await Promise.all([this.loadDanhSach(thang), this.loadKhoanLuong()]);
   }
@@ -33,9 +34,11 @@ export class InitHandler extends CSubHanlder {
     try {
       const cauHinh = await cauHinhLuongService.get();
       this.setState("khoanLuong", cauHinh.khoanLuong ?? []);
+      this.setState("cauHinhChung", cauHinh);
     } catch (error) {
       console.error("Tải cấu hình lương (khoản lương) lỗi:", error);
       this.setState("khoanLuong", []);
+      this.setState("cauHinhChung", null);
     }
   }
 

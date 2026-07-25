@@ -22,6 +22,7 @@ vi.mock("@/contexts/AuthContext", () => ({
 
 import BangLuongPage from "./BangLuongPage";
 import { bangLuongService, DongLuong } from "@/services/bangLuongService";
+import { cauHinhLuongService, CauHinhLuong } from "@/services/cauHinhLuongService";
 
 beforeAll(() => {
   const w = window as unknown as Record<string, unknown>;
@@ -66,6 +67,7 @@ const seedDong: DongLuong = {
   dongBH: true,
   thoiVu: false,
   camKet: false,
+  hopDongThu2: false,
   tamUng: 0,
   khauTruKhac: 0,
   nhapTheoKy: { HIEU_SUAT: 500_000 },
@@ -78,6 +80,8 @@ const seedDong: DongLuong = {
     thuNhapTinhThue: 0,
     thue: 0,
     thucLinh: 7_660_000,
+    chiPhiBHCongTy: 1_183_000,
+    tongChiPhiCongTy: 9_683_000,
   },
   thucTe: {
     giaTriTungKhoan: { LUONG_CONG: 10_000_000, HIEU_SUAT: 500_000 },
@@ -88,6 +92,8 @@ const seedDong: DongLuong = {
     thuNhapTinhThue: 0,
     thue: 0,
     thucLinh: 9_450_000,
+    chiPhiBHCongTy: 1_183_000,
+    tongChiPhiCongTy: 11_683_000,
   },
   trangThai: "nhap",
 };
@@ -114,5 +120,83 @@ describe("Màn Bảng lương", () => {
       expect(screen.getByText("10.500.000")).toBeTruthy();
     });
     expect(screen.queryByText("8.500.000")).toBeNull();
+  });
+
+  it("hiện cột chi phí BH công ty với số của dòng", async () => {
+    moMan();
+
+    // `findAllBy*`: antd render tiêu đề cột 2 lần (thêm một hàng đo ẩn).
+    expect((await screen.findAllByText("CP BH công ty")).length).toBeGreaterThan(0);
+    // Xuất hiện ở cả ô của dòng và dòng "Tổng cộng" (chỉ có 1 dòng dữ liệu).
+    expect(screen.getAllByText("1.183.000").length).toBeGreaterThan(0);
+  });
+
+  it("dòng chốt trước P4.1 thiếu chiPhiBHCongTy → hiện 0, không vỡ màn", async () => {
+    vi.spyOn(bangLuongService, "danhSach").mockResolvedValue([
+      {
+        ...seedDong,
+        khaiBao: { ...seedDong.khaiBao, chiPhiBHCongTy: undefined },
+      },
+    ]);
+    render(<BangLuongPage />);
+
+    expect((await screen.findAllByText("CP BH công ty")).length).toBeGreaterThan(0);
+    expect(screen.getByText("8.500.000")).toBeTruthy();
+  });
+
+  it("gắn nhãn HĐ2 cho dòng hopDongThu2", async () => {
+    vi.spyOn(bangLuongService, "danhSach").mockResolvedValue([
+      { ...seedDong, hopDongThu2: true },
+    ]);
+    render(<BangLuongPage />);
+
+    expect(await screen.findByText("HĐ2")).toBeTruthy();
+  });
+
+  it("gắn nhãn 'riêng' khi cauHinhApDung lệch cấu hình chung", async () => {
+    vi.spyOn(bangLuongService, "danhSach").mockResolvedValue([
+      {
+        ...seedDong,
+        cauHinhApDung: {
+          congChuan: 26, // cấu hình chung là 24
+          thuViecTyLe: 0.85,
+          bhxhTyLe: 0.105,
+          bhxhCanCu: "MUC_KHAI_BAO",
+        },
+      },
+    ]);
+    vi.spyOn(cauHinhLuongService, "get").mockResolvedValue({
+      congChuan: 24,
+      thuViec: { tyLe: 0.85 },
+      bhxh: { tyLe: 0.105, canCu: "MUC_KHAI_BAO" },
+      khoanLuong: [],
+    } as unknown as CauHinhLuong);
+    render(<BangLuongPage />);
+
+    expect(await screen.findByText("riêng")).toBeTruthy();
+  });
+
+  it("KHÔNG gắn nhãn 'riêng' khi cauHinhApDung trùng cấu hình chung", async () => {
+    vi.spyOn(bangLuongService, "danhSach").mockResolvedValue([
+      {
+        ...seedDong,
+        cauHinhApDung: {
+          congChuan: 24,
+          thuViecTyLe: 0.85,
+          bhxhTyLe: 0.105,
+          bhxhCanCu: "MUC_KHAI_BAO",
+        },
+      },
+    ]);
+    vi.spyOn(cauHinhLuongService, "get").mockResolvedValue({
+      congChuan: 24,
+      thuViec: { tyLe: 0.85 },
+      bhxh: { tyLe: 0.105, canCu: "MUC_KHAI_BAO" },
+      khoanLuong: [],
+    } as unknown as CauHinhLuong);
+    render(<BangLuongPage />);
+
+    await screen.findByText("8.500.000");
+    expect(screen.queryByText("riêng")).toBeNull();
   });
 });
