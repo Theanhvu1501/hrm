@@ -1,3 +1,4 @@
+import { ArgumentMetadata, ValidationPipe } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate, ValidationError } from 'class-validator';
 import { CreateEmployeeDto } from './create-employee.dto';
@@ -82,5 +83,83 @@ describe('CreateEmployeeDto — choPhepChamNgoaiVung', () => {
     const loi = timDoiLoiTruong(errors, 'choPhepChamNgoaiVung');
 
     expect(loi).toBeUndefined();
+  });
+});
+
+/**
+ * Bug đã thực sự xảy ra trên production: 7 trường lương của P4-A có trong
+ * entity + FE nhưng KHÔNG có trong DTO, mà app bật `forbidNonWhitelisted` →
+ * `PUT /nhan-vien/:id` trả 400 và tab "Lương" im lặng không lưu được gì.
+ *
+ * `validate(dto)` trần không thấy lỗi này (nó xảy ra ở tầng ValidationPipe),
+ * nên describe dưới dựng đúng pipe của `main.ts` để canh.
+ */
+describe('CreateEmployeeDto — qua ValidationPipe như main.ts', () => {
+  const pipe = new ValidationPipe({
+    whitelist: true,
+    transform: true,
+    forbidNonWhitelisted: true,
+  });
+  const meta: ArgumentMetadata = { type: 'body', metatype: CreateEmployeeDto };
+
+  it('không chặn payload đầy đủ trường lương (P4-A + P4.1)', async () => {
+    const payload = {
+      ...BASE_HOP_LE,
+      luongThoaThuan: 15_000_000,
+      mucKhaiBao: 5_500_000,
+      phuCapCoDinh: 500_000,
+      soNguoiPhuThuoc: 2,
+      dongBH: true,
+      thoiVu: false,
+      camKet: false,
+      hopDongThu2: true,
+      cauHinhLuongRieng: {
+        congChuan: 26,
+        thuViecTyLe: 0.9,
+        bhxhTyLe: 0.105,
+        bhxhCanCu: 'LUONG_THOA_THUAN',
+      },
+    };
+
+    const ketQua = await pipe.transform(payload, meta);
+
+    expect(ketQua).toMatchObject(payload);
+  });
+
+  it('giữ được giá trị false/0 (không bị coi là thiếu)', async () => {
+    const ketQua = await pipe.transform(
+      {
+        ...BASE_HOP_LE,
+        dongBH: false,
+        luongThoaThuan: 0,
+        cauHinhLuongRieng: { thuViecTyLe: 0 },
+      },
+      meta,
+    );
+
+    expect(ketQua.dongBH).toBe(false);
+    expect(ketQua.luongThoaThuan).toBe(0);
+    expect(ketQua.cauHinhLuongRieng?.thuViecTyLe).toBe(0);
+  });
+
+  it('vẫn chặn trường lạ ngoài whitelist', async () => {
+    await expect(
+      pipe.transform({ ...BASE_HOP_LE, khongCoTruongNay: 1 }, meta),
+    ).rejects.toThrow();
+  });
+
+  it('từ chối tỷ lệ ngoài [0,1] và bhxhCanCu lạ', async () => {
+    await expect(
+      pipe.transform(
+        { ...BASE_HOP_LE, cauHinhLuongRieng: { thuViecTyLe: 90 } },
+        meta,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      pipe.transform(
+        { ...BASE_HOP_LE, cauHinhLuongRieng: { bhxhCanCu: 'LUNG_TUNG' } },
+        meta,
+      ),
+    ).rejects.toThrow();
   });
 });

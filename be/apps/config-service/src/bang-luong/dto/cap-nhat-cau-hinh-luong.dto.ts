@@ -12,5 +12,6 @@ export class CapNhatCauHinhLuongDto {
   @IsOptional() @IsObject() thuViec?: { tyLe: number };
   @IsOptional() @IsObject() quyTacThoiVu?: { tyLe: number; nguong: number };
   @IsOptional() @IsObject() quyTacCamKet?: { mienThue: boolean };
+  @IsOptional() @IsObject() bhCongTy?: { tyLe: number; tyLeHopDongThu2: number };
   @IsOptional() @IsNumber() lamTron?: number;
 }
