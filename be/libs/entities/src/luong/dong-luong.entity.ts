@@ -1,6 +1,6 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../base.entity';
-import type { KetQuaLuong } from './luong.types';
+import type { CauHinhLuongApDung, KetQuaLuong } from './luong.types';
 
 @Entity('dong_luong')
 export class DongLuong extends BaseEntity {
@@ -20,6 +20,13 @@ export class DongLuong extends BaseEntity {
   @Column({ default: false }) dongBH: boolean;
   @Column({ default: false }) thoiVu: boolean;
   @Column({ default: false }) camKet: boolean;
+  @Column({ default: false }) hopDongThu2: boolean;
+  /**
+   * Cấu hình đã RESOLVE cho NV này lúc tổng hợp (không còn `undefined`).
+   * Lưu để (a) đọc một dòng lương là biết ngay số nào đã dùng, (b) sửa khoản
+   * biến động tính lại không phải đọc lại hồ sơ NV — hồ sơ có thể đã đổi.
+   */
+  @Column('json', { nullable: true }) cauHinhApDung: CauHinhLuongApDung;
   @Column({ default: 0 }) tamUng: number;
   @Column({ default: 0 }) khauTruKhac: number;
   @Column('json', { nullable: true }) nhapTheoKy: Record<string, number>;

@@ -4,7 +4,7 @@ import { BadRequestException } from '@nestjs/common';
 import { BangLuong_Service } from './bang-luong.service';
 import { CauHinhLuong, DongLuong, Employee, Timesheet } from '@app/entities';
 import type { CauHinhLuongData } from '@app/entities';
-import { tinhDongLuong } from '@app/core';
+import { ganCauHinhRieng, lamTronTheo, tinhDongLuong } from '@app/core';
 import { CAU_HINH_LUONG_MAC_DINH } from './cau-hinh-luong.seed';
 
 describe('BangLuong_Service', () => {
@@ -199,6 +199,7 @@ describe('BangLuong_Service', () => {
         dongBH: true,
         thoiVu: false,
         camKet: false,
+        hopDongThu2: false,
         nhapTheoKy: {},
       };
 
@@ -442,6 +443,7 @@ describe('BangLuong_Service', () => {
         dongBH: false,
         thoiVu: false,
         camKet: false,
+        hopDongThu2: false,
         nhapTheoKy: { HIEU_SUAT: 2_000_000 },
       };
       const expectedKhaiBao = tinhDongLuong(
@@ -503,6 +505,7 @@ describe('BangLuong_Service', () => {
         dongBH: false,
         thoiVu: false,
         camKet: false,
+        hopDongThu2: false,
         nhapTheoKy: { HIEU_SUAT: 2_000_000, THUONG: 500_000 },
       };
       const expectedKhaiBao = tinhDongLuong(
@@ -579,6 +582,236 @@ describe('BangLuong_Service', () => {
       await expect(
         service.capNhatDong(id, { tamUng: 100_000 }),
       ).resolves.toBeDefined();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // P4.1 — cấu hình lương riêng theo NV + HĐLĐ thứ 2
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('cấu hình lương riêng theo NV', () => {
+    beforeEach(() => {
+      seedCauHinh();
+    });
+
+    const CONG_CHUNG_RONG = {
+      congThuViec: 0,
+      congKhac: 0,
+      phuCapCoDinh: 0,
+      soNguoiPhuThuoc: 0,
+      tamUng: 0,
+      khauTruKhac: 0,
+      thoiVu: false,
+      camKet: false,
+      nhapTheoKy: {},
+    };
+
+    it('áp override của NV vào cả hai mức khai báo/thực tế', async () => {
+      const rieng = { congChuan: 26, thuViecTyLe: 0.9 };
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 15_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+          cauHinhLuongRieng: rieng,
+        },
+      ]);
+      timesheetStore = [{ thang: '2026-07', employeeId: EMP1, soNgayCong: 26 }];
+
+      const [row] = await service.tongHop('2026-07');
+
+      const chNV = ganCauHinhRieng(
+        CAU_HINH_LUONG_MAC_DINH as CauHinhLuongData,
+        rieng,
+      );
+      const dv = {
+        ...CONG_CHUNG_RONG,
+        congThuong: 26,
+        dongBH: false,
+        hopDongThu2: false,
+        mucKhaiBao: 5_500_000,
+      };
+
+      expect(row.khaiBao).toEqual(tinhDongLuong({ ...dv, base: 5_500_000 }, chNV));
+      expect(row.thucTe).toEqual(tinhDongLuong({ ...dv, base: 15_000_000 }, chNV));
+      // Công chuẩn 26 (không phải 24 của cấu hình chung) → số CHẮC CHẮN khác.
+      expect(row.khaiBao).not.toEqual(
+        tinhDongLuong(
+          { ...dv, base: 5_500_000 },
+          CAU_HINH_LUONG_MAC_DINH as CauHinhLuongData,
+        ),
+      );
+    });
+
+    it('NV không có override → dùng cấu hình chung (không đổi hành vi cũ)', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 15_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+        },
+      ]);
+      timesheetStore = [{ thang: '2026-07', employeeId: EMP1, soNgayCong: 24 }];
+
+      const [row] = await service.tongHop('2026-07');
+
+      const dv = {
+        ...CONG_CHUNG_RONG,
+        congThuong: 24,
+        dongBH: false,
+        hopDongThu2: false,
+        mucKhaiBao: 5_500_000,
+      };
+      expect(row.khaiBao).toEqual(
+        tinhDongLuong(
+          { ...dv, base: 5_500_000 },
+          CAU_HINH_LUONG_MAC_DINH as CauHinhLuongData,
+        ),
+      );
+      expect(row.cauHinhApDung).toEqual({
+        congChuan: CAU_HINH_LUONG_MAC_DINH.congChuan,
+        thuViecTyLe: CAU_HINH_LUONG_MAC_DINH.thuViec.tyLe,
+        bhxhTyLe: CAU_HINH_LUONG_MAC_DINH.bhxh.tyLe,
+        bhxhCanCu: CAU_HINH_LUONG_MAC_DINH.bhxh.canCu,
+      });
+    });
+
+    it('ghi cauHinhApDung là giá trị ĐÃ resolve và copy hopDongThu2 từ hồ sơ', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 15_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+          hopDongThu2: true,
+          cauHinhLuongRieng: { congChuan: 26 },
+        },
+      ]);
+
+      const [row] = await service.tongHop('2026-07');
+
+      expect(row.cauHinhApDung).toEqual({
+        congChuan: 26,
+        thuViecTyLe: 0.85,
+        bhxhTyLe: 0.105,
+        bhxhCanCu: 'MUC_KHAI_BAO',
+      });
+      expect(row.hopDongThu2).toBe(true);
+    });
+
+    it('HĐ thứ 2: dòng lương có chiPhiBHCongTy theo 0,5% và bhxh = 0', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 15_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+          dongBH: true,
+          hopDongThu2: true,
+        },
+      ]);
+      timesheetStore = [{ thang: '2026-07', employeeId: EMP1, soNgayCong: 24 }];
+
+      const [row] = await service.tongHop('2026-07');
+
+      expect(row.khaiBao.bhxh).toBe(0);
+      expect(row.khaiBao.chiPhiBHCongTy).toBe(
+        lamTronTheo(
+          CAU_HINH_LUONG_MAC_DINH.bhCongTy.tyLeHopDongThu2 * 5_500_000,
+          CAU_HINH_LUONG_MAC_DINH.lamTron,
+        ),
+      );
+    });
+
+    it('capNhatDong dùng cauHinhApDung của dòng, KHÔNG đọc lại Employee', async () => {
+      const id = '507f1f77bcf86cd799439077';
+      const apDung = {
+        congChuan: 26,
+        thuViecTyLe: 0.9,
+        bhxhTyLe: 0.105,
+        bhxhCanCu: 'MUC_KHAI_BAO' as const,
+      };
+      mockDongLuongRepo.findOne.mockResolvedValue({
+        _id: id,
+        thang: '2026-07',
+        employeeId: EMP1,
+        congThuong: 26,
+        congThuViec: 0,
+        congKhac: 0,
+        luongThoaThuan: 15_000_000,
+        mucKhaiBao: 5_500_000,
+        phuCapCoDinh: 0,
+        soNguoiPhuThuoc: 0,
+        dongBH: false,
+        thoiVu: false,
+        camKet: false,
+        hopDongThu2: false,
+        cauHinhApDung: apDung,
+        tamUng: 0,
+        khauTruKhac: 0,
+        nhapTheoKy: {},
+        trangThai: 'nhap',
+        isActive: true,
+      });
+
+      const row = await service.capNhatDong(id, { tamUng: 1_000_000 });
+
+      expect(mockEmployeeRepo.find).not.toHaveBeenCalled();
+
+      const chNV = ganCauHinhRieng(
+        CAU_HINH_LUONG_MAC_DINH as CauHinhLuongData,
+        apDung,
+      );
+      const dv = {
+        ...CONG_CHUNG_RONG,
+        congThuong: 26,
+        tamUng: 1_000_000,
+        dongBH: false,
+        hopDongThu2: false,
+        mucKhaiBao: 5_500_000,
+      };
+      expect(row.khaiBao).toEqual(tinhDongLuong({ ...dv, base: 5_500_000 }, chNV));
+      expect(row.thucTe).toEqual(tinhDongLuong({ ...dv, base: 15_000_000 }, chNV));
+    });
+  });
+
+  describe('layCauHinh — backfill bhCongTy', () => {
+    it('bản ghi tạo trước P4.1 thiếu bhCongTy → backfill từ seed và LƯU lại', async () => {
+      cauHinhStore.push({
+        _id: 'ch-cu',
+        ...(CAU_HINH_LUONG_MAC_DINH as any),
+        bhCongTy: undefined,
+        isActive: true,
+      });
+
+      const ch = await service.layCauHinh();
+
+      expect(ch.bhCongTy).toEqual(CAU_HINH_LUONG_MAC_DINH.bhCongTy);
+      expect(mockCauHinhRepo.save).toHaveBeenCalledTimes(1);
+      expect(mockCauHinhRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('bản ghi đã có bhCongTy → không ghi lại, giữ đúng tỷ lệ admin đã sửa', async () => {
+      cauHinhStore.push({
+        _id: 'ch-moi',
+        ...(CAU_HINH_LUONG_MAC_DINH as any),
+        bhCongTy: { tyLe: 0.2, tyLeHopDongThu2: 0.004 },
+        isActive: true,
+      });
+
+      const ch = await service.layCauHinh();
+
+      expect(ch.bhCongTy).toEqual({ tyLe: 0.2, tyLeHopDongThu2: 0.004 });
+      expect(mockCauHinhRepo.save).not.toHaveBeenCalled();
     });
   });
 });

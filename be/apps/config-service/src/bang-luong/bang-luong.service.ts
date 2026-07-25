@@ -2,8 +2,12 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CauHinhLuong, DongLuong, Employee, Timesheet } from '@app/entities';
-import type { CauHinhLuongData, DauVaoDongLuong } from '@app/entities';
-import { tinhDongLuong } from '@app/core';
+import type {
+  CauHinhLuongApDung,
+  CauHinhLuongData,
+  DauVaoDongLuong,
+} from '@app/entities';
+import { ganCauHinhRieng, tinhDongLuong } from '@app/core';
 import { CapNhatCauHinhLuongDto, CapNhatDongLuongDto } from './dto';
 import { CAU_HINH_LUONG_MAC_DINH } from './cau-hinh-luong.seed';
 
@@ -26,6 +30,8 @@ interface SnapshotChung {
   dongBH: boolean;
   thoiVu: boolean;
   camKet: boolean;
+  hopDongThu2: boolean;
+  cauHinhApDung: CauHinhLuongApDung;
   nhapTheoKy: Record<string, number>;
 }
 
@@ -50,7 +56,17 @@ export class BangLuong_Service {
    */
   async layCauHinh(): Promise<CauHinhLuong> {
     const rows = await this.cauHinhRepo.find({ where: { isActive: true } });
-    if (rows[0]) return rows[0] as CauHinhLuong;
+    const row = rows[0] as CauHinhLuong | undefined;
+    if (row) {
+      // Bản ghi tạo trước P4.1 không có khối `bhCongTy`; engine khai trường
+      // này BẮT BUỘC nên backfill từ seed rồi lưu lại, thay vì để engine
+      // phòng thủ `?? 0` (sẽ âm thầm báo chi phí công ty = 0 mãi mãi).
+      if (!row.bhCongTy) {
+        row.bhCongTy = CAU_HINH_LUONG_MAC_DINH.bhCongTy;
+        return this.cauHinhRepo.save(row);
+      }
+      return row;
+    }
 
     const created = this.cauHinhRepo.create({
       ...CAU_HINH_LUONG_MAC_DINH,
@@ -107,7 +123,18 @@ export class BangLuong_Service {
       dongBH: sn.dongBH,
       thoiVu: sn.thoiVu,
       camKet: sn.camKet,
+      hopDongThu2: sn.hopDongThu2,
       nhapTheoKy: sn.nhapTheoKy,
+    };
+  }
+
+  /** Ảnh chụp cấu hình ĐÃ resolve cho một NV — nguồn duy nhất để tính lại. */
+  private toCauHinhApDung(ch: CauHinhLuongData): CauHinhLuongApDung {
+    return {
+      congChuan: ch.congChuan,
+      thuViecTyLe: ch.thuViec.tyLe,
+      bhxhTyLe: ch.bhxh.tyLe,
+      bhxhCanCu: ch.bhxh.canCu,
     };
   }
 
@@ -144,6 +171,10 @@ export class BangLuong_Service {
       const mucKhaiBao = emp.mucKhaiBao ?? ch.mucKhaiBaoMacDinh;
       const luongThoaThuan = emp.luongThoaThuan ?? 0;
 
+      // Cấu hình riêng của NV gộp lên cấu hình chung; `ch` KHÔNG bị mutate nên
+      // NV sau trong vòng lặp vẫn xuất phát từ cấu hình của công ty.
+      const chNV = ganCauHinhRieng(ch, emp.cauHinhLuongRieng);
+
       const snapshot: SnapshotChung = {
         congThuong: cong.congThuong,
         congThuViec: cong.congThuViec,
@@ -155,11 +186,13 @@ export class BangLuong_Service {
         dongBH: !!emp.dongBH,
         thoiVu: !!emp.thoiVu,
         camKet: !!emp.camKet,
+        hopDongThu2: !!emp.hopDongThu2,
+        cauHinhApDung: this.toCauHinhApDung(chNV),
         nhapTheoKy: existing?.nhapTheoKy ?? {},
       };
 
-      const khaiBao = tinhDongLuong(this.buildDauVao(mucKhaiBao, mucKhaiBao, snapshot), ch);
-      const thucTe = tinhDongLuong(this.buildDauVao(luongThoaThuan, mucKhaiBao, snapshot), ch);
+      const khaiBao = tinhDongLuong(this.buildDauVao(mucKhaiBao, mucKhaiBao, snapshot), chNV);
+      const thucTe = tinhDongLuong(this.buildDauVao(luongThoaThuan, mucKhaiBao, snapshot), chNV);
 
       let row = existing;
       if (!row) {
@@ -183,6 +216,8 @@ export class BangLuong_Service {
       row.dongBH = snapshot.dongBH;
       row.thoiVu = snapshot.thoiVu;
       row.camKet = snapshot.camKet;
+      row.hopDongThu2 = snapshot.hopDongThu2;
+      row.cauHinhApDung = snapshot.cauHinhApDung;
       row.tamUng = snapshot.tamUng;
       row.khauTruKhac = snapshot.khauTruKhac;
       row.nhapTheoKy = snapshot.nhapTheoKy;
@@ -233,7 +268,13 @@ export class BangLuong_Service {
     if (dto.khauTruKhac !== undefined) item.khauTruKhac = dto.khauTruKhac;
 
     const chEntity = await this.layCauHinh();
-    const ch = this.toCauHinhData(chEntity);
+    // Cố ý dùng `item.cauHinhApDung` (snapshot của dòng) chứ không đọc lại
+    // Employee: sửa một khoản biến động không được kéo theo thay đổi cấu hình
+    // riêng mà HR vừa sửa trên hồ sơ giữa kỳ.
+    const ch = ganCauHinhRieng(
+      this.toCauHinhData(chEntity),
+      item.cauHinhApDung,
+    );
 
     const snapshot: SnapshotChung = {
       congThuong: item.congThuong,
@@ -246,6 +287,8 @@ export class BangLuong_Service {
       dongBH: item.dongBH,
       thoiVu: item.thoiVu,
       camKet: item.camKet,
+      hopDongThu2: item.hopDongThu2,
+      cauHinhApDung: item.cauHinhApDung,
       nhapTheoKy: item.nhapTheoKy ?? {},
     };
 

@@ -1,5 +1,6 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../base.entity';
+import type { CauHinhLuongRieng } from '../luong/luong.types';
 
 export interface BangCap { ten: string; noiCap?: string; nam?: string; }
 export interface NguoiPhuThuoc { hoTen: string; quanHe?: string; ngaySinh?: string; giayTo?: string; }
@@ -49,6 +50,20 @@ export class Employee extends BaseEntity {
   @Column({ default: false }) dongBH: boolean;
   @Column({ default: false }) thoiVu: boolean;
   @Column({ default: false }) camKet: boolean;
+  // ── Lương (P4.1) ──
+  /**
+   * Override cấu hình lương cho riêng NV này — trường để trống thì kế thừa
+   * `CauHinhLuong` của công ty (xem `ganCauHinhRieng`). Chỉ chứa tham số mang
+   * tính thỏa thuận riêng; tham số là luật (giảm trừ, bậc thuế) cố ý KHÔNG
+   * override được.
+   */
+  @Column('json', { nullable: true }) cauHinhLuongRieng?: CauHinhLuongRieng;
+  /**
+   * NV làm ở 2 công ty và ĐÂY là HĐLĐ thứ 2: BHXH/BHYT/BHTN đã đóng ở nơi thứ
+   * nhất (NLĐ không bị trừ tại đây), giảm trừ gia cảnh cũng đăng ký ở đó (tại
+   * đây giảm trừ = 0, vẫn lũy tiến), công ty chỉ chịu BHTNLĐ-BNN.
+   */
+  @Column({ default: false }) hopDongThu2: boolean;
   @Column({ default: true }) isActive: boolean;
 }
 
