@@ -45,6 +45,12 @@ export interface CauHinhLuongData {
   thuViec: { tyLe: number };
   quyTacThoiVu: { tyLe: number; nguong: number };
   quyTacCamKet: { mienThue: boolean };
+  /**
+   * Phần BẢO HIỂM CÔNG TY chịu — không trừ vào lương NLĐ.
+   * `tyLeHopDongThu2` dùng khi NV là HĐLĐ thứ 2: công ty chỉ đóng BHTNLĐ-BNN
+   * vì BHXH/BHYT/BHTN đã đóng ở nơi thứ nhất.
+   */
+  bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
   lamTron: number;
 }
 
@@ -62,6 +68,8 @@ export interface DauVaoDongLuong {
   dongBH: boolean;
   thoiVu: boolean;
   camKet: boolean;
+  /** HĐLĐ thứ 2 (NLĐ đã có HĐ chính ở nơi khác). */
+  hopDongThu2: boolean;
   /** số nhập theo kỳ, khoá theo `ma` khoản (vd { HIEU_SUAT: 2000000, THUONG: 0 }). */
   nhapTheoKy: Record<string, number>;
 }
@@ -93,4 +101,8 @@ export interface KetQuaLuong {
   thuNhapTinhThue: number;
   thue: number;
   thucLinh: number;
+  /** BH phần công ty chịu — KHÔNG trừ vào `thucLinh`. */
+  chiPhiBHCongTy: number;
+  /** Tổng chi phí công ty bỏ ra cho NV này = `tongThuNhap + chiPhiBHCongTy`. */
+  tongChiPhiCongTy: number;
 }

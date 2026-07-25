@@ -10,6 +10,7 @@ export class CauHinhLuong extends BaseEntity {
   @Column({ default: 15_500_000 }) giamTruBanThan: number;
   @Column({ default: 6_200_000 }) giamTruNPT: number;
   @Column('json', { nullable: true }) bhxh: { tyLe: number; canCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN' };
+  @Column('json', { nullable: true }) bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
   @Column('json', { nullable: true }) bacThue: BacThue[];
   @Column('json', { nullable: true }) thuViec: { tyLe: number };
   @Column('json', { nullable: true }) quyTacThoiVu: { tyLe: number; nguong: number };

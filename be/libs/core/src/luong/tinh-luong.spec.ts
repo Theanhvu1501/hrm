@@ -25,6 +25,7 @@ function cauHinh(over: Partial<CauHinhLuongData> = {}): CauHinhLuongData {
     thuViec: { tyLe: 0.85 },
     quyTacThoiVu: { tyLe: 0.1, nguong: 2_000_000 },
     quyTacCamKet: { mienThue: true },
+    bhCongTy: { tyLe: 0.215, tyLeHopDongThu2: 0.005 },
     lamTron: 1000,
     ...over,
   };
@@ -35,7 +36,7 @@ function dauVao(over: Partial<DauVaoDongLuong> = {}): DauVaoDongLuong {
     base: 5_500_000, mucKhaiBao: 5_500_000,
     congThuong: 24, congThuViec: 0, congKhac: 0,
     phuCapCoDinh: 0, soNguoiPhuThuoc: 0, tamUng: 0, khauTruKhac: 0,
-    dongBH: false, thoiVu: false, camKet: false,
+    dongBH: false, thoiVu: false, camKet: false, hopDongThu2: false,
     nhapTheoKy: {}, ...over,
   };
 }
@@ -134,5 +135,104 @@ describe('tinhDongLuong', () => {
     ch.khoanLuong[1].chiuThue = false; // ăn ca không chịu thuế
     const r = tinhDongLuong(dauVao({ base: 15_000_000 }), ch);
     expect(r.thuNhapMienThue).toBe(1_200_000); // cả khoản ăn ca (=1.2tr) miễn
+  });
+});
+
+describe('chi phí BH công ty', () => {
+  it('có đóng BH, HĐ thường → tỷ lệ chuẩn trên căn cứ đóng', () => {
+    const r = tinhDongLuong(dauVao({ dongBH: true }), cauHinh());
+    expect(r.chiPhiBHCongTy).toBe(lamTronTheo(0.215 * 5_500_000, 1000));
+  });
+
+  it('không đóng BH, HĐ thường → 0', () => {
+    expect(tinhDongLuong(dauVao({ dongBH: false }), cauHinh()).chiPhiBHCongTy).toBe(0);
+  });
+
+  it('HĐLĐ thứ 2 → chỉ tỷ lệ BHTNLĐ-BNN, BẤT KỂ dongBH', () => {
+    const mong = lamTronTheo(0.005 * 5_500_000, 1000);
+    expect(
+      tinhDongLuong(dauVao({ hopDongThu2: true, dongBH: true }), cauHinh()).chiPhiBHCongTy,
+    ).toBe(mong);
+    expect(
+      tinhDongLuong(dauVao({ hopDongThu2: true, dongBH: false }), cauHinh()).chiPhiBHCongTy,
+    ).toBe(mong);
+  });
+
+  it('đọc tỷ lệ từ CẤU HÌNH, không số cứng', () => {
+    const ch = cauHinh({ bhCongTy: { tyLe: 0.3, tyLeHopDongThu2: 0.01 } });
+    expect(tinhDongLuong(dauVao({ dongBH: true }), ch).chiPhiBHCongTy).toBe(
+      lamTronTheo(0.3 * 5_500_000, 1000),
+    );
+    expect(tinhDongLuong(dauVao({ hopDongThu2: true }), ch).chiPhiBHCongTy).toBe(
+      lamTronTheo(0.01 * 5_500_000, 1000),
+    );
+  });
+
+  it('theo căn cứ LUONG_THOA_THUAN thì tính trên base', () => {
+    const ch = cauHinh({ bhxh: { tyLe: 0.105, canCu: 'LUONG_THOA_THUAN' } });
+    const r = tinhDongLuong(dauVao({ base: 20_000_000, dongBH: true }), ch);
+    expect(r.chiPhiBHCongTy).toBe(lamTronTheo(0.215 * 20_000_000, 1000));
+  });
+
+  it('tongChiPhiCongTy = tongThuNhap + chiPhiBHCongTy', () => {
+    const r = tinhDongLuong(dauVao({ dongBH: true }), cauHinh());
+    expect(r.tongChiPhiCongTy).toBe(r.tongThuNhap + r.chiPhiBHCongTy);
+  });
+
+  it('không làm đổi thucLinh (hồi quy)', () => {
+    const dv = dauVao({ dongBH: true });
+    const r = tinhDongLuong(dv, cauHinh());
+    expect(r.thucLinh).toBe(
+      r.tongThuNhap - r.bhxh - r.thue - dv.tamUng - dv.khauTruKhac,
+    );
+  });
+});
+
+describe('HĐLĐ thứ 2', () => {
+  it('không trừ BHXH của NLĐ dù dongBH = true', () => {
+    const r = tinhDongLuong(dauVao({ hopDongThu2: true, dongBH: true }), cauHinh());
+    expect(r.bhxh).toBe(0);
+  });
+
+  it('không giảm trừ gia cảnh, vẫn chạy bậc thuế lũy tiến', () => {
+    const dv = dauVao({
+      base: 30_000_000,
+      hopDongThu2: true,
+      soNguoiPhuThuoc: 2,
+      congThuong: 24,
+    });
+    const r = tinhDongLuong(dv, cauHinh());
+
+    expect(r.giamTru).toBe(0);
+    expect(r.thuNhapTinhThue).toBe(r.tongThuNhap - r.thuNhapMienThue);
+    expect(r.thue).toBe(lamTronTheo(thueLuyTien(r.thuNhapTinhThue, BAC_MAC_DINH), 1000));
+    expect(r.thue).toBeGreaterThan(0);
+  });
+
+  it('camKet thắng hopDongThu2 → thuế 0', () => {
+    const r = tinhDongLuong(
+      dauVao({ base: 30_000_000, hopDongThu2: true, camKet: true }),
+      cauHinh(),
+    );
+    expect(r.thue).toBe(0);
+  });
+
+  it('thoiVu thắng hopDongThu2 → khấu trừ theo quyTacThoiVu, không lũy tiến', () => {
+    const r = tinhDongLuong(
+      dauVao({ base: 30_000_000, hopDongThu2: true, thoiVu: true }),
+      cauHinh(),
+    );
+    const tnCT = r.tongThuNhap - r.thuNhapMienThue;
+    expect(r.thue).toBe(lamTronTheo(0.1 * tnCT, 1000));
+    expect(r.giamTru).toBe(0);
+  });
+
+  it('HĐ thường (mặc định) không đổi hành vi cũ', () => {
+    const r = tinhDongLuong(
+      dauVao({ base: 30_000_000, dongBH: true, soNguoiPhuThuoc: 1 }),
+      cauHinh(),
+    );
+    expect(r.giamTru).toBe(15_500_000 + 6_200_000);
+    expect(r.bhxh).toBe(lamTronTheo(0.105 * 5_500_000, 1000));
   });
 });

@@ -92,7 +92,25 @@ export function tinhDongLuong(
   // KhoanLuong.vaoBHXH chưa được cộng dồn ở đây — dành cho một task sau.
   const baseBHXH =
     ch.bhxh.canCu === 'MUC_KHAI_BAO' ? dv.mucKhaiBao : dv.base;
-  const bhxh = dv.dongBH ? lamTronTheo(ch.bhxh.tyLe * baseBHXH, ch.lamTron) : 0;
+
+  // HĐLĐ thứ 2: BHXH/BHYT/BHTN đã đóng ở nơi thứ nhất nên NLĐ không bị trừ
+  // tại đây, dù HR có tích `dongBH`.
+  const bhxh =
+    dv.dongBH && !dv.hopDongThu2
+      ? lamTronTheo(ch.bhxh.tyLe * baseBHXH, ch.lamTron)
+      : 0;
+
+  // Phần CÔNG TY chịu — không trừ vào `thucLinh`, chỉ để quản trị chi phí.
+  // Với HĐLĐ thứ 2, công ty vẫn phải đóng BHTNLĐ-BNN nên tỷ lệ này áp BẤT KỂ
+  // `dongBH`: HR sẽ không tích `dongBH` cho người này, mà nghĩa vụ 0,5% thì
+  // vẫn còn — buộc theo `dongBH` là làm cờ HĐ thứ 2 mất tác dụng đúng ở ca
+  // phổ biến nhất.
+  const tyLeBHCongTy = dv.hopDongThu2
+    ? ch.bhCongTy.tyLeHopDongThu2
+    : dv.dongBH
+      ? ch.bhCongTy.tyLe
+      : 0;
+  const chiPhiBHCongTy = lamTronTheo(tyLeBHCongTy * baseBHXH, ch.lamTron);
 
   let thue = 0;
   let giamTru = 0;
@@ -106,7 +124,11 @@ export function tinhDongLuong(
         ? lamTronTheo(ch.quyTacThoiVu.tyLe * tnCT, ch.lamTron)
         : 0;
   } else {
-    giamTru = ch.giamTruBanThan + dv.soNguoiPhuThuoc * ch.giamTruNPT;
+    // HĐLĐ thứ 2: giảm trừ gia cảnh chỉ được đăng ký ở MỘT nơi — đã dùng ở
+    // công ty thứ nhất, nên tại đây giảm trừ = 0 nhưng vẫn chạy lũy tiến.
+    giamTru = dv.hopDongThu2
+      ? 0
+      : ch.giamTruBanThan + dv.soNguoiPhuThuoc * ch.giamTruNPT;
     thuNhapTinhThue = Math.max(
       0,
       tongThuNhap - thuNhapMienThue - bhxh - giamTru,
@@ -125,5 +147,7 @@ export function tinhDongLuong(
     thuNhapTinhThue,
     thue,
     thucLinh,
+    chiPhiBHCongTy,
+    tongChiPhiCongTy: tongThuNhap + chiPhiBHCongTy,
   };
 }
