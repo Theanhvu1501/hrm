@@ -12,6 +12,7 @@ import { CongViecTab } from "./tabs/CongViecTab";
 import { ChamCongTab } from "./tabs/ChamCongTab";
 import { LuongTab } from "./tabs/LuongTab";
 import { HoSoNhanVienFormValues } from "./HoSoNhanVienForm.state";
+import { cauHinhLuongRiengToForm } from "./tabs/luongTab.convert";
 import { toCreateEmployeeDto } from "./hoSoNhanVienForm.convert";
 import "./HoSoNhanVienForm.state";
 
@@ -44,6 +45,11 @@ const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   dongBH: false,
   thoiVu: false,
   camKet: false,
+  hopDongThu2: false,
+  orCongChuan: undefined,
+  orThuViecPhanTram: undefined,
+  orBhxhPhanTram: undefined,
+  orBhxhCanCu: undefined,
 };
 
 function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
@@ -82,6 +88,8 @@ function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
     dongBH: employee.dongBH ?? false,
     thoiVu: employee.thoiVu ?? false,
     camKet: employee.camKet ?? false,
+    hopDongThu2: employee.hopDongThu2 ?? false,
+    ...cauHinhLuongRiengToForm(employee.cauHinhLuongRieng),
   };
 }
 

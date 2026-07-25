@@ -1,6 +1,7 @@
 import { CreateEmployeeDto } from "@/services/employeeService";
 import { HoSoNhanVienFormValues } from "./HoSoNhanVienForm.state";
 import { choPhepChamNgoaiVungToDto } from "./tabs/chamCongTab.convert";
+import { cauHinhLuongRiengToDto } from "./tabs/luongTab.convert";
 
 /**
  * Dựng DTO gửi lên BE từ giá trị form.
@@ -76,5 +77,9 @@ export function toCreateEmployeeDto(
     dongBH: values.dongBH ?? false,
     thoiVu: values.thoiVu ?? false,
     camKet: values.camKet ?? false,
+
+    // Cấu hình riêng + cờ HĐLĐ thứ 2 (tab Lương). Tách hàm để test được — xem
+    // docblock `cauHinhLuongRiengToDto` về hai bẫy %/khoá vắng mặt.
+    ...cauHinhLuongRiengToDto(values),
   };
 }

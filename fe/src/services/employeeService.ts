@@ -54,6 +54,16 @@ export interface Employee {
   dongBH: boolean;
   thoiVu: boolean;
   camKet: boolean;
+  hopDongThu2: boolean;
+  cauHinhLuongRieng?: CauHinhLuongRieng;
+}
+
+/** Override cấu hình lương riêng của một NV — trống = kế thừa Cấu hình lương. */
+export interface CauHinhLuongRieng {
+  congChuan?: number;
+  thuViecTyLe?: number; // 0..1
+  bhxhTyLe?: number; // 0..1
+  bhxhCanCu?: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN';
 }
 
 export interface EmployeeFilter {
@@ -91,6 +101,8 @@ export interface CreateEmployeeDto {
   dongBH?: boolean;
   thoiVu?: boolean;
   camKet?: boolean;
+  hopDongThu2?: boolean;
+  cauHinhLuongRieng?: CauHinhLuongRieng;
 }
 
 export type UpdateEmployeeDto = Partial<CreateEmployeeDto>;
@@ -168,6 +180,9 @@ class EmployeeService extends ServiceBase {
       dongBH: (x.dongBH as boolean) ?? false,
       thoiVu: (x.thoiVu as boolean) ?? false,
       camKet: (x.camKet as boolean) ?? false,
+      hopDongThu2: (x.hopDongThu2 as boolean) ?? false,
+      cauHinhLuongRieng:
+        (x.cauHinhLuongRieng as CauHinhLuongRieng) ?? undefined,
     };
   }
 }

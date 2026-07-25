@@ -28,6 +28,13 @@ export interface HoSoNhanVienFormValues {
   dongBH: boolean;
   thoiVu: boolean;
   camKet: boolean;
+  hopDongThu2: boolean;
+  // 4 ô "cấu hình riêng" — phẳng cho react-hook-form; ô % ở đây là PHẦN TRĂM
+  // (90), quy đổi sang tỷ lệ 0..1 trong `tabs/luongTab.convert.ts`.
+  orCongChuan?: number;
+  orThuViecPhanTram?: number;
+  orBhxhPhanTram?: number;
+  orBhxhCanCu?: "MUC_KHAI_BAO" | "LUONG_THOA_THUAN";
 }
 
 export interface FormStates extends BaseStates {

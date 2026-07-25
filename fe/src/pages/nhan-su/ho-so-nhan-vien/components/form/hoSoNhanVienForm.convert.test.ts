@@ -147,3 +147,28 @@ describe("toCreateEmployeeDto — các trường tuỳ chọn khác giữ nguyê
     expect(body.nguoiPhuThuoc).toEqual([]);
   });
 });
+
+describe("toCreateEmployeeDto — cấu hình lương riêng (P4.1)", () => {
+  it("gộp cấu hình riêng + hopDongThu2 vào DTO", () => {
+    const dto = toCreateEmployeeDto(
+      values({ hopDongThu2: true, orCongChuan: 26, orThuViecPhanTram: 90 })
+    );
+
+    expect(dto.hopDongThu2).toBe(true);
+    expect(dto.cauHinhLuongRieng).toEqual({ congChuan: 26, thuViecTyLe: 0.9 });
+  });
+
+  it("không nhập cấu hình riêng → gửi {} để xoá được cấu hình cũ", () => {
+    const dto = toCreateEmployeeDto(values());
+
+    expect(dto.cauHinhLuongRieng).toEqual({});
+    expect(dto.hopDongThu2).toBe(false);
+  });
+
+  it("khoá cauHinhLuongRieng/hopDongThu2 vẫn nằm trong body sau JSON.stringify", () => {
+    const body = bodyThucGui(toCreateEmployeeDto(values()));
+
+    expect("cauHinhLuongRieng" in body).toBe(true);
+    expect("hopDongThu2" in body).toBe(true);
+  });
+});
