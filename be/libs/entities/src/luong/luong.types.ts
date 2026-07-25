@@ -66,6 +66,24 @@ export interface DauVaoDongLuong {
   nhapTheoKy: Record<string, number>;
 }
 
+/**
+ * Override cấu hình lương cho RIÊNG một NV. Trường `undefined` = kế thừa
+ * `CauHinhLuong` của công ty.
+ *
+ * Chỉ chứa tham số mang tính THỎA THUẬN riêng từng người. Tham số là LUẬT
+ * (giảm trừ, bậc thuế, quy tắc thời vụ/cam kết) và quy ước trình bày
+ * (`lamTron`) cố ý KHÔNG có ở đây — xem spec P4.1 §4.
+ */
+export interface CauHinhLuongRieng {
+  congChuan?: number;
+  thuViecTyLe?: number; // 0..1, cùng đơn vị CauHinhLuong.thuViec.tyLe
+  bhxhTyLe?: number; // 0..1
+  bhxhCanCu?: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN';
+}
+
+/** Giá trị đã resolve (không còn `undefined`) — snapshot vào `DongLuong`. */
+export type CauHinhLuongApDung = Required<CauHinhLuongRieng>;
+
 export interface KetQuaLuong {
   giaTriTungKhoan: Record<string, number>;
   tongThuNhap: number;
