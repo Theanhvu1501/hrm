@@ -102,6 +102,46 @@ export function HangSoEditor({ canEdit }: HangSoEditorProps) {
           onChange={(canCu) => capNhat({ bhxh: { ...cauHinh.bhxh, canCu } })}
         />
       </Col>
+      {/* `?.`/`?? 0`: tenant tạo trước P4.1 chưa từng lưu `bhCongTy` và vẫn có
+          thể mở màn này trước khi BE backfill khối đó. */}
+      <Col span={8}>
+        <FieldLabel>BH công ty đóng (HĐ thường)</FieldLabel>
+        <InputNumber
+          className="w-full"
+          min={0}
+          max={100}
+          addonAfter="%"
+          value={(cauHinh.bhCongTy?.tyLe ?? 0) * 100}
+          disabled={!canEdit}
+          onChange={(v) =>
+            capNhat({
+              bhCongTy: {
+                tyLe: (v ?? 0) / 100,
+                tyLeHopDongThu2: cauHinh.bhCongTy?.tyLeHopDongThu2 ?? 0,
+              },
+            })
+          }
+        />
+      </Col>
+      <Col span={8}>
+        <FieldLabel>BH công ty đóng (HĐLĐ thứ 2)</FieldLabel>
+        <InputNumber
+          className="w-full"
+          min={0}
+          max={100}
+          addonAfter="%"
+          value={(cauHinh.bhCongTy?.tyLeHopDongThu2 ?? 0) * 100}
+          disabled={!canEdit}
+          onChange={(v) =>
+            capNhat({
+              bhCongTy: {
+                tyLe: cauHinh.bhCongTy?.tyLe ?? 0,
+                tyLeHopDongThu2: (v ?? 0) / 100,
+              },
+            })
+          }
+        />
+      </Col>
       <Col span={8}>
         <FieldLabel>Tỷ lệ hưởng khi thử việc</FieldLabel>
         <InputNumber

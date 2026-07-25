@@ -84,6 +84,7 @@ const seedCauHinh: CauHinhLuong = {
   thuViec: { tyLe: 0.85 },
   quyTacThoiVu: { tyLe: 0.1, nguong: 3_000_000 },
   quyTacCamKet: { mienThue: false },
+  bhCongTy: { tyLe: 0.215, tyLeHopDongThu2: 0.005 },
   lamTron: 1_000,
 };
 
@@ -111,6 +112,19 @@ describe("Màn Cấu hình lương", () => {
       expect(screen.getByDisplayValue("5000000")).toBeTruthy();
       // suat 0.05 -> hiện 5 (%).
       expect(screen.getByDisplayValue("5")).toBeTruthy();
+    });
+  });
+
+  it("tab Hằng số hiện 2 ô tỷ lệ BH công ty đóng theo % từ cấu hình", async () => {
+    moMan();
+
+    await screen.findByDisplayValue("Ăn ca");
+    fireEvent.click(screen.getByText("Hằng số"));
+
+    await waitFor(() => {
+      // bhCongTy.tyLe 0.215 -> 21.5 (%); tyLeHopDongThu2 0.005 -> 0.5 (%).
+      expect(screen.getByDisplayValue("21.5")).toBeTruthy();
+      expect(screen.getByDisplayValue("0.5")).toBeTruthy();
     });
   });
 });

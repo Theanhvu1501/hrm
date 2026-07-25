@@ -43,6 +43,8 @@ export interface CauHinhLuong {
   giamTruBanThan: number;
   giamTruNPT: number;
   bhxh: { tyLe: number; canCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN' };
+  /** Phần BH công ty chịu — `tyLeHopDongThu2` áp khi NV là HĐLĐ thứ 2. */
+  bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
   bacThue: BacThue[];
   thuViec: { tyLe: number };
   quyTacThoiVu: { tyLe: number; nguong: number };
