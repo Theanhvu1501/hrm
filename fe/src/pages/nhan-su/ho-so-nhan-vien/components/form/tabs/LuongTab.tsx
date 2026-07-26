@@ -44,7 +44,9 @@ export function LuongTab() {
       .catch(() => setChung(null));
   }, []);
 
-  const ph = (v?: number) => (v === undefined ? "" : `${v} (theo cấu hình)`);
+  // Placeholder = số CHUNG đang áp dụng, để HR biết "để trống thì ra số mấy".
+  const ph = (v?: number) =>
+    v === undefined ? "Theo cấu hình lương" : `${v} — theo cấu hình lương`;
 
   return (
     <Row gutter={16}>
@@ -153,7 +155,7 @@ export function LuongTab() {
           Cấu hình riêng — để trống là theo Cấu hình lương
         </Divider>
       </Col>
-      <Col span={6}>
+      <Col span={12}>
         <Form.Item label="Công chuẩn / tháng">
           <Controller
             name="orCongChuan"
@@ -169,7 +171,7 @@ export function LuongTab() {
           />
         </Form.Item>
       </Col>
-      <Col span={6}>
+      <Col span={12}>
         <Form.Item label="Tỷ lệ thử việc">
           <Controller
             name="orThuViecPhanTram"
@@ -184,7 +186,7 @@ export function LuongTab() {
           />
         </Form.Item>
       </Col>
-      <Col span={6}>
+      <Col span={12}>
         <Form.Item label="Tỷ lệ BHXH (NLĐ đóng)">
           <Controller
             name="orBhxhPhanTram"
@@ -199,7 +201,7 @@ export function LuongTab() {
           />
         </Form.Item>
       </Col>
-      <Col span={6}>
+      <Col span={12}>
         <Form.Item label="Căn cứ đóng BH">
           <Controller
             name="orBhxhCanCu"
@@ -210,8 +212,8 @@ export function LuongTab() {
                 allowClear
                 placeholder={
                   chung?.bhxh.canCu === "LUONG_THOA_THUAN"
-                    ? "Lương thoả thuận (theo cấu hình)"
-                    : "Mức khai báo (theo cấu hình)"
+                    ? "Lương thoả thuận — theo cấu hình lương"
+                    : "Mức khai báo — theo cấu hình lương"
                 }
                 options={[
                   { value: "MUC_KHAI_BAO", label: "Mức khai báo" },
