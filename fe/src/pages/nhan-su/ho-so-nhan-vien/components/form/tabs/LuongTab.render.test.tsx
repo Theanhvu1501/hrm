@@ -44,9 +44,12 @@ afterEach(() => {
 });
 
 const CAU_HINH_CHUNG = {
+  mucKhaiBaoMacDinh: 5_500_000,
   congChuan: 24,
   thuViec: { tyLe: 0.85 },
   bhxh: { tyLe: 0.105, canCu: "MUC_KHAI_BAO" },
+  bhCongTy: { tyLe: 0.215, tyLeHopDongThu2: 0.005 },
+  quyTacThoiVu: { tyLe: 0.1, nguong: 2_000_000 },
   khoanLuong: [],
 } as unknown as CauHinhLuong;
 
@@ -75,17 +78,23 @@ function moTab(over?: Partial<HoSoNhanVienFormValues>) {
   return render(<Wrapper over={over} />);
 }
 
-describe("Tab Lương — cấu hình riêng theo NV", () => {
+describe("Tab Lương — bố cục 3 nhóm", () => {
+  it("chia đúng 3 nhóm", async () => {
+    moTab();
+
+    expect(await screen.findByText("Thu nhập")).toBeTruthy();
+    expect(screen.getByText("Hợp đồng & bảo hiểm")).toBeTruthy();
+    expect(screen.getByText("Cấu hình riêng")).toBeTruthy();
+  });
+
   it("hiện đủ 4 ô cấu hình riêng và cờ HĐLĐ thứ 2", async () => {
     moTab();
 
-    expect(await screen.findByText("Công chuẩn / tháng")).toBeTruthy();
-    expect(screen.getByText("Tỷ lệ thử việc")).toBeTruthy();
-    expect(screen.getByText("Tỷ lệ BHXH (NLĐ đóng)")).toBeTruthy();
-    expect(screen.getByText("Căn cứ đóng BH")).toBeTruthy();
-    expect(
-      screen.getByText(/HĐLĐ thứ 2 \(công ty chỉ đóng 0,5% BHTNLĐ-BNN/)
-    ).toBeTruthy();
+    expect(await screen.findByText("Công chuẩn (ngày/tháng)")).toBeTruthy();
+    expect(screen.getByText("Tỷ lệ hưởng khi thử việc")).toBeTruthy();
+    expect(screen.getByText("Tỷ lệ bảo hiểm nhân viên đóng")).toBeTruthy();
+    expect(screen.getByText("Căn cứ đóng bảo hiểm")).toBeTruthy();
+    expect(screen.getByText("Hợp đồng lao động thứ 2")).toBeTruthy();
   });
 
   it("placeholder nói rõ số chung đang áp dụng khi ô để trống", async () => {
@@ -93,9 +102,9 @@ describe("Tab Lương — cấu hình riêng theo NV", () => {
 
     await waitFor(() => {
       expect(screen.getByPlaceholderText("24 — theo cấu hình lương")).toBeTruthy();
-      expect(screen.getByPlaceholderText("85 — theo cấu hình lương")).toBeTruthy();
+      expect(screen.getByPlaceholderText("85% — theo cấu hình lương")).toBeTruthy();
       expect(
-        screen.getByPlaceholderText("10.5 — theo cấu hình lương")
+        screen.getByPlaceholderText("10.5% — theo cấu hình lương")
       ).toBeTruthy();
     });
   });
@@ -113,7 +122,7 @@ describe("Tab Lương — cấu hình riêng theo NV", () => {
     vi.spyOn(cauHinhLuongService, "get").mockRejectedValue(new Error("403"));
     render(<Wrapper />);
 
-    expect(await screen.findByText("Công chuẩn / tháng")).toBeTruthy();
+    expect(await screen.findByText("Công chuẩn (ngày/tháng)")).toBeTruthy();
     await waitFor(() => {
       expect(
         screen.getAllByPlaceholderText("Theo cấu hình lương").length
@@ -126,5 +135,42 @@ describe("Tab Lương — cấu hình riêng theo NV", () => {
 
     expect(await screen.findByDisplayValue("26")).toBeTruthy();
     expect(screen.getByDisplayValue("90")).toBeTruthy();
+  });
+});
+
+describe("Tab Lương — khối Kết quả áp dụng", () => {
+  it("mặc định: lũy tiến có giảm trừ, không đóng bảo hiểm", async () => {
+    moTab();
+
+    expect(await screen.findByText("Kết quả áp dụng")).toBeTruthy();
+    expect(
+      screen.getByText(/Thuế lũy tiến, có giảm trừ bản thân/)
+    ).toBeTruthy();
+    expect(screen.getByText("Không đóng bảo hiểm ở công ty này.")).toBeTruthy();
+  });
+
+  it("tick HĐLĐ thứ 2 → câu chữ đổi ngay, nêu đúng tỷ lệ từ cấu hình", async () => {
+    moTab();
+
+    fireEvent.click(await screen.findByText("Hợp đồng lao động thứ 2"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/không giảm trừ gia cảnh — đã đăng ký ở công ty thứ nhất/)
+      ).toBeTruthy();
+      expect(screen.getByText(/công ty đóng 0,5%/)).toBeTruthy();
+    });
+  });
+
+  it("tick Đóng bảo hiểm → nêu cả phần nhân viên và phần công ty", async () => {
+    moTab();
+
+    fireEvent.click(await screen.findByText("Đóng bảo hiểm"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Trừ 10,5% lương nhân viên; công ty đóng thêm 21,5%/)
+      ).toBeTruthy();
+    });
   });
 });
