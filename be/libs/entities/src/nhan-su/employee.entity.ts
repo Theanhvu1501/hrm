@@ -20,6 +20,14 @@ export class Employee extends BaseEntity {
   @Column({ nullable: true }) phongBan?: string;
   @Column({ nullable: true }) chucDanh?: string;
   @Column({ nullable: true }) ngayVaoLam?: string;
+  /**
+   * Ngày lên chính thức — mốc MỞ KHOÁ quỹ phép (P3.8). Trống = đang thử việc,
+   * quỹ phép = 0 và không nộp được đơn `phep_nam`.
+   *
+   * KHÔNG phải mốc tính số ngày phép: prorate và thâm niên đều đếm từ
+   * `ngayVaoLam`, gồm cả thời gian thử việc (NĐ 145/2020 Đ65.2).
+   */
+  @Column({ nullable: true }) ngayChinhThuc?: string;
   @Column({ default: 'thu_viec' }) loaiHopDong: string;   // thu_viec|chinh_thuc|dich_vu
   @Column({ default: 'dang_lam_viec' }) trangThai: string; // dang_lam_viec|da_nghi|tam_nghi
   @Column('json', { nullable: true }) bangCap?: BangCap[];

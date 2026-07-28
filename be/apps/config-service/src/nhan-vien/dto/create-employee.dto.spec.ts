@@ -163,3 +163,32 @@ describe('CreateEmployeeDto — qua ValidationPipe như main.ts', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('CreateEmployeeDto — ngayChinhThuc (P3.8)', () => {
+  const pipe = new ValidationPipe({
+    whitelist: true,
+    transform: true,
+    forbidNonWhitelisted: true,
+  });
+  const meta: ArgumentMetadata = {
+    type: 'body',
+    metatype: CreateEmployeeDto,
+    data: '',
+  };
+
+  it('nhận ngayChinhThuc, không bị forbidNonWhitelisted đá ra', async () => {
+    const ketQua: any = await pipe.transform(
+      { hoTen: 'Nguyễn Văn A', cccd: '001', ngayChinhThuc: '2026-10-01' },
+      meta,
+    );
+    expect(ketQua.ngayChinhThuc).toBe('2026-10-01');
+  });
+
+  it('cho phép vắng mặt — người đang thử việc chưa có ngày chính thức', async () => {
+    const ketQua: any = await pipe.transform(
+      { hoTen: 'Nguyễn Văn B', cccd: '002' },
+      meta,
+    );
+    expect(ketQua.ngayChinhThuc).toBeUndefined();
+  });
+});

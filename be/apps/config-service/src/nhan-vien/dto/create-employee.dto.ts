@@ -89,6 +89,10 @@ export class CreateEmployeeDto {
   ngayVaoLam?: string;
 
   @IsOptional()
+  @IsString()
+  ngayChinhThuc?: string;
+
+  @IsOptional()
   @IsIn(['thu_viec', 'chinh_thuc', 'dich_vu'], {
     message: 'Loại hợp đồng không hợp lệ',
   })
