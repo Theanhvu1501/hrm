@@ -1,4 +1,10 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Employee, LeaveBalance, LeaveBalanceEntry, PhanBoQuy } from '@app/entities';
@@ -40,7 +46,13 @@ export class QuyPhep_Service {
     private readonly repoNhanVien: Repository<Employee>,
   ) {}
 
-  /** Ghi số dư + ghi sổ trong CÙNG một lời gọi. Không hàm nào khác được lưu quỹ. */
+  /**
+   * Ghi số dư + ghi sổ trong CÙNG một lời gọi — mọi BIẾN ĐỘNG THẬT của quỹ
+   * (cấp/dùng/hoàn/hết hạn) phải đi qua đây. Ngoại lệ duy nhất: `giuCho` và
+   * `nhaCho` lưu thẳng qua `repo.save()`, không qua hàm này — giữ chỗ là
+   * trạng thái tạm của một đơn đang chờ duyệt, không phải biến động quỹ thật
+   * nên không vào sổ (xem doc-comment của `giuCho`).
+   */
   private async ghi(
     quy: LeaveBalance,
     bienDong: {
@@ -221,15 +233,35 @@ export class QuyPhep_Service {
    * nộp một đơn dài vắt qua 31/3 là lách được hạn dùng của toàn bộ quỹ cũ, và
    * ngày nghỉ 2/4 vốn không phải ngày nghỉ của năm cũ.
    *
-   * `cacNgayNghi` là các ngày THỰC SỰ TRỪ PHÉP (đã loại cuối tuần và ngày lễ,
-   * xem `tinhSoNgayNghi` trong luat-don.ts). `soNgayNghi` là tổng đã tính —
-   * bằng `cacNgayNghi.length`, trừ đơn nửa ngày thì bằng 0.5.
+   * `cacNgayNghi` là các ngày THỰC SỰ TRỪ PHÉP — danh sách này do NƠI GỌI tự
+   * dựng bằng cùng bộ lọc đã bỏ cuối tuần/ngày lễ/ngày ngoài lịch làm việc
+   * (xem `tinhSoNgayNghi` trong luat-don.ts, hàm đó chỉ trả về MỘT CON SỐ chứ
+   * không phải danh sách ngày). `soNgayNghi` là tổng đã tính cho đúng danh
+   * sách đó — bằng `cacNgayNghi.length`, trừ đơn nửa ngày (1 ngày, 0.5 công)
+   * thì bằng 0.5. Guard đầu hàm canh hai tham số này khớp nhau.
    */
   async phanBoChoNgayNghi(
     employeeId: string,
     cacNgayNghi: string[],
     soNgayNghi: number,
   ): Promise<PhanBoQuy[]> {
+    // `soNgayNghi` và `cacNgayNghi` phải khớp nhau, nếu không phép chia đều ở
+    // dưới sinh trọng lượng lẻ (2/3 ngày) — lúc đó số dư còn lại kiểu 1e-16 sẽ
+    // lọt qua `co <= 0` và đẻ ra dòng phân bổ rác. Chặn ở đây vì hai tham số
+    // này do NƠI GỌI tính, và một sai lệch im lặng ở đó là mất ngày phép thật.
+    const ngayDuyNhat = [...new Set(cacNgayNghi)];
+    if (ngayDuyNhat.length !== cacNgayNghi.length) {
+      throw new BadRequestException('Danh sách ngày nghỉ có ngày trùng');
+    }
+    const hopLe =
+      soNgayNghi === cacNgayNghi.length ||
+      (cacNgayNghi.length === 1 && soNgayNghi === 0.5);
+    if (!hopLe) {
+      throw new BadRequestException(
+        `Số ngày nghỉ (${soNgayNghi}) không khớp danh sách ngày nghỉ (${cacNgayNghi.length} ngày)`,
+      );
+    }
+
     const quyKhaDung = (await this.layQuyCuaNhanVien(employeeId))
       .filter((q) => q.trangThai === 'dang_hieu_luc')
       .sort((a, b) => a.nam - b.nam);
@@ -265,8 +297,18 @@ export class QuyPhep_Service {
       }
 
       if (can > 0) {
+        // Báo đúng số dư TẠI THỜI ĐIỂM ngày đang xét bị chặn, không phải số
+        // dư gốc lúc bắt đầu hàm: nếu đơn hỏng ở ngày thứ N, các ngày 1..N-1
+        // của CHÍNH đơn này đã tiêu bớt quỹ rồi — đọc `conLai` (bộ nhớ) chứ
+        // không đọc `q.soNgayConLai` (đã lưu) mới không báo lạc quan. Quỹ đã
+        // hết hạn so với `ngay` cũng bị loại khỏi tóm tắt vì nó chưa từng và
+        // sẽ không bao giờ trả được cho ngày này.
         const tomTat = quyKhaDung
-          .map((q) => `${q.nam}: ${q.soNgayConLai} ngày (hạn ${q.hanDung})`)
+          .filter((q) => q.hanDung >= ngay)
+          .map(
+            (q) =>
+              `${q.nam}: ${conLai.get(String((q as any)._id)) ?? 0} ngày (hạn ${q.hanDung})`,
+          )
           .join('; ');
         throw new ConflictException({
           code: MA_LOI_QUY_PHEP.KHONG_DU_SO_DU,
@@ -278,12 +320,24 @@ export class QuyPhep_Service {
     return [...ketQua.values()];
   }
 
-  private async layQuyTheoId(balanceId: string): Promise<LeaveBalance> {
+  /**
+   * Tra quỹ theo `_id` VÀ đối chiếu `employeeId`. `phanBoQuy` là dữ liệu
+   * `json` snapshot trên `attendance_requests` — chỉ cần một DTO sơ hở ở nơi
+   * gọi (Task 8) là một NV có thể trỏ `balanceId` vào quỹ của đồng nghiệp.
+   * Bốn hàm vòng đời dưới đây đều đi qua cửa này để chặn việc đó.
+   */
+  private async layQuyTheoId(
+    employeeId: string,
+    balanceId: string,
+  ): Promise<LeaveBalance> {
     const { ObjectId } = await import('mongodb');
     const quy = await this.repo.findOne({
       where: { _id: new ObjectId(balanceId) as any },
     });
     if (!quy) throw new NotFoundException(`Không tìm thấy quỹ phép ${balanceId}`);
+    if (quy.employeeId !== employeeId) {
+      throw new ForbiddenException('Phân bổ quỹ không thuộc nhân viên này');
+    }
     return quy;
   }
 
@@ -296,14 +350,32 @@ export class QuyPhep_Service {
    * Giữ chỗ KHÔNG ghi sổ: sổ ghi những biến động thật của quỹ (cấp/dùng/hoàn/
    * hết hạn), còn giữ chỗ là trạng thái tạm. `doiSoat()` vì vậy chỉ đối chiếu
    * `soNgayDuocCap` và `soNgayDaDung`.
+   *
+   * GIỚI HẠN CÒN LẠI: repo này không dùng transaction ở bất kỳ service nào,
+   * và read-modify-write trên `soNgayDangChoDuyet` không nguyên tử — hai đơn
+   * nộp GẦN NHƯ ĐỒNG THỜI vẫn có thể cùng đọc một số dư rồi cùng giữ chỗ
+   * thành công, vượt quỹ thật. Guard dưới đây chỉ thu hẹp cửa sổ hở (chặn
+   * được trường hợp tuần tự — đơn sau thấy đúng số dư đơn trước đã giữ), chứ
+   * không đóng hẳn race thật sự đồng thời; muốn đóng hẳn phải có transaction
+   * hoặc `$inc` nguyên tử ở tầng DB. Việc đó được park lại, không làm ở đây.
    */
   async giuCho(
+    employeeId: string,
     phanBo: PhanBoQuy[],
     _requestId: string,
     _nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
-      const quy = await this.layQuyTheoId(p.balanceId);
+      const quy = await this.layQuyTheoId(employeeId, p.balanceId);
+      if (
+        quy.soNgayDangChoDuyet + p.soNgay >
+        quy.soNgayDuocCap - quy.soNgayDaDung
+      ) {
+        throw new ConflictException({
+          code: MA_LOI_QUY_PHEP.KHONG_DU_SO_DU,
+          message: `Quỹ ${quy.nam} không còn đủ để giữ chỗ`,
+        });
+      }
       quy.soNgayDangChoDuyet += p.soNgay;
       quy.soNgayConLai =
         quy.soNgayDuocCap - quy.soNgayDaDung - quy.soNgayDangChoDuyet;
@@ -312,12 +384,13 @@ export class QuyPhep_Service {
   }
 
   async nhaCho(
+    employeeId: string,
     phanBo: PhanBoQuy[],
     _requestId: string,
     _nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
-      const quy = await this.layQuyTheoId(p.balanceId);
+      const quy = await this.layQuyTheoId(employeeId, p.balanceId);
       quy.soNgayDangChoDuyet = Math.max(0, quy.soNgayDangChoDuyet - p.soNgay);
       quy.soNgayConLai =
         quy.soNgayDuocCap - quy.soNgayDaDung - quy.soNgayDangChoDuyet;
@@ -326,12 +399,24 @@ export class QuyPhep_Service {
   }
 
   async chuyenSangDaDung(
+    employeeId: string,
     phanBo: PhanBoQuy[],
     requestId: string,
     nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
-      const quy = await this.layQuyTheoId(p.balanceId);
+      const quy = await this.layQuyTheoId(employeeId, p.balanceId);
+      // Chặn vượt trần thay vì clamp-rồi-lưu: gọi duyệt hai lần cho cùng một
+      // đơn (bấm hai lần, retry sau lỗi mạng) mà clamp thì lần hai vẫn cộng
+      // thêm `p.soNgay` vào `soNgayDaDung`, đẩy `soNgayConLai` xuống âm và
+      // ghi thêm một dòng sổ `duyet_don` không có thật. Ném lỗi ở đây vừa giữ
+      // quỹ không âm, vừa buộc nơi gọi phát hiện đơn đã được duyệt rồi.
+      if (quy.soNgayDaDung + p.soNgay > quy.soNgayDuocCap) {
+        throw new ConflictException({
+          code: MA_LOI_QUY_PHEP.KHONG_DU_SO_DU,
+          message: `Duyệt đơn sẽ làm quỹ ${quy.nam} vượt số ngày được cấp`,
+        });
+      }
       quy.soNgayDangChoDuyet = Math.max(0, quy.soNgayDangChoDuyet - p.soNgay);
       quy.soNgayDaDung += p.soNgay;
       await this.ghi(quy, {
@@ -349,13 +434,17 @@ export class QuyPhep_Service {
    * sẽ biến phép hết hạn thành phép mới.
    */
   async hoanTraDaDung(
+    employeeId: string,
     phanBo: PhanBoQuy[],
     requestId: string,
     nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
-      const quy = await this.layQuyTheoId(p.balanceId);
-      quy.soNgayDaDung = Math.max(0, quy.soNgayDaDung - p.soNgay);
+      const quy = await this.layQuyTheoId(employeeId, p.balanceId);
+      const truoc = quy.soNgayDaDung;
+      const sau = Math.max(0, truoc - p.soNgay);
+      if (sau === truoc) continue; // clamp cắn: hoàn lặp lần hai, không ghi sổ rỗng
+      quy.soNgayDaDung = sau;
       await this.ghi(quy, {
         soNgay: p.soNgay,
         lyDo: 'huy_don',
