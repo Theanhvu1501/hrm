@@ -97,9 +97,14 @@ describe('Gateway Routing', () => {
       }
     });
 
-    it('should only expose the current HRM routes (auth, config, tai-lieu)', () => {
+    // `/master-data` được khôi phục cùng màn Quản lý thành viên (f0a1a3e) nhưng
+    // assertion này không được cập nhật theo, nên suite đỏ từ đó tới nay. Danh
+    // sách ở đây là hàng rào chống việc route kế toán cũ lẻn về, nên nó phải
+    // bám đúng những gì gateway thực sự phục vụ — thiếu một route hợp lệ thì
+    // hàng rào thành báo động giả và người ta bắt đầu bỏ qua nó.
+    it('should only expose the current HRM routes (auth, config, master-data, tai-lieu)', () => {
       const prefixes = environment.routes.map((r) => r.pathPrefix).sort();
-      expect(prefixes).toEqual(['/auth', '/config', '/tai-lieu']);
+      expect(prefixes).toEqual(['/auth', '/config', '/master-data', '/tai-lieu']);
     });
   });
 });
