@@ -34,6 +34,7 @@ import {
   DonChamCongPage,
   BangCongPage,
   NgayLePage,
+  QuyPhepPage,
   ThietBiPage,
   BanGhiPage,
   ChamCongCuaToiPage,
@@ -244,6 +245,14 @@ const App = () => (
                     element={
                       <ProtectedRoute requiredPermission="/cham-cong/ngay-le:xem">
                         <NgayLePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="quy-phep"
+                    element={
+                      <ProtectedRoute requiredPermission="/cham-cong/quy-phep:xem">
+                        <QuyPhepPage />
                       </ProtectedRoute>
                     }
                   />

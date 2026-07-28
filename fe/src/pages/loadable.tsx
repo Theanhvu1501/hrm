@@ -76,6 +76,10 @@ export const NgayLePage = loadable(() => import('./cham-cong/ngay-le/NgayLePage'
   fallback: <PageLoader />
 });
 
+export const QuyPhepPage = loadable(() => import('./cham-cong/quy-phep/QuyPhepPage'), {
+  fallback: <PageLoader />
+});
+
 export const ThietBiPage = loadable(() => import('./cham-cong/thiet-bi/ThietBiPage'), {
   fallback: <PageLoader />
 });

@@ -49,6 +49,7 @@ export const permissionModules: PermissionModule[] = [
       { key: '/cham-cong/ca-lam-viec', label: 'Cấu hình ca làm việc' },
       { key: '/cham-cong/dia-diem', label: 'Địa điểm chấm công' },
       { key: '/cham-cong/don-tu', label: 'Đơn chấm công' },
+      { key: '/cham-cong/quy-phep', label: 'Quỹ phép năm' },
       { key: '/cham-cong/bang-cong', label: 'Bảng công' },
       { key: '/cham-cong/ngay-le', label: 'Ngày nghỉ lễ' },
       { key: '/cham-cong/thiet-bi', label: 'Thiết bị chấm công' },
