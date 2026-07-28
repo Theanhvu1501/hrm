@@ -446,6 +446,70 @@ describe('QuyPhep_Service — vòng đời giữ chỗ', () => {
       service.giuCho(ID_NV2, PHAN_BO, 'don1', ID_NV2),
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // P3.8 fix round 3 — vá lại chính khoá chống trùng round 2 thêm vào
+  // (`daGhiChoDon`, "đã từng có dòng sổ chưa"): sổ ghi LỊCH SỬ, không ghi
+  // TRẠNG THÁI. Chuỗi duyệt → từ chối → mở lại → duyệt là HỢP LỆ — chính app
+  // hướng dẫn HR đi qua chuỗi này khi chặn chuyển thẳng da_duyet→cho_duyet
+  // (xem CHUYEN_TRANG_THAI_KHONG_HOP_LE) — và lần duyệt THỨ HAI trong chuỗi
+  // đó PHẢI thực sự chạy. Khoá "đã từng" sẽ thấy dòng duyet_don từ lần duyệt
+  // ĐẦU và bỏ qua nhầm lần hai, làm chỗ giữ (giuCho ở bước mở lại) kẹt vĩnh
+  // viễn. Khoá đúng là SỐ RÒNG (`soRongDaDung`): +1 mỗi duyet_don, −1 mỗi
+  // huy_don — hai test dưới đây là lưới canh cho đúng ca này.
+  // ────────────────────────────────────────────────────────────────────────
+  describe('QuyPhep_Service — chuỗi duyệt → từ chối → mở lại → duyệt lại (P3.8 fix round 3)', () => {
+    /** Chạy đúng chuỗi: giữ chỗ, duyệt, từ chối (hoàn), mở lại (giữ chỗ lại), duyệt lại. */
+    async function chayChuoiDuyetTuChoiMoLaiDuyetLai() {
+      const ctx = await dungHaiQuy();
+      const { service } = ctx;
+      await service.giuCho(ID_NV1, PHAN_BO, 'don1', 'nv1'); // nộp
+      await service.chuyenSangDaDung(ID_NV1, PHAN_BO, 'don1', 'hr1'); // duyệt
+      await service.hoanTraDaDung(ID_NV1, PHAN_BO, 'don1', 'hr1'); // từ chối → hoàn
+      await service.giuCho(ID_NV1, PHAN_BO, 'don1', 'nv1'); // mở lại → giữ chỗ lại
+      await service.chuyenSangDaDung(ID_NV1, PHAN_BO, 'don1', 'hr1'); // duyệt lại — PHẢI thực sự chạy
+      return ctx;
+    }
+
+    it('lần duyệt thứ hai thực sự áp dụng: soNgayDaDung đúng, soNgayDangChoDuyet về 0, sổ có 2 duyet_don + 1 huy_don', async () => {
+      const { repoQuy, repoSo } = await chayChuoiDuyetTuChoiMoLaiDuyetLai();
+
+      const q2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
+      // Nếu khoá "đã từng có dòng" (round 2, sai) còn hiệu lực, lần duyệt
+      // thứ hai bị bỏ qua NHẦM: soNgayDaDung sẽ kẹt ở 0 và
+      // soNgayDangChoDuyet sẽ kẹt ở 2 (chỗ giữ không bao giờ được nhả) thay
+      // vì các giá trị đúng dưới đây.
+      expect(q2026.soNgayDaDung).toBe(2);
+      expect(q2026.soNgayDangChoDuyet).toBe(0);
+
+      const soQuy2026 = repoSo.kho.filter((x: any) => x.balanceId === ID_Q2026);
+      expect(
+        soQuy2026.filter((x: any) => x.lyDo === 'duyet_don'),
+      ).toHaveLength(2);
+      expect(
+        soQuy2026.filter((x: any) => x.lyDo === 'huy_don'),
+      ).toHaveLength(1);
+    });
+
+    it('nối tiếp bằng một lần xoá đơn (đã duyệt) → hoanTraDaDung PHẢI chạy, không bị chặn nhầm bởi huy_don của lần từ chối trước', async () => {
+      const { service, repoQuy, repoSo } = await chayChuoiDuyetTuChoiMoLaiDuyetLai();
+
+      // Đơn (giờ đã duyệt lại lần hai) bị xoá — quỹ phải hoàn về 0 đã dùng.
+      // Đây chính là ca "mất ngày phép" mà khoá round 2 gây ra: khoá cũ thấy
+      // dòng huy_don đã tồn tại (từ lần TỪ CHỐI trước đó) và bỏ qua nhầm,
+      // nên chỗ giữ không bao giờ được nhả — NV mất trắng 2 ngày.
+      await service.hoanTraDaDung(ID_NV1, PHAN_BO, 'don1', 'hr1');
+
+      const q2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
+      expect(q2026.soNgayDaDung).toBe(0);
+      expect(q2026.soNgayConLai).toBe(3); // về đúng số dư gốc, không mất ngày nào
+
+      const soHuyDonQuy2026 = repoSo.kho.filter(
+        (x: any) => x.balanceId === ID_Q2026 && x.lyDo === 'huy_don',
+      );
+      expect(soHuyDonQuy2026).toHaveLength(2); // dòng thứ hai, không bị chặn nhầm
+    });
+  });
 });
 
 describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () => {

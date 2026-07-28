@@ -354,23 +354,35 @@ export class QuyPhep_Service {
   }
 
   /**
-   * Đã áp dụng biến động này cho đúng quỹ này chưa (P3.8 fix round 2). Vòng
-   * lặp theo từng quỹ trong `chuyenSangDaDung`/`hoanTraDaDung` KHÔNG nguyên
-   * tử: hỏng ở quỹ thứ hai thì quỹ thứ nhất đã đổi rồi, và lần thử lại sau
-   * đó (HR sửa số dư rồi bấm duyệt lại, hoặc bấm đúp) sẽ trừ/hoàn lần thứ
-   * hai trên chính quỹ đã xong nếu không có gì chặn. Sổ (`leave_balance_entries`)
-   * là nơi DUY NHẤT biết việc gì đã thực sự xảy ra cho đúng
-   * (quỹ, đơn) này — dùng nó làm khoá chống trùng thay vì cố dựng rollback
-   * nhiều bước (rollback không đóng được: bản thân retry cũng đi qua đúng
-   * vòng lặp không nguyên tử này).
+   * Lần duyệt trước cho đúng (quỹ này, đơn này) còn hiệu lực không (P3.8 fix
+   * round 3 — vá lại round 2).
+   *
+   * Round 2 dùng "đã từng có dòng `duyet_don`/`huy_don` chưa" làm khoá chống
+   * trùng — SAI về bản chất: sổ ghi LỊCH SỬ, không ghi TRẠNG THÁI. Chuỗi
+   * duyệt → từ chối → mở lại → duyệt là HỢP LỆ (chính app hướng dẫn HR đi
+   * qua chuỗi này khi chặn chuyển thẳng `da_duyet → cho_duyet`), và lần
+   * duyệt THỨ HAI trong chuỗi đó PHẢI thực sự chạy — round 2 lại thấy dòng
+   * `duyet_don` từ lần duyệt ĐẦU TIÊN và bỏ qua, để chỗ giữ (`giuCho` ở bước
+   * mở lại) kẹt vĩnh viễn trong `soNgayDangChoDuyet`, không bao giờ được
+   * nhả (huỷ đơn sau đó cũng bị `daGhiChoDon('huy_don')` cũ chặn nhầm vì
+   * `huy_don` đã có từ lần từ chối trước).
+   *
+   * Số RÒNG mới trả lời đúng câu hỏi "hiện đang tiêu hay đã hoàn": mỗi dòng
+   * `duyet_don` +1, mỗi dòng `huy_don` −1. Vẫn chặn được đúng ca round 2
+   * nhắm tới (vòng lặp nhiều quỹ hỏng nửa chừng rồi thử lại: quỹ đã xong có
+   * net > 0 ngay từ lần áp dụng đầu, quỹ chưa tới có net = 0) — chỉ khác là
+   * không còn nhầm "đã từng" với "vẫn còn hiệu lực".
    */
-  private async daGhiChoDon(
+  private async soRongDaDung(
     balanceId: string,
     requestId: string,
-    lyDo: string,
-  ): Promise<boolean> {
+  ): Promise<number> {
     const ds = await this.repoSo.find({ where: { balanceId, requestId } as any });
-    return ds.some((dong) => dong.lyDo === lyDo);
+    return ds.reduce((tong, dong) => {
+      if (dong.lyDo === 'duyet_don') return tong + 1;
+      if (dong.lyDo === 'huy_don') return tong - 1;
+      return tong;
+    }, 0);
   }
 
   /**
@@ -437,13 +449,16 @@ export class QuyPhep_Service {
     nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
-      // (P3.8 fix round 2): vòng lặp này không nguyên tử theo `phanBo` — nếu
-      // lần chạy trước đã áp dụng xong cho quỹ này (thấy dòng sổ `duyet_don`
-      // đúng requestId) rồi mới hỏng ở MỘT quỹ khác trong CÙNG `phanBo`, lần
-      // gọi lại (retry, hoặc "duyệt lại" sau khi updateStatus() khôi phục
-      // đơn về cho_duyet) phải bỏ qua quỹ đã xong này — nếu không sẽ trừ lần
-      // hai + ghi thêm một dòng sổ `duyet_don` không có thật.
-      if (await this.daGhiChoDon(p.balanceId, requestId, 'duyet_don')) continue;
+      // (P3.8 fix round 3): vòng lặp này không nguyên tử theo `phanBo` — nếu
+      // lần chạy trước đã áp dụng xong cho quỹ này rồi mới hỏng ở MỘT quỹ
+      // khác trong CÙNG `phanBo`, lần gọi lại (retry, hoặc "duyệt lại" sau
+      // khi updateStatus() khôi phục đơn về cho_duyet) phải bỏ qua quỹ đã
+      // xong này. Nhưng "đã xong" nghĩa là NET > 0 (lần duyệt gần nhất còn
+      // hiệu lực), KHÔNG phải "đã từng có dòng duyet_don" — nếu không, chuỗi
+      // duyệt→từ chối→mở lại→duyệt (hợp lệ, do chính app hướng dẫn HR đi
+      // qua) sẽ bị bỏ qua NHẦM ở lần duyệt thứ hai, xem doc-comment của
+      // `soRongDaDung()`.
+      if ((await this.soRongDaDung(p.balanceId, requestId)) > 0) continue;
 
       const quy = await this.layQuyTheoId(employeeId, p.balanceId);
       // Chặn vượt trần thay vì clamp-rồi-lưu: gọi duyệt hai lần cho cùng một
@@ -480,13 +495,13 @@ export class QuyPhep_Service {
     nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
-      // (P3.8 fix round 2): xem giải thích ở chuyenSangDaDung() — vòng lặp
-      // này cũng không nguyên tử theo `phanBo`, sổ là khoá chống trùng chính
-      // xác nhất. Giữ NGUYÊN clamp `sau === truoc` bên dưới như một lớp
-      // phòng thủ thứ hai (trường hợp `soNgayDaDung` đã về đúng mức mong đợi
-      // qua một đường khác mà không để lại dòng sổ `huy_don` khớp requestId
-      // này) — hai lớp không loại trừ nhau.
-      if (await this.daGhiChoDon(p.balanceId, requestId, 'huy_don')) continue;
+      // (P3.8 fix round 3): xem doc-comment của `soRongDaDung()`. Ở đây câu
+      // hỏi đúng là "hiện có gì đã tiêu để mà hoàn không" — net <= 0 nghĩa
+      // là không (chưa từng duyệt, hoặc đã hoàn xong từ lần huỷ trước) →
+      // bỏ qua. Giữ NGUYÊN clamp `sau === truoc` bên dưới như một lớp phòng
+      // thủ thứ hai (trường hợp `soNgayDaDung` đã về đúng mức mong đợi qua
+      // một đường khác) — hai lớp không loại trừ nhau.
+      if ((await this.soRongDaDung(p.balanceId, requestId)) <= 0) continue;
 
       const quy = await this.layQuyTheoId(employeeId, p.balanceId);
       const truoc = quy.soNgayDaDung;

@@ -1286,6 +1286,34 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
       expect(donSau.nguoiDuyetId).toBeUndefined();
       expect(donSau.thoiDiemDuyet).toBeUndefined();
     });
+
+    // P3.8 fix round 3 — chuỗi này đi qua updateStatus() bốn lần liên tiếp
+    // (chính là chuỗi mà thông báo lỗi CHUYEN_TRANG_THAI_KHONG_HOP_LE hướng
+    // dẫn HR đi qua). Ở tầng QuyPhep_Service (quy-phep.service.spec.ts) đã
+    // có test khẳng định lần chuyenSangDaDung THỨ HAI thực sự áp dụng — test
+    // này khẳng định updateStatus() (tầng gọi) không tự chặn/bỏ qua việc
+    // dispatch chuyenSangDaDung() lần hai đó, tức lỗi round 2 không tái phát
+    // từ CHÍNH updateStatus() (đã bị loại ở round 1 CRITICAL, xem bảng
+    // (cũ → mới) — trangThaiCu luôn đọc lại đúng mỗi lần gọi nên không có gì
+    // để mà chặn ở tầng này cả).
+    it('chuỗi đầy đủ duyệt → từ chối → mở lại → duyệt lại: gọi đúng số lần, đơn kết thúc ở da_duyet', async () => {
+      const quyPhep = mockQuyPhep();
+      const { service, repoDon, id } = await taoDonVaDuyet(quyPhep);
+
+      await service.updateStatus(id, 'da_duyet', 'HR', { id: 'user-hr-1' } as any); // duyệt
+      await service.updateStatus(id, 'tu_choi', undefined, { id: 'user-hr-2' } as any); // từ chối
+      await service.updateStatus(id, 'cho_duyet', undefined, { id: 'user-hr-3' } as any); // mở lại
+      await service.updateStatus(id, 'da_duyet', undefined, { id: 'user-hr-4' } as any); // duyệt lại
+
+      // giuCho: 1 lần lúc create() + 1 lần lúc mở lại (tu_choi → cho_duyet).
+      expect(quyPhep.giuCho).toHaveBeenCalledTimes(2);
+      expect(quyPhep.hoanTraDaDung).toHaveBeenCalledTimes(1);
+      // chuyenSangDaDung PHẢI được gọi đủ HAI lần — đây là dòng khẳng định
+      // chính: nếu updateStatus() (hoặc lớp dưới nó) âm thầm bỏ qua lần
+      // duyệt thứ hai, số này sẽ dừng ở 1.
+      expect(quyPhep.chuyenSangDaDung).toHaveBeenCalledTimes(2);
+      expect(repoDon.kho.at(-1).trangThai).toBe('da_duyet');
+    });
   });
 
   // Review round 1, MINOR 8 — đơn nửa ngày chưa có test nào đụng tới quỹ.
