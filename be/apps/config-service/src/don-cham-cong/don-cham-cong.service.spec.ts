@@ -6,7 +6,7 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
-import { DonChamCong_Service } from './don-cham-cong.service';
+import { DonChamCong_Service, MA_LOI_DON_CHAM_CONG } from './don-cham-cong.service';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
@@ -611,6 +611,125 @@ describe('DonChamCong_Service', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // (P3.8 review round 4, CRITICAL 1): PUT :id là cửa THỨ HAI vào quỹ phép —
+  // soNgayNghi/phanBoQuy chỉ backend tính MỘT LẦN lúc create(), update() KHÔNG
+  // BAO GIỜ tính lại. Sửa loaiDon/loaiNghi/ngay/denNgay/buoi của một đơn TRỪ
+  // QUỸ (trước hoặc sau khi sửa) qua PUT để lại số cũ đứng cạnh ngày/loại
+  // mới — ba kịch bản người dùng bình thường dưới đây (a, b, c trong report)
+  // đều phải bị chặn 409, và bản ghi đã lưu phải giữ NGUYÊN, không đổi gì.
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('update — PUT không được sửa các trường ảnh hưởng quỹ phép của đơn trừ quỹ (P3.8 CRITICAL 1)', () => {
+    const DON_ID = '507f1f77bcf86cd799439099';
+
+    it('(a) đơn phép năm 1 ngày → PUT kéo dài denNgay → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_phep',
+        loaiNghi: 'phep_nam',
+        ngay: '2027-02-01',
+        denNgay: '2027-02-01',
+        soNgayNghi: 1,
+        phanBoQuy: [{ balanceId: 'q1', nam: 2027, soNgay: 1 }],
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { denNgay: '2027-02-15' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('(b) đơn không_lương (không giữ chỗ) → PUT đổi loaiNghi sang phep_nam → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_phep',
+        loaiNghi: 'khong_luong',
+        ngay: '2027-02-01',
+        denNgay: '2027-02-01',
+        soNgayNghi: 1,
+        // Không có phanBoQuy: đơn không_lương chưa từng giữ chỗ gì.
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { loaiNghi: 'phep_nam' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('(c) đơn phép năm ĐÃ giữ chỗ → PUT đổi loaiNghi sang khong_luong → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_phep',
+        loaiNghi: 'phep_nam',
+        ngay: '2027-02-01',
+        denNgay: '2027-02-01',
+        soNgayNghi: 1,
+        phanBoQuy: [{ balanceId: 'q1', nam: 2027, soNgay: 1 }],
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { loaiNghi: 'khong_luong' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    // Không bị chặn quá tay: sửa một trường KHÔNG ảnh hưởng quỹ (lyDo) trên
+    // một đơn phép năm vẫn phải đi qua bình thường.
+    it('sửa lyDo trên đơn phép năm (không đụng ngày/loại) vẫn được phép', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_phep',
+        loaiNghi: 'phep_nam',
+        ngay: '2027-02-01',
+        denNgay: '2027-02-01',
+        soNgayNghi: 1,
+        phanBoQuy: [{ balanceId: 'q1', nam: 2027, soNgay: 1 }],
+      });
+
+      const result = await service.update(DON_ID, { lyDo: 'Lý do mới' } as any);
+
+      expect(result.lyDo).toBe('Lý do mới');
+      expect(mockRequestRepo.save).toHaveBeenCalled();
+    });
+
+    // Không bị chặn quá tay: sửa ngày trên một đơn KHÔNG trừ quỹ (om_dau) vẫn
+    // được phép bình thường, kể cả trước lẫn sau khi sửa.
+    it('sửa denNgay trên đơn KHÔNG trừ quỹ (om_dau) vẫn được phép', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_phep',
+        loaiNghi: 'om_dau',
+        ngay: '2027-02-01',
+        denNgay: '2027-02-01',
+        soNgayNghi: 1,
+      });
+
+      const result = await service.update(DON_ID, { denNgay: '2027-02-05' } as any);
+
+      expect(result.denNgay).toBe('2027-02-05');
+      expect(mockRequestRepo.save).toHaveBeenCalled();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   // findAll
   // ──────────────────────────────────────────────────────────────────────────
   describe('findAll', () => {
@@ -864,6 +983,43 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
     );
     expect(quyPhep.phanBoChoNgayNghi).not.toHaveBeenCalled();
     expect(quyPhep.giuCho).not.toHaveBeenCalled();
+  });
+
+  // (P3.8 review round 4, IMPORTANT 3): spec §6.1 quy tắc 1 chặn CẢ HAI vế —
+  // "chưa có ngayChinhThuc" (test ở trên) VÀ "ngayChinhThuc > ngày nghỉ".
+  // Thiếu vế sau, một NV vừa lên chính thức HÔM NAY vẫn xin nghỉ phép năm cho
+  // một ngày TRONG QUÁ KHỨ, lúc còn thử việc — quỹ không phân biệt được đó là
+  // thời gian thử việc chưa đủ điều kiện.
+  it('NV đã chính thức nhưng ngayChinhThuc > ngày nghỉ đầu tiên → 409, KHÔNG giữ chỗ', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service } = await dungServiceDon({
+      quyPhep,
+      // Chính thức từ 2027-02-15, nhưng đơn xin nghỉ 2027-02-01 → 2027-02-02
+      // (trước ngày lên chính thức).
+      nhanVien: { ...nhanVienMacDinh(), ngayChinhThuc: '2027-02-15' },
+    });
+
+    const err = await batMaLoi(() => service.create(DON_PHEP as any));
+
+    expect(err).toBe('CHUA_LEN_CHINH_THUC');
+    expect(quyPhep.phanBoChoNgayNghi).not.toHaveBeenCalled();
+    expect(quyPhep.giuCho).not.toHaveBeenCalled();
+  });
+
+  // Ranh giới ĐÚNG bằng ngày lên chính thức phải được PHÉP — quy tắc chặn
+  // "ngayChinhThuc > ngày nghỉ", không phải ">=". Nghỉ ĐÚNG NGÀY lên chính
+  // thức là hợp lệ.
+  it('ngày nghỉ TRÙNG đúng ngayChinhThuc (ranh giới) → được phép, không bị chặn', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service } = await dungServiceDon({
+      quyPhep,
+      nhanVien: { ...nhanVienMacDinh(), ngayChinhThuc: '2027-02-01' },
+    });
+
+    await service.create(DON_PHEP as any);
+
+    expect(quyPhep.phanBoChoNgayNghi).toHaveBeenCalled();
+    expect(quyPhep.giuCho).toHaveBeenCalled();
   });
 
   it('loaiNghi khác phep_nam (om_dau) KHÔNG đụng quỹ, kể cả khi còn thử việc', async () => {

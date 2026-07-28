@@ -51,6 +51,14 @@ export const MA_LOI_DON_CHAM_CONG = {
    * `updateStatus()`.
    */
   CHUYEN_TRANG_THAI_KHONG_HOP_LE: 'CHUYEN_TRANG_THAI_KHONG_HOP_LE',
+  /**
+   * P3.8 (review round 4, CRITICAL 1): PUT :id sửa `loaiDon`/`loaiNghi`/
+   * `ngay`/`denNgay`/`buoi` của một đơn TRỪ QUỸ (trước hoặc sau khi sửa) —
+   * `soNgayNghi`/`phanBoQuy` chỉ được backend tính MỘT LẦN lúc `create()` và
+   * không bao giờ tính lại ở `update()`, nên các trường này đổi mà số đã
+   * giữ/trừ đứng yên là mở khoá quỹ. Xem doc-comment `update()`.
+   */
+  KHONG_THE_SUA_DON_TRU_QUY: 'KHONG_THE_SUA_DON_TRU_QUY',
 } as const;
 
 export interface DonChamCongFilter {
@@ -236,12 +244,41 @@ export class DonChamCong_Service {
         });
       }
 
-      // Cửa 2: đủ số dư chưa. `cacNgayTruPhep` PHẢI khớp `tinhSoNgayNghi`
-      // (dùng chung để tính truongTinhToan.soNgayNghi ở trên) — xem
-      // doc-comment của cacNgayTruPhep().
+      // `cacNgayTruPhep` PHẢI khớp `tinhSoNgayNghi` (dùng chung để tính
+      // truongTinhToan.soNgayNghi ở trên) — xem doc-comment của
+      // cacNgayTruPhep(). Tính MỘT LẦN ở đây rồi dùng lại cho cả cửa 1b lẫn
+      // cửa 2 bên dưới — trước đây `phanBoChoNgayNghi` tự tính lại danh sách
+      // này nên cửa 1b (chặn ngày nghỉ trước ngayChinhThuc) không có sẵn để
+      // mà kiểm.
+      const cacNgay = await this.cacNgayTruPhep(
+        dto.ngay,
+        dto.denNgay ?? dto.ngay,
+        emp,
+      );
+
+      // Cửa 1b (P3.8 review round 4, IMPORTANT 3): spec §6.1 quy tắc 1 chặn
+      // CẢ HAI vế — "chưa có ngayChinhThuc" (cửa 1 ở trên) VÀ "ngayChinhThuc
+      // > ngày nghỉ". Thiếu vế sau thì một NV vừa lên chính thức hôm nay vẫn
+      // xin nghỉ phép năm cho một ngày TRONG QUÁ KHỨ, lúc còn thử việc — kết
+      // hợp với round trước (ngayChinhThuc là ngày tương lai không tự cấp
+      // quỹ ngay), giờ NV này ĐÃ có quỹ (đã tới ngayChinhThuc) nên xuyên
+      // luôn được cửa 1, chỉ còn cửa 1b giữ đúng ranh giới "ngày nghỉ phải
+      // từ lúc chính thức trở đi". So bằng NGÀY THỰC SỰ TRỪ PHÉP đầu tiên
+      // (`cacNgay[0]`), không phải `dto.ngay`: đơn có thể bắt đầu bằng một
+      // ngày lễ/cuối tuần không bị trừ phép, lúc đó phải xét ngày trừ phép
+      // ĐẦU TIÊN mới đúng ranh giới.
+      const ngayDauTienTruPhep = cacNgay[0] ?? dto.ngay;
+      if (emp.ngayChinhThuc > ngayDauTienTruPhep) {
+        throw new ConflictException({
+          code: MA_LOI_DON_CHAM_CONG.CHUA_LEN_CHINH_THUC,
+          message: `Nhân viên lên chính thức từ ${emp.ngayChinhThuc}, chưa có quỹ phép năm cho ngày ${ngayDauTienTruPhep}. Có thể nộp đơn nghỉ không lương.`,
+        });
+      }
+
+      // Cửa 2: đủ số dư chưa.
       phanBoQuy = await this.quyPhep_Service.phanBoChoNgayNghi(
         dto.employeeId,
-        await this.cacNgayTruPhep(dto.ngay, dto.denNgay ?? dto.ngay, emp),
+        cacNgay,
         truongTinhToan.soNgayNghi ?? 0,
       );
     }
@@ -515,7 +552,7 @@ export class DonChamCong_Service {
         //
         // (P3.8 fix round 2, Part B): `chuyenSangDaDung`/`hoanTraDaDung`
         // (hai nhánh có ghi sổ) giờ đã tự chống trùng qua sổ
-        // (`daGhiChoDon` trong quy-phep.service.ts) — khôi phục trạng thái
+        // (`soRongDaDung` trong quy-phep.service.ts) — khôi phục trạng thái
         // rồi ĐỂ HR BẤM LẠI là đủ, KHÔNG cần bù gì thêm ở đây: lần bấm lại
         // sẽ bỏ qua đúng phần quỹ đã áp dụng thành công và chỉ áp dụng nốt
         // phần còn thiếu.
@@ -699,7 +736,42 @@ export class DonChamCong_Service {
    * main.ts đã chặn ngay tại pipe), nên bóc ở đây là phòng thủ theo chiều
    * sâu — lỡ sau này DTO/whitelist bị nới lỏng thì service vẫn không mở
    * đường cho việc đó.
+   *
+   * (P3.8 review round 4, CRITICAL 1): bóc-và-bỏ như trên KHÔNG đủ cho năm
+   * trường còn lại `loaiDon`/`loaiNghi`/`ngay`/`denNgay`/`buoi` — khác với
+   * `trangThai`/`employeeId`/`nguoiDuyet`/`phanBoQuy` (những trường PUT
+   * không BAO GIỜ được phép đụng), năm trường này là dữ liệu NGHIỆP VỤ hợp
+   * lệ để sửa — CHỈ SAI khi đơn đang trừ quỹ, vì `soNgayNghi`/`phanBoQuy`
+   * (backend tính lúc `create()`) sẽ đứng yên trong khi ngày/loại đổi. Ba lối
+   * khai thác thật, đều là "sửa sau khi đã qua cửa kiểm tra lúc nộp":
+   *
+   *   (a) đơn phép năm 1 ngày (giữ 1 ngày quỹ) → PUT kéo dài `denNgay` thêm
+   *       14 ngày. `soNgayNghi`/`phanBoQuy` vẫn là 1 → nghỉ 15 ngày, trừ 1.
+   *   (b) đơn `khong_luong` (không giữ chỗ gì, `phanBoQuy` rỗng) → PUT đổi
+   *       `loaiNghi` sang `phep_nam`. Lúc duyệt, `laDonTruQuy(item)` đúng
+   *       nhưng `phanBoQuy` rỗng từ đầu → duyệt "phép năm" mà quỹ chưa từng
+   *       bị đụng tới.
+   *   (c) đơn `phep_nam` ĐÃ giữ N ngày (`phanBoQuy` có dữ liệu) → PUT đổi
+   *       `loaiNghi` sang `khong_luong`. Từ đây `laDonTruQuy(item)` luôn
+   *       false trên MỌI đường sau đó (`updateStatus`, `huyDonCuaToi`,
+   *       `remove`) → N ngày đã giữ không bao giờ được nhả. Giữ chỗ KHÔNG
+   *       ghi sổ (xem doc-comment `giuCho()` bên quy-phep.service.ts) nên
+   *       `doiSoat()` CẤU TRÚC không thấy được số ngày kẹt này để mà báo.
+   *
+   * Chặn bằng 409 CẤU TRÚC (kiểm CẢ hai đầu — trạng thái trừ quỹ TRƯỚC và
+   * SAU khi áp dụng dto, vì ca (b) chỉ trừ quỹ ở đầu SAU) thay vì cố "tính
+   * lại cho khớp": tính lại đòi nhả-rồi-giữ-lại không nguyên tử, rủi ro y hệt
+   * giới hạn "không transaction" mà `giuCho()`/`nhaCho()` đã tự nhận. Người
+   * dùng phải huỷ đơn rồi nộp lại — `create()` tính lại từ đầu, sạch.
    */
+  private static readonly TRUONG_ANH_HUONG_QUY = [
+    'loaiDon',
+    'loaiNghi',
+    'ngay',
+    'denNgay',
+    'buoi',
+  ] as const;
+
   async update(
     id: string,
     dto: UpdateDonChamCongDto,
@@ -712,6 +784,21 @@ export class DonChamCong_Service {
       phanBoQuy: _phanBoQuyBiBoQua,
       ...phanConLaiDuocPhepSua
     } = dto as UpdateDonChamCongDto & { phanBoQuy?: unknown };
+
+    const doiTruongAnhHuongQuy = DonChamCong_Service.TRUONG_ANH_HUONG_QUY.some(
+      (truong) => truong in phanConLaiDuocPhepSua,
+    );
+    const truQuyTruocKhiSua = this.laDonTruQuy(item);
+    const truQuySauKhiSua = this.laDonTruQuy({ ...item, ...phanConLaiDuocPhepSua });
+
+    if (doiTruongAnhHuongQuy && (truQuyTruocKhiSua || truQuySauKhiSua)) {
+      throw new ConflictException({
+        code: MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY,
+        message:
+          'Đơn này ảnh hưởng tới quỹ phép năm nên không sửa trực tiếp ngày/loại nghỉ được. Hãy huỷ đơn rồi nộp lại đơn mới.',
+      });
+    }
+
     Object.assign(item, phanConLaiDuocPhepSua);
     return this.repo.save(item);
   }
