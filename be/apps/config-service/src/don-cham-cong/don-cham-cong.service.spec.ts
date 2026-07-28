@@ -4,10 +4,13 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { DonChamCong_Service } from './don-cham-cong.service';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
+import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
+import { tinhSoNgayNghi } from './luat-don';
 import { AttendanceRequest, Employee } from '@app/entities';
 
 /** Lấy `code` ra khỏi ForbiddenException để assert cho gọn — cùng tiện ích
@@ -39,6 +42,13 @@ describe('DonChamCong_Service', () => {
   };
   let mockNhanVienService: {
     resolveEmployeeFromUser: jest.Mock;
+  };
+  let mockQuyPhepService: {
+    phanBoChoNgayNghi: jest.Mock;
+    giuCho: jest.Mock;
+    nhaCho: jest.Mock;
+    chuyenSangDaDung: jest.Mock;
+    hoanTraDaDung: jest.Mock;
   };
 
   const EMP_ID = '507f1f77bcf86cd799439011';
@@ -80,6 +90,18 @@ describe('DonChamCong_Service', () => {
         ),
     };
 
+    // Mặc định vô hại cho các describe cũ không quan tâm tới quỹ phép: trả
+    // mảng rỗng nên `create()` không có gì để giữ chỗ (nhánh `phanBoQuy?.length`
+    // không chạy). Describe "nối quỹ phép" bên dưới tự cấp provider riêng qua
+    // `dungServiceDon()`, không dùng biến này.
+    mockQuyPhepService = {
+      phanBoChoNgayNghi: jest.fn().mockResolvedValue([]),
+      giuCho: jest.fn().mockResolvedValue(undefined),
+      nhaCho: jest.fn().mockResolvedValue(undefined),
+      chuyenSangDaDung: jest.fn().mockResolvedValue(undefined),
+      hoanTraDaDung: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DonChamCong_Service,
@@ -90,6 +112,7 @@ describe('DonChamCong_Service', () => {
         { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
         { provide: NgayLe_Service, useValue: mockNgayLeService },
         { provide: NhanVien_Service, useValue: mockNhanVienService },
+        { provide: QuyPhep_Service, useValue: mockQuyPhepService },
       ],
     }).compile();
 
@@ -224,7 +247,16 @@ describe('DonChamCong_Service', () => {
   });
 
   describe('create — nghi_phep / nghi_bu (nghỉ phép)', () => {
-    const employee = { _id: EMP_ID, employeeId: 'NV0001', hoTen: 'Nguyen Van A', ngayLamViecTrongTuan: T2_DEN_T6 };
+    // ngayChinhThuc: bắt buộc phải có, nếu không P3.8 chặn NGAY ở cửa thử
+    // việc (CHUA_LEN_CHINH_THUC) trước khi soNgayNghi kịp tính — hai test
+    // dưới đây không nhắm vào luật đó nên fixture phải "đã chính thức".
+    const employee = {
+      _id: EMP_ID,
+      employeeId: 'NV0001',
+      hoTen: 'Nguyen Van A',
+      ngayLamViecTrongTuan: T2_DEN_T6,
+      ngayChinhThuc: '2026-01-01',
+    };
 
     it('khoảng nghỉ vắt cuối tuần → soNgayNghi bỏ qua T7/CN', async () => {
       mockEmployeeRepo.findOne.mockResolvedValue(employee);
@@ -685,5 +717,335 @@ describe('DonChamCong_Service', () => {
         expect(mockRequestRepo.save).not.toHaveBeenCalled();
       },
     );
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// P3.8 — nối quỹ phép vào vòng đời đơn nghỉ phép (Task 8)
+//
+// Bộ test này KHÔNG dùng harness jest.fn() rời rạc ở đầu file (top-level
+// `beforeEach`) — nó cần dựng nhiều tổ hợp (nhân viên thử việc/chính thức,
+// nhiều hành vi QuyPhep_Service khác nhau) mà giữ NGUYÊN trạng thái của đơn
+// đã lưu qua nhiều lệnh gọi (create → updateStatus/huyDonCuaToi/remove) để
+// so khớp `phanBoQuy` snapshot. Vì vậy dùng lại đúng khuôn "repo giả" mature
+// đã chứng minh đúng trong quy-phep.service.spec.ts (kho mảng, save xử lý cả
+// insert lẫn update, find/findOne trả bản sao nông) thay vì mock jest.fn()
+// rời rạc — mock rời rạc không giữ được trạng thái giữa các lệnh gọi trong
+// cùng một test mà không tự tay chằng chịt lại `mockResolvedValueOnce`.
+// ────────────────────────────────────────────────────────────────────────
+describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
+  const ID_NV1 = '650000000000000000000001';
+  const ID_Q2026 = '6500000000000000000000a1';
+  const PHAN_BO = [{ balanceId: ID_Q2026, nam: 2026, soNgay: 2 }];
+
+  /** Repo giả tối thiểu: đủ find/findOne/save/create — cùng khuôn với
+   * `taoRepoGia` trong quy-phep.service.spec.ts. */
+  function taoRepoGiaDon<T extends { _id?: any }>(banDau: T[] = []) {
+    const kho: any[] = [...banDau];
+    let seq = 0;
+    return {
+      kho,
+      create: (x: any) => ({ ...x }),
+      save: async (x: any) => {
+        if (!x._id) {
+          seq += 1;
+          x._id = { toString: () => seq.toString(16).padStart(24, '0') };
+          kho.push(x);
+          return x;
+        }
+        const idx = kho.findIndex((y) => String(y._id) === String(x._id));
+        if (idx === -1) kho.push(x);
+        else kho[idx] = x;
+        return x;
+      },
+      find: async ({ where }: any = {}) =>
+        kho
+          .filter((x) =>
+            Object.entries(where ?? {}).every(
+              ([k, v]) => (x as any)[k] === v,
+            ),
+          )
+          .map((x) => ({ ...x })),
+      findOne: async ({ where }: any) => {
+        const x = kho.find((x) =>
+          Object.entries(where ?? {}).every(
+            ([k, v]) => String((x as any)[k]) === String(v),
+          ),
+        );
+        return x ? { ...x } : null;
+      },
+    };
+  }
+
+  function mockQuyPhep(ghiDe: Record<string, any> = {}) {
+    return {
+      phanBoChoNgayNghi: jest.fn().mockResolvedValue(PHAN_BO),
+      giuCho: jest.fn().mockResolvedValue(undefined),
+      nhaCho: jest.fn().mockResolvedValue(undefined),
+      chuyenSangDaDung: jest.fn().mockResolvedValue(undefined),
+      hoanTraDaDung: jest.fn().mockResolvedValue(undefined),
+      ...ghiDe,
+    };
+  }
+
+  /** Nhân viên mặc định: đã chính thức, làm T2→CN (không cần loại trừ ngày
+   * nào riêng — các test dưới đây không nhắm vào lịch làm việc trừ khi khai
+   * `nhanVien` tường minh). */
+  function nhanVienMacDinh() {
+    return {
+      _id: { toString: () => ID_NV1 },
+      employeeId: 'NV0001',
+      hoTen: 'Nguyễn Văn A',
+      ngayChinhThuc: '2026-01-01',
+      ngayLamViecTrongTuan: [0, 1, 2, 3, 4, 5, 6],
+    };
+  }
+
+  async function dungServiceDon(
+    tuyChon: { quyPhep?: any; nhanVien?: any; ngayLe?: any } = {},
+  ) {
+    const repoDon = taoRepoGiaDon<any>();
+    const repoNv = taoRepoGiaDon<any>([tuyChon.nhanVien ?? nhanVienMacDinh()]);
+    const quyPhep = tuyChon.quyPhep ?? mockQuyPhep();
+    const ngayLe = tuyChon.ngayLe ?? {
+      timTheoNgay: jest.fn().mockResolvedValue(null),
+    };
+    const nhanVienSvc = {
+      resolveEmployeeFromUser: jest
+        .fn()
+        .mockRejectedValue(new NotFoundException()),
+    };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        DonChamCong_Service,
+        { provide: getRepositoryToken(AttendanceRequest), useValue: repoDon },
+        { provide: getRepositoryToken(Employee), useValue: repoNv },
+        { provide: NgayLe_Service, useValue: ngayLe },
+        { provide: NhanVien_Service, useValue: nhanVienSvc },
+        { provide: QuyPhep_Service, useValue: quyPhep },
+      ],
+    }).compile();
+
+    return {
+      service: module.get<DonChamCong_Service>(DonChamCong_Service),
+      repoDon,
+      quyPhep,
+    };
+  }
+
+  const DON_PHEP = {
+    employeeId: ID_NV1,
+    loaiDon: 'nghi_phep',
+    loaiNghi: 'phep_nam',
+    ngay: '2027-02-01',
+    denNgay: '2027-02-02',
+  };
+
+  it('NV chưa lên chính thức nộp phep_nam → 409, KHÔNG giữ chỗ', async () => {
+    const quyPhep = mockQuyPhep();
+    // Hồ sơ không có ngayChinhThuc = còn thử việc.
+    const { service } = await dungServiceDon({
+      quyPhep,
+      nhanVien: { _id: { toString: () => ID_NV1 }, hoTen: 'A', employeeId: 'NV0001' },
+    });
+
+    await expect(service.create(DON_PHEP as any)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(quyPhep.phanBoChoNgayNghi).not.toHaveBeenCalled();
+    expect(quyPhep.giuCho).not.toHaveBeenCalled();
+  });
+
+  it('loaiNghi khác phep_nam (om_dau) KHÔNG đụng quỹ, kể cả khi còn thử việc', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service } = await dungServiceDon({
+      quyPhep,
+      nhanVien: { _id: { toString: () => ID_NV1 }, hoTen: 'A', employeeId: 'NV0001' },
+    });
+
+    await service.create({ ...DON_PHEP, loaiNghi: 'om_dau' } as any);
+
+    expect(quyPhep.phanBoChoNgayNghi).not.toHaveBeenCalled();
+    expect(quyPhep.giuCho).not.toHaveBeenCalled();
+  });
+
+  it('tạo đơn phep_nam giữ chỗ và snapshot phanBoQuy lên đơn', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service, repoDon } = await dungServiceDon({ quyPhep });
+
+    await service.create(DON_PHEP as any);
+
+    // giuCho(employeeId, phanBo, requestId, nguoiThucHien) — 4 tham số thật
+    // (xem quy-phep.service.ts), khác thứ tự với đề bài task ban đầu.
+    expect(quyPhep.giuCho).toHaveBeenCalledWith(
+      ID_NV1,
+      PHAN_BO,
+      expect.any(String),
+      ID_NV1,
+    );
+    expect(repoDon.kho.at(-1).phanBoQuy).toEqual(PHAN_BO);
+  });
+
+  it('quỹ không đủ → ném 409 và KHÔNG lưu đơn nào', async () => {
+    const quyPhep = mockQuyPhep({
+      phanBoChoNgayNghi: jest
+        .fn()
+        .mockRejectedValue(new ConflictException({ code: 'KHONG_DU_SO_DU' })),
+    });
+    const { service, repoDon } = await dungServiceDon({ quyPhep });
+    const truoc = repoDon.kho.length;
+
+    await expect(service.create(DON_PHEP as any)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(repoDon.kho.length).toBe(truoc);
+  });
+
+  it('giữ chỗ hỏng sau khi đã lưu đơn → đơn bị vô hiệu hoá, không để lại đơn ma', async () => {
+    const quyPhep = mockQuyPhep({
+      giuCho: jest.fn().mockRejectedValue(new Error('mất kết nối')),
+    });
+    const { service, repoDon } = await dungServiceDon({ quyPhep });
+
+    await expect(service.create(DON_PHEP as any)).rejects.toThrow('mất kết nối');
+    expect(repoDon.kho.at(-1).isActive).toBe(false);
+  });
+
+  it('duyệt đơn → chuyenSangDaDung với đúng phanBoQuy của đơn', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service, repoDon } = await dungServiceDon({ quyPhep });
+    const don = await service.create(DON_PHEP as any);
+
+    await service.updateStatus(
+      String((don as any)._id),
+      'da_duyet',
+      'HR',
+      { id: 'user-hr' } as any,
+    );
+
+    expect(quyPhep.chuyenSangDaDung).toHaveBeenCalledWith(
+      ID_NV1,
+      PHAN_BO,
+      String((don as any)._id),
+      'user-hr',
+    );
+    expect(quyPhep.nhaCho).not.toHaveBeenCalled();
+    expect(repoDon.kho.at(-1).trangThai).toBe('da_duyet');
+  });
+
+  it('từ chối đơn → nhaCho, quỹ trở về như trước khi nộp', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service } = await dungServiceDon({ quyPhep });
+    const don = await service.create(DON_PHEP as any);
+
+    await service.updateStatus(
+      String((don as any)._id),
+      'tu_choi',
+      'HR',
+      { id: 'user-hr' } as any,
+    );
+
+    expect(quyPhep.nhaCho).toHaveBeenCalledWith(
+      ID_NV1,
+      PHAN_BO,
+      String((don as any)._id),
+      'user-hr',
+    );
+    expect(quyPhep.chuyenSangDaDung).not.toHaveBeenCalled();
+  });
+
+  it('tự huỷ đơn cho_duyet → nhaCho', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service } = await dungServiceDon({ quyPhep });
+    const don = await service.create(DON_PHEP as any);
+
+    await service.huyDonCuaToi(String((don as any)._id), ID_NV1);
+
+    expect(quyPhep.nhaCho).toHaveBeenCalled();
+    expect(quyPhep.hoanTraDaDung).not.toHaveBeenCalled();
+  });
+
+  it('xoá đơn ĐÃ DUYỆT → hoanTraDaDung, không phải nhaCho', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service, repoDon } = await dungServiceDon({ quyPhep });
+    const don = await service.create(DON_PHEP as any);
+    repoDon.kho.at(-1).trangThai = 'da_duyet';
+
+    await service.remove(String((don as any)._id));
+
+    expect(quyPhep.hoanTraDaDung).toHaveBeenCalled();
+    expect(quyPhep.nhaCho).not.toHaveBeenCalled();
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Điều kiện sống còn của toàn bộ tính năng: cacNgayTruPhep() (dùng để gọi
+  // QuyPhep_Service.phanBoChoNgayNghi) và tinhSoNgayNghi() (dùng để tính
+  // soNgayNghi snapshot trên đơn) PHẢI luôn đếm ra cùng một con số, vì
+  // phanBoChoNgayNghi() tự ném BadRequestException nếu
+  // `soNgayNghi !== cacNgayNghi.length`. Test dưới đây cố tình bắt cả HAI
+  // điều kiện gây lệch trong CÙNG một khoảng: cuối tuần (T7/CN) VÀ một ngày
+  // lễ giữa tuần.
+  // ──────────────────────────────────────────────────────────────────────
+  it('cacNgayTruPhep khớp tinhSoNgayNghi khi khoảng vắt qua cả cuối tuần lẫn ngày lễ', async () => {
+    // 2027-02-01 (T2) .. 2027-02-08 (T2 tuần sau): 8 ngày, trong đó T7 6/2 và
+    // CN 7/2 không thuộc lịch làm việc, và 3/2 (T4) được mô phỏng là ngày lễ.
+    const NGAY_LE = '2027-02-03';
+    const ngayLe = {
+      timTheoNgay: jest
+        .fn()
+        .mockImplementation((ngay: string) =>
+          Promise.resolve(
+            ngay === NGAY_LE
+              ? { _id: 'hl1', tenNgayLe: 'Ngày lễ test', tuNgay: NGAY_LE, denNgay: NGAY_LE }
+              : null,
+          ),
+        ),
+    };
+    const quyPhep = mockQuyPhep();
+    const { service } = await dungServiceDon({
+      quyPhep,
+      ngayLe,
+      nhanVien: {
+        _id: { toString: () => ID_NV1 },
+        employeeId: 'NV0001',
+        hoTen: 'Nguyễn Văn A',
+        ngayChinhThuc: '2026-01-01',
+        ngayLamViecTrongTuan: [1, 2, 3, 4, 5], // T2→T6, không làm T7/CN
+      },
+    });
+
+    const result = await service.create({
+      ...DON_PHEP,
+      ngay: '2027-02-01',
+      denNgay: '2027-02-08',
+    } as any);
+
+    // Nguồn đối chiếu độc lập: gọi thẳng tinhSoNgayNghi() (luat-don.ts) —
+    // hàm THẬT dùng để tính soNgayNghi snapshot trên đơn.
+    const soNgayNghiMongDoi = tinhSoNgayNghi({
+      tuNgay: '2027-02-01',
+      denNgay: '2027-02-08',
+      ngayLeTrongKhoang: [NGAY_LE],
+      ngayLamViecTrongTuan: [1, 2, 3, 4, 5],
+    });
+    expect(soNgayNghiMongDoi).toBe(5); // 8 ngày - T7 - CN - 1 lễ giữa tuần
+    expect(result.soNgayNghi).toBe(soNgayNghiMongDoi);
+
+    // cacNgayTruPhep() lộ diện qua danh sách gửi cho phanBoChoNgayNghi().
+    expect(quyPhep.phanBoChoNgayNghi).toHaveBeenCalledTimes(1);
+    const [employeeIdGoi, cacNgayGoi, soNgayGoi] =
+      quyPhep.phanBoChoNgayNghi.mock.calls[0];
+    expect(employeeIdGoi).toBe(ID_NV1);
+    expect(cacNgayGoi).toEqual([
+      '2027-02-01',
+      '2027-02-02',
+      '2027-02-04',
+      '2027-02-05',
+      '2027-02-08',
+    ]);
+    expect(soNgayGoi).toBe(soNgayNghiMongDoi);
+    // Đúng điều kiện guard mà phanBoChoNgayNghi() tự kiểm trong QuyPhep_Service.
+    expect(cacNgayGoi.length).toBe(soNgayGoi);
   });
 });

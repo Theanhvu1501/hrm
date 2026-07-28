@@ -3,13 +3,15 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AttendanceRequest, Employee } from '@app/entities';
+import { AttendanceRequest, Employee, PhanBoQuy } from '@app/entities';
 import { CreateDonChamCongDto, UpdateDonChamCongDto } from './dto';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
+import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 import { suyHeSoOt, tinhSoGioOt, tinhSoNgayNghi } from './luat-don';
 
 // Khoảng nghỉ vượt quá ngần này thì từ chối luôn thay vì âm thầm quét hàng
@@ -33,6 +35,14 @@ export const MA_LOI_DON_CHAM_CONG = {
   KHONG_PHAI_DON_CUA_MINH: 'KHONG_PHAI_DON_CUA_MINH',
   /** Tự huỷ đơn đã da_duyet/tu_choi — quyết định đã có hiệu lực, không cho xoá dấu vết. */
   DON_DA_XU_LY_KHONG_THE_HUY: 'DON_DA_XU_LY_KHONG_THE_HUY',
+  /**
+   * P3.8: nộp đơn `phep_nam` khi hồ sơ chưa có `ngayChinhThuc` (còn thử
+   * việc). Cùng mã với `MA_LOI_QUY_PHEP.CHUA_LEN_CHINH_THUC` bên
+   * quy-phep.service.ts — đây là bản sao có chủ đích: don-cham-cong ném lỗi
+   * này TRƯỚC khi gọi sang QuyPhep_Service, nên nó cần mã lỗi của riêng
+   * mình thay vì import chéo một hằng số dùng cho mục đích khác.
+   */
+  CHUA_LEN_CHINH_THUC: 'CHUA_LEN_CHINH_THUC',
 } as const;
 
 export interface DonChamCongFilter {
@@ -53,7 +63,44 @@ export class DonChamCong_Service {
     private readonly employeeRepo: Repository<Employee>,
     private readonly ngayLeService: NgayLe_Service,
     private readonly nhanVienService: NhanVien_Service,
+    private readonly quyPhep_Service: QuyPhep_Service,
   ) {}
+
+  /** Đơn này có trừ quỹ phép năm không. Chỉ `phep_nam` mới đụng quỹ — các
+   * loaiNghi khác (khong_luong/om_dau/thai_san/cuoi_hoi/tang) không hề chạm
+   * tới QuyPhep_Service, kể cả khi NV còn thử việc. */
+  private laDonTruQuy(don: { loaiDon: string; loaiNghi?: string }): boolean {
+    return don.loaiDon === 'nghi_phep' && don.loaiNghi === 'phep_nam';
+  }
+
+  /**
+   * Các ngày THỰC SỰ trừ phép trong khoảng — PHẢI dùng cùng bộ lọc với
+   * `tinhSoNgayNghi` (bỏ ngày lễ, rồi bỏ ngày ngoài lịch làm việc nếu đã cấu
+   * hình). Hai hàm lệch nhau dù chỉ một ngày thì `soNgayNghi` snapshot trên
+   * đơn và độ dài danh sách gửi cho `phanBoChoNgayNghi` sẽ khác nhau, và
+   * guard đối chiếu hai tham số đó trong QuyPhep_Service (Task 5) sẽ ném
+   * BadRequestException cho MỌI đơn phép_nam — xem
+   * don-cham-cong.service.spec.ts, test đối chiếu khoảng vắt cuối tuần + lễ.
+   */
+  private async cacNgayTruPhep(
+    tuNgay: string,
+    denNgay: string,
+    emp: Employee,
+  ): Promise<string[]> {
+    const ngayLe = new Set(await this.layNgayLeTrongKhoang(tuNgay, denNgay));
+    const daCauHinh =
+      !!emp.ngayLamViecTrongTuan && emp.ngayLamViecTrongTuan.length > 0;
+
+    return this.cacNgayTrongKhoang(tuNgay, denNgay).filter((ngay) => {
+      if (ngayLe.has(ngay)) return false;
+      if (!daCauHinh) return true;
+      const [nam, thang, ngayTrongThang] = ngay.split('-').map(Number);
+      const thu = new Date(
+        Date.UTC(nam, thang - 1, ngayTrongThang),
+      ).getUTCDay();
+      return emp.ngayLamViecTrongTuan!.includes(thu);
+    });
+  }
 
   private async findEmployee(employeeId: string): Promise<Employee> {
     const { ObjectId } = await import('mongodb');
@@ -160,6 +207,37 @@ export class DonChamCong_Service {
     const emp = await this.findEmployee(dto.employeeId);
     const truongTinhToan = await this.tinhCacTruongSnapshot(dto, emp);
 
+    // P3.8: đơn phep_nam giữ chỗ quỹ TRƯỚC khi đơn được lưu — tính toán và
+    // ném lỗi (nếu có) đều xảy ra ở đây, lúc chưa có gì trong DB để mà dọn.
+    let phanBoQuy: PhanBoQuy[] | undefined;
+    if (this.laDonTruQuy(dto)) {
+      // Cửa 1: còn thử việc thì không có quỹ để mà trừ. Chặn ở đây chứ
+      // không để phanBoChoNgayNghi báo "không đủ số dư" — thông báo đó sai
+      // bản chất (họ không có quỹ nào cả, không phải quỹ không đủ) và sẽ
+      // khiến HR đi tìm cách cấp quỹ cho một người chưa đủ điều kiện.
+      if (!emp.ngayChinhThuc) {
+        // 409 (không phải 403): người gọi CÓ quyền nộp đơn — permission
+        // '/cham-cong/don-tu:them' không sai — chỉ là TRẠNG THÁI hồ sơ
+        // (chưa lên chính thức) chưa cho phép hành động này ngay bây giờ.
+        // Cùng họ lỗi với KHONG_DU_SO_DU, cả hai đều là 409 "trạng thái dữ
+        // liệu hiện tại không cho phép", không phải lỗi phân quyền.
+        throw new ConflictException({
+          code: MA_LOI_DON_CHAM_CONG.CHUA_LEN_CHINH_THUC,
+          message:
+            'Nhân viên chưa lên chính thức nên chưa có quỹ phép năm. Có thể nộp đơn nghỉ không lương.',
+        });
+      }
+
+      // Cửa 2: đủ số dư chưa. `cacNgayTruPhep` PHẢI khớp `tinhSoNgayNghi`
+      // (dùng chung để tính truongTinhToan.soNgayNghi ở trên) — xem
+      // doc-comment của cacNgayTruPhep().
+      phanBoQuy = await this.quyPhep_Service.phanBoChoNgayNghi(
+        dto.employeeId,
+        await this.cacNgayTruPhep(dto.ngay, dto.denNgay ?? dto.ngay, emp),
+        truongTinhToan.soNgayNghi ?? 0,
+      );
+    }
+
     const entity = this.repo.create({
       ...dto,
       employeeName: emp.hoTen,
@@ -177,9 +255,35 @@ export class DonChamCong_Service {
       // CreateDonChamCongDto), việc gán tường minh ở đây đảm bảo backend luôn
       // thắng ngay cả khi pipe forbidNonWhitelisted có bị nới lỏng sau này.
       ...truongTinhToan,
+      // phanBoQuy (P3.8): chỉ gán khi đơn thực sự đụng quỹ — đơn OT/giải
+      // trình/nghỉ khác không nên có key này trên entity dù là undefined.
+      ...(phanBoQuy ? { phanBoQuy } : {}),
     } as Partial<AttendanceRequest>);
 
-    return this.repo.save(entity);
+    const daLuu = await this.repo.save(entity);
+
+    if (phanBoQuy?.length) {
+      try {
+        await this.quyPhep_Service.giuCho(
+          dto.employeeId,
+          phanBoQuy,
+          String((daLuu as any)._id),
+          dto.employeeId,
+        );
+      } catch (e) {
+        // Giữ chỗ hỏng SAU khi đơn đã lưu thì đơn vừa lưu phải bị vô hiệu
+        // hoá ngay — nếu không, sẽ có một đơn "chờ duyệt" tồn tại mà quỹ
+        // không hề bị giữ; duyệt đơn ma đó về sau sẽ cấp phép miễn phí vì
+        // chuyenSangDaDung() sẽ chạy trên `phanBoQuy` đã lưu như bình
+        // thường, trong khi giuCho() — bước lẽ ra phải giữ số dư — chưa hề
+        // thành công.
+        daLuu.isActive = false;
+        await this.repo.save(daLuu);
+        throw e;
+      }
+    }
+
+    return daLuu;
   }
 
   /**
@@ -273,7 +377,34 @@ export class DonChamCong_Service {
       item.thoiDiemDuyet = new Date().toISOString();
     }
 
-    return this.repo.save(item);
+    const daLuu = await this.repo.save(item);
+
+    // P3.8: đơn phep_nam đã giữ chỗ NGAY LÚC NỘP (create()) — ở đây chỉ
+    // CHUYỂN trạng thái phần đã giữ đó, luôn thao tác trên `item.phanBoQuy`
+    // (snapshot lúc nộp), KHÔNG BAO GIỜ tính lại phân bổ mới. Giữa lúc nộp
+    // và lúc duyệt quỹ có thể đã đóng (31/3) hoặc được cấp thêm — tính lại
+    // ở đây sẽ trừ nhầm quỹ khác với quỹ đã hứa lúc nộp.
+    if (this.laDonTruQuy(item) && item.phanBoQuy?.length) {
+      const requestId = String((daLuu as any)._id);
+      const nguoiThucHienId = String(nguoiThucHien?.id ?? '');
+      if (trangThai === 'da_duyet') {
+        await this.quyPhep_Service.chuyenSangDaDung(
+          item.employeeId,
+          item.phanBoQuy,
+          requestId,
+          nguoiThucHienId,
+        );
+      } else if (trangThai === 'tu_choi') {
+        await this.quyPhep_Service.nhaCho(
+          item.employeeId,
+          item.phanBoQuy,
+          requestId,
+          nguoiThucHienId,
+        );
+      }
+    }
+
+    return daLuu;
   }
 
   /**
@@ -306,6 +437,17 @@ export class DonChamCong_Service {
 
     item.isActive = false;
     await this.repo.save(item);
+
+    // P3.8: đơn tới đây chắc chắn còn cho_duyet (đã kiểm ở trên) — nghĩa là
+    // chưa từng chuyenSangDaDung, chỉ có phần "giữ chỗ" cần nhả lại.
+    if (this.laDonTruQuy(item) && item.phanBoQuy?.length) {
+      await this.quyPhep_Service.nhaCho(
+        employeeId,
+        item.phanBoQuy,
+        id,
+        employeeId,
+      );
+    }
   }
 
   private coerceIsActive(value?: boolean | string): boolean {
@@ -372,6 +514,14 @@ export class DonChamCong_Service {
    * là `nguoiDuyetId`, chỉ `updateStatus()` được ghi. Nếu PUT ghi được nửa
    * còn lại (`nguoiDuyet`) một cách độc lập, tên hiển thị FE đọc và id soát
    * vết có thể lệch nhau mà không có dấu hiệu gì.
+   *
+   * `phanBoQuy` (P3.8) bóc ra cùng lý do một lần nữa: đây là snapshot BACKEND
+   * TỰ TÍNH lúc `create()`, approve/reject/cancel đều đọc lại nguyên snapshot
+   * đó — PUT không được phép sửa nó dưới bất kỳ hình thức nào. Trên thực tế
+   * `UpdateDonChamCongDto` còn không khai field này (forbidNonWhitelisted ở
+   * main.ts đã chặn ngay tại pipe), nên bóc ở đây là phòng thủ theo chiều
+   * sâu — lỡ sau này DTO/whitelist bị nới lỏng thì service vẫn không mở
+   * đường cho việc đó.
    */
   async update(
     id: string,
@@ -382,15 +532,45 @@ export class DonChamCong_Service {
       trangThai: _trangThaiBiBoQua,
       employeeId: _employeeIdBiBoQua,
       nguoiDuyet: _nguoiDuyetBiBoQua,
+      phanBoQuy: _phanBoQuyBiBoQua,
       ...phanConLaiDuocPhepSua
-    } = dto;
+    } = dto as UpdateDonChamCongDto & { phanBoQuy?: unknown };
     Object.assign(item, phanConLaiDuocPhepSua);
     return this.repo.save(item);
   }
 
   async remove(id: string): Promise<void> {
     const item = await this.findOne(id);
+    // Chụp lại trạng thái TRƯỚC KHI xoá mềm — remove() không đổi trangThai,
+    // chỉ đổi isActive, nhưng chụp tường minh để nhánh quỹ dưới đây không
+    // vô tình phụ thuộc thứ tự gán field nếu code này bị sửa sau này.
+    const trangThaiTruocKhiXoa = item.trangThai;
     item.isActive = false;
     await this.repo.save(item);
+
+    // P3.8: xoá mềm một đơn phep_nam phải trả quỹ về đúng như trước khi có
+    // đơn — nhánh theo ĐÚNG trạng thái tại thời điểm xoá:
+    //  - cho_duyet: đơn mới chỉ giữ chỗ, chưa từng trừ thật → nhả chỗ (nhaCho).
+    //  - da_duyet: đơn đã trừ thật vào soNgayDaDung → phải hoàn (hoanTraDaDung),
+    //    gọi nhaCho ở nhánh này sẽ không làm gì (phần giữ chỗ đã hết từ lúc
+    //    duyệt) và để lại soNgayDaDung bị trừ oan vĩnh viễn.
+    //  - tu_choi: đã nhaCho từ updateStatus() rồi, không đụng gì nữa.
+    if (this.laDonTruQuy(item) && item.phanBoQuy?.length) {
+      if (trangThaiTruocKhiXoa === 'cho_duyet') {
+        await this.quyPhep_Service.nhaCho(
+          item.employeeId,
+          item.phanBoQuy,
+          id,
+          'he_thong',
+        );
+      } else if (trangThaiTruocKhiXoa === 'da_duyet') {
+        await this.quyPhep_Service.hoanTraDaDung(
+          item.employeeId,
+          item.phanBoQuy,
+          id,
+          'he_thong',
+        );
+      }
+    }
   }
 }
