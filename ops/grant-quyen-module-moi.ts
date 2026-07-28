@@ -30,12 +30,11 @@ const MODULE_KHUON = '/cham-cong/ca-lam-viec';
 
 /**
  * Module thêm sau, đang thiếu trong `phan_quyen.permissions`.
- * Đợt P4 (Bảng lương): cấp `/luong/*`. (3 module chấm công đã cấp ở đợt P3.6 —
- * đổi lại danh sách này mỗi đợt deploy module mới; script chỉ THÊM, idempotent.)
+ * Đợt P3.8 (Quỹ phép): cấp `/cham-cong/quy-phep`. (Đợt P4 đã cấp `/luong/*`.)
+ * Script chỉ THÊM, idempotent — đổi lại danh sách này mỗi đợt deploy module mới.
  */
 const MODULE_CAN_CAP = [
-  '/luong/bang-luong',
-  '/luong/cau-hinh',
+  '/cham-cong/quy-phep',
 ];
 
 const DRY_RUN = process.argv.includes('--dry-run');

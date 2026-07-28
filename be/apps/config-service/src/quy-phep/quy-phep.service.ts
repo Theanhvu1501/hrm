@@ -102,6 +102,18 @@ export class QuyPhep_Service {
     return ds.filter((q) => q.isActive !== false).sort((a, b) => a.nam - b.nam);
   }
 
+  /** Toàn bộ quỹ còn hiệu lực dữ liệu — dùng cho bảng HR và cho `thoi-viec`/`bang-luong` đọc `soNgayConLai`. */
+  async layTatCaQuy(): Promise<LeaveBalance[]> {
+    const ds = await this.repo.find({ where: {} as any });
+    return ds
+      .filter((q) => q.isActive !== false)
+      .sort(
+        (a, b) =>
+          (a.employeeCode ?? '').localeCompare(b.employeeCode ?? '') ||
+          a.nam - b.nam,
+      );
+  }
+
   private async nhanVienDuocCap(): Promise<Employee[]> {
     const ds = await this.repoNhanVien.find({ where: { isActive: true } as any });
     // Bỏ qua người còn thử việc (chưa có ngayChinhThuc) và người đã nghỉ.

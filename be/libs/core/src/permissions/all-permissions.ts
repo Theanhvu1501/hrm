@@ -21,6 +21,7 @@ export const PERMISSION_MODULES = [
   '/cham-cong/ngay-le',
   '/cham-cong/thiet-bi',
   '/cham-cong/ban-ghi',
+  '/cham-cong/quy-phep',
   '/luong/bang-luong',
   '/luong/cau-hinh',
   // CỐ Ý KHÔNG khai '/cham-cong/cua-toi' ở đây: đó là màn hình tự phục vụ
