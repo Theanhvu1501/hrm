@@ -12,6 +12,22 @@
 import React, { useEffect } from "react";
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+
+// usePagePermission (Important 1, review round 1) đọc quyền qua useAuth —
+// mock để kiểm soát TỪNG test có/không có `/cham-cong/quy-phep:xem`, thay vì
+// dựng cả AuthProvider + token giả. `mockHasPermission` dùng `vi.hoisted` vì
+// nhà máy `vi.mock` chạy TRƯỚC mọi import khác (hoisted lên đầu file) nên
+// không thể đóng (closure) một biến khai báo bình thường ở dưới.
+const { mockHasPermission } = vi.hoisted(() => ({
+  mockHasPermission: vi.fn((_perm: string) => true),
+}));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({
+    user: { hoTen: "Trần Thị HR" },
+    hasPermission: (perm: string) => mockHasPermission(perm),
+  }),
+}));
+
 import {
   DonChamCongHandlerProvider,
   useDonChamCongHandler,
@@ -22,6 +38,7 @@ import {
   AttendanceRequest,
 } from "@/services/attendanceRequestService";
 import { leaveBalanceService, LeaveBalance } from "@/services/leaveBalanceService";
+import { ApiError, ApiErrorType } from "@/config/api";
 
 beforeAll(() => {
   const w = window as unknown as Record<string, unknown>;
@@ -55,6 +72,11 @@ beforeEach(() => {
   // KhoiSoDuPhep mới ghi đè. Thiếu mock này thì mở form nghỉ phép/phép năm
   // sẽ gọi leaveBalanceService.getList() thật (lời gọi mạng thật trong test).
   vi.spyOn(leaveBalanceService, "getList").mockResolvedValue([]);
+  // Mặc định CÓ quyền xem quỹ phép — reset mỗi test vì vi.restoreAllMocks()
+  // (ở afterEach) không đụng tới implementation của một `vi.fn()` thường,
+  // chỉ khôi phục spy có bản gốc.
+  mockHasPermission.mockReset();
+  mockHasPermission.mockImplementation(() => true);
 });
 
 afterEach(() => {
@@ -358,5 +380,86 @@ describe("Form HR — số dư phép (Task 12)", () => {
     );
 
     expect(await screen.findByText(/chưa có quỹ phép năm/i)).toBeTruthy();
+  });
+});
+
+describe("Form HR — số dư phép: phân biệt lý do rỗng (review round 1, Important 1)", () => {
+  it("KHÔNG có quyền /cham-cong/quy-phep:xem → KHÔNG gọi getList, hiện đúng câu thiếu quyền (không phải câu thử việc)", async () => {
+    mockHasPermission.mockImplementation(
+      (perm: string) => perm !== "/cham-cong/quy-phep:xem"
+    );
+    const getList = vi.spyOn(leaveBalanceService, "getList");
+
+    moForm(
+      don({
+        employeeId: "nv1",
+        loaiDon: "nghi_phep",
+        ngay: "2026-08-03",
+        denNgay: "2026-08-03",
+        loaiNghi: "phep_nam",
+      })
+    );
+
+    await screen.findByText("Loại nghỉ");
+    // Đã biết trước qua quyền trong token là sẽ 403 — không được gọi API để
+    // rồi đợi cái 403 đó (Important 1, "lớp phòng thủ thứ nhất").
+    expect(getList).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText(/không có quyền xem quỹ phép/i)
+    ).toBeTruthy();
+    expect(screen.queryByText(/đang thử việc/i)).toBeNull();
+  });
+
+  it("CÓ quyền nhưng BE vẫn trả 403 (lệch quyền token/BE) → vẫn hiện câu thiếu quyền, không rơi về câu tải hỏng", async () => {
+    // "Lớp phòng thủ thứ hai": canView đúng lúc render nhưng request thật sự
+    // vẫn 403 (token cũ, vừa bị thu hồi quyền...).
+    vi.spyOn(leaveBalanceService, "getList").mockRejectedValue(
+      new ApiError("Không có quyền", ApiErrorType.FORBIDDEN, 403, {
+        response: {
+          status: 403,
+          data: { success: false, error: { message: "Không có quyền" } },
+        },
+      })
+    );
+
+    moForm(
+      don({
+        employeeId: "nv1",
+        loaiDon: "nghi_phep",
+        ngay: "2026-08-03",
+        denNgay: "2026-08-03",
+        loaiNghi: "phep_nam",
+      })
+    );
+
+    expect(
+      await screen.findByText(/không có quyền xem quỹ phép/i)
+    ).toBeTruthy();
+    expect(screen.queryByText(/đang thử việc/i)).toBeNull();
+  });
+
+  it("getList lỗi KHÁC 403 (vd 500) → hiện câu tải hỏng, không phải câu thử việc hay câu thiếu quyền", async () => {
+    vi.spyOn(leaveBalanceService, "getList").mockRejectedValue(
+      new ApiError("Lỗi máy chủ", ApiErrorType.SERVER_ERROR, 500, {
+        response: {
+          status: 500,
+          data: { success: false, error: { message: "Lỗi máy chủ" } },
+        },
+      })
+    );
+
+    moForm(
+      don({
+        employeeId: "nv1",
+        loaiDon: "nghi_phep",
+        ngay: "2026-08-03",
+        denNgay: "2026-08-03",
+        loaiNghi: "phep_nam",
+      })
+    );
+
+    expect(await screen.findByText(/không tải được số dư phép/i)).toBeTruthy();
+    expect(screen.queryByText(/đang thử việc/i)).toBeNull();
+    expect(screen.queryByText(/không có quyền/i)).toBeNull();
   });
 });

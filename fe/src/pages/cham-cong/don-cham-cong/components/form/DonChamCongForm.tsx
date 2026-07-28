@@ -17,8 +17,10 @@ import {
   dungDtoQuanTri,
   toFormValues,
 } from "./donChamCongForm.convert";
-import { KhoiSoDuPhep } from "@/pages/toi/don-tu/components/KhoiSoDuPhep";
+import { KhoiSoDuPhep, LoiSoDuPhep } from "@/components/shared/KhoiSoDuPhep";
 import { homNayVN } from "@/ultils/thoiGianVN";
+import { usePagePermission } from "@/hooks/usePagePermission";
+import { layStatus } from "@/pages/cham-cong/cua-toi/trangThai";
 import "./DonChamCongForm.state";
 
 const TIME_FORMAT = "HH:mm";
@@ -48,6 +50,11 @@ export function DonChamCongForm() {
   );
   const [saving] = useDonChamCongState("saving", false);
   const [employeeList] = useDonChamCongState("employeeList", [] as Employee[]);
+  // Review round 1 (Important 1): `GET /quy-phep` đòi `/cham-cong/quy-phep:xem`
+  // — quyền KHÁC với `/cham-cong/don-tu:xem` đang gác cả màn hình này. Một HR
+  // mở được màn Đơn từ nhưng chưa được cấp quyền quỹ phép là kịch bản thật
+  // (đúng bẫy quên chạy ops/grant-quyen-module-moi.ts).
+  const { canView: coQuyenXemQuyPhep } = usePagePermission("/cham-cong/quy-phep");
 
   const {
     control,
@@ -86,28 +93,52 @@ export function DonChamCongForm() {
   // chính người đăng nhập" — ở đây người đăng nhập là HR, không phải chủ
   // đơn). Nạp lại mỗi khi đổi nhân viên hoặc bật loại nghỉ phép năm.
   const [soDuPhepForm, setSoDuPhepForm] = useState<LeaveBalance[]>([]);
+  // Review round 1 (Important 1): PHÂN BIỆT "chưa có quỹ" (thử việc, đáng
+  // chấp nhận) với "không tải được" — gộp chung sẽ hiện nhầm câu "đang thử
+  // việc" cho một lỗi hoàn toàn khác (thiếu quyền, hỏng mạng...), khiến HR
+  // tin nhầm một người đã làm lâu năm là chưa có phép.
+  const [loiSoDuPhepForm, setLoiSoDuPhepForm] = useState<LoiSoDuPhep | undefined>(
+    undefined
+  );
   useEffect(() => {
     if (!formVisible || !laDonPhepNam || !employeeId) {
       setSoDuPhepForm([]);
+      setLoiSoDuPhepForm(undefined);
       return;
     }
+
+    // Lớp phòng thủ thứ NHẤT: đã biết trước (qua quyền trong token) là
+    // không có `/cham-cong/quy-phep:xem` thì đừng gọi API — khỏi phải chờ
+    // một cái 403 để biết điều đã biết, và tránh spam request chắc chắn hỏng.
+    if (!coQuyenXemQuyPhep) {
+      setSoDuPhepForm([]);
+      setLoiSoDuPhepForm("khong_co_quyen");
+      return;
+    }
+
     let huy = false;
+    setLoiSoDuPhepForm(undefined);
     leaveBalanceService
       .getList(employeeId)
       .then((ds) => {
-        if (!huy) setSoDuPhepForm(ds);
+        if (huy) return;
+        setSoDuPhepForm(ds);
+        setLoiSoDuPhepForm(undefined);
       })
       .catch((error) => {
-        // Không chặn form vì lỗi tải số dư (vd HR nhập liệu không có quyền
-        // xem `/cham-cong/quy-phep:xem`) — KhoiSoDuPhep tự hiện "chưa có quỹ"
-        // khi mảng rỗng, form vẫn tạo/sửa đơn được bình thường.
         console.error("Tải số dư phép (form HR) lỗi:", error);
-        if (!huy) setSoDuPhepForm([]);
+        if (huy) return;
+        setSoDuPhepForm([]);
+        // Lớp phòng thủ thứ HAI: dù `canView` đã gác ở trên, quyền trong
+        // token và quyền BE kiểm lúc xử lý request có thể lệch nhau (token
+        // cũ, vừa bị thu hồi quyền...) — 403 THẬT vẫn phải hiện đúng câu
+        // "thiếu quyền", không rơi về câu "tải hỏng" chung chung.
+        setLoiSoDuPhepForm(layStatus(error) === 403 ? "khong_co_quyen" : "loi_khac");
       });
     return () => {
       huy = true;
     };
-  }, [formVisible, laDonPhepNam, employeeId]);
+  }, [formVisible, laDonPhepNam, employeeId, coQuyenXemQuyPhep]);
 
   useEffect(() => {
     if (formVisible) {
@@ -269,7 +300,11 @@ export function DonChamCongForm() {
             phải thấy được lúc còn đang chọn ngày. */}
         {laDonPhepNam && (
           <Col span={24} className="mt-3">
-            <KhoiSoDuPhep danhSach={soDuPhepForm} homNay={homNayVN()} />
+            <KhoiSoDuPhep
+              danhSach={soDuPhepForm}
+              homNay={homNayVN()}
+              loi={loiSoDuPhepForm}
+            />
           </Col>
         )}
         {co("buoi") && (

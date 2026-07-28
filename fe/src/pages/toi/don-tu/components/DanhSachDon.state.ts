@@ -1,6 +1,7 @@
 import { BaseStates } from "@/common/c-handler/core/actions/c-state.action";
 import { AttendanceRequest } from "@/services/attendanceRequestService";
 import { LeaveBalance } from "@/services/leaveBalanceService";
+import { LoiSoDuPhep } from "@/components/shared/KhoiSoDuPhep";
 
 export interface DanhSachDonStates extends BaseStates {
   danhSach: AttendanceRequest[];
@@ -26,6 +27,15 @@ export interface DanhSachDonStates extends BaseStates {
    * xem KhoiSoDuPhep).
    */
   soDuPhep: LeaveBalance[];
+  /**
+   * Review round 1 (Minor 4): lỗi TẢI quỹ phép (mạng, 500, tài khoản chưa
+   * gắn hồ sơ nhân viên...) khác hẳn "mảng rỗng vì chưa có quỹ" (thử việc)
+   * — không phân biệt thì tài khoản gặp lỗi 404 "chưa gắn hồ sơ" sẽ ĐỒNG
+   * THỜI thấy banner đó VÀ câu "đang thử việc, chưa được cấp phép", một câu
+   * hoàn toàn không liên quan tới lỗi thật. `undefined` = tải thành công
+   * (mảng `soDuPhep` là sự thật, có thể rỗng thật).
+   */
+  loiSoDuPhep: LoiSoDuPhep | undefined;
 }
 
 declare module "../donTuCuaToiHandler" {

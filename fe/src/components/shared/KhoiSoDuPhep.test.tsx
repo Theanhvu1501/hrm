@@ -63,3 +63,29 @@ describe('KhoiSoDuPhep', () => {
     expect(screen.getByText(/chưa có quỹ phép/i)).toBeTruthy();
   });
 });
+
+describe('KhoiSoDuPhep — phân biệt lý do "không có gì để hiện" (review round 1, Important 1)', () => {
+  it('loi="khong_co_quyen": nói rõ đây là NGƯỜI XEM thiếu quyền, KHÔNG phải NV chưa có phép', () => {
+    render(<KhoiSoDuPhep danhSach={[]} homNay="2027-01-10" loi="khong_co_quyen" />);
+
+    expect(screen.getByText(/không có quyền xem quỹ phép/i)).toBeTruthy();
+    // Đúng cái bẫy review chỉ ra: 403 thiếu quyền không được rơi vào câu
+    // "đang thử việc" — nói sai trách nhiệm sang nhân viên.
+    expect(screen.queryByText(/đang thử việc/i)).toBeNull();
+  });
+
+  it('loi="khong_co_quyen" vẫn đúng dù danhSach có dữ liệu (ưu tiên trạng thái lỗi)', () => {
+    render(<KhoiSoDuPhep danhSach={[quy2026]} homNay="2027-01-10" loi="khong_co_quyen" />);
+
+    expect(screen.getByText(/không có quyền xem quỹ phép/i)).toBeTruthy();
+    expect(screen.queryByText(/Phép năm 2026/)).toBeNull();
+  });
+
+  it('loi="loi_khac": hiện câu tải hỏng, không phải câu thử việc hay câu thiếu quyền', () => {
+    render(<KhoiSoDuPhep danhSach={[]} homNay="2027-01-10" loi="loi_khac" />);
+
+    expect(screen.getByText(/không tải được số dư phép/i)).toBeTruthy();
+    expect(screen.queryByText(/đang thử việc/i)).toBeNull();
+    expect(screen.queryByText(/không có quyền/i)).toBeNull();
+  });
+});

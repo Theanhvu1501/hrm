@@ -9,7 +9,7 @@ import {
 import { DanhSachDon } from "./components/DanhSachDon";
 import { ChonLoaiDon } from "./components/ChonLoaiDon";
 import { FormNopDon } from "./components/FormNopDon";
-import { KhoiSoDuPhep } from "./components/KhoiSoDuPhep";
+import { KhoiSoDuPhep } from "@/components/shared/KhoiSoDuPhep";
 import { LeaveBalance } from "@/services/leaveBalanceService";
 import { homNayVN } from "@/ultils/thoiGianVN";
 
@@ -24,6 +24,7 @@ import { homNayVN } from "@/ultils/thoiGianVN";
 function DonTuCuaToiPageInner() {
   const handler = useDonTuCuaToiHandler();
   const [soDuPhep] = useDonTuCuaToiState("soDuPhep", [] as LeaveBalance[]);
+  const [loiSoDuPhep] = useDonTuCuaToiState("loiSoDuPhep", undefined);
 
   useEffect(() => {
     handler.executeEvent("init", {});
@@ -35,7 +36,7 @@ function DonTuCuaToiPageInner() {
           bao nhiêu ngày TRƯỚC khi bấm nộp, không phải đọc được nó sau khi đã
           mở form và chọn ngày xong. */}
       <div className="mb-4">
-        <KhoiSoDuPhep danhSach={soDuPhep} homNay={homNayVN()} />
+        <KhoiSoDuPhep danhSach={soDuPhep} homNay={homNayVN()} loi={loiSoDuPhep} />
       </div>
 
       {/* Nút chính đặt TRÊN danh sách: việc người dùng đến màn này để làm là

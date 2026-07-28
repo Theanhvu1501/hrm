@@ -42,9 +42,17 @@ export class InitHandler extends CSubHanlder {
     try {
       const soDuPhep = await leaveBalanceService.getCuaToi();
       this.setState("soDuPhep", soDuPhep);
+      this.setState("loiSoDuPhep", undefined);
     } catch (error) {
       console.error("Tải số dư phép lỗi:", error);
       this.setState("soDuPhep", []);
+      // Review round 1 (Minor 4): PHẢI đánh dấu "lỗi tải" riêng, không chỉ
+      // set mảng rỗng — mảng rỗng vì lỗi (vd tài khoản chưa gắn hồ sơ nhân
+      // viên, 404) và mảng rỗng vì thật sự chưa có quỹ (thử việc) trông y
+      // hệt nhau, và trước bản sửa này, người dùng bị lỗi 404 còn thấy thêm
+      // một câu "đang thử việc, chưa được cấp phép" không liên quan gì tới
+      // lỗi thật của họ.
+      this.setState("loiSoDuPhep", "loi_khac");
     }
   }
 }
