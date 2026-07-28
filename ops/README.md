@@ -155,3 +155,26 @@ nếu không, một NV vào làm + chính thức từ 2019 sẽ chỉ nhận đ�
    hoặc chạy sau khi bước 2 đã tự cấp qua `moKhoaLenChinhThuc()`, đều không cấp trùng.
 4. **Đối soát** (`GET /quy-phep/doi-soat`, hoặc nút tương ứng trên màn Quỹ phép) — xác nhận
    không có lệch giữa sổ và số dư sau đợt rollout.
+
+### `ngayChinhThuc` tương lai: "Cấp phép đầu năm" phải chạy LẶP LẠI, không chỉ một lần/năm
+
+Hệ quả của round 4 (IMPORTANT 2): `moKhoaLenChinhThuc()` cố ý KHÔNG cấp quỹ khi
+`ngayChinhThuc` còn ở tương lai (chặn "cấp trước rồi NV nghỉ ngang" — xem lý do ở doc-comment
+hàm đó). Nhưng repo này **không có cron/scheduler và không backfill lúc đọc** — nên khi ngày
+đó đến hạn, KHÔNG có gì tự động cấp quỹ. Ví dụ: HR tuyển NV tháng 3, ghi `ngayChinhThuc` dự
+kiến `2027-06-01` ngay lúc tuyển; đến tháng 6 không ai sửa lại hồ sơ (không có gì để sửa —
+ngày đó đã đúng từ đầu); NV nộp đơn nghỉ phép tháng 7 sẽ bị chặn ở cửa "chưa được cấp quỹ"
+(`CHUA_DUOC_CAP_QUY`, xem `don-cham-cong.service.ts`) cho tới khi có người bấm lại
+**"Cấp phép đầu năm"**.
+
+Vì vậy nút "Cấp phép đầu năm" (`capPhepDauNam`) **phải chạy định kỳ** (ví dụ đầu mỗi tháng),
+không chỉ đúng một lần vào 1/1 — mỗi lần chạy nó vét luôn những NV vừa tới `ngayChinhThuc`
+trong tháng mà chưa được cấp. Idempotent theo khoá `(employeeId, nam, loaiQuy)` nên chạy lại
+nhiều lần trong năm là an toàn, không cấp trùng cho người đã có quỹ.
+
+Mặt còn lại — **đây là đánh đổi có chủ ý, không phải lỗi**: chạy `capPhepDauNam(năm nay)` vào
+tháng 1 vẫn cấp TRỌN quỹ cả năm cho một NV có `ngayChinhThuc` rơi vào tháng 6 CÙNG năm đó
+(miễn `ngayChinhThuc <= 31/12` năm đang cấp, xem `locNhanVienDuocCap()`) — tức cấp trước khi
+NV thực sự chạm mốc chính thức. Sản phẩm chấp nhận rủi ro này để đổi lấy việc không phải dựng
+hạ tầng job định kỳ; nếu muốn siết chặt hơn (chỉ cấp đúng lúc `ngayChinhThuc` đã qua), phải
+chạy `capPhepDauNam` thường xuyên hơn (vd hàng tuần) thay vì đổi logic.

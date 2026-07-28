@@ -44,6 +44,7 @@ describe('DonChamCong_Service', () => {
     resolveEmployeeFromUser: jest.Mock;
   };
   let mockQuyPhepService: {
+    layQuyCuaNhanVien: jest.Mock;
     phanBoChoNgayNghi: jest.Mock;
     giuCho: jest.Mock;
     nhaCho: jest.Mock;
@@ -95,6 +96,13 @@ describe('DonChamCong_Service', () => {
     // không chạy). Describe "nối quỹ phép" bên dưới tự cấp provider riêng qua
     // `dungServiceDon()`, không dùng biến này.
     mockQuyPhepService = {
+      // (P3.8 review round 5): cửa 1c mới trong create() gọi
+      // layQuyCuaNhanVien() TRƯỚC cửa 2 để chẩn đoán "chưa được cấp quỹ" —
+      // mặc định trả một quỹ dang_hieu_luc để các describe cũ (không nhắm
+      // vào cửa này) đi xuyên qua bình thường tới phanBoChoNgayNghi().
+      layQuyCuaNhanVien: jest
+        .fn()
+        .mockResolvedValue([{ trangThai: 'dang_hieu_luc' }]),
       phanBoChoNgayNghi: jest.fn().mockResolvedValue([]),
       giuCho: jest.fn().mockResolvedValue(undefined),
       nhaCho: jest.fn().mockResolvedValue(undefined),
@@ -689,7 +697,16 @@ describe('DonChamCong_Service', () => {
 
     // Không bị chặn quá tay: sửa một trường KHÔNG ảnh hưởng quỹ (lyDo) trên
     // một đơn phép năm vẫn phải đi qua bình thường.
-    it('sửa lyDo trên đơn phép năm (không đụng ngày/loại) vẫn được phép', async () => {
+    //
+    // (P3.8 review round 5 — vá hồi quy round 4): dto ở đây PHẢI đúng HÌNH
+    // DẠNG mà `dungDtoQuanTri()` (fe/.../donChamCongForm.convert.ts) thực sự
+    // gửi cho PUT — form là controlled, gửi lại NGUYÊN state hiện tại chứ
+    // không gửi diff, nên với một đơn `nghi_phep` 1 ngày, PUT LUÔN kèm
+    // `loaiDon`/`ngay`/`denNgay`/`buoi`/`loaiNghi` dù HR chỉ sửa `lyDo`. Bản
+    // test trước gửi dto CHỈ có `{ lyDo }` — payload FE không bao giờ tạo ra
+    // — nên tấm lưới an toàn đó xanh giả, không canh đúng đường thật (guard
+    // "có mặt khoá" của round 4 chặn nhầm MỌI PUT thật trên đơn phép năm).
+    it('sửa lyDo trên đơn phép năm — dto ĐÚNG HÌNH DẠNG dungDtoQuanTri (giữ nguyên 5 trường, chỉ lyDo đổi) vẫn được phép', async () => {
       mockRequestRepo.findOne.mockResolvedValue({
         _id: DON_ID,
         employeeId: EMP_ID,
@@ -698,11 +715,24 @@ describe('DonChamCong_Service', () => {
         loaiNghi: 'phep_nam',
         ngay: '2027-02-01',
         denNgay: '2027-02-01',
+        buoi: 'ca_ngay',
+        lyDo: 'Lý do cũ',
         soNgayNghi: 1,
         phanBoQuy: [{ balanceId: 'q1', nam: 2027, soNgay: 1 }],
       });
 
-      const result = await service.update(DON_ID, { lyDo: 'Lý do mới' } as any);
+      // Hình dạng thật của dungDtoQuanTri() cho đơn nghi_phep 1 ngày: luôn
+      // có employeeId/loaiDon/ngay/denNgay/buoi/loaiNghi kèm lyDo — KHÔNG
+      // phải một patch chỉ-lyDo.
+      const result = await service.update(DON_ID, {
+        employeeId: EMP_ID,
+        loaiDon: 'nghi_phep',
+        ngay: '2027-02-01',
+        denNgay: '2027-02-01',
+        buoi: 'ca_ngay',
+        loaiNghi: 'phep_nam',
+        lyDo: 'Lý do mới',
+      } as any);
 
       expect(result.lyDo).toBe('Lý do mới');
       expect(mockRequestRepo.save).toHaveBeenCalled();
@@ -907,6 +937,12 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
 
   function mockQuyPhep(ghiDe: Record<string, any> = {}) {
     return {
+      // (P3.8 review round 5): cửa 1c mới trong create() gọi
+      // layQuyCuaNhanVien() TRƯỚC cửa 2 — mặc định trả một quỹ dang_hieu_luc
+      // để các test không nhắm vào cửa này đi xuyên qua bình thường.
+      layQuyCuaNhanVien: jest
+        .fn()
+        .mockResolvedValue([{ trangThai: 'dang_hieu_luc' }]),
       phanBoChoNgayNghi: jest.fn().mockResolvedValue(PHAN_BO),
       giuCho: jest.fn().mockResolvedValue(undefined),
       nhaCho: jest.fn().mockResolvedValue(undefined),
@@ -1052,7 +1088,11 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
     expect(repoDon.kho.at(-1).phanBoQuy).toEqual(PHAN_BO);
   });
 
-  it('quỹ không đủ → ném 409 và KHÔNG lưu đơn nào', async () => {
+  // (P3.8 review round 5): đây là ca "CÓ quỹ dang_hieu_luc nhưng không đủ
+  // ngày/sai kỳ" — mockQuyPhep() mặc định trả một quỹ dang_hieu_luc nên cửa
+  // 1c (chẩn đoán "chưa được cấp") đi qua bình thường, và lỗi 409 thật sự
+  // đến từ phanBoChoNgayNghi() (cửa 2) — đúng mã KHONG_DU_SO_DU.
+  it('CÓ quỹ dang_hieu_luc nhưng không đủ số dư → ném 409 KHONG_DU_SO_DU và KHÔNG lưu đơn nào', async () => {
     const quyPhep = mockQuyPhep({
       phanBoChoNgayNghi: jest
         .fn()
@@ -1061,10 +1101,52 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
     const { service, repoDon } = await dungServiceDon({ quyPhep });
     const truoc = repoDon.kho.length;
 
-    await expect(service.create(DON_PHEP as any)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    const err = await batMaLoi(() => service.create(DON_PHEP as any));
+
+    expect(err).toBe('KHONG_DU_SO_DU');
     expect(repoDon.kho.length).toBe(truoc);
+  });
+
+  // (P3.8 review round 5 — vá hồi quy round 4 IMPORTANT 2/4): NV có
+  // ngayChinhThuc TƯƠNG LAI đã tới hạn (đã qua được cửa 1/1b) nhưng chưa ai
+  // bấm "Cấp phép đầu năm"/"Mở khoá" sau đó — repo này không có cron/backfill
+  // lúc đọc, nên KHÔNG có quỹ dang_hieu_luc nào tồn tại. Trước fix, ca này
+  // rơi thẳng vào phanBoChoNgayNghi() và bị chẩn đoán SAI thành
+  // KHONG_DU_SO_DU ("không đủ số dư" — ngụ ý đã dùng hết), khiến HR đi tìm
+  // nhầm chỗ. Chẩn đoán ĐÚNG phải là CHUA_DUOC_CAP_QUY, và phanBoChoNgayNghi
+  // không được gọi tới (chặn sớm hơn, không cần hỏi FIFO của một quỹ không
+  // tồn tại).
+  it('đã chính thức nhưng CHƯA CÓ quỹ dang_hieu_luc nào → 409 CHUA_DUOC_CAP_QUY, không phải KHONG_DU_SO_DU', async () => {
+    const quyPhep = mockQuyPhep({
+      layQuyCuaNhanVien: jest.fn().mockResolvedValue([]),
+    });
+    const { service, repoDon } = await dungServiceDon({ quyPhep });
+    const truoc = repoDon.kho.length;
+
+    const err = await batMaLoi(() => service.create(DON_PHEP as any));
+
+    expect(err).toBe('CHUA_DUOC_CAP_QUY');
+    expect(quyPhep.phanBoChoNgayNghi).not.toHaveBeenCalled();
+    expect(quyPhep.giuCho).not.toHaveBeenCalled();
+    expect(repoDon.kho.length).toBe(truoc);
+  });
+
+  // Cùng ca trên nhưng quỹ hiện có TOÀN BỘ đã da_dong (vd hết hạn từ năm
+  // trước, HR đã bấm đóng quỹ) — vẫn phải chẩn đoán CHUA_DUOC_CAP_QUY, không
+  // phải KHONG_DU_SO_DU: không có quỹ NÀO tiêu được nữa, đúng bản chất
+  // "chưa được cấp" (cho kỳ hiện tại) chứ không phải "đã dùng hết phép".
+  it('quỹ hiện có TOÀN BỘ đã da_dong (không còn quỹ dang_hieu_luc nào) → vẫn 409 CHUA_DUOC_CAP_QUY', async () => {
+    const quyPhep = mockQuyPhep({
+      layQuyCuaNhanVien: jest
+        .fn()
+        .mockResolvedValue([{ trangThai: 'da_dong' }]),
+    });
+    const { service } = await dungServiceDon({ quyPhep });
+
+    const err = await batMaLoi(() => service.create(DON_PHEP as any));
+
+    expect(err).toBe('CHUA_DUOC_CAP_QUY');
+    expect(quyPhep.phanBoChoNgayNghi).not.toHaveBeenCalled();
   });
 
   it('giữ chỗ hỏng sau khi đã lưu đơn → đơn bị vô hiệu hoá, không để lại đơn ma', async () => {

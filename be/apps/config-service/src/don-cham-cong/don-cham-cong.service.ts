@@ -59,6 +59,17 @@ export const MA_LOI_DON_CHAM_CONG = {
    * giữ/trừ đứng yên là mở khoá quỹ. Xem doc-comment `update()`.
    */
   KHONG_THE_SUA_DON_TRU_QUY: 'KHONG_THE_SUA_DON_TRU_QUY',
+  /**
+   * P3.8 (review round 5 — hệ quả của round 4 IMPORTANT 2/4): NV đã lên
+   * chính thức (qua được cửa `CHUA_LEN_CHINH_THUC`) nhưng KHÔNG có quỹ
+   * `phep_nam` nào `dang_hieu_luc` — vd `ngayChinhThuc` tương lai đã tới hạn
+   * nhưng chưa ai bấm "Cấp phép đầu năm" sau đó (round 4 CHỈ chặn cấp SỚM,
+   * không có cron/backfill lúc đọc để tự cấp ĐÚNG lúc). Khác hẳn
+   * `KHONG_DU_SO_DU` (CÓ quỹ nhưng không đủ ngày hoặc sai kỳ) — gộp chung
+   * hai ca này khiến HR đọc "không đủ số dư" rồi đi tìm nhầm chỗ (tưởng NV
+   * đã dùng hết phép) thay vì tìm đúng chỗ (chưa từng được cấp).
+   */
+  CHUA_DUOC_CAP_QUY: 'CHUA_DUOC_CAP_QUY',
 } as const;
 
 export interface DonChamCongFilter {
@@ -272,6 +283,29 @@ export class DonChamCong_Service {
         throw new ConflictException({
           code: MA_LOI_DON_CHAM_CONG.CHUA_LEN_CHINH_THUC,
           message: `Nhân viên lên chính thức từ ${emp.ngayChinhThuc}, chưa có quỹ phép năm cho ngày ${ngayDauTienTruPhep}. Có thể nộp đơn nghỉ không lương.`,
+        });
+      }
+
+      // Cửa 1c (P3.8 review round 5): chẩn đoán ĐÚNG "chưa từng được cấp
+      // quỹ" khác với "có quỹ nhưng không đủ" — hệ quả trực tiếp của round 4
+      // (IMPORTANT 2/4): NV có `ngayChinhThuc` tương lai đã tới hạn KHÔNG tự
+      // động được cấp quỹ (không có cron/backfill lúc đọc trong repo này) —
+      // phải chờ ai đó bấm "Cấp phép đầu năm" sau khi ngày đó đã qua. Nếu
+      // không có bước chẩn đoán riêng ở đây, NV này rơi thẳng vào cửa 2 với
+      // `quyKhaDung` rỗng, và `phanBoChoNgayNghi` ném `KHONG_DU_SO_DU` —
+      // đúng chữ nhưng SAI Ý: HR đọc "không đủ số dư" sẽ nghĩ NV đã dùng hết
+      // phép, đi tìm nhầm chỗ, thay vì bấm đúng nút "Cấp phép đầu năm".
+      const quyHienCo = await this.quyPhep_Service.layQuyCuaNhanVien(
+        dto.employeeId,
+      );
+      const coQuyDangHieuLuc = quyHienCo.some(
+        (q) => q.trangThai === 'dang_hieu_luc',
+      );
+      if (!coQuyDangHieuLuc) {
+        throw new ConflictException({
+          code: MA_LOI_DON_CHAM_CONG.CHUA_DUOC_CAP_QUY,
+          message:
+            'Nhân viên đã lên chính thức nhưng chưa được cấp quỹ phép năm. HR vào màn Quỹ phép bấm "Cấp phép đầu năm".',
         });
       }
 
@@ -763,6 +797,19 @@ export class DonChamCong_Service {
    * lại cho khớp": tính lại đòi nhả-rồi-giữ-lại không nguyên tử, rủi ro y hệt
    * giới hạn "không transaction" mà `giuCho()`/`nhaCho()` đã tự nhận. Người
    * dùng phải huỷ đơn rồi nộp lại — `create()` tính lại từ đầu, sạch.
+   *
+   * (P3.8 review round 5 — vá hồi quy round 4): guard bản đầu so SỰ CÓ MẶT
+   * của khoá (`truong in phanConLaiDuocPhepSua`), không so GIÁ TRỊ có đổi
+   * hay không. Đường PUT duy nhất của sản phẩm — `dungDtoQuanTri()` ở
+   * `fe/.../donChamCongForm.convert.ts` — LUÔN gửi kèm `loaiDon`/`ngay`,
+   * cộng `denNgay`/`loaiNghi`/`buoi` khi là `nghi_phep`, bất kể HR có sửa
+   * chúng hay không (form gửi lại NGUYÊN state hiện tại, không phải diff).
+   * Nên `doiTruongAnhHuongQuy` kiểu "có mặt" luôn đúng với MỌI PUT thật trên
+   * một đơn `phep_nam` — kể cả khi HR chỉ sửa `lyDo` — khoá hẳn nút Sửa cho
+   * loại đơn này. Đổi sang so GIÁ TRỊ: một khoá chỉ tính là "đổi" khi nó vừa
+   * CÓ MẶT trong dto vừa khác giá trị đang có trên `item`. Ba kịch bản khai
+   * thác (a)(b)(c) ở trên đều đổi GIÁ TRỊ THẬT nên vẫn bị chặn nguyên; đơn
+   * chỉ đổi `lyDo` (giá trị 5 trường này giữ nguyên) thì đi qua bình thường.
    */
   private static readonly TRUONG_ANH_HUONG_QUY = [
     'loaiDon',
@@ -785,8 +832,15 @@ export class DonChamCong_Service {
       ...phanConLaiDuocPhepSua
     } = dto as UpdateDonChamCongDto & { phanBoQuy?: unknown };
 
+    const phanConLaiDuocPhepSuaAny = phanConLaiDuocPhepSua as Record<
+      string,
+      unknown
+    >;
+    const itemAny = item as unknown as Record<string, unknown>;
     const doiTruongAnhHuongQuy = DonChamCong_Service.TRUONG_ANH_HUONG_QUY.some(
-      (truong) => truong in phanConLaiDuocPhepSua,
+      (truong) =>
+        truong in phanConLaiDuocPhepSuaAny &&
+        itemAny[truong] !== phanConLaiDuocPhepSuaAny[truong],
     );
     const truQuyTruocKhiSua = this.laDonTruQuy(item);
     const truQuySauKhiSua = this.laDonTruQuy({ ...item, ...phanConLaiDuocPhepSua });
