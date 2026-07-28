@@ -504,13 +504,56 @@ export class DonChamCong_Service {
           );
         }
       } catch (e) {
-        // (review round 1, IMPORTANT 2): quỹ hỏng SAU KHI trạng thái đã lưu
-        // thì phải khôi phục NGUYÊN VẸN trạng thái/vết duyệt cũ rồi lưu lại
-        // — nếu không, đơn đứng ở trạng thái mới (vd da_duyet) mà quỹ chưa
-        // hề bị đụng tới, tức nghỉ phép miễn phí. Lỗi này không hiếm:
-        // chuyenSangDaDung() ném ConflictException nếu HR vừa dieuChinhTay
-        // một số âm giữa lúc nộp và lúc duyệt; layQuyTheoId() ném
-        // NotFoundException nếu dòng quỹ bị xoá.
+        // (review round 1, IMPORTANT 2 — vẫn giữ nguyên ở fix round 2): quỹ
+        // hỏng SAU KHI trạng thái đã lưu thì phải khôi phục NGUYÊN VẸN trạng
+        // thái/vết duyệt cũ rồi lưu lại. Không chỉ để tránh "nghỉ phép miễn
+        // phí" — đây còn là điều kiện để RETRY hoạt động: nếu không khôi
+        // phục, `trangThaiCu` đọc lại ở lần gọi sau sẽ trùng `trangThai` đích
+        // (đơn đã "tới nơi" theo DB dù quỹ chưa xong), nhánh no-op phía trên
+        // (`trangThaiCu !== trangThai`) sẽ ÂM THẦM bỏ qua toàn bộ dispatch
+        // quỹ ở lần bấm lại — không còn đường nào kích lại được nữa.
+        //
+        // (P3.8 fix round 2, Part B): `chuyenSangDaDung`/`hoanTraDaDung`
+        // (hai nhánh có ghi sổ) giờ đã tự chống trùng qua sổ
+        // (`daGhiChoDon` trong quy-phep.service.ts) — khôi phục trạng thái
+        // rồi ĐỂ HR BẤM LẠI là đủ, KHÔNG cần bù gì thêm ở đây: lần bấm lại
+        // sẽ bỏ qua đúng phần quỹ đã áp dụng thành công và chỉ áp dụng nốt
+        // phần còn thiếu.
+        //
+        // `giuCho`/`nhaCho` (hai nhánh KHÔNG ghi sổ) thì KHÔNG có dấu vết gì
+        // để mà chống trùng khi retry — nếu một trong hai hỏng giữa chừng
+        // trên phanBoQuy ≥2 phần tử (giữ/nhả xong quỹ 1 rồi mới hỏng ở quỹ
+        // 2), phần đã giữ/nhả đó sẽ kẹt vĩnh viễn nếu không bù ngay. Bù
+        // best-effort bằng cách gọi hàm NGƯỢC LẠI trên TOÀN BỘ phanBoQuy —
+        // đây là bù GẦN ĐÚNG (giống create()/huyDonCuaToi()), KHÔNG PHẢI
+        // transaction: nếu chính lời gọi bù cũng hỏng, phần dở dang vẫn có
+        // thể sót lại (cùng họ giới hạn "không transaction" mà giuCho()/
+        // nhaCho() đã tự nhận). Bọc try/catch RIÊNG, nuốt lỗi phụ — lỗi gốc
+        // `e` mới là thứ được ném ra dưới.
+        if (trangThaiCu === 'tu_choi' && trangThai === 'cho_duyet') {
+          try {
+            await this.quyPhep_Service.nhaCho(
+              item.employeeId,
+              item.phanBoQuy!,
+              requestId,
+              nguoiThucHienId,
+            );
+          } catch {
+            // nuốt lỗi phụ — xem giải thích ở trên.
+          }
+        } else if (trangThaiCu === 'cho_duyet' && trangThai === 'tu_choi') {
+          try {
+            await this.quyPhep_Service.giuCho(
+              item.employeeId,
+              item.phanBoQuy!,
+              requestId,
+              nguoiThucHienId,
+            );
+          } catch {
+            // nuốt lỗi phụ — xem giải thích ở trên.
+          }
+        }
+
         item.trangThai = trangThaiCu;
         item.nguoiDuyet = nguoiDuyetCu;
         item.nguoiDuyetId = nguoiDuyetIdCu;

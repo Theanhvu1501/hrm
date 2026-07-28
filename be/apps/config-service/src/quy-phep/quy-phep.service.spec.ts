@@ -342,18 +342,102 @@ describe('QuyPhep_Service — vòng đời giữ chỗ', () => {
     expect(q2026.soNgayConLai).toBe(3);
   });
 
-  it('duyệt lần hai cho cùng một đơn bị chặn, quỹ không bao giờ âm', async () => {
-    const { service, repoQuy } = await dungHaiQuy();
+  // P3.8 fix round 2: trước đây `chuyenSangDaDung` lần hai NÉM
+  // ConflictException để tự chặn trùng. Từ fix round 2, `updateStatus()`
+  // (don-cham-cong.service.ts) có thể tự khôi phục đơn về `cho_duyet` sau
+  // một lần duyệt hỏng giữa chừng (đơn phân bổ ≥2 quỹ) rồi để HR bấm duyệt
+  // LẠI — nghĩa là "duyệt lần hai" giờ là một tình huống HỢP LỆ, không phải
+  // lỗi. `chuyenSangDaDung` vì vậy đổi từ "ném lỗi để chặn" sang "tự chống
+  // trùng qua sổ" (`daGhiChoDon`) — lần gọi lại thấy đã có dòng sổ
+  // `duyet_don` đúng requestId thì ÂM THẦM bỏ qua quỹ đó, không ném, không
+  // trừ thêm. Quỹ vẫn không bao giờ âm, chỉ khác ở CHỖ chặn.
+  it('duyệt lần hai cho cùng một đơn (idempotent) → không trừ thêm, sổ không nhân đôi', async () => {
+    const { service, repoQuy, repoSo } = await dungHaiQuy();
     await service.giuCho(ID_NV1, PHAN_BO, 'don1', 'nv1');
     await service.chuyenSangDaDung(ID_NV1, PHAN_BO, 'don1', 'hr1');
 
-    await expect(
-      service.chuyenSangDaDung(ID_NV1, PHAN_BO, 'don1', 'hr1'), // bấm lần hai / retry
-    ).rejects.toBeInstanceOf(ConflictException);
+    await service.chuyenSangDaDung(ID_NV1, PHAN_BO, 'don1', 'hr1'); // bấm lần hai / retry — KHÔNG ném nữa
 
     const q2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
     expect(q2026.soNgayDaDung).toBe(2); // không tăng lên 4
     expect(q2026.soNgayConLai).toBe(1); // không âm
+    expect(
+      repoSo.kho.filter(
+        (x: any) => x.lyDo === 'duyet_don' && x.balanceId === ID_Q2026,
+      ),
+    ).toHaveLength(1); // đúng 1 dòng sổ, không nhân đôi
+  });
+
+  // Kịch bản review round 2 nêu để biện minh cho fix: đơn vắt qua 31/3 nên
+  // phanBoQuy có 2 phần tử (quỹ 2026 + quỹ 2027). HR dieuChinhTay một số âm
+  // lên quỹ THỨ HAI giữa lúc nộp và lúc duyệt — chuyenSangDaDung áp dụng
+  // xong quỹ 1 (ghi sổ duyet_don) rồi mới ném ở quỹ 2 (thiếu số dư). Test
+  // này xác nhận: (a) quỹ 1 KHÔNG bị trừ lần hai khi thử lại sau khi HR sửa
+  // lại số dư, (b) sổ duyet_don của quỹ 1 vẫn chỉ có đúng 1 dòng.
+  it('duyệt hỏng ở quỹ thứ hai (HR giảm nhầm số dư giữa lúc nộp và lúc duyệt) → quỹ thứ nhất KHÔNG bị trừ lần hai khi thử lại', async () => {
+    const { service, repoQuy, repoSo } = await dungHaiQuy();
+    const phanBoHaiQuy = [
+      { balanceId: ID_Q2026, nam: 2026, soNgay: 2 },
+      { balanceId: ID_Q2027, nam: 2027, soNgay: 10 },
+    ];
+    await service.giuCho(ID_NV1, phanBoHaiQuy, 'don1', 'nv1');
+
+    // HR giảm nhầm số dư quỹ 2027 SAU khi đã giữ chỗ, TRƯỚC khi duyệt: 12 → 7.
+    await service.dieuChinhTay(ID_NV1, ID_Q2027, -5, 'giảm nhầm', 'hr1');
+
+    await expect(
+      service.chuyenSangDaDung(ID_NV1, phanBoHaiQuy, 'don1', 'hr1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    // Quỹ 2026 (phần tử ĐẦU trong phanBo) đã được áp dụng thành công TRƯỚC
+    // khi hỏng ở quỹ 2027 — vòng lặp không nguyên tử.
+    const q2026SauLanMot = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(q2026SauLanMot.soNgayDaDung).toBe(2);
+    expect(
+      repoSo.kho.filter((x: any) => x.lyDo === 'duyet_don'),
+    ).toHaveLength(1);
+
+    // HR sửa lại số dư quỹ 2027 cho đủ (7 → 12) rồi bấm duyệt LẠI — retry.
+    await service.dieuChinhTay(ID_NV1, ID_Q2027, 5, 'sửa lại cho đúng', 'hr1');
+    await service.chuyenSangDaDung(ID_NV1, phanBoHaiQuy, 'don1', 'hr1');
+
+    const q2026Sau = repoQuy.kho.find((x: any) => x.nam === 2026);
+    const q2027Sau = repoQuy.kho.find((x: any) => x.nam === 2027);
+    // Quỹ 2026 KHÔNG bị trừ lần hai (vẫn 2, không phải 4).
+    expect(q2026Sau.soNgayDaDung).toBe(2);
+    // Quỹ 2027 giờ mới thực sự được áp dụng.
+    expect(q2027Sau.soNgayDaDung).toBe(10);
+    // Sổ duyet_don: đúng 1 dòng cho MỖI balanceId, quỹ 2026 không nhân đôi.
+    const soDuyetDon = repoSo.kho.filter((x: any) => x.lyDo === 'duyet_don');
+    expect(
+      soDuyetDon.filter((x: any) => x.balanceId === ID_Q2026),
+    ).toHaveLength(1);
+    expect(
+      soDuyetDon.filter((x: any) => x.balanceId === ID_Q2027),
+    ).toHaveLength(1);
+  });
+
+  // hoanTraDaDung song sinh với chuyenSangDaDung — cùng cơ chế daGhiChoDon,
+  // xác nhận hoạt động khi phanBo có nhiều phần tử.
+  it('hoàn lần hai cho cùng một đơn (idempotent, nhiều quỹ) → mỗi quỹ chỉ hoàn một lần, sổ không nhân đôi', async () => {
+    const { service, repoQuy, repoSo } = await dungHaiQuy();
+    const phanBoHaiQuy = [
+      { balanceId: ID_Q2026, nam: 2026, soNgay: 2 },
+      { balanceId: ID_Q2027, nam: 2027, soNgay: 5 },
+    ];
+    await service.giuCho(ID_NV1, phanBoHaiQuy, 'don1', 'nv1');
+    await service.chuyenSangDaDung(ID_NV1, phanBoHaiQuy, 'don1', 'hr1');
+
+    await service.hoanTraDaDung(ID_NV1, phanBoHaiQuy, 'don1', 'hr1');
+    await service.hoanTraDaDung(ID_NV1, phanBoHaiQuy, 'don1', 'hr1'); // bấm lần hai / retry
+
+    const q2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
+    const q2027 = repoQuy.kho.find((x: any) => x.nam === 2027);
+    expect(q2026.soNgayDaDung).toBe(0);
+    expect(q2027.soNgayDaDung).toBe(0);
+    const soHuyDon = repoSo.kho.filter((x: any) => x.lyDo === 'huy_don');
+    expect(soHuyDon.filter((x: any) => x.balanceId === ID_Q2026)).toHaveLength(1);
+    expect(soHuyDon.filter((x: any) => x.balanceId === ID_Q2027)).toHaveLength(1);
   });
 
   it('phanBoQuy trỏ sang quỹ của nhân viên khác bị chặn', async () => {

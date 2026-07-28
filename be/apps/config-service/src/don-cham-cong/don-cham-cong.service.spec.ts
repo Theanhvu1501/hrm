@@ -1176,19 +1176,59 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
       expect(repoDon.kho.at(-1).trangThai).toBe('cho_duyet');
     });
 
-    it('tu_choi → cho_duyet: giuCho thiếu số dư → 409, đơn khôi phục về tu_choi', async () => {
+    // (P3.8 fix round 2, Part B): giuCho()/nhaCho() KHÔNG ghi sổ — không có
+    // dấu vết để tự chống trùng như chuyenSangDaDung()/hoanTraDaDung() (Phần
+    // A, quy-phep.service.ts). Nếu giuCho() hỏng giữa chừng trên phanBoQuy
+    // ≥2 phần tử, phần đã giữ được (quỹ đầu) phải được NHẢ LẠI best-effort
+    // ngay trong catch — nếu không, đơn quay về tu_choi nhưng vẫn còn giữ
+    // một phần số dư không ai biết.
+    it('tu_choi → cho_duyet: giuCho thiếu số dư → 409, bù best-effort bằng nhaCho, đơn khôi phục về tu_choi', async () => {
       const quyPhep = mockQuyPhep();
       const { service, repoDon, id } = await taoDonVaDuyet(quyPhep);
       await service.updateStatus(id, 'tu_choi', 'HR', { id: 'user-hr' } as any);
       quyPhep.giuCho.mockRejectedValueOnce(
         new ConflictException({ code: 'KHONG_DU_SO_DU' }),
       );
+      quyPhep.nhaCho.mockClear(); // nhaCho đã chạy 1 lần lúc tu_choi ở trên — đếm sạch lại
 
       await expect(
         service.updateStatus(id, 'cho_duyet', undefined, { id: 'user-hr-2' } as any),
       ).rejects.toBeInstanceOf(ConflictException);
 
       expect(repoDon.kho.at(-1).trangThai).toBe('tu_choi');
+      // Bù best-effort: gọi nhaCho() trên TOÀN BỘ phanBoQuy để nhả lại phần
+      // giuCho() có thể đã giữ được trước khi hỏng.
+      expect(quyPhep.nhaCho).toHaveBeenCalledWith(
+        ID_NV1,
+        PHAN_BO,
+        id,
+        'user-hr-2',
+      );
+    });
+
+    // Nhánh song sinh: nhaCho() (cho_duyet→tu_choi) hỏng giữa chừng → bù
+    // best-effort bằng giuCho() lại toàn bộ phanBoQuy, đơn khôi phục về
+    // cho_duyet (trạng thái trước khi thử từ chối).
+    it('cho_duyet → tu_choi: nhaCho hỏng → bù best-effort bằng giuCho, đơn khôi phục về cho_duyet', async () => {
+      const quyPhep = mockQuyPhep({
+        nhaCho: jest.fn().mockRejectedValue(new Error('mất kết nối')),
+      });
+      const { service, repoDon, id } = await taoDonVaDuyet(quyPhep);
+      quyPhep.giuCho.mockClear(); // giuCho đã chạy 1 lần lúc create() — đếm sạch lại
+
+      await expect(
+        service.updateStatus(id, 'tu_choi', undefined, { id: 'user-hr' } as any),
+      ).rejects.toThrow('mất kết nối');
+
+      expect(repoDon.kho.at(-1).trangThai).toBe('cho_duyet');
+      // Bù best-effort: gọi giuCho() lại trên TOÀN BỘ phanBoQuy để giữ lại
+      // phần nhaCho() có thể đã nhả trước khi hỏng.
+      expect(quyPhep.giuCho).toHaveBeenCalledWith(
+        ID_NV1,
+        PHAN_BO,
+        id,
+        'user-hr',
+      );
     });
 
     it('da_duyet → cho_duyet BỊ CHẶN 409, trạng thái đơn KHÔNG đổi', async () => {

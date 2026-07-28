@@ -354,6 +354,26 @@ export class QuyPhep_Service {
   }
 
   /**
+   * Đã áp dụng biến động này cho đúng quỹ này chưa (P3.8 fix round 2). Vòng
+   * lặp theo từng quỹ trong `chuyenSangDaDung`/`hoanTraDaDung` KHÔNG nguyên
+   * tử: hỏng ở quỹ thứ hai thì quỹ thứ nhất đã đổi rồi, và lần thử lại sau
+   * đó (HR sửa số dư rồi bấm duyệt lại, hoặc bấm đúp) sẽ trừ/hoàn lần thứ
+   * hai trên chính quỹ đã xong nếu không có gì chặn. Sổ (`leave_balance_entries`)
+   * là nơi DUY NHẤT biết việc gì đã thực sự xảy ra cho đúng
+   * (quỹ, đơn) này — dùng nó làm khoá chống trùng thay vì cố dựng rollback
+   * nhiều bước (rollback không đóng được: bản thân retry cũng đi qua đúng
+   * vòng lặp không nguyên tử này).
+   */
+  private async daGhiChoDon(
+    balanceId: string,
+    requestId: string,
+    lyDo: string,
+  ): Promise<boolean> {
+    const ds = await this.repoSo.find({ where: { balanceId, requestId } as any });
+    return ds.some((dong) => dong.lyDo === lyDo);
+  }
+
+  /**
    * Giữ chỗ NGAY khi nộp đơn, không đợi duyệt. Nếu chỉ trừ lúc duyệt thì NV
    * còn 2 ngày phép nộp được 5 đơn mỗi đơn 2 ngày — tất cả đều qua bước kiểm
    * tra vì chưa đơn nào bị trừ, và HR duyệt tới đơn thứ hai mới phát hiện âm
@@ -417,6 +437,14 @@ export class QuyPhep_Service {
     nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
+      // (P3.8 fix round 2): vòng lặp này không nguyên tử theo `phanBo` — nếu
+      // lần chạy trước đã áp dụng xong cho quỹ này (thấy dòng sổ `duyet_don`
+      // đúng requestId) rồi mới hỏng ở MỘT quỹ khác trong CÙNG `phanBo`, lần
+      // gọi lại (retry, hoặc "duyệt lại" sau khi updateStatus() khôi phục
+      // đơn về cho_duyet) phải bỏ qua quỹ đã xong này — nếu không sẽ trừ lần
+      // hai + ghi thêm một dòng sổ `duyet_don` không có thật.
+      if (await this.daGhiChoDon(p.balanceId, requestId, 'duyet_don')) continue;
+
       const quy = await this.layQuyTheoId(employeeId, p.balanceId);
       // Chặn vượt trần thay vì clamp-rồi-lưu: gọi duyệt hai lần cho cùng một
       // đơn (bấm hai lần, retry sau lỗi mạng) mà clamp thì lần hai vẫn cộng
@@ -452,6 +480,14 @@ export class QuyPhep_Service {
     nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
+      // (P3.8 fix round 2): xem giải thích ở chuyenSangDaDung() — vòng lặp
+      // này cũng không nguyên tử theo `phanBo`, sổ là khoá chống trùng chính
+      // xác nhất. Giữ NGUYÊN clamp `sau === truoc` bên dưới như một lớp
+      // phòng thủ thứ hai (trường hợp `soNgayDaDung` đã về đúng mức mong đợi
+      // qua một đường khác mà không để lại dòng sổ `huy_don` khớp requestId
+      // này) — hai lớp không loại trừ nhau.
+      if (await this.daGhiChoDon(p.balanceId, requestId, 'huy_don')) continue;
+
       const quy = await this.layQuyTheoId(employeeId, p.balanceId);
       const truoc = quy.soNgayDaDung;
       const sau = Math.max(0, truoc - p.soNgay);
