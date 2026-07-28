@@ -6,6 +6,7 @@ import {
   Post,
   Query,
   Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
@@ -30,6 +31,24 @@ export class QuyPhep_Controller {
     private readonly quyPhep_Service: QuyPhep_Service,
     private readonly nhanVien_Service: NhanVien_Service,
   ) {}
+
+  /**
+   * (P3.8 review round 4, IMPORTANT 9): ba route ghi quỹ trước đây đọc
+   * `String(req.user?.id ?? '')` — mặc định về CHUỖI RỖNG khi thiếu id, cho
+   * phép ghi `nguoiThucHien: ''` vào sổ biến động — đúng cái sổ mà toàn bộ
+   * kiến trúc quỹ phép dựng lên để TRUY VẾT ai làm gì. Một actor rỗng là lỗ
+   * hổng audit trail, không phải giá trị hợp lệ để mặc định vào — ném lỗi
+   * thay vì âm thầm cho qua.
+   */
+  private nguoiThucHienTuToken(req: any): string {
+    const id = req.user?.id;
+    if (!id) {
+      throw new UnauthorizedException(
+        'Không xác định được người thực hiện thao tác',
+      );
+    }
+    return String(id);
+  }
 
   // ── Tự phục vụ + các route tên cố định: PHẢI khai TRƯỚC route ':id' bên
   // dưới, nếu không NestJS khớp "cua-toi"/"doi-soat" thành :id. ────────────
@@ -61,7 +80,7 @@ export class QuyPhep_Controller {
     }
     const data = await this.quyPhep_Service.capPhepDauNam(
       body.nam,
-      String(req.user?.id ?? ''),
+      this.nguoiThucHienTuToken(req),
     );
     return { success: true, data };
   }
@@ -76,7 +95,7 @@ export class QuyPhep_Controller {
     }
     const data = await this.quyPhep_Service.dongQuy(
       body.nam,
-      String(req.user?.id ?? ''),
+      this.nguoiThucHienTuToken(req),
     );
     return { success: true, data };
   }
@@ -90,7 +109,7 @@ export class QuyPhep_Controller {
       body.balanceId,
       body.soNgay,
       body.ghiChu,
-      String(req.user?.id ?? ''),
+      this.nguoiThucHienTuToken(req),
     );
     return { success: true, data };
   }

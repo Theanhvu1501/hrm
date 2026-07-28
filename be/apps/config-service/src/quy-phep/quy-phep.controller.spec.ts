@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { UnauthorizedException } from '@nestjs/common';
 import { JwtService, AuthzLoaderService } from '@app/auth';
 import { QuyPhep_Controller } from './quy-phep.controller';
 import { QuyPhep_Service } from './quy-phep.service';
@@ -8,7 +9,9 @@ describe('QuyPhep_Controller', () => {
   const quyPhep = {
     layQuyCuaNhanVien: jest.fn().mockResolvedValue([{ nam: 2026 }]),
     xemTruocCapPhepDauNam: jest.fn().mockResolvedValue([]),
-    capPhepDauNam: jest.fn().mockResolvedValue({ daCap: 3, boQua: 1 }),
+    capPhepDauNam: jest
+      .fn()
+      .mockResolvedValue({ daCap: 3, daCoQuy: 1, boQuaThuViec: 2 }),
     xemTruocDongQuy: jest.fn().mockResolvedValue([]),
     dongQuy: jest.fn().mockResolvedValue({ soQuyDaDong: 2, tongNgayMat: 5 }),
     dieuChinhTay: jest.fn().mockResolvedValue({}),
@@ -101,5 +104,38 @@ describe('QuyPhep_Controller', () => {
       'lý do',
       'hr1',
     );
+  });
+
+  // (P3.8 review round 4, IMPORTANT 9): `String(req.user?.id ?? '')` cũ mặc
+  // định về chuỗi rỗng khi thiếu id, cho phép ghi `nguoiThucHien: ''` vào sổ
+  // biến động — lỗ hổng audit trail. Ba route ghi quỹ phải ném lỗi thay vì
+  // âm thầm cho qua khi không xác định được người thực hiện.
+  describe('actor rỗng bị chặn thay vì mặc định thành chuỗi rỗng', () => {
+    it('cap-dau-nam (không xemTruoc) với req.user.id rỗng → ném lỗi, KHÔNG gọi service', async () => {
+      const controller = await dungController();
+      await expect(
+        controller.capDauNam({ nam: 2027 }, { user: {} } as any),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(quyPhep.capPhepDauNam).not.toHaveBeenCalled();
+    });
+
+    it('dong-quy (không xemTruoc) với req.user.id rỗng → ném lỗi, KHÔNG gọi service', async () => {
+      const controller = await dungController();
+      await expect(
+        controller.dongQuy({ nam: 2026 }, { user: {} } as any),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(quyPhep.dongQuy).not.toHaveBeenCalled();
+    });
+
+    it('dieu-chinh với req.user.id rỗng → ném lỗi, KHÔNG gọi service', async () => {
+      const controller = await dungController();
+      await expect(
+        controller.dieuChinh(
+          { employeeId: 'nv1', balanceId: 'q1', soNgay: -1, ghiChu: 'lý do' },
+          { user: {} } as any,
+        ),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(quyPhep.dieuChinhTay).not.toHaveBeenCalled();
+    });
   });
 });
