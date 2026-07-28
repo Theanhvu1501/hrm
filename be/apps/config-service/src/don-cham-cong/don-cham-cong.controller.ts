@@ -156,8 +156,11 @@ export class DonChamCong_Controller {
   @Delete(':id')
   @UseGuards(PermissionGuard)
   @Permissions('/cham-cong/don-tu:xoa')
-  async remove(@Param('id') id: string) {
-    await this.donChamCong_Service.remove(id);
+  async remove(@Param('id') id: string, @Req() req: any) {
+    // req.user truyền xuống để hoanTraDaDung() (P3.8) ghi đúng tên người xoá
+    // vào sổ quỹ khi đơn bị xoá là phep_nam đã da_duyet — xem
+    // DonChamCong_Service.remove().
+    await this.donChamCong_Service.remove(id, req.user);
     return { success: true, message: 'Xóa đơn chấm công thành công' };
   }
 }

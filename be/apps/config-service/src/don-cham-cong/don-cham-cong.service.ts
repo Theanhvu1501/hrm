@@ -43,6 +43,14 @@ export const MA_LOI_DON_CHAM_CONG = {
    * mình thay vì import chéo một hằng số dùng cho mục đích khác.
    */
   CHUA_LEN_CHINH_THUC: 'CHUA_LEN_CHINH_THUC',
+  /**
+   * P3.8 (review round 1, CRITICAL fix): đơn trừ quỹ cố chuyển thẳng giữa
+   * hai trạng thái không có lối quỹ hợp lệ — `da_duyet → cho_duyet` hoặc
+   * `tu_choi → da_duyet`. Bắt đi qua trạng thái trung gian (`tu_choi`) thay
+   * vì dựng thêm đường hoàn-rồi-giữ-lại phức tạp — xem bảng chuyển trong
+   * `updateStatus()`.
+   */
+  CHUYEN_TRANG_THAI_KHONG_HOP_LE: 'CHUYEN_TRANG_THAI_KHONG_HOP_LE',
 } as const;
 
 export interface DonChamCongFilter {
@@ -277,7 +285,41 @@ export class DonChamCong_Service {
         // chuyenSangDaDung() sẽ chạy trên `phanBoQuy` đã lưu như bình
         // thường, trong khi giuCho() — bước lẽ ra phải giữ số dư — chưa hề
         // thành công.
+        //
+        // (review round 1, IMPORTANT 3): giuCho() lặp và lưu TỪNG quỹ một,
+        // không nguyên tử — nếu đơn phân bổ vào ≥2 quỹ và hỏng ở quỹ thứ
+        // hai, quỹ thứ nhất đã giữ chỗ THẬT. Gọi nhaCho() best-effort trên
+        // TOÀN BỘ phanBoQuy TRƯỚC khi vô hiệu hoá đơn, để phần đã giữ (nếu
+        // có) không bị kẹt vĩnh viễn. Bọc try/catch RIÊNG và nuốt lỗi phụ:
+        // mục tiêu chính của khối catch này là dọn đơn vừa lưu — một lỗi
+        // phụ ở bước dọn quỹ không được che mất lỗi gốc (`e`) sắp ném lại.
+        //
+        // GIỚI HẠN CÒN LẠI (cùng họ với giới hạn giuCho()/nhaCho() đã tự
+        // nhận trong quy-phep.service.ts — "không transaction"): nếu
+        // giuCho() hỏng ngay ở quỹ ĐẦU TIÊN (chưa giữ được quỹ nào),
+        // nhaCho() ở đây vẫn chạm vào đúng quỹ đó và trừ `p.soNgay` khỏi
+        // `soNgayDangChoDuyet` của nó — tự clamp về 0 nên không kéo âm,
+        // nhưng về lý thuyết vẫn có thể trừ nhầm phần giữ chỗ của MỘT đơn
+        // KHÁC đang giữ đúng quỹ đó cùng lúc (cửa sổ đua hiếm). Không có
+        // cách biết "quỹ nào trong phanBoQuy đã thực sự giữ được" từ bên
+        // ngoài mà không đổi hợp đồng public của QuyPhep_Service — chấp
+        // nhận rủi ro còn sót lại này, không mở rộng phạm vi Task 8.
+        try {
+          await this.quyPhep_Service.nhaCho(
+            dto.employeeId,
+            phanBoQuy,
+            String((daLuu as any)._id),
+            dto.employeeId,
+          );
+        } catch {
+          // nuốt lỗi phụ — xem giải thích ở trên.
+        }
         daLuu.isActive = false;
+        // Xoá luôn snapshot: dù nhaCho() ở trên thành công hay không, đơn
+        // này không còn quyền giữ/dùng bất kỳ phần nào của phanBoQuy nữa —
+        // xoá để remove()/huyDonCuaToi() (nếu lỡ được gọi trên đơn ma này)
+        // không có gì để mà nhả/hoàn lần thứ hai.
+        daLuu.phanBoQuy = undefined;
         await this.repo.save(daLuu);
         throw e;
       }
@@ -339,6 +381,20 @@ export class DonChamCong_Service {
     nguoiThucHien: { id: string; [k: string]: unknown },
   ): Promise<AttendanceRequest> {
     const item = await this.findOne(id);
+    // Chụp NGUYÊN VẸN trạng thái/vết duyệt CŨ trước khi ghi đè bất cứ gì.
+    //
+    // (review round 1, CRITICAL): bản trước rẽ nhánh quỹ theo `trangThai`
+    // ĐÍCH trong khi `item.trangThai` đã bị ghi đè ở dòng dưới, nên "duyệt
+    // hai lần" không phân biệt được với "duyệt lần đầu" (trừ quỹ hai lần),
+    // "duyệt rồi từ chối" gọi nhaCho() thay vì hoanTraDaDung() (nhaCho chỉ
+    // đụng soNgayDangChoDuyet, không đụng soNgayDaDung — phép mất vĩnh
+    // viễn), và "trả về cho_duyet" không gọi gì cả (phép vẫn bị trừ nhưng
+    // đơn quay lại hàng chờ, duyệt lần nữa trừ lần hai). Toàn bộ nhánh quỹ
+    // dưới đây so theo CẶP (cũ → mới), không so theo đích một mình.
+    const trangThaiCu = item.trangThai;
+    const nguoiDuyetCu = item.nguoiDuyet;
+    const nguoiDuyetIdCu = item.nguoiDuyetId;
+    const thoiDiemDuyetCu = item.thoiDiemDuyet;
     const laHanhDongDuyet = trangThai === 'da_duyet' || trangThai === 'tu_choi';
 
     if (laHanhDongDuyet) {
@@ -366,6 +422,32 @@ export class DonChamCong_Service {
       }
     }
 
+    // (review round 1, CRITICAL) một số CẶP (cũ → mới) không có lối quỹ hợp
+    // lệ trực tiếp — chặn TRƯỚC khi ghi `item.trangThai`, đừng để đơn đổi
+    // trạng thái rồi mới báo lỗi (nếu không, phản hồi lỗi vẫn kèm một đơn đã
+    // bị đổi trạng thái oan). Bảng đầy đủ (chỉ áp dụng cho đơn trừ quỹ —
+    // `donTruQuy` bên dưới; giai_trinh/lam_them_gio/nghi_bu/loaiNghi khác
+    // không bị ràng buộc gì, hành vi giữ nguyên như trước Task 8):
+    //
+    //   cùng nhau            → không làm gì (idempotent, bấm đúp/retry)
+    //   cho_duyet → da_duyet → chuyenSangDaDung
+    //   cho_duyet → tu_choi  → nhaCho
+    //   da_duyet  → tu_choi  → hoanTraDaDung
+    //   tu_choi   → cho_duyet→ giuCho lại (thiếu số dư thì ném 409 — đúng)
+    //   da_duyet  → cho_duyet→ CHẶN, 409 (đi qua tu_choi trước)
+    //   tu_choi   → da_duyet → CHẶN, 409 (đi qua cho_duyet trước)
+    const donTruQuy = this.laDonTruQuy(item) && !!item.phanBoQuy?.length;
+    if (
+      donTruQuy &&
+      ((trangThaiCu === 'da_duyet' && trangThai === 'cho_duyet') ||
+        (trangThaiCu === 'tu_choi' && trangThai === 'da_duyet'))
+    ) {
+      throw new ConflictException({
+        code: MA_LOI_DON_CHAM_CONG.CHUYEN_TRANG_THAI_KHONG_HOP_LE,
+        message: `Không thể chuyển đơn từ "${trangThaiCu}" thẳng sang "${trangThai}". Hãy chuyển qua trạng thái trung gian trước (ví dụ từ chối rồi mới đưa lại chờ duyệt).`,
+      });
+    }
+
     item.trangThai = trangThai;
     if (nguoiDuyet !== undefined) {
       item.nguoiDuyet = nguoiDuyet;
@@ -380,27 +462,61 @@ export class DonChamCong_Service {
     const daLuu = await this.repo.save(item);
 
     // P3.8: đơn phep_nam đã giữ chỗ NGAY LÚC NỘP (create()) — ở đây chỉ
-    // CHUYỂN trạng thái phần đã giữ đó, luôn thao tác trên `item.phanBoQuy`
-    // (snapshot lúc nộp), KHÔNG BAO GIỜ tính lại phân bổ mới. Giữa lúc nộp
-    // và lúc duyệt quỹ có thể đã đóng (31/3) hoặc được cấp thêm — tính lại
-    // ở đây sẽ trừ nhầm quỹ khác với quỹ đã hứa lúc nộp.
-    if (this.laDonTruQuy(item) && item.phanBoQuy?.length) {
+    // CHUYỂN trạng thái phần đã giữ đó theo CẶP (cũ → mới), luôn thao tác
+    // trên `item.phanBoQuy` (snapshot lúc nộp), KHÔNG BAO GIỜ tính lại phân
+    // bổ mới. Giữa lúc nộp và lúc duyệt quỹ có thể đã đóng (31/3) hoặc được
+    // cấp thêm — tính lại ở đây sẽ trừ nhầm quỹ khác với quỹ đã hứa lúc nộp.
+    //
+    // `trangThaiCu !== trangThai` (bấm đúp/retry) là NO-OP có chủ đích —
+    // xem bảng ở trên.
+    if (donTruQuy && trangThaiCu !== trangThai) {
       const requestId = String((daLuu as any)._id);
       const nguoiThucHienId = String(nguoiThucHien?.id ?? '');
-      if (trangThai === 'da_duyet') {
-        await this.quyPhep_Service.chuyenSangDaDung(
-          item.employeeId,
-          item.phanBoQuy,
-          requestId,
-          nguoiThucHienId,
-        );
-      } else if (trangThai === 'tu_choi') {
-        await this.quyPhep_Service.nhaCho(
-          item.employeeId,
-          item.phanBoQuy,
-          requestId,
-          nguoiThucHienId,
-        );
+
+      try {
+        if (trangThaiCu === 'cho_duyet' && trangThai === 'da_duyet') {
+          await this.quyPhep_Service.chuyenSangDaDung(
+            item.employeeId,
+            item.phanBoQuy!,
+            requestId,
+            nguoiThucHienId,
+          );
+        } else if (trangThaiCu === 'cho_duyet' && trangThai === 'tu_choi') {
+          await this.quyPhep_Service.nhaCho(
+            item.employeeId,
+            item.phanBoQuy!,
+            requestId,
+            nguoiThucHienId,
+          );
+        } else if (trangThaiCu === 'da_duyet' && trangThai === 'tu_choi') {
+          await this.quyPhep_Service.hoanTraDaDung(
+            item.employeeId,
+            item.phanBoQuy!,
+            requestId,
+            nguoiThucHienId,
+          );
+        } else if (trangThaiCu === 'tu_choi' && trangThai === 'cho_duyet') {
+          await this.quyPhep_Service.giuCho(
+            item.employeeId,
+            item.phanBoQuy!,
+            requestId,
+            nguoiThucHienId,
+          );
+        }
+      } catch (e) {
+        // (review round 1, IMPORTANT 2): quỹ hỏng SAU KHI trạng thái đã lưu
+        // thì phải khôi phục NGUYÊN VẸN trạng thái/vết duyệt cũ rồi lưu lại
+        // — nếu không, đơn đứng ở trạng thái mới (vd da_duyet) mà quỹ chưa
+        // hề bị đụng tới, tức nghỉ phép miễn phí. Lỗi này không hiếm:
+        // chuyenSangDaDung() ném ConflictException nếu HR vừa dieuChinhTay
+        // một số âm giữa lúc nộp và lúc duyệt; layQuyTheoId() ném
+        // NotFoundException nếu dòng quỹ bị xoá.
+        item.trangThai = trangThaiCu;
+        item.nguoiDuyet = nguoiDuyetCu;
+        item.nguoiDuyetId = nguoiDuyetIdCu;
+        item.thoiDiemDuyet = thoiDiemDuyetCu;
+        await this.repo.save(item);
+        throw e;
       }
     }
 
@@ -435,15 +551,33 @@ export class DonChamCong_Service {
       });
     }
 
-    item.isActive = false;
-    await this.repo.save(item);
-
     // P3.8: đơn tới đây chắc chắn còn cho_duyet (đã kiểm ở trên) — nghĩa là
     // chưa từng chuyenSangDaDung, chỉ có phần "giữ chỗ" cần nhả lại.
-    if (this.laDonTruQuy(item) && item.phanBoQuy?.length) {
+    //
+    // (review round 1, IMPORTANT 4): PHẢI kiểm `item.isActive` TRƯỚC khi ghi
+    // đè — `findOne()` không lọc isActive, nên đơn này có thể đã bị vô hiệu
+    // hoá từ trước (vd `remove()` gọi trước đó, hoặc `huyDonCuaToi()` bị gọi
+    // lặp/đua) mà `trangThai` vẫn còn `cho_duyet`. `nhaCho()` chạy lần thứ
+    // hai trên cùng phanBoQuy sẽ ăn nhầm chỗ giữ của một đơn KHÁC đang giữ
+    // đúng quỹ đó — `soNgayDangChoDuyet` là bộ đếm DÙNG CHUNG theo quỹ,
+    // không tách riêng theo đơn.
+    const canNhaCho =
+      item.isActive && this.laDonTruQuy(item) && !!item.phanBoQuy?.length;
+    const phanBoQuyGoc = item.phanBoQuy;
+
+    item.isActive = false;
+    if (canNhaCho) {
+      // Xoá snapshot NGAY khi đánh dấu đã xử lý — lớp phòng thủ cấu trúc thứ
+      // hai: dù có chỗ nào đó quên kiểm `isActive` trước khi gọi lại, sau
+      // dòng này `item.phanBoQuy` rỗng nên không còn gì để mà nhả lần hai.
+      item.phanBoQuy = undefined;
+    }
+    await this.repo.save(item);
+
+    if (canNhaCho) {
       await this.quyPhep_Service.nhaCho(
         employeeId,
-        item.phanBoQuy,
+        phanBoQuyGoc!,
         id,
         employeeId,
       );
@@ -539,14 +673,43 @@ export class DonChamCong_Service {
     return this.repo.save(item);
   }
 
-  async remove(id: string): Promise<void> {
+  /**
+   * `nguoiThucHien` (P3.8, review round 1 — MINOR 5): tuỳ chọn, controller
+   * truyền `req.user` xuống để ghi đúng tên người xoá vào sổ quỹ khi đơn bị
+   * xoá là `phep_nam` đã `da_duyet` — `hoanTraDaDung()` là thao tác DUY NHẤT
+   * trả ngày lại mà lại ghi `'he_thong'` nếu không có ai truyền vào. Không
+   * bắt buộc: các call site khác (nếu có, ví dụ script dọn dữ liệu nội bộ)
+   * vẫn gọi được `remove(id)` mà không phải sửa theo.
+   */
+  async remove(
+    id: string,
+    nguoiThucHien?: { id?: string; [k: string]: unknown },
+  ): Promise<void> {
     const item = await this.findOne(id);
-    // Chụp lại trạng thái TRƯỚC KHI xoá mềm — remove() không đổi trangThai,
-    // chỉ đổi isActive, nhưng chụp tường minh để nhánh quỹ dưới đây không
-    // vô tình phụ thuộc thứ tự gán field nếu code này bị sửa sau này.
+    // Chụp lại trạng thái/isActive TRƯỚC KHI xoá mềm.
     const trangThaiTruocKhiXoa = item.trangThai;
+    // (review round 1, IMPORTANT 4): `findOne()` không lọc isActive, nên
+    // `remove(id)` có thể chạy trên một đơn ĐÃ bị `huyDonCuaToi()` vô hiệu
+    // hoá từ trước (vẫn `cho_duyet`, vẫn còn `phanBoQuy`) — nhánh quỹ dưới
+    // đây phải bị bỏ qua trong trường hợp đó, nếu không `nhaCho()` chạy lần
+    // hai sẽ ăn nhầm chỗ giữ của một đơn KHÁC đang giữ đúng quỹ đó
+    // (`soNgayDangChoDuyet` dùng chung theo quỹ, không tách theo đơn).
+    const canXuLyQuy =
+      item.isActive && this.laDonTruQuy(item) && !!item.phanBoQuy?.length;
+    const phanBoQuyGoc = item.phanBoQuy;
+
     item.isActive = false;
+    if (canXuLyQuy) {
+      // Xoá snapshot NGAY — lớp phòng thủ cấu trúc thứ hai, xem giải thích
+      // tương tự ở huyDonCuaToi().
+      item.phanBoQuy = undefined;
+    }
     await this.repo.save(item);
+
+    if (!canXuLyQuy) return;
+
+    const nguoiThucHienId =
+      String(nguoiThucHien?.id ?? '').trim() || 'he_thong';
 
     // P3.8: xoá mềm một đơn phep_nam phải trả quỹ về đúng như trước khi có
     // đơn — nhánh theo ĐÚNG trạng thái tại thời điểm xoá:
@@ -554,23 +717,21 @@ export class DonChamCong_Service {
     //  - da_duyet: đơn đã trừ thật vào soNgayDaDung → phải hoàn (hoanTraDaDung),
     //    gọi nhaCho ở nhánh này sẽ không làm gì (phần giữ chỗ đã hết từ lúc
     //    duyệt) và để lại soNgayDaDung bị trừ oan vĩnh viễn.
-    //  - tu_choi: đã nhaCho từ updateStatus() rồi, không đụng gì nữa.
-    if (this.laDonTruQuy(item) && item.phanBoQuy?.length) {
-      if (trangThaiTruocKhiXoa === 'cho_duyet') {
-        await this.quyPhep_Service.nhaCho(
-          item.employeeId,
-          item.phanBoQuy,
-          id,
-          'he_thong',
-        );
-      } else if (trangThaiTruocKhiXoa === 'da_duyet') {
-        await this.quyPhep_Service.hoanTraDaDung(
-          item.employeeId,
-          item.phanBoQuy,
-          id,
-          'he_thong',
-        );
-      }
+    //  - tu_choi: đã nhaCho/hoanTraDaDung từ updateStatus() rồi, không đụng gì nữa.
+    if (trangThaiTruocKhiXoa === 'cho_duyet') {
+      await this.quyPhep_Service.nhaCho(
+        item.employeeId,
+        phanBoQuyGoc!,
+        id,
+        nguoiThucHienId,
+      );
+    } else if (trangThaiTruocKhiXoa === 'da_duyet') {
+      await this.quyPhep_Service.hoanTraDaDung(
+        item.employeeId,
+        phanBoQuyGoc!,
+        id,
+        nguoiThucHienId,
+      );
     }
   }
 }

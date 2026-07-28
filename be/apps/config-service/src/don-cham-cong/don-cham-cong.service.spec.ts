@@ -739,25 +739,34 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
   const PHAN_BO = [{ balanceId: ID_Q2026, nam: 2026, soNgay: 2 }];
 
   /** Repo giả tối thiểu: đủ find/findOne/save/create — cùng khuôn với
-   * `taoRepoGia` trong quy-phep.service.spec.ts. */
+   * `taoRepoGia` trong quy-phep.service.spec.ts.
+   *
+   * `save` là `jest.fn()` bọc quanh implementation (review round 1, MINOR
+   * 7): repo giả này đẩy CHÍNH tham chiếu vào `kho` và trả lại cùng object,
+   * nên bất kỳ đoạn code nào mutate object đó tại chỗ (không gọi lại
+   * `save()`) vẫn "vô tình" phản ánh vào `kho` — đọc `kho.at(-1)` sau đó
+   * KHÔNG phân biệt được "đã gọi save() lần hai" với "chỉ mutate suông".
+   * Bọc `jest.fn()` để test đếm được số lần `save()` thực sự được gọi, thứ
+   * duy nhất phản ánh đúng ý đồ implementation. */
   function taoRepoGiaDon<T extends { _id?: any }>(banDau: T[] = []) {
     const kho: any[] = [...banDau];
     let seq = 0;
+    const save = jest.fn(async (x: any) => {
+      if (!x._id) {
+        seq += 1;
+        x._id = { toString: () => seq.toString(16).padStart(24, '0') };
+        kho.push(x);
+        return x;
+      }
+      const idx = kho.findIndex((y) => String(y._id) === String(x._id));
+      if (idx === -1) kho.push(x);
+      else kho[idx] = x;
+      return x;
+    });
     return {
       kho,
       create: (x: any) => ({ ...x }),
-      save: async (x: any) => {
-        if (!x._id) {
-          seq += 1;
-          x._id = { toString: () => seq.toString(16).padStart(24, '0') };
-          kho.push(x);
-          return x;
-        }
-        const idx = kho.findIndex((y) => String(y._id) === String(x._id));
-        if (idx === -1) kho.push(x);
-        else kho[idx] = x;
-        return x;
-      },
+      save,
       find: async ({ where }: any = {}) =>
         kho
           .filter((x) =>
@@ -909,7 +918,26 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
     const { service, repoDon } = await dungServiceDon({ quyPhep });
 
     await expect(service.create(DON_PHEP as any)).rejects.toThrow('mất kết nối');
+
     expect(repoDon.kho.at(-1).isActive).toBe(false);
+    // (review round 1, IMPORTANT 3): best-effort nhả phần có thể đã giữ được
+    // TRƯỚC khi vô hiệu hoá đơn, và xoá snapshot để không ai nhả lần hai.
+    expect(quyPhep.nhaCho).toHaveBeenCalledWith(
+      ID_NV1,
+      PHAN_BO,
+      expect.any(String),
+      ID_NV1,
+    );
+    expect(repoDon.kho.at(-1).phanBoQuy).toBeUndefined();
+    // (review round 1, MINOR 7): repo giả trả lại CHÍNH tham chiếu vừa
+    // insert, nên `daLuu.isActive = false` mutate tại chỗ cũng "vô tình"
+    // hiện trong `kho` dù implementation QUÊN gọi lại `repo.save()`. Đếm số
+    // lần `save()` thực sự được gọi mới phân biệt được hai trường hợp: 1
+    // (insert) + 1 (update vô hiệu hoá) = 2. Tự thử xoá dòng
+    // `await this.repo.save(daLuu)` trong nhánh catch của create() và chạy
+    // lại test này để xác nhận nó ĐỎ trên đúng assertion này (đã tự kiểm khi
+    // làm fix round 1 — không commit bước thử).
+    expect(repoDon.save).toHaveBeenCalledTimes(2);
   });
 
   it('duyệt đơn → chuyenSangDaDung với đúng phanBoQuy của đơn', async () => {
@@ -966,7 +994,7 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
     expect(quyPhep.hoanTraDaDung).not.toHaveBeenCalled();
   });
 
-  it('xoá đơn ĐÃ DUYỆT → hoanTraDaDung, không phải nhaCho', async () => {
+  it('xoá đơn ĐÃ DUYỆT → hoanTraDaDung, không phải nhaCho, mặc định nguoiThucHien = he_thong', async () => {
     const quyPhep = mockQuyPhep();
     const { service, repoDon } = await dungServiceDon({ quyPhep });
     const don = await service.create(DON_PHEP as any);
@@ -974,8 +1002,51 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
 
     await service.remove(String((don as any)._id));
 
-    expect(quyPhep.hoanTraDaDung).toHaveBeenCalled();
+    expect(quyPhep.hoanTraDaDung).toHaveBeenCalledWith(
+      ID_NV1,
+      PHAN_BO,
+      String((don as any)._id),
+      'he_thong',
+    );
     expect(quyPhep.nhaCho).not.toHaveBeenCalled();
+  });
+
+  // (review round 1, MINOR 5): hoanTraDaDung() là thao tác DUY NHẤT trả
+  // ngày lại mà ghi vào sổ (leave_balance_entries) — phải ghi đúng tên
+  // người xoá thay vì luôn là 'he_thong'.
+  it('xoá đơn ĐÃ DUYỆT truyền nguoiThucHien → hoanTraDaDung ghi đúng người xoá', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service, repoDon } = await dungServiceDon({ quyPhep });
+    const don = await service.create(DON_PHEP as any);
+    repoDon.kho.at(-1).trangThai = 'da_duyet';
+
+    await service.remove(String((don as any)._id), { id: 'hr-xoa-don' } as any);
+
+    expect(quyPhep.hoanTraDaDung).toHaveBeenCalledWith(
+      ID_NV1,
+      PHAN_BO,
+      String((don as any)._id),
+      'hr-xoa-don',
+    );
+  });
+
+  // (review round 1, IMPORTANT 4): findOne() không lọc isActive — remove()
+  // gọi SAU khi huyDonCuaToi() đã vô hiệu hoá đơn (vẫn cho_duyet, vẫn còn
+  // phanBoQuy) không được nhả chỗ lần hai, vì soNgayDangChoDuyet dùng chung
+  // theo quỹ, không tách theo đơn — nhả lần hai ăn nhầm chỗ giữ của đơn khác.
+  it('remove() sau khi đơn đã bị huyDonCuaToi() KHÔNG nhả chỗ lần hai', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service } = await dungServiceDon({ quyPhep });
+    const don = await service.create(DON_PHEP as any);
+
+    await service.huyDonCuaToi(String((don as any)._id), ID_NV1);
+    expect(quyPhep.nhaCho).toHaveBeenCalledTimes(1);
+
+    // Đơn vẫn còn trangThai='cho_duyet' (huyDonCuaToi chỉ đổi isActive) —
+    // remove() gọi lại trên đúng đơn này phải là no-op về mặt quỹ.
+    await service.remove(String((don as any)._id));
+    expect(quyPhep.nhaCho).toHaveBeenCalledTimes(1);
+    expect(quyPhep.hoanTraDaDung).not.toHaveBeenCalled();
   });
 
   // ──────────────────────────────────────────────────────────────────────
@@ -1047,5 +1118,151 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
     expect(soNgayGoi).toBe(soNgayNghiMongDoi);
     // Đúng điều kiện guard mà phanBoChoNgayNghi() tự kiểm trong QuyPhep_Service.
     expect(cacNgayGoi.length).toBe(soNgayGoi);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Review round 1, CRITICAL — updateStatus() phải rẽ nhánh quỹ theo CẶP
+  // (trạng thái CŨ → trạng thái ĐÍCH), không phải theo trạng thái đích một
+  // mình. Bảng đầy đủ trong doc-comment của updateStatus().
+  // ──────────────────────────────────────────────────────────────────────
+  describe('updateStatus — rẽ nhánh quỹ theo CẶP (cũ → mới)', () => {
+    async function taoDonVaDuyet(quyPhep: any) {
+      const { service, repoDon } = await dungServiceDon({ quyPhep });
+      const don = await service.create(DON_PHEP as any);
+      return { service, repoDon, id: String((don as any)._id) };
+    }
+
+    it('duyệt hai lần liên tiếp (bấm đúp/retry) → lần hai KHÔNG trừ thêm', async () => {
+      const quyPhep = mockQuyPhep();
+      const { service, id } = await taoDonVaDuyet(quyPhep);
+
+      await service.updateStatus(id, 'da_duyet', 'HR', { id: 'user-hr' } as any);
+      await service.updateStatus(id, 'da_duyet', 'HR', { id: 'user-hr' } as any);
+
+      expect(quyPhep.chuyenSangDaDung).toHaveBeenCalledTimes(1);
+    });
+
+    it('da_duyet → tu_choi gọi hoanTraDaDung (KHÔNG phải nhaCho) — trả lại phần đã trừ thật', async () => {
+      const quyPhep = mockQuyPhep();
+      const { service, repoDon, id } = await taoDonVaDuyet(quyPhep);
+      await service.updateStatus(id, 'da_duyet', 'HR', { id: 'user-hr' } as any);
+
+      await service.updateStatus(id, 'tu_choi', undefined, { id: 'user-hr-2' } as any);
+
+      expect(quyPhep.hoanTraDaDung).toHaveBeenCalledWith(
+        ID_NV1,
+        PHAN_BO,
+        id,
+        'user-hr-2',
+      );
+      expect(quyPhep.nhaCho).not.toHaveBeenCalled();
+      expect(repoDon.kho.at(-1).trangThai).toBe('tu_choi');
+    });
+
+    it('tu_choi → cho_duyet gọi giuCho lại (mở lại đơn đã từ chối)', async () => {
+      const quyPhep = mockQuyPhep();
+      const { service, repoDon, id } = await taoDonVaDuyet(quyPhep);
+      await service.updateStatus(id, 'tu_choi', 'HR', { id: 'user-hr' } as any);
+      quyPhep.giuCho.mockClear(); // giuCho đã chạy 1 lần lúc create() — đếm sạch lại
+
+      await service.updateStatus(id, 'cho_duyet', undefined, { id: 'user-hr-2' } as any);
+
+      expect(quyPhep.giuCho).toHaveBeenCalledWith(
+        ID_NV1,
+        PHAN_BO,
+        id,
+        'user-hr-2',
+      );
+      expect(repoDon.kho.at(-1).trangThai).toBe('cho_duyet');
+    });
+
+    it('tu_choi → cho_duyet: giuCho thiếu số dư → 409, đơn khôi phục về tu_choi', async () => {
+      const quyPhep = mockQuyPhep();
+      const { service, repoDon, id } = await taoDonVaDuyet(quyPhep);
+      await service.updateStatus(id, 'tu_choi', 'HR', { id: 'user-hr' } as any);
+      quyPhep.giuCho.mockRejectedValueOnce(
+        new ConflictException({ code: 'KHONG_DU_SO_DU' }),
+      );
+
+      await expect(
+        service.updateStatus(id, 'cho_duyet', undefined, { id: 'user-hr-2' } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(repoDon.kho.at(-1).trangThai).toBe('tu_choi');
+    });
+
+    it('da_duyet → cho_duyet BỊ CHẶN 409, trạng thái đơn KHÔNG đổi', async () => {
+      const quyPhep = mockQuyPhep();
+      const { service, repoDon, id } = await taoDonVaDuyet(quyPhep);
+      await service.updateStatus(id, 'da_duyet', 'HR', { id: 'user-hr' } as any);
+      quyPhep.giuCho.mockClear(); // giuCho đã chạy 1 lần lúc create() — đếm sạch lại
+
+      const loi = await service
+        .updateStatus(id, 'cho_duyet', undefined, { id: 'user-hr-2' } as any)
+        .catch((e) => e);
+
+      expect(loi).toBeInstanceOf(ConflictException);
+      expect((loi as any).getResponse().code).toBe(
+        'CHUYEN_TRANG_THAI_KHONG_HOP_LE',
+      );
+      expect(repoDon.kho.at(-1).trangThai).toBe('da_duyet');
+      expect(quyPhep.giuCho).not.toHaveBeenCalled();
+    });
+
+    it('tu_choi → da_duyet BỊ CHẶN 409, trạng thái đơn KHÔNG đổi', async () => {
+      const quyPhep = mockQuyPhep();
+      const { service, repoDon, id } = await taoDonVaDuyet(quyPhep);
+      await service.updateStatus(id, 'tu_choi', 'HR', { id: 'user-hr' } as any);
+
+      const loi = await service
+        .updateStatus(id, 'da_duyet', undefined, { id: 'user-hr-2' } as any)
+        .catch((e) => e);
+
+      expect(loi).toBeInstanceOf(ConflictException);
+      expect((loi as any).getResponse().code).toBe(
+        'CHUYEN_TRANG_THAI_KHONG_HOP_LE',
+      );
+      expect(repoDon.kho.at(-1).trangThai).toBe('tu_choi');
+      expect(quyPhep.chuyenSangDaDung).not.toHaveBeenCalled();
+    });
+
+    // Review round 1, IMPORTANT 2 — quỹ hỏng SAU KHI trạng thái đã lưu phải
+    // khôi phục nguyên vẹn trạng thái/vết duyệt cũ, không để đơn đứng ở
+    // trạng thái mới mà quỹ chưa hề bị đụng tới ("nghỉ phép miễn phí").
+    it('duyệt hỏng ở tầng quỹ (SAU khi trạng thái đã lưu) → khôi phục cho_duyet, không để lại "nghỉ phép miễn phí"', async () => {
+      const quyPhep = mockQuyPhep({
+        chuyenSangDaDung: jest
+          .fn()
+          .mockRejectedValue(new ConflictException({ code: 'KHONG_DU_SO_DU' })),
+      });
+      const { service, repoDon, id } = await taoDonVaDuyet(quyPhep);
+
+      await expect(
+        service.updateStatus(id, 'da_duyet', 'HR', { id: 'user-hr' } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      const donSau = repoDon.kho.at(-1);
+      expect(donSau.trangThai).toBe('cho_duyet');
+      expect(donSau.nguoiDuyetId).toBeUndefined();
+      expect(donSau.thoiDiemDuyet).toBeUndefined();
+    });
+  });
+
+  // Review round 1, MINOR 8 — đơn nửa ngày chưa có test nào đụng tới quỹ.
+  it('đơn nửa ngày (buoi: sang, đúng 1 ngày) → chạm quỹ với soNgayNghi = 0.5, không phải 1', async () => {
+    const quyPhep = mockQuyPhep();
+    const { service } = await dungServiceDon({ quyPhep });
+
+    const result = await service.create({
+      ...DON_PHEP,
+      denNgay: DON_PHEP.ngay, // đúng 1 ngày
+      buoi: 'sang',
+    } as any);
+
+    expect(result.soNgayNghi).toBe(0.5);
+    expect(quyPhep.phanBoChoNgayNghi).toHaveBeenCalledTimes(1);
+    const [, cacNgayGoi, soNgayGoi] = quyPhep.phanBoChoNgayNghi.mock.calls[0];
+    expect(cacNgayGoi).toHaveLength(1);
+    expect(soNgayGoi).toBe(0.5);
   });
 });
