@@ -114,10 +114,13 @@ class LeaveBalanceService extends ServiceBase {
   }
 
   async capDauNam(nam: number, xemTruoc = false) {
-    return this.post<DongXemTruocCap[] | { daCap: number; boQua: number }>(
-      { nam, xemTruoc },
-      { endpoint: '/cap-dau-nam' },
-    );
+    // `daCoQuy`/`boQuaThuViec` (P3.8 review round 4, Task 7): BE trước đây
+    // gộp "đã có quỹ năm này" và "còn thử việc / chưa đủ tháng làm việc"
+    // thành một `boQua` mập mờ — toast từng báo sai "bỏ qua N người đã có
+    // quỹ" cho một người thực ra chưa đủ tháng. Giữ đúng shape mới ở đây.
+    return this.post<
+      DongXemTruocCap[] | { daCap: number; daCoQuy: number; boQuaThuViec: number }
+    >({ nam, xemTruoc }, { endpoint: '/cap-dau-nam' });
   }
 
   async dongQuy(nam: number, xemTruoc = false) {

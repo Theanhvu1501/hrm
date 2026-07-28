@@ -131,3 +131,27 @@ db.leave_balances.createIndex({ nam: 1, trangThai: 1 })
 db.leave_balance_entries.createIndex({ balanceId: 1, thoiDiem: 1 })
 db.leave_balance_entries.createIndex({ requestId: 1 })
 ```
+
+## Rollout `ngayChinhThuc` hàng loạt cho NV có sẵn (P3.8, review round 4)
+
+`ngayChinhThuc` là cột MỚI trên `Employee` — mọi hồ sơ NV đang có trước P3.8 đều thiếu nó.
+Khi HR điền hàng loạt cho NV đang làm lâu năm, `moKhoaLenChinhThuc()` chỉ backfill quỹ cho
+những năm **còn hạn dùng** (`hanDung >= hôm nay`) và LUÔN cấp thêm quỹ của **năm hiện tại** —
+nếu không, một NV vào làm + chính thức từ 2019 sẽ chỉ nhận được một quỹ 2019 đã hết hạn từ
+2020-03-31, không có quỹ nào dùng được hôm nay. Chạy đúng thứ tự sau khi rollout:
+
+1. **Cấp quyền** (nếu chưa làm — xem mục "Vá quyền 3 module chấm công thêm sau" ở trên,
+   `PERMISSION_MODULES` đã có `/cham-cong/quy-phep` từ đợt P3.8):
+   ```bash
+   npx ts-node ops/grant-quyen-module-moi.ts
+   ```
+2. **Điền `ngayChinhThuc` hàng loạt** cho NV hiện có (qua màn Hồ sơ nhân viên, hoặc script
+   nhập liệu nội bộ nếu số lượng lớn) — mỗi lần lưu hồ sơ có `ngayChinhThuc` mới/thay đổi sẽ
+   tự gọi `moKhoaLenChinhThuc()` (xem `nhan-vien.service.ts`).
+3. **Chạy `capPhepDauNam(năm hiện tại)`** qua màn Quỹ phép (nút "Cấp phép đầu năm") — lưới an
+   toàn bổ sung, phòng trường hợp bước 2 điền `ngayChinhThuc` bằng đường KHÔNG đi qua
+   `NhanVien_Service.update()` (import thẳng DB, script nội bộ...) nên không tự kích
+   `moKhoaLenChinhThuc()`. Idempotent theo khoá `(employeeId, nam, loaiQuy)` — chạy lại,
+   hoặc chạy sau khi bước 2 đã tự cấp qua `moKhoaLenChinhThuc()`, đều không cấp trùng.
+4. **Đối soát** (`GET /quy-phep/doi-soat`, hoặc nút tương ứng trên màn Quỹ phép) — xác nhận
+   không có lệch giữa sổ và số dư sau đợt rollout.

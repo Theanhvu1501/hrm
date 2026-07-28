@@ -70,11 +70,23 @@ export class ThaoTacHandler extends CSubHanlder {
       if (xemTruoc.loai === "cap_dau_nam") {
         const ketQua = (await leaveBalanceService.capDauNam(xemTruoc.nam, false)) as {
           daCap: number;
-          boQua: number;
+          daCoQuy: number;
+          boQuaThuViec: number;
         };
+        // (P3.8 review round 4, Task 7): trước đây gộp "đã có quỹ" và "còn
+        // thử việc / chưa đủ tháng làm việc" thành một con số `boQua`, nên
+        // toast báo sai "bỏ qua N người đã có quỹ" cho những người thực ra
+        // chưa đủ điều kiện có quỹ (không phải lệnh chạy trùng). Tách rõ hai
+        // vế, chỉ nhắc tới vế nào thực sự > 0.
+        const phanBoQua = [
+          ketQua.daCoQuy > 0 ? `${ketQua.daCoQuy} người đã có quỹ` : null,
+          ketQua.boQuaThuViec > 0
+            ? `${ketQua.boQuaThuViec} người chưa đủ điều kiện (còn thử việc/chưa đủ tháng làm việc)`
+            : null,
+        ].filter((x): x is string => x !== null);
         message.success(
           `Đã cấp phép đầu năm ${xemTruoc.nam} cho ${ketQua.daCap} nhân viên` +
-            (ketQua.boQua > 0 ? ` (bỏ qua ${ketQua.boQua} người đã có quỹ).` : ".")
+            (phanBoQua.length > 0 ? ` (bỏ qua ${phanBoQua.join(", ")}).` : ".")
         );
       } else {
         const ketQua = (await leaveBalanceService.dongQuy(xemTruoc.nam, false)) as {
