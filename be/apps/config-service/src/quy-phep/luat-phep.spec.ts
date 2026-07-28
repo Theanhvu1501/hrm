@@ -67,6 +67,14 @@ describe('demThangLamViec', () => {
     ).toBe(1);
   });
 
+  // T12/2026 có 27 ngày làm việc (31 ngày - 4 Chủ nhật); từ 16/12 còn 14 ngày
+  // → 14/27 = 51.85% ≥ 50% nên tháng 12 ĐƯỢC tính (và là tháng cuối năm).
+  it('biên đúng ngưỡng 50% — vào làm 16/12/2026 → 1 tháng (14/27 ngày ≥ 50%)', () => {
+    expect(
+      demThangLamViec({ ngayVaoLam: '2026-12-16', nam: 2026, ngayLamViecTrongTuan: T2_T7 }),
+    ).toBe(1);
+  });
+
   it('chưa cấu hình lịch làm việc → mọi ngày là ngày làm việc, không phải nghỉ hết', () => {
     // 20/10 → còn 12/31 ngày = 38.7% < 50% → 0 tháng, còn T11+T12 đủ.
     expect(demThangLamViec({ ngayVaoLam: '2026-10-20', nam: 2026 })).toBe(2);
@@ -110,17 +118,27 @@ describe('tinhPhepDuocCap', () => {
     ).toBe(13);
   });
 
-  it('có thâm niên mà bị prorate → làm tròn LÊN bội số 0.5', () => {
-    // 13/12 × 5 tháng = 5.4166… → 5.5
-    const { soNgay } = tinhPhepDuocCap({
-      ngayVaoLam: '2020-08-01',
-      nam: 2025,
-      ngayLamViecTrongTuan: T2_T7,
+  // Prorate và thâm niên loại trừ nhau: prorate chỉ xảy ra ở NĂM VÀO LÀM, mà
+  // năm vào làm thì thamNienNam = 0 ⇒ mucCaNam = 12 ⇒ 12/12 × soThang luôn
+  // nguyên. Với chính sách hiện tại, số ngày cấp không bao giờ lẻ.
+  it('với chính sách hiện tại, prorate luôn ra số nguyên — không phát sinh nửa ngày', () => {
+    [1, 2, 5, 7, 11].forEach((thangVao) => {
+      const { soNgay, canCuCap } = tinhPhepDuocCap({
+        ngayVaoLam: `2026-${String(thangVao).padStart(2, '0')}-01`,
+        nam: 2026,
+        ngayLamViecTrongTuan: T2_T7,
+      });
+      expect(canCuCap.thamNienNam).toBe(0);
+      expect(Number.isInteger(soNgay)).toBe(true);
     });
-    expect(soNgay).toBe(13); // làm trọn năm 2025
-    expect(
-      lamTronLen05((12 + 1) / 12 * 5),
-    ).toBe(5.5);
+  });
+
+  // lamTronLen05 là lưới an toàn cho chính sách tương lai (mức 14/16 ngày với
+  // nghề nặng nhọc — BLLĐ Đ113.1b,c, hiện chưa làm). Lúc đó prorate mới ra số
+  // lẻ thật. Test ở mức hàm vì đường qua tinhPhepDuocCap chưa tồn tại.
+  it('làm tròn lên nửa ngày khi mức cả năm không chia hết cho 12 (mức 14 giả định)', () => {
+    expect(lamTronLen05((14 / 12) * 5)).toBe(6);
+    expect(lamTronLen05((14 / 12) * 6)).toBe(7);
   });
 });
 

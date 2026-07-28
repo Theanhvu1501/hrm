@@ -27,7 +27,6 @@ export interface CanCuCapPhep {
 }
 
 const MOT_NGAY = 24 * 60 * 60 * 1000;
-const hai = (n: number) => String(n).padStart(2, '0');
 
 function moc(ngay: string): number {
   const [nam, thang, ngayTrongThang] = ngay.split('-').map(Number);
