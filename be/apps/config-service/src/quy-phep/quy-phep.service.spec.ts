@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { ConflictException } from '@nestjs/common';
 import { LeaveBalance, LeaveBalanceEntry, Employee } from '@app/entities';
 import { QuyPhep_Service } from './quy-phep.service';
 
@@ -15,7 +16,18 @@ function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
         seq += 1;
         x._id = { toString: () => `id${seq}` };
         kho.push(x);
+        return x;
       }
+      // Cập nhật: thay đúng phần tử trong kho theo _id thay vì im lặng không
+      // làm gì. Trước đây nhánh này là no-op và test vẫn "qua" — nhưng chỉ vì
+      // find/findOne trả thẳng tham chiếu nằm sẵn trong `kho`, nên service
+      // mutate tại chỗ tình cờ trùng với bản ghi test đang giữ. Bất kỳ chỗ nào
+      // service dựng lại object rồi save() (repo.create() trả object mới, hay
+      // findOne trả bản sao) sẽ khiến update biến mất mà test không hề biết —
+      // đúng cái bẫy mà Task 4 review đã chỉ ra.
+      const idx = kho.findIndex((y) => String(y._id) === String(x._id));
+      if (idx === -1) kho.push(x);
+      else kho[idx] = x;
       return x;
     },
     find: async ({ where }: any = {}) =>
@@ -125,5 +137,165 @@ describe('QuyPhep_Service — cấp phép', () => {
     const quy = await service.moKhoaLenChinhThuc(ID_NV2, 'hr1');
     expect(quy).toEqual([]);
     expect(repoQuy.kho).toHaveLength(0);
+  });
+});
+
+const ID_Q2026 = '6500000000000000000000a1';
+const ID_Q2027 = '6500000000000000000000a2';
+
+function quyGia(id: string, nam: number, soNgay: number, hanDung: string) {
+  return {
+    _id: { toString: () => id },
+    employeeId: ID_NV1,
+    nam,
+    loaiQuy: 'phep_nam',
+    soNgayDuocCap: soNgay,
+    soNgayDaDung: 0,
+    soNgayDangChoDuyet: 0,
+    soNgayConLai: soNgay,
+    hanDung,
+    trangThai: 'dang_hieu_luc',
+    isActive: true,
+  };
+}
+
+/** Dựng sẵn 2 quỹ: 2026 còn 3 ngày (hạn 31/3/2027) và 2027 còn 12 ngày. */
+async function dungHaiQuy() {
+  const ctx = await dungService([NV_CHINH_THUC]);
+  ctx.repoQuy.kho.push(
+    quyGia(ID_Q2026, 2026, 3, '2027-03-31'),
+    quyGia(ID_Q2027, 2027, 12, '2028-03-31'),
+  );
+  return ctx;
+}
+
+/**
+ * CHỈ có quỹ 2026 (3 ngày). Cần cho các test "hết phép": nếu còn quỹ 2027 thì
+ * FIFO tràn sang quỹ đó và không bao giờ chạm được nhánh không đủ số dư.
+ */
+async function dungMotQuy() {
+  const ctx = await dungService([NV_CHINH_THUC]);
+  ctx.repoQuy.kho.push(quyGia(ID_Q2026, 2026, 3, '2027-03-31'));
+  return ctx;
+}
+
+describe('QuyPhep_Service — phân bổ FIFO', () => {
+  it('trừ quỹ năm cũ trước khi động tới quỹ năm mới', async () => {
+    const { service } = await dungHaiQuy();
+    const phanBo = await service.phanBoChoNgayNghi(
+      ID_NV1,
+      ['2027-02-01', '2027-02-02'],
+      2,
+    );
+    expect(phanBo).toEqual([{ balanceId: ID_Q2026, nam: 2026, soNgay: 2 }]);
+  });
+
+  it('đơn vắt qua 31/3 chia đúng hai quỹ theo TỪNG NGÀY', async () => {
+    const { service } = await dungHaiQuy();
+    const phanBo = await service.phanBoChoNgayNghi(
+      ID_NV1,
+      ['2027-03-30', '2027-03-31', '2027-04-01', '2027-04-02'],
+      4,
+    );
+    expect(phanBo).toEqual([
+      { balanceId: ID_Q2026, nam: 2026, soNgay: 2 },
+      { balanceId: ID_Q2027, nam: 2027, soNgay: 2 },
+    ]);
+  });
+
+  it('ngày nghỉ sau hạn dùng KHÔNG ăn được quỹ cũ dù quỹ cũ còn dư', async () => {
+    const { service } = await dungHaiQuy();
+    const phanBo = await service.phanBoChoNgayNghi(ID_NV1, ['2027-04-01'], 1);
+    expect(phanBo).toEqual([{ balanceId: ID_Q2027, nam: 2027, soNgay: 1 }]);
+  });
+
+  it('nửa ngày trừ 0.5 vào quỹ của đúng ngày đó', async () => {
+    const { service } = await dungHaiQuy();
+    const phanBo = await service.phanBoChoNgayNghi(ID_NV1, ['2027-02-01'], 0.5);
+    expect(phanBo).toEqual([{ balanceId: ID_Q2026, nam: 2026, soNgay: 0.5 }]);
+  });
+
+  it('không đủ số dư → ConflictException mã KHONG_DU_SO_DU', async () => {
+    const { service } = await dungMotQuy();
+    await expect(
+      service.phanBoChoNgayNghi(
+        ID_NV1,
+        ['2027-02-01', '2027-02-02', '2027-02-03', '2027-02-04'],
+        4,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('quỹ đã đóng không được dùng dù chưa quá hạn', async () => {
+    const { service, repoQuy } = await dungHaiQuy();
+    repoQuy.kho[0].trangThai = 'da_dong';
+    const phanBo = await service.phanBoChoNgayNghi(ID_NV1, ['2027-02-01'], 1);
+    expect(phanBo).toEqual([{ balanceId: ID_Q2027, nam: 2027, soNgay: 1 }]);
+  });
+});
+
+describe('QuyPhep_Service — vòng đời giữ chỗ', () => {
+  const PHAN_BO = [{ balanceId: ID_Q2026, nam: 2026, soNgay: 2 }];
+
+  it('giữ chỗ làm giảm số dư khả dụng ngay, chưa tính là đã dùng', async () => {
+    const { service, repoQuy } = await dungHaiQuy();
+    await service.giuCho(PHAN_BO, 'don1', 'nv1');
+    const q = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(q.soNgayDangChoDuyet).toBe(2);
+    expect(q.soNgayDaDung).toBe(0);
+    expect(q.soNgayConLai).toBe(1);
+  });
+
+  // Kịch bản spec §6.2: quỹ 3 ngày, đơn 1 giữ chỗ 2 ngày ⇒ đơn 2 xin 2 ngày
+  // phải bị chặn NGAY LÚC NỘP, không đợi HR duyệt tới đơn thứ hai mới phát
+  // hiện âm quỹ. Dùng dungMotQuy(): còn quỹ 2027 thì FIFO tràn sang và test
+  // không kiểm được gì.
+  it('đơn thứ hai bị chặn vì đơn thứ nhất đang giữ chỗ', async () => {
+    const { service } = await dungMotQuy();
+    const p1 = await service.phanBoChoNgayNghi(
+      ID_NV1,
+      ['2027-02-01', '2027-02-02'],
+      2,
+    );
+    await service.giuCho(p1, 'don1', ID_NV1);
+    await expect(
+      service.phanBoChoNgayNghi(ID_NV1, ['2027-02-03', '2027-02-04'], 2),
+    ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('duyệt: chuyển giữ chỗ thành đã dùng, ghi đúng 1 dòng sổ duyet_don', async () => {
+    const { service, repoQuy, repoSo } = await dungHaiQuy();
+    await service.giuCho(PHAN_BO, 'don1', 'nv1');
+    const truocDuyet = repoSo.kho.length;
+    await service.chuyenSangDaDung(PHAN_BO, 'don1', 'hr1');
+    const q = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(q.soNgayDangChoDuyet).toBe(0);
+    expect(q.soNgayDaDung).toBe(2);
+    expect(q.soNgayConLai).toBe(1);
+    expect(repoSo.kho.length - truocDuyet).toBe(1);
+    expect(repoSo.kho.at(-1)).toMatchObject({ lyDo: 'duyet_don', requestId: 'don1' });
+  });
+
+  it('từ chối: quỹ trở về đúng như trước khi nộp', async () => {
+    const { service, repoQuy } = await dungHaiQuy();
+    await service.giuCho(PHAN_BO, 'don1', 'nv1');
+    await service.nhaCho(PHAN_BO, 'don1', 'hr1');
+    const q = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(q.soNgayDangChoDuyet).toBe(0);
+    expect(q.soNgayConLai).toBe(3);
+  });
+
+  it('huỷ đơn ĐÃ DUYỆT hoàn về đúng quỹ cũ, kể cả quỹ đã đóng', async () => {
+    const { service, repoQuy } = await dungHaiQuy();
+    await service.giuCho(PHAN_BO, 'don1', 'nv1');
+    await service.chuyenSangDaDung(PHAN_BO, 'don1', 'hr1');
+    repoQuy.kho.find((x: any) => x.nam === 2026).trangThai = 'da_dong';
+
+    await service.hoanTraDaDung(PHAN_BO, 'don1', 'hr1');
+
+    const q2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
+    const q2027 = repoQuy.kho.find((x: any) => x.nam === 2027);
+    expect(q2026.soNgayDaDung).toBe(0);
+    expect(q2027.soNgayDuocCap).toBe(12); // KHÔNG chảy sang quỹ mới
   });
 });
