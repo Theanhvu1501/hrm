@@ -120,3 +120,14 @@ rsync -az --delete --exclude=node_modules --exclude=dist --exclude=.git --exclud
 ssh kt 'cd /root/chimseo/nhan-su && docker compose -f docker-compose.production.yml up -d --build'
 ```
 Sự cố đã gặp (2026-07-18): rsync KHÔNG loại `env/` → db.env local (`digital_book`) đè lên server → app ghi nhầm vào DB master-seo. Đã dọn + khôi phục. Luôn dùng `--exclude=env`.
+
+## Tạo chỉ mục cho quỹ phép (P3.8)
+
+Khi dữ liệu lớn lên, chạy các chỉ mục sau trên MongoDB để tối ưu hiệu suất truy vấn:
+
+```bash
+db.leave_balances.createIndex({ employeeId: 1, nam: 1, loaiQuy: 1 })
+db.leave_balances.createIndex({ nam: 1, trangThai: 1 })
+db.leave_balance_entries.createIndex({ balanceId: 1, thoiDiem: 1 })
+db.leave_balance_entries.createIndex({ requestId: 1 })
+```

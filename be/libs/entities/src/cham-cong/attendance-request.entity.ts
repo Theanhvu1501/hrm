@@ -1,5 +1,6 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../base.entity';
+import type { PhanBoQuy } from './leave-balance.entity';
 
 @Entity('attendance_requests')
 export class AttendanceRequest extends BaseEntity {
@@ -29,6 +30,16 @@ export class AttendanceRequest extends BaseEntity {
   @Column({ nullable: true }) soGioOt?: number; // kết quả tinhSoGioOt()
   @Column({ nullable: true }) heSoOt?: number; // kết quả suyHeSoOt().heSoOt
   @Column({ nullable: true }) loaiNgayOt?: string; // kết quả suyHeSoOt().loaiNgayOt
+  /**
+   * Đơn `nghi_phep` với `loaiNghi='phep_nam'` đã giữ chỗ ở quỹ nào, bao nhiêu
+   * (P3.8). Backend tự ghi lúc tạo đơn — CỐ Ý không có trong DTO.
+   *
+   * Vì sao phải snapshot thay vì suy lại lúc duyệt: giữa lúc nộp và lúc duyệt,
+   * quỹ có thể đã bị đóng (hết 31/3) hoặc đã được cấp thêm. Suy lại là hoàn
+   * nhầm quỹ — huỷ một đơn của tháng 3 sau ngày 31/3 sẽ biến phép hết hạn
+   * thành phép mới.
+   */
+  @Column('json', { nullable: true }) phanBoQuy?: PhanBoQuy[];
 
   // ── Vết duyệt đơn ─────────────────────────────────────────────────────────
   @Column({ nullable: true }) nguoiDuyetId?: string; // id người duyệt, khác `nguoiDuyet` (tên hiển thị)
