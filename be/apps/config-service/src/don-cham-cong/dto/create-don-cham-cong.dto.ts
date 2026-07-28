@@ -46,12 +46,13 @@ export class CreateDonChamCongDto {
   @IsString()
   gioDen?: string;
 
-  // Cố ý KHÔNG có soNgayNghi/soGioOt/heSoOt/loaiNgayOt ở đây — đây là các
-  // trường BACKEND TỰ TÍNH (Task 3, dùng luat-don.ts), không nhận từ client.
+  // Cố ý KHÔNG có soNgayNghi/soGioOt/heSoOt/loaiNgayOt/phanBoQuy ở đây — đây là
+  // các trường BACKEND TỰ TÍNH (Task 3, dùng luat-don.ts), không nhận từ client.
   // Nhận từ client là mở đường cho người nộp đơn tự khai số ngày nghỉ hoặc
   // tự khai hệ số OT của chính mình (ví dụ khai heSoOt = 3.0 cho ngày thường).
-  // Cùng lý do, KHÔNG thêm nguoiDuyetId/thoiDiemDuyet: đó là vết duyệt do
-  // luồng phê duyệt ghi, không phải điều người nộp đơn tự khai.
+  // phanBoQuy (P3.8) được backend ghi lúc tạo đơn nghi_phep để snapshot quỹ
+  // được sử dụng. Cùng lý do, KHÔNG thêm nguoiDuyetId/thoiDiemDuyet: đó là vết
+  // duyệt do luồng phê duyệt ghi, không phải điều người nộp đơn tự khai.
 
   @IsOptional()
   @IsString()
