@@ -14,7 +14,12 @@ function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
     save: async (x: any) => {
       if (!x._id) {
         seq += 1;
-        x._id = { toString: () => `id${seq}` };
+        // PHẢI là hex 24 ký tự hợp lệ: `layQuyTheoId` (Task 5) gọi thẳng
+        // `new ObjectId(balanceId)` trên id lấy từ đây khi test đi theo
+        // đường "tạo quỹ qua service rồi đưa id đó vào giuCho/…" (Task 6).
+        // Id giả dạng `id1` từng đủ vì trước đó không test nào route ngược
+        // id vừa tạo qua ObjectId — nay `doiSoat` làm vậy nên phải hex thật.
+        x._id = { toString: () => seq.toString(16).padStart(24, '0') };
         kho.push(x);
         return x;
       }
@@ -356,5 +361,115 @@ describe('QuyPhep_Service — vòng đời giữ chỗ', () => {
     await expect(
       service.giuCho(ID_NV2, PHAN_BO, 'don1', ID_NV2),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+});
+
+describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () => {
+  it('điều chỉnh tay bắt buộc có ghi chú', async () => {
+    const { service } = await dungHaiQuy();
+    await expect(
+      service.dieuChinhTay(ID_NV1, ID_Q2026, -1, '', 'hr1'),
+    ).rejects.toThrow();
+  });
+
+  it('điều chỉnh tay đổi số dư và ghi sổ dieu_chinh_tay', async () => {
+    const { service, repoQuy, repoSo } = await dungHaiQuy();
+    await service.dieuChinhTay(
+      ID_NV1,
+      ID_Q2026,
+      2,
+      'Bù phép năm ngoái theo QĐ 12',
+      'hr1',
+    );
+    const q = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(q.soNgayDuocCap).toBe(5);
+    expect(q.soNgayConLai).toBe(5);
+    expect(repoSo.kho.at(-1)).toMatchObject({
+      lyDo: 'dieu_chinh_tay',
+      soNgay: 2,
+      ghiChu: 'Bù phép năm ngoái theo QĐ 12',
+    });
+  });
+
+  it('xem trước đóng quỹ liệt kê đúng số ngày sắp mất', async () => {
+    const { service } = await dungHaiQuy();
+    const xemTruoc = await service.xemTruocDongQuy(2026);
+    expect(xemTruoc).toEqual([
+      expect.objectContaining({ balanceId: ID_Q2026, soNgayMat: 3 }),
+    ]);
+  });
+
+  it('đóng quỹ ghi sổ het_han đúng số dư và khoá quỹ lại', async () => {
+    const { service, repoQuy, repoSo } = await dungHaiQuy();
+    const ketQua = await service.dongQuy(2026, 'hr1');
+    expect(ketQua).toEqual({ soQuyDaDong: 1, tongNgayMat: 3 });
+    const q = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(q.trangThai).toBe('da_dong');
+    expect(q.soNgayConLai).toBe(0);
+    expect(repoSo.kho.at(-1)).toMatchObject({ lyDo: 'het_han', soNgay: -3 });
+  });
+
+  it('đóng quỹ lần hai không ghi thêm dòng sổ nào', async () => {
+    const { service, repoSo } = await dungHaiQuy();
+    await service.dongQuy(2026, 'hr1');
+    const sau = repoSo.kho.length;
+    const lanHai = await service.dongQuy(2026, 'hr1');
+    expect(lanHai.soQuyDaDong).toBe(0);
+    expect(repoSo.kho.length).toBe(sau);
+  });
+
+  it('đối soát khớp sau chuỗi thao tác hỗn hợp', async () => {
+    const { service } = await dungService([NV_CHINH_THUC]);
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1');
+    const [quy] = await service.layQuyCuaNhanVien(ID_NV1);
+    const id = String((quy as any)._id);
+
+    const phanBo = [{ balanceId: id, nam: 2026, soNgay: 2 }];
+    await service.giuCho(ID_NV1, phanBo, 'don1', 'nv1');
+    await service.chuyenSangDaDung(ID_NV1, phanBo, 'don1', 'hr1');
+    await service.hoanTraDaDung(ID_NV1, phanBo, 'don1', 'hr1');
+    await service.dieuChinhTay(ID_NV1, id, -1, 'Nghỉ không lương quá 1 tháng', 'hr1');
+
+    expect(await service.doiSoat(ID_NV1)).toEqual([]);
+  });
+
+  it('đối soát PHÁT HIỆN được số dư bị sửa lén không qua sổ', async () => {
+    const { service, repoQuy } = await dungService([NV_CHINH_THUC]);
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1');
+    repoQuy.kho[0].soNgayDuocCap = 99; // ai đó ghi thẳng vào quỹ, không ghi sổ
+
+    const lech = await service.doiSoat(ID_NV1);
+    expect(lech).toHaveLength(1);
+    expect(lech[0]).toMatchObject({ theoSo: 5, theoQuy: 99 });
+  });
+
+  // Ca đặc biệt: quỹ đã ĐÓNG rồi mới nhận hoàn trả (đơn đã duyệt trước lúc
+  // đóng bị huỷ SAU khi đóng). hoanTraDaDung() hoàn về ĐÚNG quỹ gốc theo thiết
+  // kế, kể cả quỹ da_dong — nên quỹ này có soNgayConLai > 0 một cách hợp lệ.
+  // doiSoat() không được báo đây là lệch (sổ vẫn khớp số), và dongQuy() chạy
+  // lại sau đó không được hồi sinh quỹ này về dang_hieu_luc.
+  it('quỹ đã đóng được hoàn phép vào vẫn đối soát khớp, không hồi sinh, conLai phản ánh đúng phần hoàn', async () => {
+    const { service, repoQuy } = await dungService([NV_CHINH_THUC]);
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1');
+    const [quy] = await service.layQuyCuaNhanVien(ID_NV1);
+    const id = String((quy as any)._id);
+    const phanBo = [{ balanceId: id, nam: 2026, soNgay: 2 }];
+
+    await service.giuCho(ID_NV1, phanBo, 'don1', 'nv1');
+    await service.chuyenSangDaDung(ID_NV1, phanBo, 'don1', 'hr1'); // daDung=2, conLai=3
+
+    await service.dongQuy(2026, 'hr1'); // đóng quỹ: mất 3 ngày còn dư, trangThai=da_dong, conLai=0
+
+    // Đơn đã duyệt bị huỷ SAU KHI quỹ đã đóng — hoàn về ĐÚNG quỹ cũ.
+    await service.hoanTraDaDung(ID_NV1, phanBo, 'don1', 'hr1');
+
+    const sau = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(sau.trangThai).toBe('da_dong'); // không hồi sinh về dang_hieu_luc
+    expect(sau.soNgayConLai).toBe(2); // soNgayDuocCap(2 sau khi hết hạn) - soNgayDaDung(0)
+
+    expect(await service.doiSoat(ID_NV1)).toEqual([]); // không bị coi là lệch
+
+    const lanHai = await service.dongQuy(2026, 'hr1');
+    expect(lanHai.soQuyDaDong).toBe(0); // dongQuy sau đó bỏ qua quỹ đã đóng
   });
 });

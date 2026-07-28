@@ -453,4 +453,155 @@ export class QuyPhep_Service {
       });
     }
   }
+
+  async laySoBienDong(balanceId: string): Promise<LeaveBalanceEntry[]> {
+    const ds = await this.repoSo.find({ where: { balanceId } as any });
+    return ds.sort((a, b) => a.thoiDiem.localeCompare(b.thoiDiem));
+  }
+
+  /**
+   * Cộng/trừ tay. `ghiChu` BẮT BUỘC: đây là đường duy nhất đổi quỹ mà không có
+   * sự kiện nghiệp vụ nào đứng sau, nên lý do phải nằm trong sổ — nếu không,
+   * sáu tháng sau không ai biết vì sao NV bị trừ 1 ngày.
+   *
+   * Nhận `employeeId` làm tham số đầu, giống `giuCho`/`nhaCho`/
+   * `chuyenSangDaDung`/`hoanTraDaDung`: đi qua `layQuyTheoId(employeeId, …)`
+   * để chặn HR gõ nhầm `balanceId` của một NV khác.
+   */
+  async dieuChinhTay(
+    employeeId: string,
+    balanceId: string,
+    soNgay: number,
+    ghiChu: string,
+    nguoiThucHien: string,
+  ): Promise<LeaveBalance> {
+    if (!ghiChu?.trim()) {
+      throw new BadRequestException('Điều chỉnh quỹ phép bắt buộc phải có ghi chú');
+    }
+
+    const quy = await this.layQuyTheoId(employeeId, balanceId);
+    quy.soNgayDuocCap += soNgay;
+    return this.ghi(quy, {
+      soNgay,
+      lyDo: 'dieu_chinh_tay',
+      nguoiThucHien,
+      ghiChu: ghiChu.trim(),
+    });
+  }
+
+  private async quyDangHieuLucCuaNam(nam: number): Promise<LeaveBalance[]> {
+    const ds = await this.repo.find({ where: { loaiQuy: LOAI_QUY_PHEP_NAM } as any });
+    return ds.filter(
+      (q) => q.nam === nam && q.trangThai === 'dang_hieu_luc' && q.isActive !== false,
+    );
+  }
+
+  async xemTruocDongQuy(nam: number): Promise<
+    Array<{
+      balanceId: string;
+      employeeName?: string;
+      employeeCode?: string;
+      soNgayMat: number;
+    }>
+  > {
+    const ds = await this.quyDangHieuLucCuaNam(nam);
+    return ds
+      .filter((q) => q.soNgayConLai > 0)
+      .map((q) => ({
+        balanceId: String((q as any)._id),
+        employeeName: q.employeeName,
+        employeeCode: q.employeeCode,
+        soNgayMat: q.soNgayConLai,
+      }));
+  }
+
+  /**
+   * Đóng quỹ năm N sau 31/3 năm N+1. CHỈ chạy khi HR bấm, không có job tự
+   * động: trừ phép là thao tác phá huỷ, chạy âm thầm mà sai thì cả công ty
+   * mất phép và không ai biết cho tới khi có người thắc mắc.
+   *
+   * Đơn còn `cho_duyet` đang giữ chỗ vẫn giữ nguyên phần giữ chỗ — chỉ số dư
+   * còn tự do mới bị thu. Quỹ chuyển `da_dong` nên không nhận đơn mới nữa.
+   *
+   * Chỉ đọc quỹ đang `dang_hieu_luc` của năm — quỹ đã `da_dong` (kể cả quỹ
+   * vừa nhận `hoanTraDaDung` sau khi đóng, xem doc-comment của hàm đó) không
+   * bao giờ lọt vào đây nên không bị "hồi sinh" hay bị thu phép lần hai.
+   */
+  async dongQuy(
+    nam: number,
+    nguoiThucHien: string,
+  ): Promise<{ soQuyDaDong: number; tongNgayMat: number }> {
+    const ds = await this.quyDangHieuLucCuaNam(nam);
+    let soQuyDaDong = 0;
+    let tongNgayMat = 0;
+
+    for (const quy of ds) {
+      const mat = quy.soNgayConLai;
+      quy.trangThai = 'da_dong';
+      if (mat > 0) {
+        quy.soNgayDuocCap -= mat;
+        await this.ghi(quy, { soNgay: -mat, lyDo: 'het_han', nguoiThucHien });
+        tongNgayMat += mat;
+      } else {
+        quy.soNgayConLai =
+          quy.soNgayDuocCap - quy.soNgayDaDung - quy.soNgayDangChoDuyet;
+        await this.repo.save(quy);
+      }
+      soQuyDaDong += 1;
+    }
+
+    return { soQuyDaDong, tongNgayMat };
+  }
+
+  /**
+   * Dựng lại số dư từ sổ và so với `leave_balances`. Lệch = có nơi nào đó ghi
+   * quỹ mà không ghi sổ — bug phải sửa ở chỗ ghi, KHÔNG phải sửa số ở đây.
+   * Vì vậy hàm này chỉ BÁO CÁO, không tự chữa.
+   *
+   * Chỉ đối chiếu `soNgayDuocCap - soNgayDaDung` (phần sổ có ghi); phần
+   * `soNgayDangChoDuyet` là trạng thái tạm của đơn đang chờ, không vào sổ.
+   *
+   * Quỹ `da_dong` nhận `hoanTraDaDung` sau khi đóng (xem doc-comment hàm đó)
+   * vẫn khớp bình thường ở đây: dòng sổ `het_han` lúc đóng VÀ dòng `huy_don`
+   * lúc hoàn đều đã cộng dồn vào `theoSo`, và `ghi()` đã cập nhật lại
+   * `soNgayDuocCap`/`soNgayDaDung` tương ứng — không cần biệt lệ theo
+   * `trangThai`.
+   */
+  async doiSoat(employeeId?: string): Promise<
+    Array<{
+      balanceId: string;
+      employeeCode?: string;
+      nam: number;
+      theoSo: number;
+      theoQuy: number;
+    }>
+  > {
+    const ds = employeeId
+      ? await this.repo.find({ where: { employeeId } as any })
+      : await this.repo.find({ where: {} as any });
+
+    const lech: Array<{
+      balanceId: string;
+      employeeCode?: string;
+      nam: number;
+      theoSo: number;
+      theoQuy: number;
+    }> = [];
+    for (const quy of ds) {
+      const balanceId = String((quy as any)._id);
+      const so = await this.laySoBienDong(balanceId);
+      const theoSo = so.reduce((tong, dong) => tong + dong.soNgay, 0);
+      const theoQuy = quy.soNgayDuocCap - quy.soNgayDaDung;
+      if (Math.abs(theoSo - theoQuy) > 1e-9) {
+        lech.push({
+          balanceId,
+          employeeCode: quy.employeeCode,
+          nam: quy.nam,
+          theoSo,
+          theoQuy,
+        });
+      }
+    }
+    return lech;
+  }
 }
