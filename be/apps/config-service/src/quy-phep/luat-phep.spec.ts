@@ -67,12 +67,38 @@ describe('demThangLamViec', () => {
     ).toBe(1);
   });
 
-  // T12/2026 có 27 ngày làm việc (31 ngày - 4 Chủ nhật); từ 16/12 còn 14 ngày
-  // → 14/27 = 51.85% ≥ 50% nên tháng 12 ĐƯỢC tính (và là tháng cuối năm).
-  it('biên đúng ngưỡng 50% — vào làm 16/12/2026 → 1 tháng (14/27 ngày ≥ 50%)', () => {
+  // Sát trên ngưỡng: T12/2026 có 27 ngày làm việc (31 ngày - 4 Chủ nhật); từ 16/12
+  // còn 14 ngày → 14/27 = 51.85% ≥ 50% nên tháng 12 ĐƯỢC tính.
+  it('sát trên ngưỡng — vào làm 16/12/2026 → 1 tháng (14/27 = 51.85%)', () => {
     expect(
       demThangLamViec({ ngayVaoLam: '2026-12-16', nam: 2026, ngayLamViecTrongTuan: T2_T7 }),
     ).toBe(1);
+  });
+
+  // Biên THẬT của phép so `>=`: tháng 2/2027 tròn 4 tuần nên với lịch T2–T6 có
+  // đúng 20 ngày làm việc; vào làm 15/2 còn đúng 10 ngày = 10/20 = 50.0%.
+  // Đây là cấu hình duy nhất dựng được đúng ngưỡng — các tháng 30/31 ngày cho
+  // ra số ngày làm việc lẻ nên không bao giờ chia đôi được.
+  it('đúng 50.0% thì tháng vẫn được tính (biên của phép so >=)', () => {
+    expect(
+      demThangLamViec({
+        ngayVaoLam: '2027-02-15',
+        nam: 2027,
+        ngayLamViecTrongTuan: [1, 2, 3, 4, 5],
+      }),
+    ).toBe(11);
+  });
+
+  // Ngay dưới biên: lùi vào làm sang ngày làm việc kế tiếp (16/2) thì còn 9/20
+  // = 45% → tháng 2 bị loại, chỉ còn 10 tháng.
+  it('ngay dưới 50% thì tháng bị loại', () => {
+    expect(
+      demThangLamViec({
+        ngayVaoLam: '2027-02-16',
+        nam: 2027,
+        ngayLamViecTrongTuan: [1, 2, 3, 4, 5],
+      }),
+    ).toBe(10);
   });
 
   it('chưa cấu hình lịch làm việc → mọi ngày là ngày làm việc, không phải nghỉ hết', () => {
