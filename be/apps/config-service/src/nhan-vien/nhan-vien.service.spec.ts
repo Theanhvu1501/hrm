@@ -4,6 +4,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { NhanVien_Service } from './nhan-vien.service';
 import { Employee, EmployeeCounter } from '@app/entities';
 import { TenantContextService } from '@app/core';
+import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 
 const TENANT_ID = 'test-tenant-id';
 
@@ -81,6 +82,13 @@ describe('NhanVien_Service', () => {
           useValue: mockCounterRepo,
         },
         { provide: TenantContextService, useValue: mockTenantContext },
+        // Không có test nào ở describe gốc này quan tâm tới mở khoá quỹ phép
+        // (xem describe riêng "mở khoá quỹ phép (P3.8)" cuối file) — chỉ cần
+        // đủ hình dạng để constructor tiêm được, không rớt vào undefined.
+        {
+          provide: QuyPhep_Service,
+          useValue: { moKhoaLenChinhThuc: jest.fn().mockResolvedValue([]) },
+        },
       ],
     }).compile();
 
@@ -499,5 +507,189 @@ describe('NhanVien_Service', () => {
       const daGhi = mockEmployeeRepo.save.mock.calls.at(-1)?.[0];
       expect(daGhi).toHaveProperty('choPhepChamNgoaiVung', false);
     });
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// mở khoá quỹ phép (P3.8, Task 9) — harness RIÊNG, không dùng
+// mockEmployeeRepo ở trên. Nhóm test này cần đọc lại đúng `ngayChinhThuc`
+// đã lưu TRƯỚC khi update() ghi đè (để phân biệt "vừa đổi" khỏi "giữ
+// nguyên"), nên mượn kiểu repo giả có trạng thái thật từ
+// quy-phep.service.spec.ts: find/findOne/save xử lý cả tạo mới lẫn cập nhật,
+// và find/findOne trả BẢN SAO NÔNG (không phải tham chiếu sống) để buộc mọi
+// thay đổi phải đi qua save() — đúng hành vi TypeORM thật.
+// ──────────────────────────────────────────────────────────────────────────
+function taoRepoNvGia(banDau: any[] = []) {
+  const kho: any[] = [...banDau];
+  let seq = 0;
+  return {
+    kho,
+    create: (x: any) => ({ ...x }),
+    save: async (x: any) => {
+      if (!x._id) {
+        seq += 1;
+        // Hex 24 ký tự thật: NhanVien_Service.findOne() gọi `new ObjectId(id)`.
+        x._id = { toString: () => seq.toString(16).padStart(24, '0') };
+        kho.push(x);
+        return { ...x };
+      }
+      const idx = kho.findIndex((y) => String(y._id) === String(x._id));
+      if (idx === -1) kho.push(x);
+      else kho[idx] = { ...x };
+      return { ...x };
+    },
+    find: async ({ where }: any = {}) =>
+      kho
+        .filter((x) =>
+          Object.entries(where ?? {}).every(([k, v]) => x[k] === v),
+        )
+        .map((x) => ({ ...x })),
+    findOne: async ({ where }: any) => {
+      const x = kho.find((x) =>
+        Object.entries(where ?? {}).every(
+          ([k, v]) => String(x[k]) === String(v),
+        ),
+      );
+      return x ? { ...x } : null;
+    },
+  };
+}
+
+/**
+ * Dựng NhanVien_Service với repo NV giả có trạng thái thật + một
+ * QuyPhep_Service giả (mặc định `moKhoaLenChinhThuc` resolve `[]`, ghi đè
+ * qua `opts.quyPhep`). `counterRepo` chỉ cần đủ hình dạng cho constructor —
+ * các test ở đây không đi qua generateEmployeeId() qua service.create()
+ * (dùng repoNv.save() thẳng để dựng dữ liệu ban đầu), trừ khi test tự gọi
+ * service.create().
+ */
+async function dungServiceNhanVien(opts: { quyPhep?: any } = {}) {
+  const repoNv = taoRepoNvGia();
+  const counterStore = new Map<string | undefined, number>();
+  const counterRepo = {
+    manager: {
+      getMongoRepository: () => ({
+        findOneAndUpdate: async (query: any, update: any) => {
+          const key = query?.tenantId;
+          const inc = update?.$inc?.seq ?? 0;
+          const next = (counterStore.get(key) ?? 0) + inc;
+          counterStore.set(key, next);
+          return { tenantId: key, seq: next };
+        },
+      }),
+    },
+  };
+  const tenantContext = { getCurrentTenantId: () => 'test-tenant-id' };
+  const quyPhep = opts.quyPhep ?? {
+    moKhoaLenChinhThuc: jest.fn().mockResolvedValue([]),
+  };
+
+  const moduleRef: TestingModule = await Test.createTestingModule({
+    providers: [
+      NhanVien_Service,
+      { provide: getRepositoryToken(Employee), useValue: repoNv },
+      { provide: getRepositoryToken(EmployeeCounter), useValue: counterRepo },
+      { provide: TenantContextService, useValue: tenantContext },
+      { provide: QuyPhep_Service, useValue: quyPhep },
+    ],
+  }).compile();
+
+  return { service: moduleRef.get(NhanVien_Service), repoNv, quyPhep };
+}
+
+describe('NhanVien_Service — mở khoá quỹ phép (P3.8)', () => {
+  it('điền ngayChinhThuc lần đầu → gọi moKhoaLenChinhThuc', async () => {
+    const quyPhep = { moKhoaLenChinhThuc: jest.fn().mockResolvedValue([]) };
+    const { service, repoNv } = await dungServiceNhanVien({ quyPhep });
+    const nv = await repoNv.save({
+      hoTen: 'A',
+      cccd: '001',
+      ngayVaoLam: '2026-08-01',
+      isActive: true,
+    });
+
+    await service.update(String(nv._id), {
+      ngayChinhThuc: '2026-10-01',
+    } as any);
+
+    expect(quyPhep.moKhoaLenChinhThuc).toHaveBeenCalledWith(
+      String(nv._id),
+      expect.any(String),
+    );
+  });
+
+  it('sửa hồ sơ mà KHÔNG đổi ngayChinhThuc → không gọi lại', async () => {
+    const quyPhep = { moKhoaLenChinhThuc: jest.fn() };
+    const { service, repoNv } = await dungServiceNhanVien({ quyPhep });
+    const nv = await repoNv.save({
+      hoTen: 'A',
+      cccd: '001',
+      ngayVaoLam: '2026-08-01',
+      ngayChinhThuc: '2026-10-01',
+      isActive: true,
+    });
+
+    await service.update(String(nv._id), {
+      soDienThoai: '0900',
+    } as any);
+
+    expect(quyPhep.moKhoaLenChinhThuc).not.toHaveBeenCalled();
+  });
+
+  it('lỗi cấp quỹ KHÔNG làm hỏng việc lưu hồ sơ', async () => {
+    const quyPhep = {
+      moKhoaLenChinhThuc: jest.fn().mockRejectedValue(new Error('db sập')),
+    };
+    const { service, repoNv } = await dungServiceNhanVien({ quyPhep });
+    const nv = await repoNv.save({
+      hoTen: 'A',
+      cccd: '001',
+      ngayVaoLam: '2026-08-01',
+      isActive: true,
+    });
+
+    const daLuu = await service.update(String(nv._id), {
+      ngayChinhThuc: '2026-10-01',
+    } as any);
+
+    expect(daLuu.ngayChinhThuc).toBe('2026-10-01');
+  });
+
+  /**
+   * Hồ sơ nhập liệu từ hệ thống cũ có thể tạo mới với `ngayChinhThuc` đã có
+   * sẵn (NV đã chính thức từ trước, chỉ mới được đưa vào hệ thống nhân sự
+   * này) — không thể đợi một lần update() sau đó mới mở khoá quỹ, vì có thể
+   * sẽ không có lần update() nào đổi ngayChinhThuc nữa.
+   */
+  it('create() với ngayChinhThuc có sẵn → cũng gọi moKhoaLenChinhThuc', async () => {
+    const quyPhep = { moKhoaLenChinhThuc: jest.fn().mockResolvedValue([]) };
+    const { service, quyPhep: quyPhepGia } = await dungServiceNhanVien({
+      quyPhep,
+    });
+
+    const daTao = await service.create({
+      hoTen: 'Nguyễn Văn A',
+      cccd: '001',
+      ngayVaoLam: '2026-08-01',
+      ngayChinhThuc: '2026-10-01',
+    } as any);
+
+    expect(quyPhepGia.moKhoaLenChinhThuc).toHaveBeenCalledWith(
+      String((daTao as any)._id),
+      expect.any(String),
+    );
+  });
+
+  it('create() không có ngayChinhThuc → không gọi moKhoaLenChinhThuc', async () => {
+    const quyPhep = { moKhoaLenChinhThuc: jest.fn() };
+    const { service } = await dungServiceNhanVien({ quyPhep });
+
+    await service.create({
+      hoTen: 'Nguyễn Văn A',
+      cccd: '001',
+      ngayVaoLam: '2026-08-01',
+    } as any);
+
+    expect(quyPhep.moKhoaLenChinhThuc).not.toHaveBeenCalled();
   });
 });

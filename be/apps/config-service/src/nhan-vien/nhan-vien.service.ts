@@ -2,12 +2,15 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Employee, EmployeeCounter } from '@app/entities';
 import { TenantContextService } from '@app/core';
 import { CreateEmployeeDto, UpdateEmployeeDto } from './dto';
+import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 
 export interface EmployeeFilter {
   hoTen?: string;
@@ -26,6 +29,11 @@ export class NhanVien_Service {
     @InjectRepository(EmployeeCounter)
     private readonly counterRepo: Repository<EmployeeCounter>,
     private readonly tenantContext: TenantContextService,
+    // Vòng phụ thuộc CỐ Ý với QuyPhep_Module (xem nhan-vien.module.ts):
+    // forwardRef() cần ở CẢ import module lẫn injection này — thiếu một chỗ
+    // là Nest báo lỗi circular dependency lúc boot hoặc tiêm undefined.
+    @Inject(forwardRef(() => QuyPhep_Service))
+    private readonly quyPhep_Service: QuyPhep_Service,
   ) {}
 
   /**
@@ -96,7 +104,47 @@ export class NhanVien_Service {
       isActive: true,
     } as Partial<Employee>);
 
-    return this.repo.save(entity);
+    const daLuu = await this.repo.save(entity);
+
+    // Hồ sơ nhập liệu (vd. chuyển từ hệ thống cũ) có thể tạo mới với
+    // ngayChinhThuc đã có sẵn — NV đã chính thức từ trước, chỉ mới được đưa
+    // vào hệ thống này. Không thể đợi một lần update() sau đó mới mở khoá vì
+    // có thể sẽ không có lần update() nào đổi ngayChinhThuc nữa.
+    await this.moKhoaQuyNeuCanThiet(daLuu, undefined);
+
+    return daLuu;
+  }
+
+  /**
+   * Mở khoá quỹ phép CHỈ khi `ngayChinhThuc` vừa được đặt hoặc vừa đổi so với
+   * giá trị trước khi lưu — không phải mọi lần save(). moKhoaLenChinhThuc()
+   * tự nó idempotent nên gọi mọi lần cũng không sai, nhưng như vậy là N truy
+   * vấn thừa mỗi lần HR chỉ sửa số điện thoại.
+   *
+   * Lỗi cấp quỹ KHÔNG được làm hỏng việc lưu hồ sơ: hồ sơ là bản ghi chính,
+   * đã lưu xong rồi; quỹ luôn cấp lại được bằng tay từ màn Quỹ phép. Vì vậy
+   * chỉ log lỗi, không rethrow (không phá create()/update()) và không nuốt
+   * im lặng (console.error để còn dò được khi có sự cố).
+   */
+  private async moKhoaQuyNeuCanThiet(
+    daLuu: Employee,
+    ngayChinhThucTruocKhiSua: string | undefined,
+  ): Promise<void> {
+    if (
+      !daLuu.ngayChinhThuc ||
+      daLuu.ngayChinhThuc === ngayChinhThucTruocKhiSua
+    ) {
+      return;
+    }
+
+    try {
+      await this.quyPhep_Service.moKhoaLenChinhThuc(
+        String((daLuu as any)._id),
+        'he_thong',
+      );
+    } catch (e) {
+      console.error('[quy-phep] mở khoá thất bại', e);
+    }
   }
 
   /**
@@ -168,8 +216,13 @@ export class NhanVien_Service {
       }
     }
 
+    const truocKhiSua = item.ngayChinhThuc;
     Object.assign(item, dto);
-    return this.repo.save(item);
+    const daLuu = await this.repo.save(item);
+
+    await this.moKhoaQuyNeuCanThiet(daLuu, truocKhiSua);
+
+    return daLuu;
   }
 
   async remove(id: string): Promise<void> {
