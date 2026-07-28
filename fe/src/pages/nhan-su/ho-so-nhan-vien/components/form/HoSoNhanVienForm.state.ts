@@ -15,6 +15,9 @@ export interface HoSoNhanVienFormValues {
   phongBan?: string;
   chucDanh?: string;
   ngayVaoLam?: string;
+  // Mốc "lên chính thức" — khoá mở quỹ phép năm (BE Task 7). KHÔNG dùng để
+  // tính số ngày phép/thâm niên: hai thứ đó luôn tính từ `ngayVaoLam`.
+  ngayChinhThuc?: string;
   loaiHopDong: string;
   trangThai: string;
   userId?: string;

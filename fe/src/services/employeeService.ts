@@ -33,6 +33,10 @@ export interface Employee {
   phongBan?: string;
   chucDanh?: string;
   ngayVaoLam?: string;
+  // Mốc "lên chính thức" — khoá mở quỹ phép năm (Task 7 BE), KHÔNG phải căn
+  // cứ tính số ngày phép: số ngày và thâm niên vẫn tính từ `ngayVaoLam`, kể
+  // cả thời gian thử việc. Trống = còn thử việc, quỹ phép bằng 0.
+  ngayChinhThuc?: string;
   loaiHopDong: string;
   trangThai: string;
   bangCap?: BangCap[];
@@ -85,6 +89,7 @@ export interface CreateEmployeeDto {
   phongBan?: string;
   chucDanh?: string;
   ngayVaoLam?: string;
+  ngayChinhThuc?: string;
   loaiHopDong?: string;
   trangThai?: string;
   bangCap?: BangCap[];
@@ -161,6 +166,7 @@ class EmployeeService extends ServiceBase {
       phongBan: x.phongBan as string | undefined,
       chucDanh: x.chucDanh as string | undefined,
       ngayVaoLam: x.ngayVaoLam as string | undefined,
+      ngayChinhThuc: x.ngayChinhThuc as string | undefined,
       loaiHopDong: (x.loaiHopDong as string) ?? 'thu_viec',
       trangThai: (x.trangThai as string) ?? 'dang_lam_viec',
       bangCap: (x.bangCap as BangCap[]) ?? undefined,

@@ -34,6 +34,10 @@ export function toCreateEmployeeDto(
     phongBan: values.phongBan || undefined,
     chucDanh: values.chucDanh || undefined,
     ngayVaoLam: values.ngayVaoLam || undefined,
+    // Cùng cách xử lý như `ngayVaoLam`: chuỗi rỗng ("chưa nhập") không được
+    // gửi lên — nếu gửi `undefined` BE giữ nguyên giá trị cũ (Object.assign),
+    // đúng ý nghĩa "chưa sửa mốc này", không phải "xoá mốc, đóng quỹ phép".
+    ngayChinhThuc: values.ngayChinhThuc || undefined,
     loaiHopDong: values.loaiHopDong,
     trangThai: values.trangThai,
     bangCap: (values.bangCap || []).filter((b) => b.ten?.trim()),

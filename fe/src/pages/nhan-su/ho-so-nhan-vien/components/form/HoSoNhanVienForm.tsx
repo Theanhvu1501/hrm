@@ -30,6 +30,7 @@ const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   phongBan: "",
   chucDanh: "",
   ngayVaoLam: "",
+  ngayChinhThuc: "",
   loaiHopDong: "thu_viec",
   trangThai: "dang_lam_viec",
   userId: undefined,
@@ -52,7 +53,10 @@ const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   orBhxhCanCu: undefined,
 };
 
-function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
+// Xuất ra để test được trực tiếp chiều "nạp NV có sẵn vào form" — cùng lý do
+// `toCreateEmployeeDto` được tách ra file convert.ts riêng: lỗi ở đây vô hình
+// trên màn hình (modal vẫn mở, chỉ có ô là trống/sai), chỉ test mới bắt được.
+export function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
   if (!employee) return DEFAULT_VALUES;
 
   return {
@@ -69,6 +73,7 @@ function toFormValues(employee: Employee | null): HoSoNhanVienFormValues {
     phongBan: employee.phongBan || "",
     chucDanh: employee.chucDanh || "",
     ngayVaoLam: employee.ngayVaoLam || "",
+    ngayChinhThuc: employee.ngayChinhThuc || "",
     loaiHopDong: employee.loaiHopDong || "thu_viec",
     trangThai: employee.trangThai || "dang_lam_viec",
     userId: employee.userId,

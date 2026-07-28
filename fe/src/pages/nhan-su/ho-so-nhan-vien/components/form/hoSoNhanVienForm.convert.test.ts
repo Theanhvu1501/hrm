@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { toCreateEmployeeDto } from "./hoSoNhanVienForm.convert";
+import { toFormValues } from "./HoSoNhanVienForm";
 import { HoSoNhanVienFormValues } from "./HoSoNhanVienForm.state";
+import { Employee } from "@/services/employeeService";
 
 const values = (
   over: Partial<HoSoNhanVienFormValues> = {}
@@ -11,6 +13,26 @@ const values = (
   nguoiPhuThuoc: [],
   loaiHopDong: "thu_viec",
   trangThai: "dang_lam_viec",
+  ...over,
+});
+
+// Hồ sơ NV rỗng — chỉ điền các trường bắt buộc của `Employee`, dùng cho test
+// chiều nạp NV -> form (`toFormValues`).
+const nhanVienRong = (over: Partial<Employee> = {}): Employee => ({
+  id: "nv-1",
+  employeeId: "NV001",
+  hoTen: "Nguyễn Văn Hải",
+  cccd: "001111111111",
+  loaiHopDong: "thu_viec",
+  trangThai: "dang_lam_viec",
+  isActive: true,
+  luongThoaThuan: 0,
+  phuCapCoDinh: 0,
+  soNguoiPhuThuoc: 0,
+  dongBH: false,
+  thoiVu: false,
+  camKet: false,
+  hopDongThu2: false,
   ...over,
 });
 
@@ -170,5 +192,33 @@ describe("toCreateEmployeeDto — cấu hình lương riêng (P4.1)", () => {
 
     expect("cauHinhLuongRieng" in body).toBe(true);
     expect("hopDongThu2" in body).toBe(true);
+  });
+});
+
+describe("Ngày lên chính thức (P3.8) — mốc mở quỹ phép, giữ nguyên cả hai chiều", () => {
+  it("form -> DTO: có nhập thì gửi đúng chuỗi YYYY-MM-DD", () => {
+    const dto = toCreateEmployeeDto(values({ ngayChinhThuc: "2026-10-01" }));
+
+    expect(dto.ngayChinhThuc).toBe("2026-10-01");
+  });
+
+  it("form -> DTO: để trống thì không gửi khoá này (không tự ý mở/đóng quỹ phép)", () => {
+    const body = bodyThucGui(
+      toCreateEmployeeDto(values({ ngayChinhThuc: undefined }))
+    );
+
+    expect("ngayChinhThuc" in body).toBe(false);
+  });
+
+  it("NV -> form: nạp lại đúng chuỗi đã lưu", () => {
+    const form = toFormValues(nhanVienRong({ ngayChinhThuc: "2026-10-01" }));
+
+    expect(form.ngayChinhThuc).toBe("2026-10-01");
+  });
+
+  it("NV -> form: hồ sơ chưa có (còn thử việc) nạp thành chuỗi rỗng, không phải undefined", () => {
+    const form = toFormValues(nhanVienRong({ ngayChinhThuc: undefined }));
+
+    expect(form.ngayChinhThuc).toBe("");
   });
 });

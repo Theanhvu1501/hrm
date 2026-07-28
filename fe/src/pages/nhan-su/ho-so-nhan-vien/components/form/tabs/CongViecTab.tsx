@@ -35,6 +35,22 @@ export function CongViecTab() {
         />
       </Col>
       <Col span={12} className="mt-3">
+        <label className="block mb-1 text-sm font-medium">
+          Ngày lên chính thức
+        </label>
+        <Controller
+          name="ngayChinhThuc"
+          control={control}
+          render={({ field }) => (
+            <Input {...field} type="date" className="w-full" />
+          )}
+        />
+        <div className="mt-1 text-xs text-gray-500">
+          Để trống = đang thử việc: chưa có quỹ phép năm. Số ngày phép vẫn
+          tính từ Ngày vào làm.
+        </div>
+      </Col>
+      <Col span={12} className="mt-3">
         <label className="block mb-1 text-sm font-medium">Loại hợp đồng</label>
         <Controller
           name="loaiHopDong"
