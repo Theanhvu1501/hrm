@@ -143,7 +143,14 @@ export class NhanVien_Service {
         'he_thong',
       );
     } catch (e) {
-      console.error('[quy-phep] mở khoá thất bại', e);
+      // (P3.8 review round 4, IMPORTANT 10): log PHẢI kèm employeeId — đây
+      // là tín hiệu DUY NHẤT cho biết quỹ của MỘT NGƯỜI CỤ THỂ đã âm thầm
+      // không được cấp. Thiếu id, log chỉ nói "có lỗi xảy ra ở đâu đó" và
+      // không ai lần ra được nhân viên nào cần cấp bù tay.
+      console.error(
+        `[quy-phep] mở khoá thất bại cho nhân viên ${String((daLuu as any)._id)}`,
+        e,
+      );
     }
   }
 

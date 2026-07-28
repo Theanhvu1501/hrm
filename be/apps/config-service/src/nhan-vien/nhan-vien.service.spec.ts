@@ -655,6 +655,34 @@ describe('NhanVien_Service — mở khoá quỹ phép (P3.8)', () => {
     expect(daLuu.ngayChinhThuc).toBe('2026-10-01');
   });
 
+  // (P3.8 review round 4, IMPORTANT 10): log lỗi PHẢI kèm employeeId — đây là
+  // tín hiệu DUY NHẤT cho biết quỹ của MỘT NGƯỜI CỤ THỂ đã âm thầm không được
+  // cấp. Trước fix, log chỉ có mỗi thông điệp chung chung, không ai lần ra
+  // được nhân viên nào cần cấp bù tay.
+  it('lỗi cấp quỹ ghi log KÈM employeeId, không chỉ mỗi thông điệp chung chung', async () => {
+    const quyPhep = {
+      moKhoaLenChinhThuc: jest.fn().mockRejectedValue(new Error('db sập')),
+    };
+    const { service, repoNv } = await dungServiceNhanVien({ quyPhep });
+    const nv = await repoNv.save({
+      hoTen: 'A',
+      cccd: '001',
+      ngayVaoLam: '2026-08-01',
+      isActive: true,
+    });
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await service.update(String(nv._id), {
+      ngayChinhThuc: '2026-10-01',
+    } as any);
+
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining(String(nv._id)),
+      expect.any(Error),
+    );
+    spy.mockRestore();
+  });
+
   /**
    * Hồ sơ nhập liệu từ hệ thống cũ có thể tạo mới với `ngayChinhThuc` đã có
    * sẵn (NV đã chính thức từ trước, chỉ mới được đưa vào hệ thống nhân sự
