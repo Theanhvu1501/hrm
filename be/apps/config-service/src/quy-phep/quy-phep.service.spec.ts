@@ -98,28 +98,57 @@ async function dungService(nhanVien: any[] = [NV_CHINH_THUC, NV_THU_VIEC]) {
 }
 
 describe('QuyPhep_Service — cấp phép', () => {
+  // Task 7 (review round 4): trả BA con số riêng thay vì một `boQua` mập mờ —
+  // xem doc-comment `capPhepDauNam()`.
   it('cấp đầu năm bỏ qua người còn thử việc', async () => {
     const { service, repoQuy } = await dungService();
     const ketQua = await service.capPhepDauNam(2027, 'hr1');
     expect(ketQua.daCap).toBe(1);
-    expect(ketQua.boQua).toBe(1);
+    expect(ketQua.daCoQuy).toBe(0);
+    expect(ketQua.boQuaThuViec).toBe(1);
     expect(repoQuy.kho).toHaveLength(1);
     expect(repoQuy.kho[0].employeeId).toBe(ID_NV1);
     expect(repoQuy.kho[0].soNgayDuocCap).toBe(12);
     expect(repoQuy.kho[0].hanDung).toBe('2028-03-31');
   });
 
-  it('cấp đầu năm chạy lần hai không cấp trùng', async () => {
+  it('cấp đầu năm chạy lần hai không cấp trùng — lần hai báo daCoQuy, không phải boQuaThuViec', async () => {
     const { service, repoQuy } = await dungService();
     await service.capPhepDauNam(2027, 'hr1');
     const lanHai = await service.capPhepDauNam(2027, 'hr1');
     expect(lanHai.daCap).toBe(0);
+    expect(lanHai.daCoQuy).toBe(1);
+    expect(lanHai.boQuaThuViec).toBe(1); // NV_THU_VIEC vẫn còn thử việc
     expect(repoQuy.kho).toHaveLength(1);
+  });
+
+  // Task 7: người có ngayChinhThuc từ trước nhưng CHƯA đủ tháng làm việc để
+  // ra ngày nào (soNgay tính ra 0) phải rơi vào `boQuaThuViec`, KHÔNG được
+  // gộp nhầm vào `daCoQuy` — trước đây cả hai đổ chung một con số `boQua`.
+  it('người ra 0 ngày phép (chưa đủ tháng) rơi vào boQuaThuViec, không phải daCoQuy', async () => {
+    const nvRa0Ngay = {
+      _id: { toString: () => ID_NV1 },
+      employeeId: 'NV0001',
+      hoTen: 'Nguyễn Văn A',
+      ngayVaoLam: '2027-12-28', // vào làm cuối năm 2027 → 2027 ra 0 tháng đủ 50%
+      ngayChinhThuc: '2027-12-28',
+      ngayLamViecTrongTuan: [1, 2, 3, 4, 5, 6],
+      trangThai: 'dang_lam_viec',
+      isActive: true,
+    };
+    const { service } = await dungService([nvRa0Ngay]);
+    const ketQua = await service.capPhepDauNam(2027, 'hr1');
+    expect(ketQua.daCap).toBe(0);
+    expect(ketQua.daCoQuy).toBe(0);
+    expect(ketQua.boQuaThuViec).toBe(1);
   });
 
   it('mở khoá lên chính thức — ca A cấp đúng 5 ngày cho năm vào làm', async () => {
     const { service, repoQuy, repoSo } = await dungService([NV_CHINH_THUC]);
-    const quy = await service.moKhoaLenChinhThuc(ID_NV1, 'hr1');
+    // homNay PHẢI ghim SAU ngayChinhThuc ('2026-10-01') — mở khoá chỉ cấp
+    // khi đã tới ngày đó (Task 2, review round 4), không còn cấp ngay lúc
+    // gọi bất kể ngày tương lai.
+    const quy = await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     expect(quy).toHaveLength(1);
     expect(repoQuy.kho[0].nam).toBe(2026);
     expect(repoQuy.kho[0].soNgayDuocCap).toBe(5);
@@ -132,7 +161,8 @@ describe('QuyPhep_Service — cấp phép', () => {
     const { service, repoQuy } = await dungService([
       { ...NV_THU_VIEC, ngayVaoLam: '2026-11-20', ngayChinhThuc: '2027-01-15' },
     ]);
-    await service.moKhoaLenChinhThuc(ID_NV2, 'hr1');
+    // homNay SAU ngayChinhThuc ('2027-01-15') để mở khoá thực sự chạy.
+    await service.moKhoaLenChinhThuc(ID_NV2, 'hr1', '2027-02-01');
     const theoNam = Object.fromEntries(
       repoQuy.kho.map((q: any) => [q.nam, q.soNgayDuocCap]),
     );
@@ -140,10 +170,20 @@ describe('QuyPhep_Service — cấp phép', () => {
     expect(repoQuy.kho.find((q: any) => q.nam === 2026).hanDung).toBe('2027-03-31');
   });
 
+  it('lên chính thức bằng một ngày TƯƠNG LAI → CHƯA cấp gì (Task 2, review round 4)', async () => {
+    const { service, repoQuy } = await dungService([NV_CHINH_THUC]);
+    // homNay TRƯỚC ngayChinhThuc ('2026-10-01') — kịch bản HR nhập kế hoạch
+    // hết thử việc ngay lúc tuyển: mở khoá không được cấp quỹ ngay hôm đó,
+    // nếu không một người còn thử việc nhận trọn quỹ ngày đầu tiên.
+    const quy = await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-08-15');
+    expect(quy).toEqual([]);
+    expect(repoQuy.kho).toHaveLength(0);
+  });
+
   it('mở khoá lần hai không cấp thêm', async () => {
     const { service, repoQuy } = await dungService([NV_CHINH_THUC]);
-    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1');
-    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1');
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     expect(repoQuy.kho).toHaveLength(1);
   });
 
@@ -152,6 +192,45 @@ describe('QuyPhep_Service — cấp phép', () => {
     const quy = await service.moKhoaLenChinhThuc(ID_NV2, 'hr1');
     expect(quy).toEqual([]);
     expect(repoQuy.kho).toHaveLength(0);
+  });
+
+  // Task 4 (review round 4): rollout điền ngayChinhThuc hàng loạt cho NV làm
+  // lâu năm — vào làm VÀ chính thức từ 2019, nhưng hôm nay (`homNay`) đã là
+  // 2026. Trước fix, vòng lặp backfill chạy `namVao..namChinhThuc` = chỉ năm
+  // 2019 → tạo một quỹ ĐÃ HẾT HẠN từ 2020-03-31 và KHÔNG tạo quỹ năm nay —
+  // NV không có phép nào dùng được dù hồ sơ đã "chính thức".
+  it('rollout ngayChinhThuc trễ nhiều năm → KHÔNG tạo quỹ chết, LUÔN có quỹ năm hiện tại', async () => {
+    const nvLauNam = {
+      ...NV_CHINH_THUC,
+      ngayVaoLam: '2019-03-01',
+      ngayChinhThuc: '2019-06-01',
+    };
+    const { service, repoQuy } = await dungService([nvLauNam]);
+    const quy = await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-07-29');
+
+    const cacNam = repoQuy.kho.map((q: any) => q.nam).sort();
+    expect(cacNam).not.toContain(2019); // quỹ 2019 đã chết (hạn 2020-03-31) — không tạo
+    expect(cacNam).toContain(2026); // quỹ năm hiện tại LUÔN được cấp
+    // Vào làm 2019-03-01 → tới 31/12/2026 đã tròn 7 năm thâm niên (⌊7/5⌋=1)
+    // → mucCaNam = 12 + 1 = 13, làm trọn năm 2026 nên soNgay = đúng mucCaNam.
+    expect(quy.find((q: any) => q.nam === 2026)?.soNgayDuocCap).toBe(13);
+    // lyDo của quỹ 2026: NV đã chính thức từ lâu, đây thực chất là phần cấp
+    // đầu năm bị lỡ — không phải "cấp lên chính thức" (đã xảy ra 2019) hay
+    // "cấp bù năm trước" (2026 là năm nay, không phải năm trước).
+    expect(quy.find((q: any) => q.nam === 2026)?.canCuCap).toBeDefined();
+  });
+
+  it('rollout: quỹ năm hiện tại ghi sổ với lyDo cap_dau_nam khi ngayChinhThuc đã lùi xa', async () => {
+    const nvLauNam = {
+      ...NV_CHINH_THUC,
+      ngayVaoLam: '2019-03-01',
+      ngayChinhThuc: '2019-06-01',
+    };
+    const { service, repoSo } = await dungService([nvLauNam]);
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-07-29');
+
+    expect(repoSo.kho).toHaveLength(1); // đúng 1 dòng sổ — chỉ quỹ 2026 được tạo
+    expect(repoSo.kho[0]).toMatchObject({ lyDo: 'cap_dau_nam', nam: 2026 });
   });
 });
 
@@ -193,6 +272,43 @@ async function dungMotQuy() {
   ctx.repoQuy.kho.push(quyGia(ID_Q2026, 2026, 3, '2027-03-31'));
   return ctx;
 }
+
+// (P3.8 review round 4, IMPORTANT 11): `layQuyCuaNhanVien` nuôi khối số dư
+// hiển thị cho NGƯỜI DÙNG chọn ngày (tự phục vụ + form HR nộp hộ) — trước
+// fix chỉ lọc `isActive`, nên một quỹ `da_dong` đã qua hạn dùng từ 5 năm
+// trước vẫn hiện mãi mãi (xoá mềm không áp dụng cho quỹ đóng đúng quy trình).
+describe('QuyPhep_Service — layQuyCuaNhanVien lọc quỹ còn dùng được (Task 11)', () => {
+  it('quỹ ĐÃ ĐÓNG và ĐÃ QUA HẠN DÙNG bị loại khỏi khối số dư', async () => {
+    const { service, repoQuy } = await dungHaiQuy();
+    repoQuy.kho.find((x: any) => x.nam === 2026).trangThai = 'da_dong';
+
+    // homNay SAU hạn dùng quỹ 2026 ('2027-03-31') — quỹ này giờ vừa đóng vừa
+    // hết hạn, đúng "lịch sử chết" cần bị loại.
+    const ds = await service.layQuyCuaNhanVien(ID_NV1, 'phep_nam', '2027-04-01');
+
+    expect(ds.map((q: any) => q.nam)).toEqual([2027]);
+  });
+
+  it('quỹ ĐÃ ĐÓNG nhưng CHƯA QUA HẠN DÙNG vẫn hiện (chưa phải lịch sử chết)', async () => {
+    const { service, repoQuy } = await dungHaiQuy();
+    repoQuy.kho.find((x: any) => x.nam === 2026).trangThai = 'da_dong';
+
+    // homNay TRƯỚC hạn dùng quỹ 2026 — quỹ đóng sớm (hiếm nhưng có thể) vẫn
+    // còn đáng xem cho tới hạn.
+    const ds = await service.layQuyCuaNhanVien(ID_NV1, 'phep_nam', '2027-01-01');
+
+    expect(ds.map((q: any) => q.nam).sort()).toEqual([2026, 2027]);
+  });
+
+  it('quỹ CÒN dang_hieu_luc luôn hiện dù lỡ trễ hạn đóng', async () => {
+    const { service } = await dungHaiQuy();
+    // homNay xa sau hạn dùng của CẢ HAI quỹ, nhưng cả hai đều còn
+    // dang_hieu_luc (HR chưa bấm đóng quỹ) — vẫn phải hiện để HR còn thấy mà
+    // đóng.
+    const ds = await service.layQuyCuaNhanVien(ID_NV1, 'phep_nam', '2030-01-01');
+    expect(ds.map((q: any) => q.nam).sort()).toEqual([2026, 2027]);
+  });
+});
 
 describe('QuyPhep_Service — phân bổ FIFO', () => {
   it('trừ quỹ năm cũ trước khi động tới quỹ năm mới', async () => {
@@ -308,7 +424,7 @@ describe('QuyPhep_Service — vòng đời giữ chỗ', () => {
     expect(q.soNgayConLai).toBe(3);
   });
 
-  it('huỷ đơn ĐÃ DUYỆT hoàn về đúng quỹ cũ, kể cả quỹ đã đóng', async () => {
+  it('huỷ đơn ĐÃ DUYỆT hoàn về đúng quỹ cũ, kể cả quỹ đã đóng — phần hồi sinh hết hạn NGAY (Task 5, review round 4)', async () => {
     const { service, repoQuy, repoSo } = await dungHaiQuy();
     await service.giuCho(ID_NV1, PHAN_BO, 'don1', 'nv1');
     await service.chuyenSangDaDung(ID_NV1, PHAN_BO, 'don1', 'hr1');
@@ -319,12 +435,39 @@ describe('QuyPhep_Service — vòng đời giữ chỗ', () => {
     const q2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
     const q2027 = repoQuy.kho.find((x: any) => x.nam === 2027);
     expect(q2026.soNgayDaDung).toBe(0);
-    // Recompute phải chạy lại trong ghi(): nếu không, quỹ có thể kẹt ở
-    // daDung = 0 nhưng conLai vẫn = 1 (như lúc mới duyệt) — NV mất im lặng
-    // 2 ngày dùng được dù sổ đã ghi hoàn.
-    expect(q2026.soNgayConLai).toBe(3);
+    // (Task 5, review round 4): TRƯỚC fix, `soNgayConLai` sống lại thành 3
+    // dù quỹ đã đóng — "phép ma" không đơn nào tiêu được qua
+    // `phanBoChoNgayNghi` (chỉ chọn quỹ `dang_hieu_luc`) nhưng vẫn hiện ra
+    // cho NV/HR, và chính là con số spec §11 hứa trả tiền phép chưa nghỉ khi
+    // thôi việc — phép ma thành tiền thật. Sau fix: phần vừa hồi sinh hết
+    // hạn NGAY LẬP TỨC (ghi thêm một dòng sổ `het_han`), số dư về đúng 0.
+    expect(q2026.soNgayConLai).toBe(0);
+    expect(q2026.soNgayDuocCap).toBe(0); // 3 (gốc) - 3 (het_han bù) = 0
     expect(q2027.soNgayDuocCap).toBe(12); // KHÔNG chảy sang quỹ mới
-    expect(repoSo.kho.at(-1)).toMatchObject({ lyDo: 'huy_don', soNgay: 2 });
+    expect(repoSo.kho.at(-2)).toMatchObject({ lyDo: 'huy_don', soNgay: 2 });
+    expect(repoSo.kho.at(-1)).toMatchObject({ lyDo: 'het_han', soNgay: -3 });
+  });
+
+  // Task 5, review round 4 — nhánh THỨ HAI (nhaCho): `dongQuy()` cố ý giữ
+  // nguyên phần đang giữ chỗ khi đóng quỹ (xem doc-comment `dongQuy()`). Nếu
+  // đơn giữ chỗ đó sau đó bị TỪ CHỐI, phần vừa nhả không được "sống lại" trên
+  // một quỹ đã đóng — cùng lỗi phép ma với nhánh `hoanTraDaDung` ở trên,
+  // nhưng qua đường "từ chối" thay vì "huỷ đơn đã duyệt".
+  it('nhaCho trên quỹ đã đóng: phần vừa nhả hết hạn NGAY, không "sống lại"', async () => {
+    const { service, repoQuy, repoSo } = await dungHaiQuy();
+    await service.giuCho(ID_NV1, PHAN_BO, 'don1', 'nv1'); // giữ 2 ngày trên quỹ 2026
+    await service.dongQuy(2026, 'hr1'); // đóng quỹ: hold vẫn giữ nguyên, phần rảnh (1) hết hạn
+
+    const truocNha = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(truocNha.trangThai).toBe('da_dong');
+    expect(truocNha.soNgayDangChoDuyet).toBe(2); // hold vẫn còn nguyên sau khi đóng quỹ
+
+    await service.nhaCho(ID_NV1, PHAN_BO, 'don1', 'hr1'); // đơn giữ chỗ bị TỪ CHỐI sau khi quỹ đã đóng
+
+    const q2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(q2026.soNgayDangChoDuyet).toBe(0);
+    expect(q2026.soNgayConLai).toBe(0); // không phải 2 — phần vừa nhả hết hạn ngay, không sống lại
+    expect(repoSo.kho.at(-1)).toMatchObject({ lyDo: 'het_han', soNgay: -2 });
   });
 
   it('hoàn lần hai không ghi thêm dòng sổ và không cộng nhầm số dư (idempotent)', async () => {
@@ -348,7 +491,7 @@ describe('QuyPhep_Service — vòng đời giữ chỗ', () => {
   // một lần duyệt hỏng giữa chừng (đơn phân bổ ≥2 quỹ) rồi để HR bấm duyệt
   // LẠI — nghĩa là "duyệt lần hai" giờ là một tình huống HỢP LỆ, không phải
   // lỗi. `chuyenSangDaDung` vì vậy đổi từ "ném lỗi để chặn" sang "tự chống
-  // trùng qua sổ" (`daGhiChoDon`) — lần gọi lại thấy đã có dòng sổ
+  // trùng qua sổ" (`soRongDaDung`) — lần gọi lại thấy đã có dòng sổ
   // `duyet_don` đúng requestId thì ÂM THẦM bỏ qua quỹ đó, không ném, không
   // trừ thêm. Quỹ vẫn không bao giờ âm, chỉ khác ở CHỖ chặn.
   it('duyệt lần hai cho cùng một đơn (idempotent) → không trừ thêm, sổ không nhân đôi', async () => {
@@ -417,7 +560,7 @@ describe('QuyPhep_Service — vòng đời giữ chỗ', () => {
     ).toHaveLength(1);
   });
 
-  // hoanTraDaDung song sinh với chuyenSangDaDung — cùng cơ chế daGhiChoDon,
+  // hoanTraDaDung song sinh với chuyenSangDaDung — cùng cơ chế soRongDaDung,
   // xác nhận hoạt động khi phanBo có nhiều phần tử.
   it('hoàn lần hai cho cùng một đơn (idempotent, nhiều quỹ) → mỗi quỹ chỉ hoàn một lần, sổ không nhân đôi', async () => {
     const { service, repoQuy, repoSo } = await dungHaiQuy();
@@ -449,7 +592,7 @@ describe('QuyPhep_Service — vòng đời giữ chỗ', () => {
 
   // ────────────────────────────────────────────────────────────────────────
   // P3.8 fix round 3 — vá lại chính khoá chống trùng round 2 thêm vào
-  // (`daGhiChoDon`, "đã từng có dòng sổ chưa"): sổ ghi LỊCH SỬ, không ghi
+  // (tiền thân của `soRongDaDung`, "đã từng có dòng sổ chưa"): sổ ghi LỊCH SỬ, không ghi
   // TRẠNG THÁI. Chuỗi duyệt → từ chối → mở lại → duyệt là HỢP LỆ — chính app
   // hướng dẫn HR đi qua chuỗi này khi chặn chuyển thẳng da_duyet→cho_duyet
   // (xem CHUYEN_TRANG_THAI_KHONG_HOP_LE) — và lần duyệt THỨ HAI trong chuỗi
@@ -520,6 +663,44 @@ describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () =
     ).rejects.toThrow();
   });
 
+  // (P3.8 review round 4, IMPORTANT 8): modal FE mặc định ô số ngày = 0 — một
+  // lần bấm Lưu lỡ tay (chưa kịp gõ số) không được ghi một dòng sổ RỖNG vĩnh
+  // viễn vào sổ append-only.
+  it('điều chỉnh tay soNgay = 0 bị chặn, không ghi sổ', async () => {
+    const { service, repoSo } = await dungHaiQuy();
+    await expect(
+      service.dieuChinhTay(ID_NV1, ID_Q2026, 0, 'lý do bất kỳ', 'hr1'),
+    ).rejects.toThrow();
+    expect(repoSo.kho).toHaveLength(0);
+  });
+
+  // Trừ vượt quá số NGÀY ĐÃ DÙNG thật (không phải trừ vượt số đang giữ chỗ —
+  // đó là thao tác hợp lệ, xem test 'duyệt hỏng ở quỹ thứ hai...' ở trên) là
+  // trạng thái không thể có thật: đã tiêu nhiều hơn số được cấp.
+  it('điều chỉnh tay đẩy soNgayDuocCap xuống dưới soNgayDaDung bị chặn', async () => {
+    const { service, repoQuy, repoSo } = await dungHaiQuy();
+    // Duyệt trước 2 ngày trên quỹ 2026 (duocCap=3) để có soNgayDaDung=2.
+    const phanBo = [{ balanceId: ID_Q2026, nam: 2026, soNgay: 2 }];
+    await service.giuCho(ID_NV1, phanBo, 'don1', 'nv1');
+    await service.chuyenSangDaDung(ID_NV1, phanBo, 'don1', 'hr1');
+    const truocDieuChinh = repoSo.kho.length;
+
+    // Trừ 2 ngày nữa: duocCap 3 → 1, thấp hơn soNgayDaDung (2) → không thể có thật.
+    await expect(
+      service.dieuChinhTay(ID_NV1, ID_Q2026, -2, 'trừ nhầm quá tay', 'hr1'),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(repoSo.kho.length).toBe(truocDieuChinh); // không ghi sổ gì thêm
+    const q2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(q2026.soNgayDuocCap).toBe(3); // không đổi
+
+    // Trong khi đó, trừ vào phần ĐANG GIỮ CHỖ (không phải đã dùng) của quỹ
+    // 2027 vẫn HỢP LỆ — đây chính là kịch bản đã test ở
+    // 'duyệt hỏng ở quỹ thứ hai...', giữ nguyên không bị Task 8 chặn nhầm.
+    await service.dieuChinhTay(ID_NV1, ID_Q2027, -5, 'giảm nhầm', 'hr1');
+    expect(repoQuy.kho.find((x: any) => x.nam === 2027).soNgayDuocCap).toBe(7);
+  });
+
   it('điều chỉnh tay đổi số dư và ghi sổ dieu_chinh_tay', async () => {
     const { service, repoQuy, repoSo } = await dungHaiQuy();
     await service.dieuChinhTay(
@@ -568,7 +749,7 @@ describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () =
 
   it('đối soát khớp sau chuỗi thao tác hỗn hợp', async () => {
     const { service } = await dungService([NV_CHINH_THUC]);
-    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1');
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     const [quy] = await service.layQuyCuaNhanVien(ID_NV1);
     const id = String((quy as any)._id);
 
@@ -583,7 +764,7 @@ describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () =
 
   it('đối soát PHÁT HIỆN được số dư bị sửa lén không qua sổ', async () => {
     const { service, repoQuy } = await dungService([NV_CHINH_THUC]);
-    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1');
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     repoQuy.kho[0].soNgayDuocCap = 99; // ai đó ghi thẳng vào quỹ, không ghi sổ
 
     const lech = await service.doiSoat(ID_NV1);
@@ -592,13 +773,15 @@ describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () =
   });
 
   // Ca đặc biệt: quỹ đã ĐÓNG rồi mới nhận hoàn trả (đơn đã duyệt trước lúc
-  // đóng bị huỷ SAU khi đóng). hoanTraDaDung() hoàn về ĐÚNG quỹ gốc theo thiết
-  // kế, kể cả quỹ da_dong — nên quỹ này có soNgayConLai > 0 một cách hợp lệ.
+  // đóng bị huỷ SAU khi đóng). Task 5 (review round 4): phần hoàn về không
+  // được phép "sống lại" trên một quỹ đã đóng — hoanTraDaDung() giờ tự phát
+  // hiện và hết hạn NGAY phần đó (ghi thêm một dòng sổ `het_han`), nên
+  // `soNgayConLai` PHẢI về đúng 0, không phải phần hoàn dương như trước fix.
   // doiSoat() không được báo đây là lệch (sổ vẫn khớp số), và dongQuy() chạy
   // lại sau đó không được hồi sinh quỹ này về dang_hieu_luc.
-  it('quỹ đã đóng được hoàn phép vào vẫn đối soát khớp, không hồi sinh, conLai phản ánh đúng phần hoàn', async () => {
+  it('quỹ đã đóng được hoàn phép vào không sống lại, vẫn đối soát khớp, không hồi sinh', async () => {
     const { service, repoQuy } = await dungService([NV_CHINH_THUC]);
-    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1');
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     const [quy] = await service.layQuyCuaNhanVien(ID_NV1);
     const id = String((quy as any)._id);
     const phanBo = [{ balanceId: id, nam: 2026, soNgay: 2 }];
@@ -613,11 +796,60 @@ describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () =
 
     const sau = repoQuy.kho.find((x: any) => x.nam === 2026);
     expect(sau.trangThai).toBe('da_dong'); // không hồi sinh về dang_hieu_luc
-    expect(sau.soNgayConLai).toBe(2); // soNgayDuocCap(2 sau khi hết hạn) - soNgayDaDung(0)
+    // soNgayDuocCap: 5 (gốc) - 3 (het_han lúc dongQuy) - 2 (het_han bù ngay
+    // sau khi hoàn) = 0. Phần hoàn KHÔNG được phép hiển thị thành số dư dùng
+    // được — đó là "phép ma" mà Task 5 vá.
+    expect(sau.soNgayDuocCap).toBe(0);
+    expect(sau.soNgayConLai).toBe(0);
 
     expect(await service.doiSoat(ID_NV1)).toEqual([]); // không bị coi là lệch
 
     const lanHai = await service.dongQuy(2026, 'hr1');
     expect(lanHai.soQuyDaDong).toBe(0); // dongQuy sau đó bỏ qua quỹ đã đóng
+  });
+});
+
+// (P3.8 review round 4, IMPORTANT 6): `ghi()` đảo thứ tự — SỔ TRƯỚC, SỐ DƯ
+// SAU cho một quỹ ĐÃ TỒN TẠI. Thứ tự CŨ (số dư trước) hỏng giữa chừng để lại
+// số dư đã di chuyển mà sổ không có dấu vết — retry sẽ áp dụng lần hai. Thứ
+// tự MỚI thất bại giữa chừng để lại đúng một dòng sổ không khớp số dư,
+// `doiSoat()` phát hiện được và người dựng lại từ sổ — đúng lý do sổ tồn tại.
+describe('QuyPhep_Service — ghi() ghi sổ trước, số dư sau (Task 6)', () => {
+  it('quỹ ĐÃ TỒN TẠI: sổ hỏng → số dư KHÔNG bị đổi, an toàn để retry', async () => {
+    const { service, repoQuy, repoSo } = await dungHaiQuy();
+    const phanBo = [{ balanceId: ID_Q2026, nam: 2026, soNgay: 2 }];
+    repoSo.save = jest.fn().mockRejectedValueOnce(new Error('sổ hỏng'));
+
+    await expect(
+      service.chuyenSangDaDung(ID_NV1, phanBo, 'don1', 'hr1'),
+    ).rejects.toThrow('sổ hỏng');
+
+    const q2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
+    // Nếu thứ tự CŨ (số dư trước, sổ sau) còn hiệu lực, soNgayDaDung đã lên 2
+    // dù sổ ghi hỏng — một lần retry sau đó sẽ cộng chồng lần hai (số dư âm
+    // thầm bị trừ hai lần cho cùng một lần duyệt). Thứ tự MỚI giữ số dư
+    // nguyên vẹn.
+    expect(q2026.soNgayDaDung).toBe(0);
+    expect(q2026.soNgayDangChoDuyet).toBe(0); // vẫn chưa bị trừ khỏi chỗ giữ
+    expect(q2026.soNgayConLai).toBe(3);
+  });
+
+  it('quỹ MỚI (capMotNam, chưa có _id): buộc lưu số dư trước để lấy id — nhưng gọi lại không cấp trùng nhờ idempotent riêng của capMotNam', async () => {
+    const { service, repoQuy, repoSo } = await dungService([NV_CHINH_THUC]);
+    repoSo.save = jest.fn().mockRejectedValueOnce(new Error('sổ hỏng'));
+
+    await expect(
+      service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15'),
+    ).rejects.toThrow('sổ hỏng');
+
+    // Quỹ đã được TẠO — không có balanceId nào để ghi sổ trước khi quỹ này
+    // có _id, nên nhánh "quỹ mới" của ghi() buộc phải lưu số dư trước.
+    expect(repoQuy.kho).toHaveLength(1);
+
+    // Gọi lại: capMotNam() thấy quỹ đã tồn tại (timQuy) và bỏ qua — KHÔNG cấp
+    // trùng, dù sổ của lần trước bị thiếu do repoSo.save hỏng.
+    const lanHai = await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
+    expect(lanHai).toEqual([]);
+    expect(repoQuy.kho).toHaveLength(1);
   });
 });

@@ -9,6 +9,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Employee, LeaveBalance, LeaveBalanceEntry, PhanBoQuy } from '@app/entities';
 import { hanDungCuaNam, tinhPhepDuocCap } from './luat-phep';
+import { ngayVN } from '../ban-ghi-cham-cong/thoi-gian.util';
 
 export const MA_LOI_QUY_PHEP = {
   /** Nộp đơn `phep_nam` khi hồ sơ chưa có `ngayChinhThuc`. */
@@ -65,8 +66,44 @@ export class QuyPhep_Service {
   ): Promise<LeaveBalance> {
     quy.soNgayConLai =
       quy.soNgayDuocCap - quy.soNgayDaDung - quy.soNgayDangChoDuyet;
-    const daLuu = await this.repo.save(quy);
 
+    const idHienCo = (quy as any)._id ? String((quy as any)._id) : undefined;
+
+    // (P3.8 review round 4, IMPORTANT 6): SỔ TRƯỚC, SỐ DƯ SAU khi quỹ đã có
+    // sẵn _id (mọi lần GHI ĐÈ một quỹ đang tồn tại — duyệt/hoàn/điều
+    // chỉnh/hết hạn). Thứ tự CŨ (số dư trước, sổ sau) hỏng ở giữa để lại số
+    // dư ĐÃ DI CHUYỂN mà sổ không có dấu vết gì — bộ đếm chống trùng
+    // (`soRongDaDung`, đọc từ sổ) vẫn thấy net = 0 nên một lần RETRY sẽ ÁP
+    // DỤNG LẦN HAI, cộng/trừ chồng lên số đã chồng, và không có transaction
+    // nào ở đây để cuộn lại. Đảo thứ tự thì thất bại giữa chừng để lại đúng
+    // MỘT dòng sổ không khớp số dư — `doiSoat()` phát hiện đúng lệch đó
+    // (theoSo ≠ theoQuy) và CON NGƯỜI dựng lại số dư từ sổ (nguồn sự thật)
+    // được, đúng lý do kiến trúc này có sổ append-only ngay từ đầu.
+    if (idHienCo) {
+      await this.repoSo.save(
+        this.repoSo.create({
+          balanceId: idHienCo,
+          employeeId: quy.employeeId,
+          nam: quy.nam,
+          loaiQuy: quy.loaiQuy,
+          soNgay: bienDong.soNgay,
+          lyDo: bienDong.lyDo,
+          requestId: bienDong.requestId,
+          nguoiThucHien: bienDong.nguoiThucHien,
+          thoiDiem: new Date().toISOString(),
+          ghiChu: bienDong.ghiChu,
+        }) as Partial<LeaveBalanceEntry>,
+      );
+      return this.repo.save(quy);
+    }
+
+    // Quỹ MỚI (capMotNam() tạo lần đầu — chưa có _id): không có balanceId để
+    // ghi sổ trước, buộc phải lưu số dư trước để Mongo cấp _id cho quỹ. Nhánh
+    // này KHÔNG có nguy cơ double-apply của nhánh trên: capMotNam() tự chống
+    // trùng bằng `timQuy()` NGAY TRƯỚC khi gọi ghi() — nếu sổ hỏng sau khi số
+    // dư đã lưu, lần gọi lại sẽ thấy quỹ đã tồn tại và bỏ qua (trả null),
+    // không tạo/cộng thêm lần hai.
+    const daLuu = await this.repo.save(quy);
     await this.repoSo.save(
       this.repoSo.create({
         balanceId: String((daLuu as any)._id),
@@ -94,12 +131,31 @@ export class QuyPhep_Service {
     return ds.find((q) => q.nam === nam) ?? null;
   }
 
+  /**
+   * Quỹ của một NV dùng cho các khối HIỂN THỊ CHO NGƯỜI DÙNG chọn ngày
+   * (khối số dư tự phục vụ, form HR nộp hộ) — KHÔNG dùng cho bảng quản trị
+   * đầy đủ (`layTatCaQuy()`), nơi HR cần thấy cả lịch sử quỹ đã đóng.
+   *
+   * (P3.8 review round 4, IMPORTANT 11): chỉ lọc `isActive` là chưa đủ — một
+   * quỹ `da_dong` của 5 năm trước vẫn `isActive` mãi mãi (xoá mềm không áp
+   * dụng cho quỹ đã đóng đúng quy trình), nên khối số dư phình thêm một dòng
+   * chết mỗi năm. Giữ lại quỹ khi CÒN DÙNG ĐƯỢC (`hanDung >= homNay`) HOẶC
+   * còn `dang_hieu_luc` (quỹ chưa đóng, kể cả lỡ trễ hạn đóng) — chỉ loại
+   * đúng những quỹ đã `da_dong` VÀ đã qua `hanDung`, tức lịch sử chết thật.
+   *
+   * `homNay` nhận qua tham số (mặc định giờ thật) để test ghim được mốc so
+   * sánh — không rải `new Date()` khắp hàm.
+   */
   async layQuyCuaNhanVien(
     employeeId: string,
     loaiQuy = LOAI_QUY_PHEP_NAM,
+    homNay: string = ngayVN(new Date()),
   ): Promise<LeaveBalance[]> {
     const ds = await this.repo.find({ where: { employeeId, loaiQuy } as any });
-    return ds.filter((q) => q.isActive !== false).sort((a, b) => a.nam - b.nam);
+    return ds
+      .filter((q) => q.isActive !== false)
+      .filter((q) => q.hanDung >= homNay || q.trangThai === 'dang_hieu_luc')
+      .sort((a, b) => a.nam - b.nam);
   }
 
   /** Toàn bộ quỹ còn hiệu lực dữ liệu — dùng cho bảng HR và cho `thoi-viec`/`bang-luong` đọc `soNgayConLai`. */
@@ -114,32 +170,63 @@ export class QuyPhep_Service {
       );
   }
 
-  private async nhanVienDuocCap(): Promise<Employee[]> {
-    const ds = await this.repoNhanVien.find({ where: { isActive: true } as any });
-    // Bỏ qua người còn thử việc (chưa có ngayChinhThuc) và người đã nghỉ.
-    // Người còn thử việc sẽ được cấp sau, đúng lúc moKhoaLenChinhThuc() chạy —
-    // gồm cả phần cấp bù năm trước.
+  private async nhanVienDangHoatDong(): Promise<Employee[]> {
+    return this.repoNhanVien.find({ where: { isActive: true } as any });
+  }
+
+  /**
+   * Lọc NV đủ điều kiện nằm trong lệnh cấp phép đầu năm cho `nam`.
+   *
+   * (P3.8 review round 4, IMPORTANT 2): trước đây chỉ kiểm `!!nv.ngayChinhThuc`
+   * — coi TRƯỜNG này như một cờ boolean. Từ khi `ngayChinhThuc` cho phép ghi
+   * một ngày TƯƠNG LAI (kế hoạch hết thử việc nhập lúc tuyển), một NV còn thử
+   * việc với `ngayChinhThuc` xa trong tương lai vẫn lọt qua cờ truthy đó và bị
+   * tính phép của năm `nam` như thể đã chính thức — lật ngược đúng quyết định
+   * spec §3.1 (thử việc = quỹ 0). So bằng CHUỖI với `${nam}-12-31` (không phải
+   * boolean) mới đúng bản chất: chỉ NV có `ngayChinhThuc` rơi vào year `nam`
+   * trở về trước mới được coi là đã/sẽ chính thức trong năm này.
+   *
+   * NV bị loại ở đây (còn thử việc, hoặc ngayChinhThuc rơi vào một năm SAU
+   * `nam`) sẽ được cấp sau, đúng lúc `moKhoaLenChinhThuc()` chạy — gồm cả
+   * phần cấp bù năm trước (ca D của spec).
+   */
+  private locNhanVienDuocCap(ds: Employee[], nam: number): Employee[] {
+    const hanCuoiNam = `${nam}-12-31`;
     return ds.filter(
-      (nv) => !!nv.ngayChinhThuc && !!nv.ngayVaoLam && nv.trangThai !== 'da_nghi',
+      (nv) =>
+        !!nv.ngayChinhThuc &&
+        nv.ngayChinhThuc <= hanCuoiNam &&
+        !!nv.ngayVaoLam &&
+        nv.trangThai !== 'da_nghi',
     );
   }
 
-  /** Cấp một quỹ cho (NV, năm). Đã có quỹ thì trả null — đây là cơ chế idempotent. */
+  /**
+   * Cấp một quỹ cho (NV, năm). `lyDoBoQua` phân biệt HAI lý do khác hẳn nhau
+   * của việc không cấp — Task 7 (review round 4): trước đây cả hai đổ chung
+   * vào một con số `boQua` khiến FE báo sai "đã có quỹ" cho người thực ra
+   * chưa đủ tháng làm việc (0 ngày), và ngược lại.
+   */
   private async capMotNam(
     nv: Employee,
     nam: number,
     lyDo: string,
     nguoiThucHien: string,
-  ): Promise<LeaveBalance | null> {
+  ): Promise<{
+    quy: LeaveBalance | null;
+    lyDoBoQua?: 'da_co_quy' | 'khong_du_thang';
+  }> {
     const employeeId = String((nv as any)._id);
-    if (await this.timQuy(employeeId, nam)) return null;
+    if (await this.timQuy(employeeId, nam)) {
+      return { quy: null, lyDoBoQua: 'da_co_quy' };
+    }
 
     const { soNgay, canCuCap } = tinhPhepDuocCap({
       ngayVaoLam: nv.ngayVaoLam!,
       nam,
       ngayLamViecTrongTuan: nv.ngayLamViecTrongTuan,
     });
-    if (soNgay <= 0) return null;
+    if (soNgay <= 0) return { quy: null, lyDoBoQua: 'khong_du_thang' };
 
     const quy = this.repo.create({
       employeeId,
@@ -157,11 +244,11 @@ export class QuyPhep_Service {
       isActive: true,
     } as Partial<LeaveBalance>);
 
-    return this.ghi(quy, { soNgay, lyDo, nguoiThucHien });
+    return { quy: await this.ghi(quy, { soNgay, lyDo, nguoiThucHien }) };
   }
 
   async xemTruocCapPhepDauNam(nam: number): Promise<DongXemTruocCap[]> {
-    const ds = await this.nhanVienDuocCap();
+    const ds = this.locNhanVienDuocCap(await this.nhanVienDangHoatDong(), nam);
     return Promise.all(
       ds.map(async (nv) => {
         const employeeId = String((nv as any)._id);
@@ -182,40 +269,81 @@ export class QuyPhep_Service {
     );
   }
 
+  /**
+   * Cấp phép đầu năm hàng loạt. Trả BA con số riêng (Task 7, review round 4)
+   * thay vì gộp một `boQua` mập mờ: `daCoQuy` (đã có quỹ năm này từ trước —
+   * lệnh chạy lại) tách khỏi `boQuaThuViec` (chưa đủ điều kiện có quỹ — còn
+   * thử việc, hoặc chưa đủ tháng làm việc để tính ra ngày nào). Gộp hai cái
+   * này từng khiến toast báo sai "bỏ qua N người đã có quỹ" cho một người mới
+   * vào làm chưa đủ tháng.
+   *
+   * Chỉ MỘT lần `repoNhanVien.find()` cho cả hàm (trước đây gọi hai lần — một
+   * lần gián tiếp qua `nhanVienDuocCap()`, một lần nữa chỉ để đếm tổng).
+   */
   async capPhepDauNam(
     nam: number,
     nguoiThucHien: string,
-  ): Promise<{ daCap: number; boQua: number }> {
-    const ds = await this.nhanVienDuocCap();
+  ): Promise<{ daCap: number; daCoQuy: number; boQuaThuViec: number }> {
+    const tatCa = await this.nhanVienDangHoatDong();
+    const ds = this.locNhanVienDuocCap(tatCa, nam);
+
     let daCap = 0;
-    let boQua = 0;
+    let daCoQuy = 0;
+    let khongDuThang = 0;
 
     for (const nv of ds) {
-      const quy = await this.capMotNam(nv, nam, 'cap_dau_nam', nguoiThucHien);
+      const { quy, lyDoBoQua } = await this.capMotNam(
+        nv,
+        nam,
+        'cap_dau_nam',
+        nguoiThucHien,
+      );
       if (quy) daCap += 1;
-      else boQua += 1;
+      else if (lyDoBoQua === 'da_co_quy') daCoQuy += 1;
+      else khongDuThang += 1;
     }
 
-    // Người còn thử việc cũng nằm trong `boQua` gián tiếp: họ đã bị loại ở
-    // nhanVienDuocCap(), nên cộng thêm phần chênh lệch cho con số báo cáo đúng.
-    const tongNhanSu = (await this.repoNhanVien.find({ where: { isActive: true } as any }))
-      .length;
-    boQua += tongNhanSu - ds.length;
+    // Người bị `locNhanVienDuocCap()` loại thẳng (còn thử việc, hoặc
+    // ngayChinhThuc rơi vào năm sau `nam`) cộng chung với người "đủ điều
+    // kiện nhưng ra 0 ngày" — cả hai đều là "chưa đủ điều kiện có quỹ",
+    // khác hẳn nhóm `daCoQuy` (đã có quỹ, lệnh chạy trùng).
+    const boQuaThuViec = tatCa.length - ds.length + khongDuThang;
 
-    return { daCap, boQua };
+    return { daCap, daCoQuy, boQuaThuViec };
   }
 
   /**
    * Mở khoá quỹ khi NV lên chính thức. Cấp quỹ năm của `ngayChinhThuc` VÀ
-   * cấp bù mọi năm trước đó có tháng làm việc mà chưa có quỹ (ca D của spec):
-   * NV vào làm T11/2026 nhưng T1/2027 mới chính thức thì các tháng làm việc
-   * năm 2026 vẫn có thật — không cấp bù là NV mất trắng do lỗi thời điểm.
+   * cấp bù mọi năm trước đó CÒN DÙNG ĐƯỢC mà chưa có quỹ (ca D của spec): NV
+   * vào làm T11/2026 nhưng T1/2027 mới chính thức thì các tháng làm việc năm
+   * 2026 vẫn có thật — không cấp bù là NV mất trắng do lỗi thời điểm.
    *
    * Idempotent: gọi lại không cấp thêm (dựa `capMotNam` trả null khi đã có quỹ).
+   *
+   * (P3.8 review round 4, IMPORTANT 2 + 4):
+   *
+   * 2 — `ngayChinhThuc` là một NGÀY, không phải cờ boolean. Trước đây hàm
+   * này chỉ kiểm `!!nv.ngayChinhThuc` rồi cấp NGAY LẬP TỨC, kể cả khi ngày đó
+   * nằm ở TƯƠNG LAI (kế hoạch hết thử việc nhập lúc tuyển) — HR gõ xong là
+   * một người còn đang thử việc nhận trọn quỹ ngay hôm đó, lật ngược spec
+   * §3.1 ("cấp trước rồi NV nghỉ ngang là mất tiền mà không đòi lại được").
+   * Chặn ở đây: chưa tới `ngayChinhThuc` (so với `homNay`) thì KHÔNG mở khoá
+   * gì cả — trả mảng rỗng, không tạo quỹ nào. `homNay` nhận qua tham số
+   * (mặc định giờ thật) để test ghim được mốc so sánh.
+   *
+   * 4 — Backfill KHÔNG được cấp vào những năm đã chết (`hanDung < homNay`):
+   * rollout đổ `ngayChinhThuc` hàng loạt cho NV đang làm lâu năm (ví dụ vào
+   * làm 2019, chính thức 2019, nhưng hôm nay đã là 2026) sẽ tạo một quỹ 2019
+   * hết hạn từ 2020 mà KHÔNG tạo quỹ năm nay — `layQuyCuaNhanVien` không lọc
+   * hạn dùng ở tầng entity nên khối số dư nhân viên sẽ hiện một quỹ chết như
+   * còn dùng được. Bound vòng lặp tới `max(namChinhThuc, namHomNay)` rồi lọc
+   * bỏ từng năm đã hết hạn NGAY TRONG vòng lặp — luôn đảm bảo năm hiện tại
+   * (nếu còn hạn, luôn đúng) được xét tới dù `namChinhThuc` đã lùi xa.
    */
   async moKhoaLenChinhThuc(
     employeeId: string,
     nguoiThucHien: string,
+    homNay: string = ngayVN(new Date()),
   ): Promise<LeaveBalance[]> {
     const { ObjectId } = await import('mongodb');
     const nv = await this.repoNhanVien.findOne({
@@ -223,14 +351,28 @@ export class QuyPhep_Service {
     });
     if (!nv) throw new NotFoundException('Không tìm thấy nhân viên');
     if (!nv.ngayChinhThuc || !nv.ngayVaoLam) return [];
+    if (nv.ngayChinhThuc > homNay) return [];
 
     const namVao = Number(nv.ngayVaoLam.slice(0, 4));
     const namChinhThuc = Number(nv.ngayChinhThuc.slice(0, 4));
+    const namHomNay = Number(homNay.slice(0, 4));
+    const namCuoiBackfill = Math.max(namChinhThuc, namHomNay);
 
     const daCap: LeaveBalance[] = [];
-    for (let nam = namVao; nam <= namChinhThuc; nam += 1) {
-      const lyDo = nam === namChinhThuc ? 'cap_len_chinh_thuc' : 'cap_bu_nam_truoc';
-      const quy = await this.capMotNam(nv, nam, lyDo, nguoiThucHien);
+    for (let nam = namVao; nam <= namCuoiBackfill; nam += 1) {
+      if (hanDungCuaNam(nam) < homNay) continue; // quỹ năm này đã chết, cấp cũng vô nghĩa
+
+      const lyDo =
+        nam === namChinhThuc
+          ? 'cap_len_chinh_thuc'
+          : nam < namChinhThuc
+            ? 'cap_bu_nam_truoc'
+            // nam > namChinhThuc: chỉ xảy ra khi rollout điền ngayChinhThuc
+            // trễ (namHomNay > namChinhThuc) — đây thực chất là phần cấp
+            // đầu năm bình thường mà NV lẽ ra đã nhận qua capPhepDauNam() nếu
+            // hồ sơ có ngayChinhThuc từ đầu năm.
+            : 'cap_dau_nam';
+      const { quy } = await this.capMotNam(nv, nam, lyDo, nguoiThucHien);
       if (quy) daCap.push(quy);
     }
 
@@ -364,8 +506,9 @@ export class QuyPhep_Service {
    * duyệt THỨ HAI trong chuỗi đó PHẢI thực sự chạy — round 2 lại thấy dòng
    * `duyet_don` từ lần duyệt ĐẦU TIÊN và bỏ qua, để chỗ giữ (`giuCho` ở bước
    * mở lại) kẹt vĩnh viễn trong `soNgayDangChoDuyet`, không bao giờ được
-   * nhả (huỷ đơn sau đó cũng bị `daGhiChoDon('huy_don')` cũ chặn nhầm vì
-   * `huy_don` đã có từ lần từ chối trước).
+   * nhả (huỷ đơn sau đó cũng bị bản kiểm tra cũ — tiền thân của
+   * `soRongDaDung()` bên dưới — chặn nhầm vì đã có dòng `huy_don` từ lần từ
+   * chối trước).
    *
    * Số RÒNG mới trả lời đúng câu hỏi "hiện đang tiêu hay đã hoàn": mỗi dòng
    * `duyet_don` +1, mỗi dòng `huy_don` −1. Vẫn chặn được đúng ca round 2
@@ -427,18 +570,42 @@ export class QuyPhep_Service {
     }
   }
 
+  /**
+   * (P3.8 review round 4, IMPORTANT 5): nhả chỗ trên một quỹ ĐÃ ĐÓNG
+   * (`dongQuy()` thu hồi phần rảnh nhưng CỐ Ý giữ nguyên phần đang giữ chỗ —
+   * xem doc-comment `dongQuy()`) không được để phần vừa nhả "sống lại". Nếu
+   * không xử lý, `soNgayConLai` của một quỹ `da_dong` sẽ hiện > 0 dù không
+   * đơn nào tiêu được nó (`phanBoChoNgayNghi` chỉ chọn quỹ `dang_hieu_luc`)
+   * — và `soNgayConLai` chính là con số spec §11 hứa cho `thoi-viec`/
+   * `bang-luong` đọc để trả tiền phép chưa nghỉ, nên "không tiêu được qua
+   * đơn" không đồng nghĩa "vô hại": nó vẫn có thể bị trả thành tiền thật.
+   * `requestId`/`nguoiThucHien` giờ ĐƯỢC dùng (bỏ tiền tố `_`) để ghi đúng
+   * dòng `het_han` bù này vào sổ, truy được về đúng đơn gây ra nó.
+   */
   async nhaCho(
     employeeId: string,
     phanBo: PhanBoQuy[],
-    _requestId: string,
-    _nguoiThucHien: string,
+    requestId: string,
+    nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
       const quy = await this.layQuyTheoId(employeeId, p.balanceId);
       quy.soNgayDangChoDuyet = Math.max(0, quy.soNgayDangChoDuyet - p.soNgay);
       quy.soNgayConLai =
         quy.soNgayDuocCap - quy.soNgayDaDung - quy.soNgayDangChoDuyet;
-      await this.repo.save(quy);
+
+      if (quy.trangThai === 'da_dong' && quy.soNgayConLai > 0) {
+        const mat = quy.soNgayConLai;
+        quy.soNgayDuocCap -= mat;
+        await this.ghi(quy, {
+          soNgay: -mat,
+          lyDo: 'het_han',
+          nguoiThucHien,
+          requestId,
+        });
+      } else {
+        await this.repo.save(quy);
+      }
     }
   }
 
@@ -508,12 +675,27 @@ export class QuyPhep_Service {
       const sau = Math.max(0, truoc - p.soNgay);
       if (sau === truoc) continue; // clamp cắn: hoàn lặp lần hai, không ghi sổ rỗng
       quy.soNgayDaDung = sau;
-      await this.ghi(quy, {
+      const daLuu = await this.ghi(quy, {
         soNgay: p.soNgay,
         lyDo: 'huy_don',
         requestId,
         nguoiThucHien,
       });
+
+      // (P3.8 review round 4, IMPORTANT 5): xem doc-comment tương ứng ở
+      // `nhaCho()` — hoàn phép vào một quỹ ĐÃ ĐÓNG (đơn đã duyệt trước lúc
+      // đóng, bị huỷ SAU khi đóng) làm `soNgayConLai` sống lại dù không đơn
+      // nào tiêu được nó. Hết hạn NGAY phần vừa hồi sinh để số dư về đúng 0.
+      if (daLuu.trangThai === 'da_dong' && daLuu.soNgayConLai > 0) {
+        const mat = daLuu.soNgayConLai;
+        daLuu.soNgayDuocCap -= mat;
+        await this.ghi(daLuu, {
+          soNgay: -mat,
+          lyDo: 'het_han',
+          nguoiThucHien,
+          requestId,
+        });
+      }
     }
   }
 
@@ -541,8 +723,37 @@ export class QuyPhep_Service {
     if (!ghiChu?.trim()) {
       throw new BadRequestException('Điều chỉnh quỹ phép bắt buộc phải có ghi chú');
     }
+    // (P3.8 review round 4, IMPORTANT 8): modal FE mặc định ô số ngày = 0 —
+    // một lần bấm Lưu lỡ tay (chưa kịp gõ số) sẽ ghi một dòng sổ RỖNG, vô
+    // nghĩa nhưng vẫn chiếm một dòng lịch sử vĩnh viễn (sổ append-only,
+    // không sửa/xoá được).
+    if (soNgay === 0) {
+      throw new BadRequestException('Điều chỉnh quỹ phép phải khác 0 ngày');
+    }
 
     const quy = await this.layQuyTheoId(employeeId, balanceId);
+    // Chặn TRƯỚC khi ghi: `soNgayDuocCap` sau điều chỉnh không được thấp hơn
+    // `soNgayDaDung` — đó là trạng thái KHÔNG THỂ CÓ THẬT (đã tiêu nhiều hơn
+    // số được cấp) và không có cách nào tự hồi phục, vì `soNgayDaDung` chỉ
+    // giảm qua `hoanTraDaDung()` (một sự kiện nghiệp vụ khác, không phải điều
+    // chỉnh tay này).
+    //
+    // CỐ Ý không đưa `soNgayDangChoDuyet` vào phép so sánh này (khác với công
+    // thức `soNgayConLai` dùng ở mọi nơi khác trong file): phần đang giữ chỗ
+    // là trạng thái TẠM — HR hạ `soNgayDuocCap` xuống dưới mức đang giữ (ví
+    // dụ sửa lại một lần cấp nhầm quá tay trong lúc đơn của NV còn chờ duyệt)
+    // là một thao tác HỢP LỆ và đã được test ở
+    // 'duyệt hỏng ở quỹ thứ hai...' phía trên: `soNgayConLai` âm tạm thời ở
+    // đây không phải dữ liệu hỏng, nó đúng là "không đủ cho các đơn đang chờ"
+    // — và `chuyenSangDaDung()` đã có guard riêng chặn đúng lúc duyệt.
+    const duocCapSauDieuChinh = quy.soNgayDuocCap + soNgay;
+    if (duocCapSauDieuChinh < quy.soNgayDaDung) {
+      throw new ConflictException({
+        code: MA_LOI_QUY_PHEP.KHONG_DU_SO_DU,
+        message: `Điều chỉnh sẽ làm số ngày được cấp của quỹ ${quy.nam} thấp hơn số đã dùng (${quy.soNgayDaDung} ngày đã dùng, còn ${duocCapSauDieuChinh} sau điều chỉnh)`,
+      });
+    }
+
     quy.soNgayDuocCap += soNgay;
     return this.ghi(quy, {
       soNgay,
