@@ -1,5 +1,19 @@
 import { ServiceBase } from './base/service-base';
 
+/**
+ * P3.8 — mã lỗi 409 khi nộp/duyệt đơn `phep_nam`. Khớp
+ * `MA_LOI_QUY_PHEP`/`MA_LOI_DON_CHAM_CONG` phía backend (quy-phep.service.ts,
+ * don-cham-cong.service.ts). FE đọc `code` (qua `maLoiChamCong()`,
+ * attendanceRecordService.ts) để phân biệt, KHÔNG so khớp chuỗi tiếng Việt —
+ * cùng quy ước với `MA_LOI_THIET_BI`.
+ */
+export const MA_LOI_QUY_PHEP = {
+  /** Hồ sơ chưa có `ngayChinhThuc` (còn thử việc) → chưa có quỹ phép năm. */
+  CHUA_LEN_CHINH_THUC: 'CHUA_LEN_CHINH_THUC',
+  /** Tổng ngày nghỉ vượt số dư khả dụng tại đúng những ngày xin nghỉ. */
+  KHONG_DU_SO_DU: 'KHONG_DU_SO_DU',
+} as const;
+
 export interface LeaveBalance {
   id: string;
   employeeId: string;

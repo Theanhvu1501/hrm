@@ -1,6 +1,7 @@
 import { HandlerDecorator, RegisterHandler } from "@/common";
 import { CSubHanlder } from "@/common/c-handler/core/sub-handler.ts/sub-handler";
 import { attendanceRequestService } from "@/services/attendanceRequestService";
+import { leaveBalanceService } from "@/services/leaveBalanceService";
 import { thongDiepLoiDon } from "../../thongDiepLoi";
 import "./init.event";
 
@@ -32,6 +33,18 @@ export class InitHandler extends CSubHanlder {
       );
     } finally {
       this.setState("dangTai", false);
+    }
+
+    // P3.8 (Task 12): số dư phép — tải RIÊNG, không chung try/catch với danh
+    // sách đơn. BE quỹ phép lỗi (hoặc NV chưa lên chính thức, chưa có quỹ
+    // nào) không được chặn xem/nộp các loại đơn khác (giải trình, OT, nghỉ
+    // bù) — rỗng khi lỗi, KhoiSoDuPhep tự hiện đúng câu cho từng trường hợp.
+    try {
+      const soDuPhep = await leaveBalanceService.getCuaToi();
+      this.setState("soDuPhep", soDuPhep);
+    } catch (error) {
+      console.error("Tải số dư phép lỗi:", error);
+      this.setState("soDuPhep", []);
     }
   }
 }

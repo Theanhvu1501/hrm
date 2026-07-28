@@ -10,7 +10,7 @@
  * LOAI_DON_OPTIONS.
  */
 import React, { useEffect } from "react";
-import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import {
   DonChamCongHandlerProvider,
@@ -21,6 +21,7 @@ import {
   attendanceRequestService,
   AttendanceRequest,
 } from "@/services/attendanceRequestService";
+import { leaveBalanceService, LeaveBalance } from "@/services/leaveBalanceService";
 
 beforeAll(() => {
   const w = window as unknown as Record<string, unknown>;
@@ -49,9 +50,32 @@ beforeAll(() => {
     };
 });
 
+beforeEach(() => {
+  // Số dư phép (Task 12): mặc định rỗng cho mọi test — chỉ các test nói về
+  // KhoiSoDuPhep mới ghi đè. Thiếu mock này thì mở form nghỉ phép/phép năm
+  // sẽ gọi leaveBalanceService.getList() thật (lời gọi mạng thật trong test).
+  vi.spyOn(leaveBalanceService, "getList").mockResolvedValue([]);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+function quy(over: Partial<LeaveBalance> = {}): LeaveBalance {
+  return {
+    id: "q1",
+    employeeId: "nv1",
+    nam: 2026,
+    loaiQuy: "phep_nam",
+    soNgayDuocCap: 12,
+    soNgayDaDung: 0,
+    soNgayDangChoDuyet: 0,
+    soNgayConLai: 12,
+    hanDung: "2027-03-31",
+    trangThai: "dang_hieu_luc",
+    ...over,
+  };
+}
 
 function don(over: Partial<AttendanceRequest> = {}): AttendanceRequest {
   return {
@@ -285,5 +309,54 @@ describe("Form HR — payload gửi lên backend", () => {
       gioDen: "20:00",
       lyDo: "x",
     });
+  });
+});
+
+describe("Form HR — số dư phép (Task 12)", () => {
+  it("nghỉ phép năm: tải và hiện đúng số dư của NHÂN VIÊN đứng tên đơn", async () => {
+    const getList = vi
+      .spyOn(leaveBalanceService, "getList")
+      .mockResolvedValue([quy({ soNgayConLai: 7, soNgayDuocCap: 12 })]);
+
+    moForm(
+      don({
+        employeeId: "nv1",
+        loaiDon: "nghi_phep",
+        ngay: "2026-08-03",
+        denNgay: "2026-08-03",
+        loaiNghi: "phep_nam",
+      })
+    );
+
+    await waitFor(() => expect(getList).toHaveBeenCalledWith("nv1"));
+    expect(await screen.findByText(/Phép năm 2026/)).toBeTruthy();
+  });
+
+  it("nghỉ bù (không phải phép năm) — KHÔNG gọi tải số dư, KHÔNG hiện khối", async () => {
+    const getList = vi
+      .spyOn(leaveBalanceService, "getList")
+      .mockResolvedValue([quy()]);
+
+    moForm(don({ employeeId: "nv1", loaiDon: "nghi_bu", ngay: "2026-08-03", denNgay: "2026-08-03" }));
+
+    await screen.findByText("Đến ngày");
+    expect(getList).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Phép năm/)).toBeNull();
+  });
+
+  it("chưa có quỹ (thử việc) — hiện đúng lý do, không phải bảng rỗng", async () => {
+    vi.spyOn(leaveBalanceService, "getList").mockResolvedValue([]);
+
+    moForm(
+      don({
+        employeeId: "nv1",
+        loaiDon: "nghi_phep",
+        ngay: "2026-08-03",
+        denNgay: "2026-08-03",
+        loaiNghi: "phep_nam",
+      })
+    );
+
+    expect(await screen.findByText(/chưa có quỹ phép năm/i)).toBeTruthy();
   });
 });

@@ -18,6 +18,8 @@ import {
   hienTruong,
 } from "../truongDon";
 import { MAT_HINH_LOAI } from "../loaiDonUI";
+import { KhoiSoDuPhep } from "./KhoiSoDuPhep";
+import { LeaveBalance } from "@/services/leaveBalanceService";
 import "./FormNopDon.state";
 import "../don-tu.css";
 import "@/components/layout/emp-modal.css";
@@ -36,6 +38,9 @@ export function FormNopDon() {
   const [loaiDaChon] = useDonTuCuaToiState("loaiDaChon", "");
   const [dangGui] = useDonTuCuaToiState("dangGui", false);
   const [loiGui] = useDonTuCuaToiState("loiGui", "");
+  // Nạp cùng lúc với danh sách đơn ở init.handler.ts — form không tự gọi lại
+  // leaveBalanceService, chỉ đọc từ state đã có sẵn của trang.
+  const [soDuPhep] = useDonTuCuaToiState("soDuPhep", [] as LeaveBalance[]);
   const [v, setV] = useState<GiaTriFormDon>(GIA_TRI_MAC_DINH);
 
   // Mỗi lần mở lại là một tờ đơn mới, ĐÚNG loại đã chọn ở bước trước. Ngày mặc
@@ -132,6 +137,17 @@ export function FormNopDon() {
           <div className="mt-1 text-[11px] text-[color:var(--emp-muted)]">
             Để trống nếu chỉ nghỉ một ngày.
           </div>
+        </div>
+      )}
+
+      {/* Chỉ đơn phép năm mới trừ quỹ (nghỉ bù/không lương/ốm đau... không
+          đụng tới) — đặt NGAY DƯỚI ô chọn ngày, không phải cạnh nút Gửi: đây
+          là chỗ người dùng còn đang chỉnh Từ ngày/Đến ngày, đúng lúc số dư
+          còn hữu ích cho quyết định, chứ không phải sau khi bấm Gửi mới biết
+          hết phép. */}
+      {v.loaiDon === "nghi_phep" && v.loaiNghi === "phep_nam" && (
+        <div className="mb-3">
+          <KhoiSoDuPhep danhSach={soDuPhep} homNay={homNayVN()} />
         </div>
       )}
 

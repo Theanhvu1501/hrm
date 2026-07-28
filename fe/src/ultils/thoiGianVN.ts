@@ -49,6 +49,17 @@ export function ngayGioVN(iso?: string): string {
   return new Date(iso).toLocaleString('vi-VN', { timeZone: TZ_VN });
 }
 
+/**
+ * "YYYY-MM-DD" → "DD/MM/YYYY". Chuỗi ngày THUẦN (không phải ISO instant, vd
+ * `hanDung` của quỹ phép), nên cắt chuỗi là đủ — không cần dựng `Date` (và
+ * không dính múi giờ máy người xem). Chuỗi rỗng nếu không có giá trị.
+ */
+export function ngayVN(iso?: string): string {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 /** Hôm nay theo giờ VN, dạng "YYYY-MM-DD". */
 export function homNayVN(): string {
   // 'en-CA' là locale cho ra đúng thứ tự YYYY-MM-DD.

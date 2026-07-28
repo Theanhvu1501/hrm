@@ -7,13 +7,14 @@
  * đến mức nguy hiểm, nên chúng là phần lớn số test ở đây.
  */
 import React from 'react';
-import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import DonTuCuaToiPage from './DonTuCuaToiPage';
 import {
   attendanceRequestService,
   AttendanceRequest,
 } from '@/services/attendanceRequestService';
+import { leaveBalanceService, LeaveBalance } from '@/services/leaveBalanceService';
 import { ApiError, ApiErrorType } from '@/config/api';
 import { homNayVN } from '@/ultils/thoiGianVN';
 
@@ -44,9 +45,33 @@ beforeAll(() => {
     };
 });
 
+beforeEach(() => {
+  // Số dư phép (Task 12): mặc định rỗng cho MỌI test trong file này — chỉ
+  // các test nói về KhoiSoDuPhep mới ghi đè bằng mock riêng. Không mock thì
+  // init.handler.ts gọi leaveBalanceService.getCuaToi() thật, tạo một lời
+  // gọi mạng thật trong môi trường test.
+  vi.spyOn(leaveBalanceService, 'getCuaToi').mockResolvedValue([]);
+});
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+function quy(over: Partial<LeaveBalance> = {}): LeaveBalance {
+  return {
+    id: 'q1',
+    employeeId: 'e1',
+    nam: 2026,
+    loaiQuy: 'phep_nam',
+    soNgayDuocCap: 12,
+    soNgayDaDung: 0,
+    soNgayDangChoDuyet: 0,
+    soNgayConLai: 12,
+    hanDung: '2027-03-31',
+    trangThai: 'dang_hieu_luc',
+    ...over,
+  };
+}
 
 function don(over: Partial<AttendanceRequest> = {}): AttendanceRequest {
   return {
@@ -395,5 +420,74 @@ describe('Đơn từ của tôi — lỗi tải', () => {
     render(<DonTuCuaToiPage />);
 
     expect(await screen.findByText(/chưa được gắn với hồ sơ nhân viên/)).toBeTruthy();
+  });
+});
+
+describe('Đơn từ của tôi — số dư phép (Task 12)', () => {
+  it('hiện ngay đầu trang, trước cả khi mở form', async () => {
+    vi.spyOn(attendanceRequestService, 'cuaToi').mockResolvedValue([]);
+    vi.spyOn(leaveBalanceService, 'getCuaToi').mockResolvedValue([
+      quy({ nam: 2026, soNgayConLai: 5, soNgayDuocCap: 12 }),
+    ]);
+
+    render(<DonTuCuaToiPage />);
+
+    expect(await screen.findByText(/Phép năm 2026/)).toBeTruthy();
+  });
+
+  it('không có quỹ nào (thử việc) → nói rõ lý do ngay đầu trang', async () => {
+    vi.spyOn(attendanceRequestService, 'cuaToi').mockResolvedValue([]);
+    vi.spyOn(leaveBalanceService, 'getCuaToi').mockResolvedValue([]);
+
+    render(<DonTuCuaToiPage />);
+
+    expect(await screen.findByText(/chưa có quỹ phép năm/i)).toBeTruthy();
+  });
+
+  it('form nghỉ phép + phép năm: hiện THÊM một khối số dư NGAY DƯỚI ô chọn ngày', async () => {
+    // Trang đã có sẵn MỘT khối số dư ở đầu trang (test phía trên) — test này
+    // đếm số LẦN "Phép năm 2026" xuất hiện để phân biệt khối đầu trang với
+    // khối vừa mở trong form, thay vì tìm-không-thấy (sẽ luôn thấy vì khối
+    // đầu trang không biến mất khi mở form).
+    vi.spyOn(attendanceRequestService, 'cuaToi').mockResolvedValue([]);
+    vi.spyOn(leaveBalanceService, 'getCuaToi').mockResolvedValue([
+      quy({ nam: 2026, soNgayConLai: 5, soNgayDuocCap: 12 }),
+    ]);
+
+    render(<DonTuCuaToiPage />);
+    await screen.findByText('Chưa có đơn nào');
+    expect(screen.getAllByText(/Phép năm 2026/)).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /Nộp đơn/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Nghỉ phép$/ }));
+    await screen.findByLabelText('Loại nghỉ');
+
+    // Chưa chọn loại nghỉ ("— Chọn loại nghỉ —" mặc định): vẫn chỉ MỘT khối
+    // (đầu trang) — form chưa biết đơn có đụng quỹ phép năm hay không.
+    expect(screen.getAllByText(/Phép năm 2026/)).toHaveLength(1);
+
+    fireEvent.change(screen.getByLabelText('Loại nghỉ'), {
+      target: { value: 'phep_nam' },
+    });
+
+    await waitFor(() =>
+      expect(screen.getAllByText(/Phép năm 2026/)).toHaveLength(2),
+    );
+  });
+
+  it('nghỉ bù KHÔNG đụng quỹ phép năm — form không thêm khối số dư', async () => {
+    vi.spyOn(attendanceRequestService, 'cuaToi').mockResolvedValue([]);
+    vi.spyOn(leaveBalanceService, 'getCuaToi').mockResolvedValue([
+      quy({ nam: 2026, soNgayConLai: 5, soNgayDuocCap: 12 }),
+    ]);
+
+    render(<DonTuCuaToiPage />);
+    await screen.findByText('Chưa có đơn nào');
+    fireEvent.click(screen.getByRole('button', { name: /Nộp đơn/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Nghỉ bù$/ }));
+    await screen.findByLabelText('Đến ngày');
+
+    // Vẫn đúng MỘT khối (đầu trang) — form nghỉ bù không thêm khối thứ hai.
+    expect(screen.getAllByText(/Phép năm 2026/)).toHaveLength(1);
   });
 });

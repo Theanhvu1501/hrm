@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal, Button, Input, Select, DatePicker, TimePicker, Row, Col } from "antd";
 import { Controller, useForm } from "react-hook-form";
 import dayjs from "dayjs";
@@ -8,6 +8,7 @@ import {
 } from "../../DonChamCongHandlerContext";
 import { AttendanceRequest } from "@/services/attendanceRequestService";
 import { Employee } from "@/services/employeeService";
+import { leaveBalanceService, LeaveBalance } from "@/services/leaveBalanceService";
 import { BUOI_OPTIONS, LOAI_DON_OPTIONS, LOAI_NGHI_OPTIONS } from "../../constants";
 import { TruongDon, hienTruong } from "../../truongTheoLoaiDon";
 import { DonChamCongFormValues } from "./DonChamCongForm.state";
@@ -16,6 +17,8 @@ import {
   dungDtoQuanTri,
   toFormValues,
 } from "./donChamCongForm.convert";
+import { KhoiSoDuPhep } from "@/pages/toi/don-tu/components/KhoiSoDuPhep";
+import { homNayVN } from "@/ultils/thoiGianVN";
 import "./DonChamCongForm.state";
 
 const TIME_FORMAT = "HH:mm";
@@ -60,6 +63,8 @@ export function DonChamCongForm() {
   const loaiDon = watch("loaiDon");
   const ngay = watch("ngay");
   const denNgay = watch("denNgay");
+  const loaiNghi = watch("loaiNghi");
+  const employeeId = watch("employeeId");
 
   /**
    * Cùng một cơ chế "đổi trường theo loại đơn" như trước (điều kiện dựng trên
@@ -72,6 +77,37 @@ export function DonChamCongForm() {
    */
   const co = (truong: TruongDon) =>
     hienTruong({ loaiDon, ngay, denNgay }, truong);
+
+  // Chỉ đơn phép năm mới trừ quỹ — nghỉ bù/không lương/ốm đau... không liên
+  // quan tới KhoiSoDuPhep.
+  const laDonPhepNam = loaiDon === "nghi_phep" && loaiNghi === "phep_nam";
+
+  // Số dư phép của NHÂN VIÊN ĐANG CHỌN, không phải `getCuaToi()` (đó là "của
+  // chính người đăng nhập" — ở đây người đăng nhập là HR, không phải chủ
+  // đơn). Nạp lại mỗi khi đổi nhân viên hoặc bật loại nghỉ phép năm.
+  const [soDuPhepForm, setSoDuPhepForm] = useState<LeaveBalance[]>([]);
+  useEffect(() => {
+    if (!formVisible || !laDonPhepNam || !employeeId) {
+      setSoDuPhepForm([]);
+      return;
+    }
+    let huy = false;
+    leaveBalanceService
+      .getList(employeeId)
+      .then((ds) => {
+        if (!huy) setSoDuPhepForm(ds);
+      })
+      .catch((error) => {
+        // Không chặn form vì lỗi tải số dư (vd HR nhập liệu không có quyền
+        // xem `/cham-cong/quy-phep:xem`) — KhoiSoDuPhep tự hiện "chưa có quỹ"
+        // khi mảng rỗng, form vẫn tạo/sửa đơn được bình thường.
+        console.error("Tải số dư phép (form HR) lỗi:", error);
+        if (!huy) setSoDuPhepForm([]);
+      });
+    return () => {
+      huy = true;
+    };
+  }, [formVisible, laDonPhepNam, employeeId]);
 
   useEffect(() => {
     if (formVisible) {
@@ -226,6 +262,14 @@ export function DonChamCongForm() {
                 {errors.denNgay.message}
               </div>
             )}
+          </Col>
+        )}
+        {/* Ngay dưới ô chọn ngày (Từ ngày/Đến ngày ở trên), TRƯỚC khi HR bấm
+            Tạo/Cập nhật — cùng vị trí và cùng lý do như form nhân viên: số dư
+            phải thấy được lúc còn đang chọn ngày. */}
+        {laDonPhepNam && (
+          <Col span={24} className="mt-3">
+            <KhoiSoDuPhep danhSach={soDuPhepForm} homNay={homNayVN()} />
           </Col>
         )}
         {co("buoi") && (
