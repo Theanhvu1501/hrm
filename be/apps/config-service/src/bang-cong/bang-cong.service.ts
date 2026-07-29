@@ -293,6 +293,37 @@ export class BangCong_Service {
     }
   }
 
+  /**
+   * Mốc ngày làm việc cuối của MỘT nhân viên, lấy từ hồ sơ thôi việc đã
+   * duyệt/hoàn thành — dùng chung cho `suyLaiMotNgay()` và `demLaiOTrong()`.
+   *
+   * Lấy ngày MUỘN NHẤT chứ không phải hồ sơ khớp đầu tiên trong mảng: NV
+   * nghỉ rồi được tuyển lại rồi nghỉ tiếp sẽ có NHIỀU hồ sơ, và bắt phải hồ
+   * sơ cũ thì mọi ngày sau đó bị coi là ngoài khoảng làm việc — mà nhánh đó
+   * của `suyKyHieuNgay()` trả `chuaXuLy: false` nên không cảnh báo gì cả, cả
+   * tháng công lặng lẽ biến mất. Đây đúng là lỗi `generate()` đã vá ở Task 4
+   * review round 1 (xem `ngayCuoi` trong `generate()` bên trên) — hai hàm
+   * này phải theo cùng luật, nếu không "trả về tự động" sẽ ghi một ký hiệu
+   * SAI cho ngày người đó đã nghỉ.
+   *
+   * `generate()` giữ nguyên cách tính theo lô (gom `Map<employeeId, ...>`
+   * một lần cho mọi nhân viên) vì hiệu năng — không refactor để dùng chung
+   * hàm này, chỉ cùng LUẬT chọn ngày muộn nhất.
+   *
+   * Rơi về `ngayNopDon` (bắt buộc) khi `ngayLamViecCuoi` để trống, còn hơn
+   * coi như người đó làm việc mãi mãi.
+   */
+  private mocNgayLamViecCuoi(thoiViec: Resignation[]): string | undefined {
+    let muonNhat: string | undefined;
+    for (const tv of thoiViec) {
+      if (tv.trangThai !== 'da_duyet' && tv.trangThai !== 'hoan_thanh') continue;
+      const ngay = tv.ngayLamViecCuoi || tv.ngayNopDon;
+      if (!ngay) continue;
+      if (!muonNhat || ngay > muonNhat) muonNhat = ngay;
+    }
+    return muonNhat;
+  }
+
   /** Suy lại ký hiệu cho đúng MỘT ngày của MỘT dòng — dùng cho "trả về tự động". */
   private async suyLaiMotNgay(item: Timesheet, ngayTrongThang: number) {
     const ngay = `${item.thang}-${String(ngayTrongThang).padStart(2, '0')}`;
@@ -309,14 +340,11 @@ export class BangCong_Service {
     ]);
 
     const duLieu = gomTheoNgay(banGhi, don, item.thang).get(item.employeeId)?.get(ngay);
-    const tv = thoiViec.find(
-      (r) => r.trangThai === 'da_duyet' || r.trangThai === 'hoan_thanh',
-    );
 
     return suyKyHieuNgay({
       ngay,
       ngayVaoLam: emp?.ngayVaoLam,
-      ngayLamViecCuoi: tv?.ngayLamViecCuoi || tv?.ngayNopDon,
+      ngayLamViecCuoi: this.mocNgayLamViecCuoi(thoiViec),
       ngayLamViecTrongTuan: emp?.ngayLamViecTrongTuan,
       laNgayLe: tapNgayLeCuaThang(ngayLe, item.thang).has(ngay),
       donNghi: duLieu?.donNghi ?? null,
@@ -339,6 +367,13 @@ export class BangCong_Service {
    * bấm sửa một ô. Ở đây lấy dữ liệu của dòng này MỘT LẦN (5 truy vấn, không
    * đổi theo số ô trống) rồi lặp thuần trong bộ nhớ bằng `suyKyHieuNgay()`
    * trực tiếp — cùng cách `generate()` đã làm cho cả tháng.
+   *
+   * `soOCanhBao` cộng cảnh báo của MỌI ngày trống có `kq.canhBao.length`,
+   * không riêng những ngày `chuaXuLy` — giống hệt `generate()`. Ca cụ thể:
+   * HR xoá một ô mà ngày đó có chấm vào nhưng thiếu giờ ra, máy suy ra lại
+   * `X` kèm cờ `thieu_gio_ra` (`chuaXuLy: false`, không phải "ô trống"), nếu
+   * chỉ cộng theo `soOTrong` thì cảnh báo này biến mất khỏi cột cho tới lần
+   * Tổng hợp kế tiếp.
    */
   private async demLaiOTrong(item: Timesheet): Promise<void> {
     const { ObjectId } = await import('mongodb');
@@ -358,12 +393,14 @@ export class BangCong_Service {
 
     const tapLe = tapNgayLeCuaThang(ngayLe, item.thang);
     const theoNgay = gomTheoNgay(banGhi, don, item.thang).get(item.employeeId);
-    const tv = thoiViec.find(
-      (r) => r.trangThai === 'da_duyet' || r.trangThai === 'hoan_thanh',
-    );
+    const ngayLamViecCuoi = this.mocNgayLamViecCuoi(thoiViec);
 
     const daCo = new Set((item.chiTietNgay ?? []).map((c) => c.ngay));
     let soOTrong = 0;
+    // Cảnh báo của các ngày CHƯA có ô (khác với cảnh báo của ô đã có sẵn
+    // trong chiTietNgay, cộng riêng bên dưới) — cùng cách generate() tách
+    // hai nguồn cảnh báo (ô hr_sua giữ nguyên vs. ô vừa suy ra).
+    let soOCanhBaoTrong = 0;
 
     for (const ngay of cacNgayTrongThang(item.thang)) {
       const soNgay = Number(ngay.slice(-2));
@@ -373,7 +410,7 @@ export class BangCong_Service {
       const kq = suyKyHieuNgay({
         ngay,
         ngayVaoLam: emp?.ngayVaoLam,
-        ngayLamViecCuoi: tv?.ngayLamViecCuoi || tv?.ngayNopDon,
+        ngayLamViecCuoi,
         ngayLamViecTrongTuan: emp?.ngayLamViecTrongTuan,
         laNgayLe: tapLe.has(ngay),
         donNghi: duLieu?.donNghi ?? null,
@@ -383,10 +420,12 @@ export class BangCong_Service {
       });
 
       if (kq.chuaXuLy) soOTrong += 1;
+      if (kq.canhBao.length) soOCanhBaoTrong += 1;
     }
 
     item.soOTrong = soOTrong;
-    item.soOCanhBao = (item.chiTietNgay ?? []).filter((c) => c.canhBao?.length).length + soOTrong;
+    item.soOCanhBao =
+      (item.chiTietNgay ?? []).filter((c) => c.canhBao?.length).length + soOCanhBaoTrong;
   }
 
   /**

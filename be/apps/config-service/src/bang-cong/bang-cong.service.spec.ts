@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
-import { BangCong_Service } from './bang-cong.service';
+import { BangCong_Service, MA_LOI_BANG_CONG } from './bang-cong.service';
 import {
   Timesheet,
   Employee,
@@ -943,6 +943,60 @@ describe('BangCong_Service.setDay — nguồn ô và chốt (P3.9)', () => {
     });
   });
 
+  // Review Task 5: suyLaiMotNgay()/demLaiOTrong() ban đầu chọn hồ sơ thôi
+  // việc bằng `thoiViec.find(...)` — LẤY PHẦN TỬ KHỚP ĐẦU TIÊN theo thứ tự
+  // mảng, đúng lỗi generate() đã vá ở Task 4 review round 1. NV nghỉ lần 1
+  // (08-05) rồi được tuyển lại rồi nghỉ lần 2 (08-20): hồ sơ 08-05 CỐ Ý đứng
+  // TRƯỚC trong mảng — đây là thứ tự duy nhất khiến `.find()` trả nhầm hồ sơ
+  // cũ (không giống test "MUỘN NHẤT" của generate() ở trên: đó là bug của
+  // một vòng lặp ghi-đè-vô-điều-kiện, thứ tự ngược lại mới lộ bug; đây là bug
+  // của `.find()` chọn theo VỊ TRÍ, đứng trước là lộ bug). Nếu bắt phải hồ sơ
+  // 08-05, ngày 08-10 (nằm giữa hai mốc, tức vẫn đang đi làm thật) sẽ bị coi
+  // là ngoài khoảng làm việc — "trả về tự động" sẽ để ô trống thay vì điền
+  // đúng ký hiệu X.
+  it('nhiều hồ sơ thôi việc cho cùng một người → veTuDong dùng ngày MUỘN NHẤT, không coi ngày giữa hai mốc là ngoài khoảng làm việc', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      banGhi: [
+        { employeeId: NV1, ngay: '2026-08-10', loai: 'vao', isActive: true },
+        { employeeId: NV1, ngay: '2026-08-10', loai: 'ra', isActive: true },
+      ],
+      thoiViec: [
+        {
+          employeeId: NV1,
+          trangThai: 'da_duyet',
+          ngayNopDon: '2026-06-01',
+          ngayLamViecCuoi: '2026-08-05',
+          isActive: true,
+        },
+        {
+          employeeId: NV1,
+          trangThai: 'da_duyet',
+          ngayNopDon: '2026-07-01',
+          ngayLamViecCuoi: '2026-08-20',
+          isActive: true,
+        },
+      ],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.setDay(ID_BC1, { ngay: 10, kyHieu: '', veTuDong: true } as any);
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 10)).toMatchObject({
+      kyHieu: 'X',
+      nguon: 'tu_dong',
+    });
+  });
+
   // Lỗ hổng sẵn có trước P3.9: finalize() đặt cờ chot nhưng setDay/update
   // không kiểm gì, nên bảng công đã tính lương vẫn sửa được mà không ai biết.
   it('dòng đã chốt thì setDay ném 409', async () => {
@@ -960,9 +1014,15 @@ describe('BangCong_Service.setDay — nguồn ô và chốt (P3.9)', () => {
       ],
     });
 
-    await expect(service.setDay(ID_BC1, { ngay: 3, kyHieu: 'X' } as any)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    const loi = await service
+      .setDay(ID_BC1, { ngay: 3, kyHieu: 'X' } as any)
+      .catch((e) => e);
+
+    expect(loi).toBeInstanceOf(ConflictException);
+    // Không chỉ đúng LOẠI lỗi — "mã lỗi có tên" là deliverable của task này;
+    // thiếu khẳng định này thì ai đó xoá `code` khỏi ConflictException vẫn
+    // qua được test.
+    expect((loi as any).getResponse().code).toBe(MA_LOI_BANG_CONG.BANG_CONG_DA_CHOT);
   });
 
   it('dòng đã chốt thì update ném 409', async () => {
@@ -980,9 +1040,12 @@ describe('BangCong_Service.setDay — nguồn ô và chốt (P3.9)', () => {
       ],
     });
 
-    await expect(service.update(ID_BC1, { ghiChu: 'sửa lén' } as any)).rejects.toBeInstanceOf(
-      ConflictException,
-    );
+    const loi = await service
+      .update(ID_BC1, { ghiChu: 'sửa lén' } as any)
+      .catch((e) => e);
+
+    expect(loi).toBeInstanceOf(ConflictException);
+    expect((loi as any).getResponse().code).toBe(MA_LOI_BANG_CONG.BANG_CONG_DA_CHOT);
   });
 
   // Review Task 4: recompute() không đụng soOTrong/soOCanhBao — chỉ
@@ -1011,5 +1074,50 @@ describe('BangCong_Service.setDay — nguồn ô và chốt (P3.9)', () => {
     await service.update(ID_BC1, { chiTietNgay: [] } as any);
 
     expect(repoBc.kho[0].soOTrong).toBeGreaterThan(0);
+  });
+
+  // Review Task 5 minor #2: soOCanhBao trước bản vá chỉ cộng cảnh báo của ô
+  // ĐÃ CÓ trong chiTietNgay cộng với soOTrong — bỏ sót cảnh báo của những
+  // ngày CHƯA có ô nhưng máy suy ra được ký hiệu kèm cờ (chuaXuLy: false,
+  // không phải "ô trống"). Ca cụ thể: chấm vào không chấm ra.
+  //
+  // Thu hẹp phạm vi làm việc còn đúng MỘT ngày (ngayVaoLam = ngayLamViecCuoi
+  // = 10/08) để mọi ngày khác trong tháng đều "ngoài phạm vi" (không cảnh
+  // báo) — nhờ vậy soOCanhBao đo được CHỈ RIÊNG cảnh báo của ngày 10/08, tách
+  // bạch khỏi nhiễu của soOTrong.
+  it('demLaiOTrong đếm cảnh báo của ngày có ký hiệu nhưng thiếu giờ ra, không chỉ ngày trống', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [{ ...HO_SO_NV1, ngayVaoLam: '2026-08-10' }],
+      banGhi: [{ employeeId: NV1, ngay: '2026-08-10', loai: 'vao', isActive: true }],
+      thoiViec: [
+        {
+          employeeId: NV1,
+          trangThai: 'da_duyet',
+          ngayNopDon: '2026-08-10',
+          ngayLamViecCuoi: '2026-08-10',
+          isActive: true,
+        },
+      ],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [],
+          soOTrong: 0,
+          soOCanhBao: 0,
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    // ghiChu-only update vẫn kích hoạt demLaiOTrong() (gọi vô điều kiện).
+    await service.update(ID_BC1, { ghiChu: 'kích hoạt demLaiOTrong' } as any);
+
+    // Ngày 10/08 có kyHieu suy ra được (X) nên KHÔNG phải ô trống — soOTrong
+    // vẫn 0 — nhưng vẫn phải lên cảnh báo vì thiếu giờ ra.
+    expect(repoBc.kho[0].soOTrong).toBe(0);
+    expect(repoBc.kho[0].soOCanhBao).toBe(1);
   });
 });
