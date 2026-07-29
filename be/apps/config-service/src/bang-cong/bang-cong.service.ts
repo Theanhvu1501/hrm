@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -29,6 +29,11 @@ export interface BangCongFilter {
   // must accept the raw string form as well as a real boolean.
   isActive?: boolean | string;
 }
+
+export const MA_LOI_BANG_CONG = {
+  /** Sửa bảng công đã chốt — kỳ lương có thể đã tính theo con số cũ. */
+  BANG_CONG_DA_CHOT: 'BANG_CONG_DA_CHOT',
+} as const;
 
 /** Tóm tắt một lần tổng hợp `generate()` — xem doc-comment của hàm đó. */
 export interface TomTatTongHop {
@@ -272,20 +277,151 @@ export class BangCong_Service {
   }
 
   /**
+   * Chốt xong nghĩa là kỳ lương có thể đã tính theo bảng công này. Sửa lén
+   * một ô sau đó là làm cho phiếu lương đã phát và bảng công lệch nhau mà
+   * không ai biết. Muốn sửa thì phải mở lại — hành động có chủ ý.
+   *
+   * Lỗ hổng có sẵn TRƯỚC P3.9: `finalize()` đặt cờ `chot` nhưng không hàm
+   * nào kiểm, nên bảng công đã tính lương vẫn sửa được mà không ai biết.
+   */
+  private chanKhiDaChot(item: Timesheet): void {
+    if (item.trangThai === 'chot') {
+      throw new ConflictException({
+        code: MA_LOI_BANG_CONG.BANG_CONG_DA_CHOT,
+        message: 'Bảng công đã chốt. Bấm "Mở lại" trước khi sửa.',
+      });
+    }
+  }
+
+  /** Suy lại ký hiệu cho đúng MỘT ngày của MỘT dòng — dùng cho "trả về tự động". */
+  private async suyLaiMotNgay(item: Timesheet, ngayTrongThang: number) {
+    const ngay = `${item.thang}-${String(ngayTrongThang).padStart(2, '0')}`;
+    const { ObjectId } = await import('mongodb');
+    const emp = await this.employeeRepo.findOne({
+      where: { _id: new ObjectId(item.employeeId) as any },
+    });
+
+    const [banGhi, don, ngayLe, thoiViec] = await Promise.all([
+      this.recordRepo.find({ where: { employeeId: item.employeeId, isActive: true } as any }),
+      this.requestRepo.find({ where: { employeeId: item.employeeId, isActive: true } as any }),
+      this.holidayRepo.find({ where: { isActive: true } as any }),
+      this.resignationRepo.find({ where: { employeeId: item.employeeId, isActive: true } as any }),
+    ]);
+
+    const duLieu = gomTheoNgay(banGhi, don, item.thang).get(item.employeeId)?.get(ngay);
+    const tv = thoiViec.find(
+      (r) => r.trangThai === 'da_duyet' || r.trangThai === 'hoan_thanh',
+    );
+
+    return suyKyHieuNgay({
+      ngay,
+      ngayVaoLam: emp?.ngayVaoLam,
+      ngayLamViecCuoi: tv?.ngayLamViecCuoi || tv?.ngayNopDon,
+      ngayLamViecTrongTuan: emp?.ngayLamViecTrongTuan,
+      laNgayLe: tapNgayLeCuaThang(ngayLe, item.thang).has(ngay),
+      donNghi: duLieu?.donNghi ?? null,
+      coChamVao: duLieu?.coChamVao ?? false,
+      coChamRa: duLieu?.coChamRa ?? false,
+      coBanGhiNgoaiVung: duLieu?.coBanGhiNgoaiVung ?? false,
+    });
+  }
+
+  /**
+   * Đếm lại soOTrong/soOCanhBao sau khi HR sửa tay (setDay hoặc update thay
+   * cả mảng chiTietNgay).
+   *
+   * "Ô trống" chỉ tính trên NGÀY LÀM VIỆC — Chủ nhật, ngày trước khi vào làm
+   * và ngày sau khi nghỉ việc đều không phải việc HR phải xử lý. Nên phải
+   * suy lại từng ngày chưa có ký hiệu thay vì đếm suông số ngày thiếu.
+   *
+   * KHÔNG gọi `suyLaiMotNgay()` trong vòng lặp: hàm đó tự truy vấn 5 lần cho
+   * MỘT ngày, nên một tháng còn 20 ô trống sẽ thành 100 truy vấn cho một cú
+   * bấm sửa một ô. Ở đây lấy dữ liệu của dòng này MỘT LẦN (5 truy vấn, không
+   * đổi theo số ô trống) rồi lặp thuần trong bộ nhớ bằng `suyKyHieuNgay()`
+   * trực tiếp — cùng cách `generate()` đã làm cho cả tháng.
+   */
+  private async demLaiOTrong(item: Timesheet): Promise<void> {
+    const { ObjectId } = await import('mongodb');
+    const [emp, banGhi, don, ngayLe, thoiViec] = await Promise.all([
+      this.employeeRepo.findOne({ where: { _id: new ObjectId(item.employeeId) as any } }),
+      this.recordRepo.find({
+        where: {
+          employeeId: item.employeeId,
+          isActive: true,
+          ngay: { $gte: `${item.thang}-01`, $lte: `${item.thang}-31` },
+        } as any,
+      }),
+      this.requestRepo.find({ where: { employeeId: item.employeeId, isActive: true } as any }),
+      this.holidayRepo.find({ where: { isActive: true } as any }),
+      this.resignationRepo.find({ where: { employeeId: item.employeeId, isActive: true } as any }),
+    ]);
+
+    const tapLe = tapNgayLeCuaThang(ngayLe, item.thang);
+    const theoNgay = gomTheoNgay(banGhi, don, item.thang).get(item.employeeId);
+    const tv = thoiViec.find(
+      (r) => r.trangThai === 'da_duyet' || r.trangThai === 'hoan_thanh',
+    );
+
+    const daCo = new Set((item.chiTietNgay ?? []).map((c) => c.ngay));
+    let soOTrong = 0;
+
+    for (const ngay of cacNgayTrongThang(item.thang)) {
+      const soNgay = Number(ngay.slice(-2));
+      if (daCo.has(soNgay)) continue;
+
+      const duLieu = theoNgay?.get(ngay);
+      const kq = suyKyHieuNgay({
+        ngay,
+        ngayVaoLam: emp?.ngayVaoLam,
+        ngayLamViecCuoi: tv?.ngayLamViecCuoi || tv?.ngayNopDon,
+        ngayLamViecTrongTuan: emp?.ngayLamViecTrongTuan,
+        laNgayLe: tapLe.has(ngay),
+        donNghi: duLieu?.donNghi ?? null,
+        coChamVao: duLieu?.coChamVao ?? false,
+        coChamRa: duLieu?.coChamRa ?? false,
+        coBanGhiNgoaiVung: duLieu?.coBanGhiNgoaiVung ?? false,
+      });
+
+      if (kq.chuaXuLy) soOTrong += 1;
+    }
+
+    item.soOTrong = soOTrong;
+    item.soOCanhBao = (item.chiTietNgay ?? []).filter((c) => c.canhBao?.length).length + soOTrong;
+  }
+
+  /**
    * Upserts a single day's symbol into `chiTietNgay` and recomputes the
    * derived totals. Passing an empty/falsy `kyHieu` removes that day's
    * entry entirely (clearing the cell) rather than storing a blank symbol.
+   *
+   * HR chạm vào ô nào thì ô đó thuộc về HR: đặt `nguon: 'hr_sua'` và xoá
+   * `canhBao` cũ — cảnh báo cũ nói về giá trị máy suy ra, không còn đúng với
+   * giá trị người vừa đặt. `veTuDong` là đường lùi ngược lại: xoá dấu
+   * `hr_sua` rồi tính lại đúng ngày đó như máy vẫn quản.
    */
   async setDay(id: string, dto: SetDayDto): Promise<Timesheet> {
     const item = await this.findOne(id);
+    this.chanKhiDaChot(item);
+
     const cells = (item.chiTietNgay ?? []).filter((c) => c.ngay !== dto.ngay);
 
-    if (dto.kyHieu) {
-      cells.push({ ngay: dto.ngay, kyHieu: dto.kyHieu });
+    if (dto.veTuDong) {
+      const kq = await this.suyLaiMotNgay(item, dto.ngay);
+      if (kq.kyHieu) {
+        cells.push({
+          ngay: dto.ngay,
+          kyHieu: kq.kyHieu,
+          nguon: NGUON_O.TU_DONG,
+          canhBao: kq.canhBao.length ? kq.canhBao : undefined,
+        });
+      }
+    } else if (dto.kyHieu) {
+      cells.push({ ngay: dto.ngay, kyHieu: dto.kyHieu, nguon: NGUON_O.HR_SUA });
     }
 
     cells.sort((a, b) => a.ngay - b.ngay);
     item.chiTietNgay = cells;
+    await this.demLaiOTrong(item);
     this.recompute(item);
 
     return this.repo.save(item);
@@ -297,15 +433,23 @@ export class BangCong_Service {
    * dto includes a new `chiTietNgay` array, it replaces the existing grid
    * wholesale and triggers a recompute; manual fields (soLanDiMuon,
    * soLanVeSom, ghiChu, soGioLamThem) are applied as-is.
+   *
+   * `chiTietNgay` thay cả mảng thì `soOTrong`/`soOCanhBao` cũng phải đếm lại
+   * — không chỉ `generate()` và `setDay()` mới đổi lưới, PUT nguyên khối
+   * cũng đổi được, nên bỏ sót đường này thì HR lấp đủ ô qua PUT mà cột "ô
+   * trống" vẫn đứng yên vĩnh viễn.
    */
   async update(id: string, dto: UpdateTimesheetDto): Promise<Timesheet> {
     const item = await this.findOne(id);
+    this.chanKhiDaChot(item);
+
     const { soNgayCong: _ignored, chiTietNgay, ...rest } = dto;
 
     Object.assign(item, rest);
     if (chiTietNgay) {
       item.chiTietNgay = chiTietNgay as ChiTietNgayCong[];
     }
+    await this.demLaiOTrong(item);
     this.recompute(item);
 
     return this.repo.save(item);

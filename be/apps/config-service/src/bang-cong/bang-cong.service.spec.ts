@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { BangCong_Service } from './bang-cong.service';
 import {
   Timesheet,
@@ -27,6 +27,7 @@ describe('BangCong_Service', () => {
   };
   let mockEmployeeRepo: {
     find: jest.Mock;
+    findOne: jest.Mock;
   };
   let mockRequestRepo: {
     find: jest.Mock;
@@ -61,6 +62,11 @@ describe('BangCong_Service', () => {
 
     mockEmployeeRepo = {
       find: jest.fn().mockResolvedValue([]),
+      // Task 5: setDay/update giờ đếm lại soOTrong sau mỗi lần lưu
+      // (demLaiOTrong), việc đó cần tra hồ sơ nhân viên qua findOne — các
+      // describe cũ (setDay/update) không quan tâm kết quả này nên trả null
+      // là đủ, chỉ cần phương thức tồn tại để không throw.
+      findOne: jest.fn().mockResolvedValue(null),
     };
 
     mockRequestRepo = {
@@ -279,7 +285,9 @@ describe('BangCong_Service', () => {
 
       const result = await service.setDay(id, { ngay: 5, kyHieu: '1/2' });
 
-      expect(result.chiTietNgay).toEqual([{ ngay: 5, kyHieu: '1/2' }]);
+      // Task 5: mọi ô HR gõ qua setDay() giờ mang dấu nguon: 'hr_sua' — xem
+      // describe 'BangCong_Service.setDay — nguồn ô và chốt (P3.9)' bên dưới.
+      expect(result.chiTietNgay).toEqual([{ ngay: 5, kyHieu: '1/2', nguon: 'hr_sua' }]);
       expect(result.soNgayCong).toBe(0.5);
     });
 
@@ -851,5 +859,157 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
 
     const where = repoBanGhi.lanFindCuoi?.where ?? {};
     expect(where.ngay).toEqual({ $gte: '2026-08-01', $lte: '2026-08-31' });
+  });
+});
+
+// `findOne()`/`setDay()`/`update()` chạy `new ObjectId(id)` thật trên tham số
+// id trước khi hỏi repo — không như `_id: { toString: () => 'bc1' }` của các
+// fixture generate() ở trên (không đi qua findOne nên chuỗi ngắn vô hại), ở
+// đây id phải là hex 24 ký tự thật, cùng quy ước ID_NV1/ID_Q2026 của
+// quy-phep.service.spec.ts.
+const ID_BC1 = '650000000000000000000bc1';
+
+describe('BangCong_Service.setDay — nguồn ô và chốt (P3.9)', () => {
+  it('HR sửa một ô thì ô đó thành hr_sua và mất cảnh báo', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 3, kyHieu: 'X', nguon: 'tu_dong', canhBao: ['thieu_gio_ra'] }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.setDay(ID_BC1, { ngay: 3, kyHieu: 'CT' } as any);
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 3)).toMatchObject({
+      kyHieu: 'CT',
+      nguon: 'hr_sua',
+    });
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 3).canhBao ?? []).toEqual([]);
+  });
+
+  it('xoá ký hiệu vẫn đếm lại ô trống', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 3, kyHieu: 'X', nguon: 'tu_dong' }],
+          soOTrong: 0,
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.setDay(ID_BC1, { ngay: 3, kyHieu: '' } as any);
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 3)).toBeUndefined();
+    expect(repoBc.kho[0].soOTrong).toBeGreaterThan(0);
+  });
+
+  it('trả ô về tự động thì ô quay lại giá trị máy suy ra', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      banGhi: [
+        { employeeId: NV1, ngay: '2026-08-03', loai: 'vao', isActive: true },
+        { employeeId: NV1, ngay: '2026-08-03', loai: 'ra', isActive: true },
+      ],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 3, kyHieu: 'CT', nguon: 'hr_sua' }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.setDay(ID_BC1, { ngay: 3, kyHieu: '', veTuDong: true } as any);
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 3)).toMatchObject({
+      kyHieu: 'X',
+      nguon: 'tu_dong',
+    });
+  });
+
+  // Lỗ hổng sẵn có trước P3.9: finalize() đặt cờ chot nhưng setDay/update
+  // không kiểm gì, nên bảng công đã tính lương vẫn sửa được mà không ai biết.
+  it('dòng đã chốt thì setDay ném 409', async () => {
+    const { service } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [],
+          trangThai: 'chot',
+          isActive: true,
+        },
+      ],
+    });
+
+    await expect(service.setDay(ID_BC1, { ngay: 3, kyHieu: 'X' } as any)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  it('dòng đã chốt thì update ném 409', async () => {
+    const { service } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [],
+          trangThai: 'chot',
+          isActive: true,
+        },
+      ],
+    });
+
+    await expect(service.update(ID_BC1, { ghiChu: 'sửa lén' } as any)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+  });
+
+  // Review Task 4: recompute() không đụng soOTrong/soOCanhBao — chỉ
+  // generate() từng nuôi hai cột này. update() thay được cả mảng chiTietNgay
+  // (PUT nguyên khối), nên nếu chỉ setDay() gọi demLaiOTrong() thì HR lấp đủ
+  // ô qua PUT mà cột "ô trống" vẫn đứng yên vĩnh viễn, và nút Chốt ở Task 6
+  // (gác bởi soOTrong > 0) sẽ không bao giờ mở dù bảng công đã đầy thật.
+  it('update thay cả chiTietNgay cũng đếm lại ô trống', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 3, kyHieu: 'X', nguon: 'tu_dong' }],
+          soOTrong: 0,
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    // Xoá trắng lưới qua update() — không có bản ghi chấm công nào để suy ra
+    // ký hiệu, nên mọi ngày làm việc trong tháng đều rơi vào "chưa xử lý".
+    await service.update(ID_BC1, { chiTietNgay: [] } as any);
+
+    expect(repoBc.kho[0].soOTrong).toBeGreaterThan(0);
   });
 });
