@@ -1,10 +1,25 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Timesheet, Employee, AttendanceRequest } from '@app/entities';
+import {
+  Timesheet,
+  Employee,
+  AttendanceRequest,
+  AttendanceRecord,
+  Holiday,
+  Resignation,
+} from '@app/entities';
 import type { ChiTietNgayCong } from '@app/entities';
 import { UpdateTimesheetDto, SetDayDto } from './dto';
-import { soCongCuaKyHieu } from './cham-cong-ky-hieu';
+import { soCongCuaKyHieu, nguonCuaO, NGUON_O } from './cham-cong-ky-hieu';
+import { suyKyHieuNgay } from './suy-ky-hieu';
+import {
+  cacNgayTrongThang,
+  tapNgayLeCuaThang,
+  gomTheoNgay,
+  demMuonSom,
+  tongGioOt,
+} from './nguon-thang';
 
 export interface BangCongFilter {
   thang?: string;
@@ -13,6 +28,15 @@ export interface BangCongFilter {
   // Query-string values arrive as strings (e.g. `?isActive=false`), so this
   // must accept the raw string form as well as a real boolean.
   isActive?: boolean | string;
+}
+
+/** Tóm tắt một lần tổng hợp `generate()` — xem doc-comment của hàm đó. */
+export interface TomTatTongHop {
+  soDongXuLy: number;
+  soODaDien: number;
+  soOTrong: number;
+  soOCanhBao: number;
+  soDongBoQuaVIChot: number;
 }
 
 @Injectable()
@@ -24,45 +48,18 @@ export class BangCong_Service {
     private readonly employeeRepo: Repository<Employee>,
     @InjectRepository(AttendanceRequest)
     private readonly requestRepo: Repository<AttendanceRequest>,
+    @InjectRepository(AttendanceRecord)
+    private readonly recordRepo: Repository<AttendanceRecord>,
+    @InjectRepository(Holiday)
+    private readonly holidayRepo: Repository<Holiday>,
+    @InjectRepository(Resignation)
+    private readonly resignationRepo: Repository<Resignation>,
   ) {}
 
   private coerceIsActive(value?: boolean | string): boolean {
     if (value === undefined) return true;
     if (typeof value === 'boolean') return value;
     return value !== 'false';
-  }
-
-  /**
-   * Hours between two "HH:mm" strings. Returns 0 if either bound is missing,
-   * unparseable, or the range is non-positive (never negative OT).
-   */
-  private parseOtHours(gioTu?: string, gioDen?: string): number {
-    if (!gioTu || !gioDen) return 0;
-
-    const [fromH, fromM] = gioTu.split(':').map(Number);
-    const [toH, toM] = gioDen.split(':').map(Number);
-    if ([fromH, fromM, toH, toM].some((n) => Number.isNaN(n))) return 0;
-
-    const minutes = toH * 60 + toM - (fromH * 60 + fromM);
-    return minutes > 0 ? minutes / 60 : 0;
-  }
-
-  private async sumApprovedOtHours(
-    employeeId: string,
-    thang: string,
-  ): Promise<number> {
-    const requests = await this.requestRepo.find({
-      where: {
-        employeeId,
-        loaiDon: 'lam_them_gio',
-        trangThai: 'da_duyet',
-        isActive: true,
-      },
-    });
-
-    return requests
-      .filter((r) => (r.ngay ?? '').startsWith(thang))
-      .reduce((sum, r) => sum + this.parseOtHours(r.gioTu, r.gioDen), 0);
   }
 
   /**
@@ -84,28 +81,55 @@ export class BangCong_Service {
   }
 
   /**
-   * Upserts one Timesheet row per active employee for `thang`. Existing rows
-   * keep their manually-entered values (soLanDiMuon, ...) and their
-   * chiTietNgay grid — only soGioLamThem is (re)computed every run from
-   * approved lam_them_gio requests, since that field is fully automatic.
-   * New rows start with an empty chiTietNgay grid; soNgayCong (and the P/KL/O
-   * counters) are always derived via `recompute`, never set directly.
+   * Tổng hợp bảng công của cả tháng.
+   *
+   * Ba việc, theo đúng thứ tự: tạo dòng còn thiếu → điền ô `tu_dong` và ô
+   * trống → bỏ qua mọi ô `hr_sua`.
+   *
+   * Không có bảng xem trước như `dongQuy` của quỹ phép, vì thao tác này KHÔNG
+   * phá dữ liệu người: nó chỉ tính lại phần vốn dĩ của máy. Đổi lại phải trả
+   * về tóm tắt để HR biết còn bao nhiêu ô phải tự xử lý.
    */
-  async generate(thang: string): Promise<Timesheet[]> {
-    const employees = await this.employeeRepo.find({
-      where: { isActive: true },
-    });
+  async generate(thang: string): Promise<TomTatTongHop> {
+    const [employees, dongCoSan, banGhi, don, ngayLe, thoiViec] = await Promise.all([
+      this.employeeRepo.find({ where: { isActive: true } as any }),
+      this.repo.find({ where: { thang, isActive: true } as any }),
+      this.recordRepo.find({ where: { isActive: true } as any }),
+      this.requestRepo.find({ where: { isActive: true } as any }),
+      this.holidayRepo.find({ where: { isActive: true } as any }),
+      this.resignationRepo.find({ where: { isActive: true } as any }),
+    ]);
 
-    const rows: Timesheet[] = [];
+    const cacNgay = cacNgayTrongThang(thang);
+    const tapLe = tapNgayLeCuaThang(ngayLe, thang);
+    const theoNgay = gomTheoNgay(banGhi, don, thang);
+    const muonSom = demMuonSom(banGhi.filter((b) => b.ngay?.startsWith(thang)));
+    const gioOt = tongGioOt(don, thang);
+    const ngayCuoi = new Map<string, string>();
+    for (const tv of thoiViec) {
+      if (tv.trangThai !== 'da_duyet' && tv.trangThai !== 'hoan_thanh') continue;
+      if (tv.ngayLamViecCuoi) ngayCuoi.set(tv.employeeId, tv.ngayLamViecCuoi);
+    }
+
+    const dongTheoNv = new Map(dongCoSan.map((d) => [d.employeeId, d]));
+
+    const tomTat: TomTatTongHop = {
+      soDongXuLy: 0,
+      soODaDien: 0,
+      soOTrong: 0,
+      soOCanhBao: 0,
+      soDongBoQuaVIChot: 0,
+    };
 
     for (const emp of employees) {
       const employeeId = String((emp as any)._id);
+      let row = dongTheoNv.get(employeeId);
 
-      const existing = await this.repo.find({
-        where: { thang, employeeId },
-      });
+      if (row?.trangThai === 'chot') {
+        tomTat.soDongBoQuaVIChot += 1;
+        continue;
+      }
 
-      let row = existing[0];
       if (!row) {
         row = this.repo.create({
           thang,
@@ -113,23 +137,72 @@ export class BangCong_Service {
           employeeName: emp.hoTen,
           employeeCode: emp.employeeId,
           chiTietNgay: [],
-          soNgayCong: 0,
-          soGioLamThem: 0,
-          soLanDiMuon: 0,
-          soLanVeSom: 0,
           trangThai: 'nhap',
           isActive: true,
         } as Partial<Timesheet>);
       }
 
-      if (!row.chiTietNgay) row.chiTietNgay = [];
-      row.soGioLamThem = await this.sumApprovedOtHours(employeeId, thang);
+      const oCu = new Map(
+        (row.chiTietNgay ?? []).map((o) => [o.ngay, o] as [number, ChiTietNgayCong]),
+      );
+      const oMoi: ChiTietNgayCong[] = [];
+      let soOTrong = 0;
+      let soOCanhBao = 0;
+
+      for (const ngay of cacNgay) {
+        const soNgay = Number(ngay.slice(-2));
+        const cu = oCu.get(soNgay);
+
+        // Ô HR đã chạm vào là bất khả xâm phạm — kể cả khi căn cứ đã đổi.
+        if (cu && nguonCuaO(cu) === NGUON_O.HR_SUA) {
+          oMoi.push(cu);
+          if (cu.canhBao?.length) soOCanhBao += 1;
+          continue;
+        }
+
+        const duLieu = theoNgay.get(employeeId)?.get(ngay);
+        const kq = suyKyHieuNgay({
+          ngay,
+          ngayVaoLam: emp.ngayVaoLam,
+          ngayLamViecCuoi: ngayCuoi.get(employeeId),
+          ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
+          laNgayLe: tapLe.has(ngay),
+          donNghi: duLieu?.donNghi ?? null,
+          coChamVao: duLieu?.coChamVao ?? false,
+          coChamRa: duLieu?.coChamRa ?? false,
+          coBanGhiNgoaiVung: duLieu?.coBanGhiNgoaiVung ?? false,
+        });
+
+        if (kq.chuaXuLy) soOTrong += 1;
+        if (kq.canhBao.length) soOCanhBao += 1;
+
+        if (kq.kyHieu) {
+          oMoi.push({
+            ngay: soNgay,
+            kyHieu: kq.kyHieu,
+            nguon: NGUON_O.TU_DONG,
+            canhBao: kq.canhBao.length ? kq.canhBao : undefined,
+          });
+          tomTat.soODaDien += 1;
+        }
+      }
+
+      oMoi.sort((a, b) => a.ngay - b.ngay);
+      row.chiTietNgay = oMoi;
+      row.soOTrong = soOTrong;
+      row.soOCanhBao = soOCanhBao;
+      row.soGioLamThem = gioOt.get(employeeId) ?? 0;
+      row.soLanDiMuon = muonSom.get(employeeId)?.diMuon ?? 0;
+      row.soLanVeSom = muonSom.get(employeeId)?.veSom ?? 0;
       this.recompute(row);
 
-      rows.push(await this.repo.save(row));
+      await this.repo.save(row);
+      tomTat.soDongXuLy += 1;
+      tomTat.soOTrong += soOTrong;
+      tomTat.soOCanhBao += soOCanhBao;
     }
 
-    return rows;
+    return tomTat;
   }
 
   async findAll(filter?: BangCongFilter): Promise<Timesheet[]> {

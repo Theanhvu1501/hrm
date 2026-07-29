@@ -2,8 +2,21 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { BangCong_Service } from './bang-cong.service';
-import { Timesheet, Employee, AttendanceRequest } from '@app/entities';
+import {
+  Timesheet,
+  Employee,
+  AttendanceRequest,
+  AttendanceRecord,
+  Holiday,
+  Resignation,
+} from '@app/entities';
 
+// ────────────────────────────────────────────────────────────────────────────
+// Repo giả dùng cho các describe cũ (findAll/update/setDay/findOne/remove/
+// finalize) — không đụng tới generate() nên vẫn dùng khuôn mock đơn giản, chỉ
+// bổ sung 3 repo mới (record/holiday/resignation) làm stub rỗng để thoả DI
+// (constructor của service từ nay cần đủ 6 repo).
+// ────────────────────────────────────────────────────────────────────────────
 describe('BangCong_Service', () => {
   let service: BangCong_Service;
   let mockTimesheetRepo: {
@@ -19,10 +32,6 @@ describe('BangCong_Service', () => {
     find: jest.Mock;
   };
 
-  // In-memory stores backing the mocked `find` calls — a `where` filter is
-  // applied against these arrays so tests can assert on genuine filtering
-  // behaviour (only matching entries make it into the aggregated result),
-  // not just on what arguments the service happened to pass.
   let timesheetStore: Partial<Timesheet>[];
   let requestStore: Partial<AttendanceRequest>[];
 
@@ -71,170 +80,25 @@ describe('BangCong_Service', () => {
           provide: getRepositoryToken(AttendanceRequest),
           useValue: mockRequestRepo,
         },
+        // Stubs rỗng: các describe dưới đây không gọi generate() nên không
+        // chạm tới 3 repo này, nhưng constructor cần đủ tham số để module
+        // Nest resolve được.
+        {
+          provide: getRepositoryToken(AttendanceRecord),
+          useValue: { find: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: getRepositoryToken(Holiday),
+          useValue: { find: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: getRepositoryToken(Resignation),
+          useValue: { find: jest.fn().mockResolvedValue([]) },
+        },
       ],
     }).compile();
 
     service = module.get<BangCong_Service>(BangCong_Service);
-  });
-
-  // ──────────────────────────────────────────────────────────────────────────
-  // generate — tạo bảng công theo tháng
-  // ──────────────────────────────────────────────────────────────────────────
-  describe('generate — tạo mới', () => {
-    it('creates one row per active employee, denorming employeeName/employeeCode', async () => {
-      mockEmployeeRepo.find.mockResolvedValue([
-        {
-          _id: EMP1,
-          employeeId: 'NV0001',
-          hoTen: 'Nguyen Van A',
-          isActive: true,
-        },
-        {
-          _id: EMP2,
-          employeeId: 'NV0002',
-          hoTen: 'Tran Thi B',
-          isActive: true,
-        },
-      ]);
-
-      const result = await service.generate('2026-07');
-
-      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({
-        where: { isActive: true },
-      });
-      expect(result).toHaveLength(2);
-
-      const row1 = result.find((r) => r.employeeId === EMP1)!;
-      expect(row1.employeeName).toBe('Nguyen Van A');
-      expect(row1.employeeCode).toBe('NV0001');
-      expect(row1.thang).toBe('2026-07');
-      expect(row1.trangThai).toBe('nhap');
-      expect(row1.soNgayCong).toBe(0);
-      expect(row1.chiTietNgay).toEqual([]);
-
-      const row2 = result.find((r) => r.employeeId === EMP2)!;
-      expect(row2.employeeName).toBe('Tran Thi B');
-      expect(row2.employeeCode).toBe('NV0002');
-    });
-  });
-
-  describe('generate — cộng dồn giờ OT đã duyệt', () => {
-    it('sums approved lam_them_gio hours (18:00-20:00 => 2h) into soGioLamThem', async () => {
-      mockEmployeeRepo.find.mockResolvedValue([
-        {
-          _id: EMP1,
-          employeeId: 'NV0001',
-          hoTen: 'Nguyen Van A',
-          isActive: true,
-        },
-      ]);
-      requestStore = [
-        {
-          employeeId: EMP1,
-          loaiDon: 'lam_them_gio',
-          trangThai: 'da_duyet',
-          isActive: true,
-          ngay: '2026-07-15',
-          gioTu: '18:00',
-          gioDen: '20:00',
-        },
-      ];
-
-      const [row] = await service.generate('2026-07');
-
-      expect(row.soGioLamThem).toBe(2);
-    });
-
-    it('ignores requests that are not approved or not OT type', async () => {
-      mockEmployeeRepo.find.mockResolvedValue([
-        {
-          _id: EMP1,
-          employeeId: 'NV0001',
-          hoTen: 'Nguyen Van A',
-          isActive: true,
-        },
-      ]);
-      requestStore = [
-        // pending approval — must not count
-        {
-          employeeId: EMP1,
-          loaiDon: 'lam_them_gio',
-          trangThai: 'cho_duyet',
-          isActive: true,
-          ngay: '2026-07-10',
-          gioTu: '18:00',
-          gioDen: '20:00',
-        },
-        // approved but wrong loaiDon — must not count
-        {
-          employeeId: EMP1,
-          loaiDon: 'giai_trinh',
-          trangThai: 'da_duyet',
-          isActive: true,
-          ngay: '2026-07-11',
-          gioTu: '18:00',
-          gioDen: '22:00',
-        },
-        // approved OT but a different month — must not count
-        {
-          employeeId: EMP1,
-          loaiDon: 'lam_them_gio',
-          trangThai: 'da_duyet',
-          isActive: true,
-          ngay: '2026-06-30',
-          gioTu: '18:00',
-          gioDen: '21:00',
-        },
-      ];
-
-      const [row] = await service.generate('2026-07');
-
-      expect(row.soGioLamThem).toBe(0);
-    });
-  });
-
-  describe('generate — không ghi đè giá trị nhập tay', () => {
-    it('keeps the existing row chiTietNgay/soLanDiMuon, re-deriving soNgayCong from the grid', async () => {
-      mockEmployeeRepo.find.mockResolvedValue([
-        {
-          _id: EMP1,
-          employeeId: 'NV0001',
-          hoTen: 'Nguyen Van A',
-          isActive: true,
-        },
-      ]);
-      timesheetStore = [
-        {
-          _id: 'existing-row-id',
-          thang: '2026-07',
-          employeeId: EMP1,
-          employeeName: 'Nguyen Van A',
-          employeeCode: 'NV0001',
-          chiTietNgay: [
-            { ngay: 1, kyHieu: 'X' },
-            { ngay: 2, kyHieu: 'X' },
-          ],
-          soNgayCong: 2,
-          soGioLamThem: 0,
-          soLanDiMuon: 1,
-          soLanVeSom: 0,
-          trangThai: 'nhap',
-          isActive: true,
-        },
-      ];
-
-      const [row] = await service.generate('2026-07');
-
-      // soNgayCong is re-derived from the (untouched) chiTietNgay grid, not
-      // reset to 0 — the existing day-by-day data survives a re-generate.
-      expect(row.soNgayCong).toBe(2);
-      expect(row.chiTietNgay).toEqual([
-        { ngay: 1, kyHieu: 'X' },
-        { ngay: 2, kyHieu: 'X' },
-      ]);
-      expect(row.soLanDiMuon).toBe(1);
-      expect(mockTimesheetRepo.create).not.toHaveBeenCalled();
-    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -488,5 +352,320 @@ describe('BangCong_Service', () => {
         expect.objectContaining({ isActive: false }),
       );
     });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// generate() — P3.9: tự sinh ký hiệu. Khuôn repo giả trưởng thành, giống
+// `quy-phep.service.spec.ts`: find/findOne trả BẢN SAO NÔNG (không phải tham
+// chiếu sống trong `kho`), save xử lý cả insert lẫn update. Bản sao nông là
+// điểm mấu chốt: nếu find trả thẳng tham chiếu, service có thể mutate object
+// tại chỗ rồi QUÊN gọi save() mà mọi test vẫn xanh — vì đúng tham chiếu đó
+// nằm trong `kho`. Đếm `soLanFind` để test "không truy vấn theo từng nhân
+// viên" có ý nghĩa thật, không chỉ là mock trả rỗng.
+// ────────────────────────────────────────────────────────────────────────────
+
+/** Repo giả dùng chung cho mọi entity mà generate() đọc/ghi. */
+function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
+  const kho: any[] = [...banDau];
+  let seq = 0;
+  let soLanFindNoiBo = 0;
+  return {
+    kho,
+    get soLanFind() {
+      return soLanFindNoiBo;
+    },
+    create: (x: any) => ({ ...x }),
+    save: async (x: any) => {
+      if (!x._id) {
+        seq += 1;
+        x._id = { toString: () => seq.toString(16).padStart(24, '0') };
+        kho.push(x);
+        return x;
+      }
+      const idx = kho.findIndex((y) => String(y._id) === String(x._id));
+      if (idx === -1) kho.push(x);
+      else kho[idx] = x;
+      return x;
+    },
+    // BẢN SAO NÔNG — xem giải thích ở đầu describe.
+    find: async ({ where }: any = {}) => {
+      soLanFindNoiBo += 1;
+      return kho
+        .filter((x) =>
+          Object.entries(where ?? {}).every(([k, v]) => (x as any)[k] === v),
+        )
+        .map((x) => ({ ...x }));
+    },
+    findOne: async ({ where }: any) => {
+      const x = kho.find((x) =>
+        Object.entries(where ?? {}).every(
+          ([k, v]) => String((x as any)[k]) === String(v),
+        ),
+      );
+      return x ? { ...x } : null;
+    },
+  };
+}
+
+async function dungService(
+  opts: {
+    nhanVien?: any[];
+    banGhi?: any[];
+    don?: any[];
+    bangCongCoSan?: any[];
+    ngayLe?: any[];
+    thoiViec?: any[];
+  } = {},
+) {
+  const repoBc = taoRepoGia<any>(opts.bangCongCoSan ?? []);
+  const repoNv = taoRepoGia<any>(opts.nhanVien ?? []);
+  const repoDon = taoRepoGia<any>(opts.don ?? []);
+  const repoBanGhi = taoRepoGia<any>(opts.banGhi ?? []);
+  const repoLe = taoRepoGia<any>(opts.ngayLe ?? []);
+  const repoThoiViec = taoRepoGia<any>(opts.thoiViec ?? []);
+
+  const moduleRef = await Test.createTestingModule({
+    providers: [
+      BangCong_Service,
+      { provide: getRepositoryToken(Timesheet), useValue: repoBc },
+      { provide: getRepositoryToken(Employee), useValue: repoNv },
+      { provide: getRepositoryToken(AttendanceRequest), useValue: repoDon },
+      { provide: getRepositoryToken(AttendanceRecord), useValue: repoBanGhi },
+      { provide: getRepositoryToken(Holiday), useValue: repoLe },
+      { provide: getRepositoryToken(Resignation), useValue: repoThoiViec },
+    ],
+  }).compile();
+
+  return {
+    service: moduleRef.get<BangCong_Service>(BangCong_Service),
+    repoBc,
+    repoNv,
+    repoDon,
+    repoBanGhi,
+    repoLe,
+    repoThoiViec,
+  };
+}
+
+// ID trong test PHẢI là chuỗi hex 24 ký tự: `findOne`/`save` so sánh qua
+// `String(_id)`, và nơi khác trong codebase gọi thẳng `new ObjectId(id)`.
+const NV1 = '650000000000000000000001';
+
+const HO_SO_NV1 = {
+  _id: { toString: () => NV1 },
+  employeeId: 'NV0001',
+  hoTen: 'Nguyễn Văn A',
+  ngayVaoLam: '2020-01-01',
+  ngayLamViecTrongTuan: [1, 2, 3, 4, 5, 6],
+  trangThai: 'dang_lam_viec',
+  isActive: true,
+};
+
+describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
+  it('điền X cho ngày có chấm công đủ vào/ra', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      banGhi: [
+        { employeeId: NV1, ngay: '2026-08-03', loai: 'vao', isActive: true },
+        { employeeId: NV1, ngay: '2026-08-03', loai: 'ra', isActive: true },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    const o = repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 3);
+    expect(o).toMatchObject({ kyHieu: 'X', nguon: 'tu_dong' });
+    expect(o.canhBao ?? []).toEqual([]);
+  });
+
+  it('điền P cho ngày có đơn nghỉ phép đã duyệt', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      don: [
+        {
+          employeeId: NV1,
+          loaiDon: 'nghi_phep',
+          loaiNghi: 'phep_nam',
+          ngay: '2026-08-05',
+          trangThai: 'da_duyet',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 5)).toMatchObject({
+      kyHieu: 'P',
+      nguon: 'tu_dong',
+    });
+  });
+
+  // RÀNG BUỘC QUAN TRỌNG NHẤT CỦA CẢ PLAN.
+  it('KHÔNG đè ô HR đã sửa tay', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      banGhi: [{ employeeId: NV1, ngay: '2026-08-03', loai: 'vao', isActive: true }],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => 'bc1' },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 3, kyHieu: 'CT', nguon: 'hr_sua' }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 3)).toMatchObject({
+      kyHieu: 'CT',
+      nguon: 'hr_sua',
+    });
+  });
+
+  // Dữ liệu trước P3.9 không có `nguon` — phải được bảo vệ y như hr_sua, nếu
+  // không lần tổng hợp đầu tiên sau deploy sẽ xoá công sức của nhiều tháng.
+  it('KHÔNG đè ô cũ thiếu nguon', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      banGhi: [{ employeeId: NV1, ngay: '2026-08-03', loai: 'vao', isActive: true }],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => 'bc1' },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 3, kyHieu: 'CT' }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 3).kyHieu).toBe('CT');
+  });
+
+  it('ĐÈ ô tu_dong khi căn cứ đã đổi', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      don: [
+        {
+          employeeId: NV1,
+          loaiDon: 'nghi_phep',
+          loaiNghi: 'phep_nam',
+          ngay: '2026-08-03',
+          trangThai: 'da_duyet',
+          isActive: true,
+        },
+      ],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => 'bc1' },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 3, kyHieu: 'X', nguon: 'tu_dong' }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 3).kyHieu).toBe('P');
+  });
+
+  it('bỏ qua dòng đã chốt và báo lại trong tóm tắt', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      banGhi: [{ employeeId: NV1, ngay: '2026-08-03', loai: 'vao', isActive: true }],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => 'bc1' },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [],
+          trangThai: 'chot',
+          isActive: true,
+        },
+      ],
+    });
+
+    const tomTat = await service.generate('2026-08');
+
+    expect(tomTat.soDongBoQuaVIChot).toBe(1);
+    expect(repoBc.kho[0].chiTietNgay).toEqual([]);
+  });
+
+  it('đếm ô trống và ô cảnh báo vào cột của dòng', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      banGhi: [{ employeeId: NV1, ngay: '2026-08-03', loai: 'vao', isActive: true }],
+    });
+
+    await service.generate('2026-08');
+
+    const dong = repoBc.kho[0];
+    // T8/2026 có 26 ngày T2–T7; ngày 3 có chấm vào nên còn 25 ngày trống.
+    expect(dong.soOTrong).toBe(25);
+    // Ô ngày 3 mang cờ thiếu giờ ra; 25 ô trống mang cờ chưa xử lý.
+    expect(dong.soOCanhBao).toBe(26);
+  });
+
+  it('tính lại số lượt đi muộn / về sớm từ bản ghi', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      banGhi: [
+        { employeeId: NV1, ngay: '2026-08-03', loai: 'vao', soPhutDiMuon: 10, isActive: true },
+        { employeeId: NV1, ngay: '2026-08-03', loai: 'ra', soPhutVeSom: 5, isActive: true },
+        { employeeId: NV1, ngay: '2026-08-04', loai: 'vao', soPhutDiMuon: 2, isActive: true },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    expect(repoBc.kho[0]).toMatchObject({ soLanDiMuon: 2, soLanVeSom: 1 });
+  });
+
+  // Regression của describe cũ 'generate — cộng dồn giờ OT đã duyệt': hành vi
+  // giữ nguyên (giờ OT đã duyệt được cộng vào soGioLamThem), chỉ đổi đường đi
+  // — nay qua tongGioOt() (Task 3) thay vì sumApprovedOtHours() đã bị xoá.
+  it('cộng giờ OT đã duyệt vào soGioLamThem', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      don: [
+        {
+          employeeId: NV1,
+          loaiDon: 'lam_them_gio',
+          trangThai: 'da_duyet',
+          isActive: true,
+          ngay: '2026-08-15',
+          gioTu: '18:00',
+          gioDen: '20:00',
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    expect(repoBc.kho[0].soGioLamThem).toBe(2);
+  });
+
+  it('không truy vấn thêm theo từng nhân viên', async () => {
+    const { service, repoBc, repoBanGhi, repoDon } = await dungService({
+      nhanVien: [HO_SO_NV1, { ...HO_SO_NV1, _id: { toString: () => '650000000000000000000002' } }],
+    });
+
+    await service.generate('2026-08');
+
+    // Mỗi repo được hỏi đúng một lần cho cả tháng, bất kể bao nhiêu nhân viên.
+    expect(repoBanGhi.soLanFind).toBe(1);
+    expect(repoDon.soLanFind).toBe(1);
+    expect(repoBc.soLanFind).toBe(1);
   });
 });
