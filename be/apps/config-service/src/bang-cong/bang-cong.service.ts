@@ -105,10 +105,21 @@ export class BangCong_Service {
     const theoNgay = gomTheoNgay(banGhi, don, thang);
     const muonSom = demMuonSom(banGhi.filter((b) => b.ngay?.startsWith(thang)));
     const gioOt = tongGioOt(don, thang);
+    // Người đã nghỉ vẫn nằm trong danh sách NV đang hoạt động (duyệt thôi việc
+    // chỉ đổi `trangThai`, không tắt `isActive`), nên nếu không có mốc kết thúc
+    // thì mỗi tháng họ đẻ ra hai chục ô "chưa xử lý" vĩnh viễn.
+    // `ngayLamViecCuoi` là trường optional; rơi về `ngayNopDon` (bắt buộc) còn
+    // hơn là coi như làm việc mãi mãi.
+    // Nhiều hồ sơ thôi việc thì lấy ngày MUỘN NHẤT — ghi đè lần cuối trên mảng
+    // chưa sắp xếp sẽ để một hồ sơ cũ xoá trắng mọi ngày sau nó, mà nhánh đó
+    // trả chuaXuLy=false nên không cảnh báo gì cả.
     const ngayCuoi = new Map<string, string>();
     for (const tv of thoiViec) {
       if (tv.trangThai !== 'da_duyet' && tv.trangThai !== 'hoan_thanh') continue;
-      if (tv.ngayLamViecCuoi) ngayCuoi.set(tv.employeeId, tv.ngayLamViecCuoi);
+      const ngay = tv.ngayLamViecCuoi || tv.ngayNopDon;
+      if (!ngay) continue;
+      const daCo = ngayCuoi.get(tv.employeeId);
+      if (!daCo || ngay > daCo) ngayCuoi.set(tv.employeeId, ngay);
     }
 
     const dongTheoNv = new Map(dongCoSan.map((d) => [d.employeeId, d]));
@@ -185,6 +196,16 @@ export class BangCong_Service {
           });
           tomTat.soODaDien += 1;
         }
+      }
+
+      // Ô hr_sua có `ngay` không khớp ngày nào của tháng (dữ liệu bẩn, hoặc
+      // PATCH cũ lọt ngày 31 vào tháng 2) vẫn phải được mang theo: xoá nó đi
+      // là phá đúng thứ spec gọi là bất khả xâm phạm.
+      const ngayDaXet = new Set(cacNgay.map((n) => Number(n.slice(-2))));
+      for (const [soNgay, cu] of oCu) {
+        if (ngayDaXet.has(soNgay)) continue;
+        if (nguonCuaO(cu) !== NGUON_O.HR_SUA) continue;
+        oMoi.push(cu);
       }
 
       oMoi.sort((a, b) => a.ngay - b.ngay);

@@ -527,6 +527,34 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
     });
   });
 
+  // Review round 1: chỉ đọc code chưa đủ khẳng định — ô hr_sua được kiểm
+  // NGUỒN trước khi suy nên suyKyHieuNgay() không bao giờ chạm tới ngày đó,
+  // kể cả khi lịch làm việc trong tuần của NV đã đổi sau lúc HR tick.
+  it('ô hr_sua sống sót cả khi lịch làm việc của NV đã đổi sau lúc tick', async () => {
+    // NV giờ chỉ làm T2–T6, nhưng ô thứ Bảy đã được HR tick từ trước.
+    // 2026-08-01 là thứ Bảy.
+    const { service, repoBc } = await dungService({
+      nhanVien: [{ ...HO_SO_NV1, ngayLamViecTrongTuan: [1, 2, 3, 4, 5] }],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => 'bc1' },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 1, kyHieu: 'CT', nguon: 'hr_sua' }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 1)).toMatchObject({
+      kyHieu: 'CT',
+      nguon: 'hr_sua',
+    });
+  });
+
   // Dữ liệu trước P3.9 không có `nguon` — phải được bảo vệ y như hr_sua, nếu
   // không lần tổng hợp đầu tiên sau deploy sẽ xoá công sức của nhiều tháng.
   it('KHÔNG đè ô cũ thiếu nguon', async () => {
@@ -548,6 +576,35 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
     await service.generate('2026-08');
 
     expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 3).kyHieu).toBe('CT');
+  });
+
+  // Review round 1: `oMoi` trước fix chỉ dựng từ vòng lặp `cacNgay` (1..N của
+  // tháng thật) — ô hr_sua có `ngay` không khớp ngày nào của tháng (dữ liệu
+  // bẩn, hoặc PATCH cũ từng lọt `ngay:31` vào một dòng tháng 2) không được
+  // mang theo và biến mất khỏi lưới khi lưu, dù đó chính là ô spec gọi là
+  // bất khả xâm phạm. T8/2026 có 31 ngày thật; test giả lập một ô hr_sua ở
+  // `ngay: 45` — chắc chắn không khớp ngày nào của bất kỳ tháng nào.
+  it('ô hr_sua có ngay ngoài số ngày thật của tháng vẫn được giữ, không bị xoá âm thầm', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => 'bc1' },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 45, kyHieu: 'CT', nguon: 'hr_sua' }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    expect(repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 45)).toMatchObject({
+      kyHieu: 'CT',
+      nguon: 'hr_sua',
+    });
   });
 
   it('ĐÈ ô tu_dong khi căn cứ đã đổi', async () => {
@@ -654,6 +711,72 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
     await service.generate('2026-08');
 
     expect(repoBc.kho[0].soGioLamThem).toBe(2);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Review round 1: duyệt thôi việc chỉ đổi Employee.trangThai, KHÔNG tắt
+  // isActive — người đã nghỉ vẫn lọt vào employeeRepo.find({isActive:true})
+  // mãi mãi. Nếu không tính đúng mốc kết thúc, mỗi tháng họ đẻ ra hai chục ô
+  // "chưa xử lý" vĩnh viễn (thiếu ngayLamViecCuoi), hoặc tệ hơn — một hồ sơ
+  // thôi việc cũ xử lý sau cùng âm thầm xoá trắng công của những ngày sau nó
+  // mà KHÔNG cảnh báo gì (nhánh "ngoài khoảng làm việc" của suyKyHieuNgay trả
+  // chuaXuLy: false).
+  // ──────────────────────────────────────────────────────────────────────
+  it('hồ sơ thôi việc thiếu ngayLamViecCuoi → rơi về ngayNopDon, không coi là làm việc mãi mãi', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      thoiViec: [
+        {
+          employeeId: NV1,
+          trangThai: 'da_duyet',
+          ngayNopDon: '2026-08-05',
+          // Thiếu ngayLamViecCuoi — hồ sơ duyệt xong nhưng quên điền ngày.
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    // Không còn đẻ ~26 ô "chưa xử lý" vĩnh viễn: NV coi như nghỉ từ 05/08,
+    // nên chỉ những ngày làm việc TỪ 1 đến 5/08 còn tính (sau đó để trống,
+    // không cảnh báo — ngoài phạm vi làm việc, không phải lỗi dữ liệu).
+    // T8/2026: 01(Bảy),03(Hai),04(Ba),05(Tư) là 4 ngày làm việc trong
+    // khoảng 1–5/08 (02 là Chủ nhật, nghỉ theo lịch).
+    expect(repoBc.kho[0].soOTrong).toBe(4);
+  });
+
+  it('nhiều hồ sơ thôi việc cho cùng một người → lấy ngày làm việc cuối MUỘN NHẤT', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      thoiViec: [
+        // Hồ sơ NGÀY MUỘN HƠN đứng TRƯỚC trong mảng — nếu service còn lấy
+        // "bản ghi cuối cùng gặp" (bug cũ, ghi đè vô điều kiện) thì ngày
+        // 2026-08-05 (đứng sau) sẽ thắng nhầm và xoá trắng công từ 06/08 trở
+        // đi mà không một cảnh báo nào.
+        {
+          employeeId: NV1,
+          trangThai: 'da_duyet',
+          ngayNopDon: '2026-07-01',
+          ngayLamViecCuoi: '2026-08-20',
+          isActive: true,
+        },
+        {
+          employeeId: NV1,
+          trangThai: 'da_duyet',
+          ngayNopDon: '2026-07-01',
+          ngayLamViecCuoi: '2026-08-05',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    // T8/2026: Chủ nhật rơi vào 02, 09, 16 trong 20 ngày đầu (NV làm T2–T7)
+    // → 20 - 3 = 17 ngày trống nếu mốc nghỉ thật sự là 20/08 (ngày muộn
+    // nhất). Nếu bug cũ còn đó (lấy nhầm 05/08), con số này tụt xuống 4.
+    expect(repoBc.kho[0].soOTrong).toBe(17);
   });
 
   it('không truy vấn thêm theo từng nhân viên', async () => {
