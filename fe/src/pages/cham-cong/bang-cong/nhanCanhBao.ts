@@ -4,6 +4,10 @@ export const NHAN_CANH_BAO: Record<string, string> = {
   don_va_cham_cong: 'Vừa có đơn nghỉ đã duyệt vừa có chấm công — một trong hai sai',
   ngoai_vung: 'Có lượt chấm công ngoài bán kính địa điểm',
   chua_xu_ly: 'Ngày làm việc nhưng không có căn cứ nào để điền',
+  sau_ngay_nghi_viec:
+    'Có dữ liệu chấm công sau ngày làm việc cuối — kiểm tra lại hồ sơ thôi việc',
+  truoc_ngay_vao_lam:
+    'Có dữ liệu chấm công trước ngày vào làm — kiểm tra lại hồ sơ nhân viên',
 };
 
 /** Mã lạ trả nguyên chuỗi: thà hiện mã còn hơn ô trống không giải thích được. */

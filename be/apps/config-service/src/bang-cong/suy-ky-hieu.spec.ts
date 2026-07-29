@@ -36,6 +36,61 @@ describe('suyKyHieuNgay — bảng ưu tiên', () => {
     expect(kq.kyHieu).toBe('X');
   });
 
+  // CRITICAL A: ngayLamViecCuoi optional, thiếu thì rơi về ngayNopDon (sớm
+  // hơn ngày nghỉ thật). Có chấm công SAU mốc đó không được phép biến mất
+  // âm thầm — phải chặn chốt và báo rõ.
+  it('dòng 1: có chấm vào SAU ngày làm việc cuối → chặn, gắn cờ sau_ngay_nghi_viec', () => {
+    const kq = suyKyHieuNgay(nen({ ngayLamViecCuoi: '2026-07-31', coChamVao: true }));
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(true);
+    expect(kq.canhBao).toContain(MA_CANH_BAO.SAU_NGAY_NGHI_VIEC);
+  });
+
+  it('dòng 1: có đơn nghỉ SAU ngày làm việc cuối → chặn, gắn cờ sau_ngay_nghi_viec', () => {
+    const kq = suyKyHieuNgay(
+      nen({
+        ngayLamViecCuoi: '2026-07-31',
+        donNghi: { loaiDon: 'nghi_phep', loaiNghi: 'phep_nam', laNuaNgay: false },
+      }),
+    );
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(true);
+    expect(kq.canhBao).toContain(MA_CANH_BAO.SAU_NGAY_NGHI_VIEC);
+  });
+
+  it('dòng 1: sau ngày làm việc cuối mà KHÔNG có bằng chứng nào → vẫn trống, im lặng như cũ', () => {
+    const kq = suyKyHieuNgay(nen({ ngayLamViecCuoi: '2026-07-31' }));
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(false);
+    expect(kq.canhBao).toEqual([]);
+  });
+
+  it('dòng 1: có chấm vào TRƯỚC ngày vào làm → chặn, gắn cờ truoc_ngay_vao_lam', () => {
+    const kq = suyKyHieuNgay(nen({ ngayVaoLam: '2026-08-10', coChamVao: true }));
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(true);
+    expect(kq.canhBao).toContain(MA_CANH_BAO.TRUOC_NGAY_VAO_LAM);
+  });
+
+  it('dòng 1: có đơn nghỉ TRƯỚC ngày vào làm → chặn, gắn cờ truoc_ngay_vao_lam', () => {
+    const kq = suyKyHieuNgay(
+      nen({
+        ngayVaoLam: '2026-08-10',
+        donNghi: { loaiDon: 'nghi_phep', loaiNghi: 'phep_nam', laNuaNgay: false },
+      }),
+    );
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(true);
+    expect(kq.canhBao).toContain(MA_CANH_BAO.TRUOC_NGAY_VAO_LAM);
+  });
+
+  it('dòng 1: trước ngày vào làm mà KHÔNG có bằng chứng nào → vẫn trống, im lặng như cũ', () => {
+    const kq = suyKyHieuNgay(nen({ ngayVaoLam: '2026-08-10' }));
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(false);
+    expect(kq.canhBao).toEqual([]);
+  });
+
   // 2026-08-02 là Chủ nhật.
   it('dòng 2: ngày ngoài lịch làm việc → trống, KHÔNG đếm là chưa xử lý', () => {
     const kq = suyKyHieuNgay(nen({ ngay: '2026-08-02' }));

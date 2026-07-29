@@ -18,6 +18,23 @@ export const MA_CANH_BAO = {
   NGOAI_VUNG: 'ngoai_vung',
   /** Ngày làm việc nhưng không có căn cứ nào để điền. */
   CHUA_XU_LY: 'chua_xu_ly',
+  /**
+   * Có chấm công/đơn nghỉ SAU ngày làm việc cuối trên hồ sơ thôi việc. Đây
+   * KHÔNG phải chuyện hiếm: `ngayLamViecCuoi` là trường optional, HR duyệt
+   * đơn thôi việc bỏ trống nó là đường mặc định chứ không phải ngoại lệ.
+   * Không có cờ này thì cả tháng chấm công thật (GPS, thiết bị, đơn từ đã
+   * duyệt) của một người đã nghỉ sẽ lặng lẽ biến mất — máy coi ngày đó
+   * "ngoài phạm vi làm việc" nên không đoán, nhưng cũng không báo cho HR
+   * biết có gì đó cần xem lại. Máy không đoán ký hiệu, nhưng PHẢI la lên.
+   */
+  SAU_NGAY_NGHI_VIEC: 'sau_ngay_nghi_viec',
+  /**
+   * Đối xứng với SAU_NGAY_NGHI_VIEC ở đầu kia: có chấm công/đơn nghỉ TRƯỚC
+   * `ngayVaoLam`. Cùng một lớp lỗi dữ liệu thượng nguồn (hồ sơ nhân viên sai
+   * ngày vào làm, hoặc bản ghi chấm công gắn nhầm employeeId) — đáng được HR
+   * nhìn thấy trước khi chốt, không phải im lặng bỏ qua.
+   */
+  TRUOC_NGAY_VAO_LAM: 'truoc_ngay_vao_lam',
 } as const;
 
 export interface DonNghiCuaNgay {
@@ -90,11 +107,45 @@ function khongTinh(): SuyKyHieuKetQua {
   return { kyHieu: null, canhBao: [], chuaXuLy: false };
 }
 
+/**
+ * Có bằng chứng THẬT SỰ cho ngày này hay không — chấm công hoặc đơn nghỉ đã
+ * duyệt. Dùng để phân biệt hai tình huống hoàn toàn khác nhau khi ngày rơi
+ * ngoài khoảng làm việc (dòng 1 của bảng ưu tiên):
+ *
+ * - Không có gì cả → người thật sự chưa vào làm / đã nghỉ hẳn, ô trống là
+ *   đúng, không phải việc HR phải xử lý.
+ * - CÓ chấm công hoặc đơn nghỉ → dữ liệu mâu thuẫn với mốc ngày trên hồ sơ
+ *   (thường là `ngayLamViecCuoi` bị bỏ trống lúc duyệt thôi việc, rơi về
+ *   `ngayNopDon` sớm hơn ngày thật sự nghỉ). Máy không được tự ý xoá bằng
+ *   chứng thật — phải chặn và bắt HR nhìn thấy.
+ */
+function coBangChung(input: SuyKyHieuInput): boolean {
+  return input.coChamVao || !!input.donNghi;
+}
+
 export function suyKyHieuNgay(input: SuyKyHieuInput): SuyKyHieuKetQua {
-  // Dòng 1: ngoài khoảng làm việc. Không cảnh báo gì — người chưa vào làm
-  // hoặc đã nghỉ việc thì ô trống là đúng, không phải việc HR phải xử lý.
-  if (input.ngayVaoLam && input.ngay < input.ngayVaoLam) return khongTinh();
-  if (input.ngayLamViecCuoi && input.ngay > input.ngayLamViecCuoi) return khongTinh();
+  // Dòng 1: ngoài khoảng làm việc.
+  if (input.ngayVaoLam && input.ngay < input.ngayVaoLam) {
+    // Có chấm công/đơn nghỉ TRƯỚC ngày vào làm là lỗi dữ liệu thượng nguồn
+    // (hồ sơ NV sai ngày, hoặc bản ghi gắn nhầm employeeId) — la lên, không
+    // âm thầm nuốt bằng chứng.
+    if (coBangChung(input)) {
+      return { kyHieu: null, canhBao: [MA_CANH_BAO.TRUOC_NGAY_VAO_LAM], chuaXuLy: true };
+    }
+    return khongTinh();
+  }
+  if (input.ngayLamViecCuoi && input.ngay > input.ngayLamViecCuoi) {
+    // Cùng lý do: `ngayLamViecCuoi` optional trên hồ sơ thôi việc, rơi về
+    // `ngayNopDon` là ĐƯỜNG MẶC ĐỊNH (xem generate()/mocNgayLamViecCuoi()),
+    // không phải trường hợp hiếm. NV đi làm suốt thời gian báo trước rồi
+    // rơi vào đây thì cả tháng công thật của họ không được phép biến mất
+    // không dấu vết — máy vẫn không đoán ký hiệu (đúng nguyên tắc "không
+    // đoán bừa"), nhưng phải chặn chốt và nói rõ lý do.
+    if (coBangChung(input)) {
+      return { kyHieu: null, canhBao: [MA_CANH_BAO.SAU_NGAY_NGHI_VIEC], chuaXuLy: true };
+    }
+    return khongTinh();
+  }
 
   // Dòng 2: ngoài lịch làm việc trong tuần. Đi làm Chủ nhật vẫn để trống —
   // giờ hôm đó đi vào cột làm thêm với hệ số 2.0, không phải một ngày công.
