@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Popover, Space, Tooltip } from "antd";
 import { KyHieuDef } from "@/services/timesheetService";
 import { moTaCanhBao } from "../../nhanCanhBao";
+import { laHrSua } from "../../nguonO";
 
 interface DayCellProps {
   day: number;
@@ -24,7 +25,12 @@ export function DayCell({
   onChange,
 }: DayCellProps) {
   const [open, setOpen] = useState(false);
-  const laHrSua = nguon === "hr_sua";
+  // Đồng bộ với quy ước BE (nguonCuaO() ở cham-cong-ky-hieu.ts, mirror ở
+  // nguonO.ts): ô có ký hiệu nhưng THIẾU nguon là dữ liệu trước P3.9, coi là
+  // hr_sua — máy không bao giờ đè. Trước bản vá, FE so `nguon === "hr_sua"`
+  // trần nên mọi ô đó vẽ như tu_dong (không viền, không nút "Trả về tự
+  // động"), ngược hẳn với thứ BE hứa.
+  const daLaHrSua = laHrSua({ kyHieu, nguon });
   const coCanhBao = !!canhBao?.length;
 
   const cellStyle: React.CSSProperties = {
@@ -33,7 +39,7 @@ export function DayCell({
     color: isWeekend ? "#cf1322" : undefined,
     cursor: disabled ? "default" : "pointer",
     // Viền xanh = người đã chạm vào ô này, máy sẽ không đụng nữa.
-    border: laHrSua ? "1px solid #1677ff" : "1px solid transparent",
+    border: daLaHrSua ? "1px solid #1677ff" : "1px solid transparent",
     // Nền vàng = có chuyện cần HR nhìn trước khi chốt.
     background: coCanhBao ? "#fff7e6" : undefined,
   };
@@ -68,7 +74,7 @@ export function DayCell({
               {opt.kyHieu} - {opt.nhan}
             </Button>
           ))}
-          {laHrSua && (
+          {daLaHrSua && (
             <Button
               size="small"
               block
