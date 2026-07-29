@@ -65,6 +65,20 @@ describe('suyKyHieuNgay — bảng ưu tiên', () => {
     expect(kq.canhBao).toEqual([]);
   });
 
+  // Re-review: coBangChung() ban đầu chỉ nhìn coChamVao/donNghi, bỏ sót
+  // lượt chấm RA đứng một mình — ca đêm có lượt vào rơi sang hôm trước, hoặc
+  // HR nhập bù chỉ một đầu, đều để lại đúng một lượt ra. Ngoài phạm vi làm
+  // việc, một lượt ra một mình vẫn phải được coi là bằng chứng, không kém
+  // lượt vào — cùng lớp tác hại mà CRITICAL A sinh ra để diệt, chỉ hẹp hơn.
+  it('dòng 1: CHỈ có chấm ra SAU ngày làm việc cuối → chặn, gắn cờ sau_ngay_nghi_viec', () => {
+    const kq = suyKyHieuNgay(
+      nen({ ngayLamViecCuoi: '2026-07-31', coChamVao: false, coChamRa: true }),
+    );
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(true);
+    expect(kq.canhBao).toContain(MA_CANH_BAO.SAU_NGAY_NGHI_VIEC);
+  });
+
   it('dòng 1: có chấm vào TRƯỚC ngày vào làm → chặn, gắn cờ truoc_ngay_vao_lam', () => {
     const kq = suyKyHieuNgay(nen({ ngayVaoLam: '2026-08-10', coChamVao: true }));
     expect(kq.kyHieu).toBeNull();

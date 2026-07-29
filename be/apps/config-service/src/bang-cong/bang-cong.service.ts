@@ -533,8 +533,13 @@ export class BangCong_Service {
    * `soNgayCong` (and the P/KL/O counters) are always derived from
    * `chiTietNgay` — any value the caller sends for them is ignored. If the
    * dto includes a new `chiTietNgay` array, it replaces the existing grid
-   * wholesale and triggers a recompute; manual fields (soLanDiMuon,
-   * soLanVeSom, ghiChu, soGioLamThem) are applied as-is.
+   * wholesale and triggers a recompute; manual fields (`ghiChu`,
+   * `soGioLamThem`) are applied as-is.
+   *
+   * `soLanDiMuon`/`soLanVeSom` KHÔNG còn ở đây (Finding E, review wave 2):
+   * đã chuyển sang máy tự tính từ bản ghi chấm công lúc `generate()` (spec
+   * §5.3) — `UpdateTimesheetDto` không còn khai hai trường này nên `rest`
+   * không bao giờ chứa chúng, `Object.assign` không đụng tới.
    *
    * `chiTietNgay` thay cả mảng thì `soOTrong`/`soOCanhBao` cũng phải đếm lại
    * — không chỉ `generate()` và `setDay()` mới đổi lưới, PUT nguyên khối

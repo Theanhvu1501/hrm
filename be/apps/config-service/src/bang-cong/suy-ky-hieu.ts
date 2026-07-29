@@ -118,9 +118,13 @@ function khongTinh(): SuyKyHieuKetQua {
  *   (thường là `ngayLamViecCuoi` bị bỏ trống lúc duyệt thôi việc, rơi về
  *   `ngayNopDon` sớm hơn ngày thật sự nghỉ). Máy không được tự ý xoá bằng
  *   chứng thật — phải chặn và bắt HR nhìn thấy.
+ *
+ * Tính cả lượt chấm RA đứng một mình: ca đêm có lượt vào rơi sang hôm trước,
+ * hoặc HR nhập bù chỉ một đầu, đều để lại đúng một lượt ra. Bỏ sót nó là để
+ * nguyên đúng lớp lỗi mà cảnh báo này sinh ra để diệt, chỉ hẹp hơn.
  */
 function coBangChung(input: SuyKyHieuInput): boolean {
-  return input.coChamVao || !!input.donNghi;
+  return input.coChamVao || input.coChamRa || !!input.donNghi;
 }
 
 export function suyKyHieuNgay(input: SuyKyHieuInput): SuyKyHieuKetQua {
