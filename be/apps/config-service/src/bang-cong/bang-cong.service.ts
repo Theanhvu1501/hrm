@@ -35,6 +35,8 @@ export const MA_LOI_BANG_CONG = {
   BANG_CONG_DA_CHOT: 'BANG_CONG_DA_CHOT',
   /** Chốt khi còn ô chưa xử lý = chốt một kỳ lương thiếu ngày công. */
   CON_O_CHUA_XU_LY: 'CON_O_CHUA_XU_LY',
+  /** Chốt một tháng chưa từng "Tổng hợp" — không có dòng nào để khoá. */
+  CHUA_CO_BANG_CONG: 'CHUA_CO_BANG_CONG',
 } as const;
 
 /** Tóm tắt một lần tổng hợp `generate()` — xem doc-comment của hàm đó. */
@@ -44,6 +46,15 @@ export interface TomTatTongHop {
   soOTrong: number;
   soOCanhBao: number;
   soDongBoQuaVIChot: number;
+  /**
+   * Số dòng "mồ côi": NV bị soft-delete SAU khi đã có dòng bảng công tháng
+   * này (thường còn `soOTrong > 0`) — `employeeRepo.find({isActive:true})`
+   * không còn thấy họ nên vòng lặp chính không bao giờ quay lại dòng đó.
+   * `finalize()` đọc MỌI dòng active của tháng bất kể NV còn hoạt động hay
+   * không, nên nếu không dọn thì dòng này chặn chốt vĩnh viễn, không có UI
+   * nào sửa được ngoài xoá tay. Xem vòng lặp "dòng mồ côi" cuối `generate()`.
+   */
+  soDongMoCoi: number;
 }
 
 @Injectable()
@@ -135,21 +146,26 @@ export class BangCong_Service {
     // Người đã nghỉ vẫn nằm trong danh sách NV đang hoạt động (duyệt thôi việc
     // chỉ đổi `trangThai`, không tắt `isActive`), nên nếu không có mốc kết thúc
     // thì mỗi tháng họ đẻ ra hai chục ô "chưa xử lý" vĩnh viễn.
-    // `ngayLamViecCuoi` là trường optional; rơi về `ngayNopDon` (bắt buộc) còn
-    // hơn là coi như làm việc mãi mãi.
     // Nhiều hồ sơ thôi việc thì lấy ngày MUỘN NHẤT — ghi đè lần cuối trên mảng
     // chưa sắp xếp sẽ để một hồ sơ cũ xoá trắng mọi ngày sau nó, mà nhánh đó
     // trả chuaXuLy=false nên không cảnh báo gì cả.
+    //
+    // Luật chọn mốc CHO TỪNG HỒ SƠ (đã duyệt/hoàn thành, rơi về ngayNopDon khi
+    // thiếu ngayLamViecCuoi) dùng CHUNG `ngayCuoiHopLeCuaHoSo()` với
+    // `mocNgayLamViecCuoi()` bên dưới — hai hàm này phục vụ hai đường khác
+    // nhau (generate() gom theo lô, suyLaiMotNgay()/demLaiOTrong() tính cho
+    // một NV) nhưng PHẢI cùng một luật, nếu không "trả về tự động" sẽ suy ra
+    // một ngày khác với lần Tổng hợp gần nhất cho cùng một người.
     const ngayCuoi = new Map<string, string>();
     for (const tv of thoiViec) {
-      if (tv.trangThai !== 'da_duyet' && tv.trangThai !== 'hoan_thanh') continue;
-      const ngay = tv.ngayLamViecCuoi || tv.ngayNopDon;
+      const ngay = this.ngayCuoiHopLeCuaHoSo(tv);
       if (!ngay) continue;
       const daCo = ngayCuoi.get(tv.employeeId);
       if (!daCo || ngay > daCo) ngayCuoi.set(tv.employeeId, ngay);
     }
 
     const dongTheoNv = new Map(dongCoSan.map((d) => [d.employeeId, d]));
+    const activeIds = new Set(employees.map((emp) => String((emp as any)._id)));
 
     const tomTat: TomTatTongHop = {
       soDongXuLy: 0,
@@ -157,6 +173,7 @@ export class BangCong_Service {
       soOTrong: 0,
       soOCanhBao: 0,
       soDongBoQuaVIChot: 0,
+      soDongMoCoi: 0,
     };
 
     for (const emp of employees) {
@@ -228,11 +245,17 @@ export class BangCong_Service {
       // Ô hr_sua có `ngay` không khớp ngày nào của tháng (dữ liệu bẩn, hoặc
       // PATCH cũ lọt ngày 31 vào tháng 2) vẫn phải được mang theo: xoá nó đi
       // là phá đúng thứ spec gọi là bất khả xâm phạm.
+      //
+      // Cờ cảnh báo của những ô này cũng phải được cộng vào soOCanhBao — nếu
+      // không, `demLaiOTrong()` (đếm TẤT CẢ ô trong chiTietNgay, không phân
+      // biệt trong/ngoài phạm vi tháng) và `generate()` sẽ ra HAI con số khác
+      // nhau cho CÙNG một dòng dữ liệu, chỉ tuỳ đường nào chạy sau cùng.
       const ngayDaXet = new Set(cacNgay.map((n) => Number(n.slice(-2))));
       for (const [soNgay, cu] of oCu) {
         if (ngayDaXet.has(soNgay)) continue;
         if (nguonCuaO(cu) !== NGUON_O.HR_SUA) continue;
         oMoi.push(cu);
+        if (cu.canhBao?.length) soOCanhBao += 1;
       }
 
       oMoi.sort((a, b) => a.ngay - b.ngay);
@@ -248,6 +271,24 @@ export class BangCong_Service {
       tomTat.soDongXuLy += 1;
       tomTat.soOTrong += soOTrong;
       tomTat.soOCanhBao += soOCanhBao;
+    }
+
+    // Dòng "mồ côi": tồn tại trong `dongCoSan` (bảng công tháng này) nhưng
+    // `employeeId` không còn nằm trong `employees` đang hoạt động — NV bị
+    // soft-delete SAU khi đã có dòng, thường vẫn còn `soOTrong > 0`. Vòng lặp
+    // trên chỉ đi qua `employees` nên KHÔNG BAO GIỜ quay lại dòng này; mà
+    // `finalize()` đọc mọi dòng active của tháng bất kể NV còn hoạt động hay
+    // không, nên nó chặn chốt vĩnh viễn nếu không được dọn ở đây. Không đụng
+    // dòng đã `chot` — đã khoá có chủ ý, không phải việc của generate().
+    for (const row of dongCoSan) {
+      if (activeIds.has(row.employeeId)) continue;
+      if (row.trangThai === 'chot') continue;
+      if ((row.soOTrong ?? 0) === 0 && (row.soOCanhBao ?? 0) === 0) continue;
+
+      row.soOTrong = 0;
+      row.soOCanhBao = 0;
+      await this.repo.save(row);
+      tomTat.soDongMoCoi += 1;
     }
 
     return tomTat;
@@ -296,30 +337,41 @@ export class BangCong_Service {
   }
 
   /**
+   * Mốc ngày làm việc cuối áp dụng được của MỘT hồ sơ thôi việc, hoặc
+   * `undefined` nếu hồ sơ đó chưa đủ chín (chưa duyệt/hoàn thành) — dùng
+   * chung cho `generate()` (gom theo lô, tự tính ngày muộn nhất cho mỗi NV
+   * trong `Map`) và `mocNgayLamViecCuoi()` (một NV, cũng lấy muộn nhất).
+   *
+   * Luật này trước đây nằm rải ở HAI nơi (Task 4 review round 1) — sửa một
+   * chỗ quên chỗ kia khiến `generate()` và "trả về tự động"
+   * (`suyLaiMotNgay()`/`demLaiOTrong()`) tính khác ngày nhau cho CÙNG một NV,
+   * ghi một ký hiệu SAI cho ngày người đó thật ra đã nghỉ hoặc chưa nghỉ.
+   *
+   * Rơi về `ngayNopDon` (bắt buộc) khi `ngayLamViecCuoi` để trống, còn hơn
+   * coi như người đó làm việc mãi mãi.
+   */
+  private ngayCuoiHopLeCuaHoSo(tv: Resignation): string | undefined {
+    if (tv.trangThai !== 'da_duyet' && tv.trangThai !== 'hoan_thanh') return undefined;
+    return tv.ngayLamViecCuoi || tv.ngayNopDon || undefined;
+  }
+
+  /**
    * Mốc ngày làm việc cuối của MỘT nhân viên, lấy từ hồ sơ thôi việc đã
    * duyệt/hoàn thành — dùng chung cho `suyLaiMotNgay()` và `demLaiOTrong()`.
    *
    * Lấy ngày MUỘN NHẤT chứ không phải hồ sơ khớp đầu tiên trong mảng: NV
    * nghỉ rồi được tuyển lại rồi nghỉ tiếp sẽ có NHIỀU hồ sơ, và bắt phải hồ
-   * sơ cũ thì mọi ngày sau đó bị coi là ngoài khoảng làm việc — mà nhánh đó
-   * của `suyKyHieuNgay()` trả `chuaXuLy: false` nên không cảnh báo gì cả, cả
-   * tháng công lặng lẽ biến mất. Đây đúng là lỗi `generate()` đã vá ở Task 4
-   * review round 1 (xem `ngayCuoi` trong `generate()` bên trên) — hai hàm
-   * này phải theo cùng luật, nếu không "trả về tự động" sẽ ghi một ký hiệu
-   * SAI cho ngày người đó đã nghỉ.
+   * sơ cũ thì mọi ngày sau đó bị coi là ngoài khoảng làm việc.
    *
    * `generate()` giữ nguyên cách tính theo lô (gom `Map<employeeId, ...>`
    * một lần cho mọi nhân viên) vì hiệu năng — không refactor để dùng chung
-   * hàm này, chỉ cùng LUẬT chọn ngày muộn nhất.
-   *
-   * Rơi về `ngayNopDon` (bắt buộc) khi `ngayLamViecCuoi` để trống, còn hơn
-   * coi như người đó làm việc mãi mãi.
+   * VÒNG LẶP này, chỉ dùng chung `ngayCuoiHopLeCuaHoSo()` ở trên cho LUẬT
+   * chọn ngày của từng hồ sơ.
    */
   private mocNgayLamViecCuoi(thoiViec: Resignation[]): string | undefined {
     let muonNhat: string | undefined;
     for (const tv of thoiViec) {
-      if (tv.trangThai !== 'da_duyet' && tv.trangThai !== 'hoan_thanh') continue;
-      const ngay = tv.ngayLamViecCuoi || tv.ngayNopDon;
+      const ngay = this.ngayCuoiHopLeCuaHoSo(tv);
       if (!ngay) continue;
       if (!muonNhat || ngay > muonNhat) muonNhat = ngay;
     }
@@ -335,7 +387,16 @@ export class BangCong_Service {
     });
 
     const [banGhi, don, ngayLe, thoiViec] = await Promise.all([
-      this.recordRepo.find({ where: { employeeId: item.employeeId, isActive: true } as any }),
+      // Chặn khoảng ngày ở tầng truy vấn — cùng lý do đã ghi ở generate() và
+      // demLaiOTrong(): không chặn thì mỗi lần bấm "Trả về tự động" MỘT ô sẽ
+      // nạp cả lịch sử chấm công của người đó, dùng đúng một ngày rồi bỏ.
+      this.recordRepo.find({
+        where: {
+          employeeId: item.employeeId,
+          isActive: true,
+          ngay: { $gte: `${item.thang}-01`, $lte: `${item.thang}-31` },
+        } as any,
+      }),
       this.requestRepo.find({ where: { employeeId: item.employeeId, isActive: true } as any }),
       this.holidayRepo.find({ where: { isActive: true } as any }),
       this.resignationRepo.find({ where: { employeeId: item.employeeId, isActive: true } as any }),
@@ -504,6 +565,16 @@ export class BangCong_Service {
   async finalize(thang: string): Promise<Timesheet[]> {
     const rows = await this.repo.find({ where: { thang, isActive: true } as any });
 
+    // Chưa từng bấm "Tổng hợp bảng công" cho tháng này thì không có gì để
+    // khoá — trả "thành công" với mảng rỗng dễ khiến HR tưởng nhầm tháng đã
+    // chốt xong, trong khi thực ra chưa hề có một dòng công nào được tính.
+    if (rows.length === 0) {
+      throw new ConflictException({
+        code: MA_LOI_BANG_CONG.CHUA_CO_BANG_CONG,
+        message: 'Chưa có bảng công nào để chốt. Bấm "Tổng hợp bảng công" trước.',
+      });
+    }
+
     const conTrong = rows.filter((r) => (r.soOTrong ?? 0) > 0);
     if (conTrong.length > 0) {
       const tongO = conTrong.reduce((s, r) => s + (r.soOTrong ?? 0), 0);
@@ -515,6 +586,13 @@ export class BangCong_Service {
 
     const saved: Timesheet[] = [];
     for (const row of rows) {
+      // Dòng đã chốt sẵn (vd chốt lại một tháng đã chốt toàn bộ, hoặc
+      // generate() vừa tạo dòng mới bên cạnh các dòng cũ đã chốt) thì ghi lại
+      // không đổi gì — bỏ qua để khỏi tốn một lượt save() vô ích cho mỗi dòng.
+      if (row.trangThai === 'chot') {
+        saved.push(row);
+        continue;
+      }
       row.trangThai = 'chot';
       saved.push(await this.repo.save(row));
     }

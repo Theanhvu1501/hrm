@@ -135,6 +135,71 @@ describe('BangCong_Service', () => {
       expect(result.every((r) => r.trangThai === 'chot')).toBe(true);
       expect(mockTimesheetRepo.save).toHaveBeenCalledTimes(2);
     });
+
+    // Finding L (review wave 2): trước bản vá, chốt một tháng KHÔNG có dòng
+    // nào (chưa từng bấm "Tổng hợp bảng công") trả "thành công" với mảng
+    // rỗng — dễ khiến HR tưởng nhầm tháng đã chốt xong.
+    it('ném 409 khi tháng chưa có dòng bảng công nào', async () => {
+      timesheetStore = [];
+
+      const loi = await service.finalize('2026-07').catch((e) => e);
+
+      expect(loi).toBeInstanceOf(ConflictException);
+      expect((loi as any).getResponse().code).toBe(
+        MA_LOI_BANG_CONG.CHUA_CO_BANG_CONG,
+      );
+      expect(mockTimesheetRepo.save).not.toHaveBeenCalled();
+    });
+
+    // Finding L: chốt lại một tháng đã chốt toàn bộ (vd bấm nhầm lần 2)
+    // không được ghi lại từng dòng vô ích — dòng đã 'chot' không đổi gì.
+    it('không ghi lại dòng đã chốt sẵn khi chốt lại một tháng đã chốt', async () => {
+      timesheetStore = [
+        {
+          _id: 'row-1',
+          thang: '2026-07',
+          employeeId: EMP1,
+          trangThai: 'chot',
+          soOTrong: 0,
+          isActive: true,
+        },
+      ];
+
+      const result = await service.finalize('2026-07');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].trangThai).toBe('chot');
+      expect(mockTimesheetRepo.save).not.toHaveBeenCalled();
+    });
+
+    // Vẫn phải chốt được các dòng CHƯA chốt nằm CHUNG tháng với dòng đã chốt
+    // sẵn (vd generate() vừa tạo thêm dòng cho NV mới) — chỉ bỏ qua đúng dòng
+    // đã 'chot', không bỏ qua cả thao tác.
+    it('vẫn chốt dòng chưa chốt khi tháng có lẫn dòng đã chốt sẵn', async () => {
+      timesheetStore = [
+        {
+          _id: 'row-1',
+          thang: '2026-07',
+          employeeId: EMP1,
+          trangThai: 'chot',
+          soOTrong: 0,
+          isActive: true,
+        },
+        {
+          _id: 'row-2',
+          thang: '2026-07',
+          employeeId: EMP2,
+          trangThai: 'nhap',
+          soOTrong: 0,
+          isActive: true,
+        },
+      ];
+
+      const result = await service.finalize('2026-07');
+
+      expect(result.every((r) => r.trangThai === 'chot')).toBe(true);
+      expect(mockTimesheetRepo.save).toHaveBeenCalledTimes(1);
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -170,7 +235,13 @@ describe('BangCong_Service', () => {
   // update — sửa tay
   // ──────────────────────────────────────────────────────────────────────────
   describe('update', () => {
-    it('edits manual fields (soGioLamThem, soLanDiMuon, soLanVeSom, ghiChu) without touching chiTietNgay', async () => {
+    // Finding E (review wave 2): soLanDiMuon/soLanVeSom KHÔNG còn ở đây —
+    // spec §5.3 đã chuyển hai cột này sang tự tính (xem test
+    // "tính lại số lượt đi muộn / về sớm từ bản ghi" ở describe generate()
+    // bên dưới), và `UpdateTimesheetDto` không còn khai hai trường này (xem
+    // `update-timesheet.dto.spec.ts` — client gửi lên bị 400 luôn ở tầng
+    // validate, không lọt được tới đây).
+    it('edits manual fields (soGioLamThem, ghiChu) without touching chiTietNgay', async () => {
       const id = '507f1f77bcf86cd799439033';
       const existing = {
         _id: id,
@@ -187,17 +258,19 @@ describe('BangCong_Service', () => {
       mockTimesheetRepo.findOne.mockResolvedValue(existing);
 
       const result = await service.update(id, {
-        soLanDiMuon: 2,
+        soGioLamThem: 5,
         ghiChu: 'Nghỉ phép 1 ngày',
       });
 
-      expect(result.soLanDiMuon).toBe(2);
+      expect(result.soGioLamThem).toBe(5);
       expect(result.ghiChu).toBe('Nghỉ phép 1 ngày');
+      // soLanDiMuon is untouched — update() no longer accepts it.
+      expect(result.soLanDiMuon).toBe(0);
       // soNgayCong is untouched (still derived from the unchanged grid).
       expect(result.soNgayCong).toBe(1);
       expect(mockTimesheetRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          soLanDiMuon: 2,
+          soGioLamThem: 5,
           ghiChu: 'Nghỉ phép 1 ngày',
         }),
       );
@@ -413,6 +486,7 @@ function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
   let seq = 0;
   let soLanFindNoiBo = 0;
   let lanFindCuoiNoiBo: any = undefined;
+  const moiLanFindNoiBo: any[] = [];
   return {
     kho,
     get soLanFind() {
@@ -423,6 +497,14 @@ function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
     // không), không chỉ số lần gọi.
     get lanFindCuoi() {
       return lanFindCuoiNoiBo;
+    },
+    // TOÀN BỘ tham số của MỌI lần gọi `find`, không chỉ lần cuối —
+    // `setDay({veTuDong:true})` gọi `find` trên cùng repo này HAI LẦN
+    // (suyLaiMotNgay() rồi demLaiOTrong()); nếu chỉ khoá lần cuối thì một
+    // trong hai đường không chặn khoảng ngày vẫn lọt qua test không phát hiện
+    // được (đường sau che đường trước).
+    get moiLanFind() {
+      return moiLanFindNoiBo;
     },
     create: (x: any) => ({ ...x }),
     save: async (x: any) => {
@@ -441,6 +523,7 @@ function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
     find: async (options: any = {}) => {
       soLanFindNoiBo += 1;
       lanFindCuoiNoiBo = options;
+      moiLanFindNoiBo.push(options);
       const { where } = options;
       return kho
         .filter((x) =>
@@ -832,6 +915,105 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
     expect(repoBc.kho[0].soOTrong).toBe(17);
   });
 
+  // CRITICAL A: `ngayLamViecCuoi` optional, HR duyệt để trống là đường mặc
+  // định — rơi về `ngayNopDon` (thường sớm hơn ngày thật sự nghỉ, vì NV còn
+  // đi làm suốt thời gian báo trước). Trước bản vá này, chấm công SAU mốc
+  // đó biến mất không dấu vết (chuaXuLy: false) — bản vá phải làm nó LOUD:
+  // đếm vào soOTrong để chặn chốt, không phải chọn thay HR.
+  it('có chấm công SAU mốc ngayNopDon (thiếu ngayLamViecCuoi) → tính vào ô chưa xử lý, không im lặng biến mất', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [{ ...HO_SO_NV1, ngayVaoLam: '2026-08-01' }],
+      banGhi: [
+        // Trong khoảng (≤ mốc nghỉ) — công bình thường, không liên quan.
+        { employeeId: NV1, ngay: '2026-08-01', loai: 'vao', isActive: true },
+        { employeeId: NV1, ngay: '2026-08-01', loai: 'ra', isActive: true },
+        // SAU mốc ngayNopDon (2026-08-01) — bằng chứng thật của một người
+        // vẫn đang đi làm trong thời gian báo trước.
+        { employeeId: NV1, ngay: '2026-08-05', loai: 'vao', isActive: true },
+      ],
+      thoiViec: [
+        {
+          employeeId: NV1,
+          trangThai: 'da_duyet',
+          ngayNopDon: '2026-08-01',
+          // Thiếu ngayLamViecCuoi — đường mặc định khi duyệt thôi việc.
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    // Chỉ đúng MỘT ngày (08-05) rơi vào diện "có bằng chứng sau ngày nghỉ" —
+    // mọi ngày khác sau mốc không có bản ghi nào nên vẫn im lặng như cũ.
+    expect(repoBc.kho[0].soOTrong).toBe(1);
+  });
+
+  // IMPORTANT C: NV bị soft-delete SAU khi đã có dòng bảng công tháng này
+  // (isActive=false → không còn trong employeeRepo.find({isActive:true})).
+  // generate() chỉ lặp qua NV đang hoạt động nên KHÔNG BAO GIỜ quay lại dòng
+  // này để tính lại soOTrong — mà finalize() đọc mọi dòng active của tháng
+  // bất kể NV còn hay không, nên dòng "mồ côi" còn soOTrong > 0 sẽ chặn chốt
+  // vĩnh viễn, không có UI nào sửa được ngoài xoá tay.
+  it('dòng mồ côi (NV không còn hoạt động) được dọn về 0 ô trống, báo lại số dòng đã dọn', async () => {
+    const NV_DA_NGHI = '650000000000000000000099';
+    const { service, repoBc } = await dungService({
+      // NV_DA_NGHI KHÔNG có mặt trong danh sách NV đang hoạt động.
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => 'bc-nv1' },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+        {
+          _id: { toString: () => 'bc-mo-coi' },
+          thang: '2026-08',
+          employeeId: NV_DA_NGHI,
+          chiTietNgay: [],
+          soOTrong: 5,
+          soOCanhBao: 2,
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    const tomTat = await service.generate('2026-08');
+
+    const dongMoCoi = repoBc.kho.find((d: any) => d.employeeId === NV_DA_NGHI);
+    expect(dongMoCoi.soOTrong).toBe(0);
+    expect(dongMoCoi.soOCanhBao).toBe(0);
+    expect(tomTat.soDongMoCoi).toBe(1);
+  });
+
+  it('dòng mồ côi đã chốt thì không đụng vào — khoá có chủ ý, không phải việc của generate()', async () => {
+    const NV_DA_NGHI = '650000000000000000000099';
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => 'bc-mo-coi-chot' },
+          thang: '2026-08',
+          employeeId: NV_DA_NGHI,
+          chiTietNgay: [],
+          soOTrong: 5,
+          trangThai: 'chot',
+          isActive: true,
+        },
+      ],
+    });
+
+    const tomTat = await service.generate('2026-08');
+
+    expect(repoBc.kho[0].soOTrong).toBe(5);
+    expect(repoBc.kho[0].trangThai).toBe('chot');
+    expect(tomTat.soDongMoCoi).toBe(0);
+  });
+
   it('không truy vấn thêm theo từng nhân viên', async () => {
     const { service, repoBc, repoBanGhi, repoDon } = await dungService({
       nhanVien: [HO_SO_NV1, { ...HO_SO_NV1, _id: { toString: () => '650000000000000000000002' } }],
@@ -941,6 +1123,36 @@ describe('BangCong_Service.setDay — nguồn ô và chốt (P3.9)', () => {
       kyHieu: 'X',
       nguon: 'tu_dong',
     });
+  });
+
+  // Finding G: suyLaiMotNgay() nạp TOÀN BỘ lịch sử chấm công của một NV để
+  // suy lại đúng MỘT ngày — bên cạnh nó, demLaiOTrong() đã chặn khoảng ngày
+  // theo tháng từ trước. Không chặn giống nhau thì "Trả về tự động" trên một
+  // NV lâu năm quét cả nghìn bản ghi chỉ để dùng đúng một ngày.
+  it('trả về tự động chặn khoảng ngày theo tháng ở tầng truy vấn, không nạp cả lịch sử chấm công', async () => {
+    const { service, repoBanGhi } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 3, kyHieu: 'CT', nguon: 'hr_sua' }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.setDay(ID_BC1, { ngay: 3, kyHieu: '', veTuDong: true } as any);
+
+    // `setDay({veTuDong:true})` gọi recordRepo.find HAI LẦN trên cùng dòng
+    // này (suyLaiMotNgay() rồi demLaiOTrong()) — cả hai đều phải chặn khoảng
+    // ngày theo tháng, không chỉ đường chạy sau cùng.
+    expect(repoBanGhi.moiLanFind.length).toBeGreaterThanOrEqual(2);
+    for (const lan of repoBanGhi.moiLanFind) {
+      expect(lan.where?.ngay).toEqual({ $gte: '2026-08-01', $lte: '2026-08-31' });
+    }
   });
 
   // Review Task 5: suyLaiMotNgay()/demLaiOTrong() ban đầu chọn hồ sơ thôi
