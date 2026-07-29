@@ -30,6 +30,12 @@ export class CrudHandler extends CSubHanlder {
       if (t.soDongBoQuaVIChot > 0) {
         phan.push(`bỏ qua ${t.soDongBoQuaVIChot} dòng đã chốt`);
       }
+      // NV bị soft-delete sau một lần Tổng hợp để lại dòng "mồ côi" —
+      // generate() đã tự dọn về 0 ô trống (xem TomTatTongHop.soDongMoCoi ở
+      // BE), nhưng HR vẫn cần biết CÓ chuyện đó xảy ra, không phải lặng lẽ.
+      if (t.soDongMoCoi > 0) {
+        phan.push(`dọn ${t.soDongMoCoi} dòng mồ côi (NV không còn hoạt động)`);
+      }
       message.success(phan.join(" · "));
     } catch (error) {
       console.error("Generate bang cong error:", error);

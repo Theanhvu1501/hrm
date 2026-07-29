@@ -44,6 +44,9 @@ export interface TomTatTongHop {
   soOTrong: number;
   soOCanhBao: number;
   soDongBoQuaVIChot: number;
+  // Số dòng "mồ côi" (NV không còn hoạt động) đã được dọn về 0 ô trống —
+  // xem doc-comment cùng tên ở BE bang-cong.service.ts.
+  soDongMoCoi: number;
 }
 
 export interface TimesheetFilter {
@@ -52,11 +55,13 @@ export interface TimesheetFilter {
   trangThai?: string;
 }
 
+// soLanDiMuon/soLanVeSom KHÔNG có ở đây (spec §5.3, Finding E review wave 2):
+// đã chuyển từ nhập tay sang máy tự tính (đếm bản ghi có soPhutDiMuon/
+// soPhutVeSom > 0 trong tháng lúc Tổng hợp) — BE (`UpdateTimesheetDto`)
+// không còn nhận hai trường này, gửi lên sẽ bị 400.
 export interface UpdateTimesheetDto {
   soNgayCong?: number;
   soGioLamThem?: number;
-  soLanDiMuon?: number;
-  soLanVeSom?: number;
   ghiChu?: string;
 }
 

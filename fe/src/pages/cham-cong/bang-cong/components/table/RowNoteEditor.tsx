@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Input, InputNumber, Popover, Space } from "antd";
+import { Button, Input, Popover, Space } from "antd";
 import { EditOutlined } from "@ant-design/icons";
 import { Timesheet, UpdateTimesheetDto } from "@/services/timesheetService";
 
@@ -11,8 +11,6 @@ interface RowNoteEditorProps {
 
 export function RowNoteEditor({ record, disabled, onSave }: RowNoteEditorProps) {
   const [open, setOpen] = useState(false);
-  const [soLanDiMuon, setSoLanDiMuon] = useState(record.soLanDiMuon ?? 0);
-  const [soLanVeSom, setSoLanVeSom] = useState(record.soLanVeSom ?? 0);
   const [ghiChu, setGhiChu] = useState(record.ghiChu ?? "");
 
   if (disabled) {
@@ -21,15 +19,13 @@ export function RowNoteEditor({ record, disabled, onSave }: RowNoteEditorProps) 
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
-      setSoLanDiMuon(record.soLanDiMuon ?? 0);
-      setSoLanVeSom(record.soLanVeSom ?? 0);
       setGhiChu(record.ghiChu ?? "");
     }
     setOpen(next);
   };
 
   const handleSave = () => {
-    onSave({ soLanDiMuon, soLanVeSom, ghiChu });
+    onSave({ ghiChu });
     setOpen(false);
   };
 
@@ -41,23 +37,17 @@ export function RowNoteEditor({ record, disabled, onSave }: RowNoteEditorProps) 
       title="Ghi chú thêm"
       content={
         <Space direction="vertical" style={{ width: 220 }}>
+          {/* Đi muộn/về sớm là máy tự tính từ bản ghi chấm công lúc Tổng hợp
+              (spec §5.3) — không còn là ô cho HR gõ tay, nên chỉ hiện SỐ,
+              không có InputNumber. Gõ tay ở đây trước bản vá này sống sót đến
+              lần Tổng hợp kế tiếp rồi bị máy ghi đè không một cảnh báo nào. */}
           <div>
             <span className="text-xs text-muted-foreground">Đi muộn (lần)</span>
-            <InputNumber
-              min={0}
-              value={soLanDiMuon}
-              onChange={(v) => setSoLanDiMuon(typeof v === "number" ? v : 0)}
-              style={{ width: "100%" }}
-            />
+            <div>{record.soLanDiMuon ?? 0}</div>
           </div>
           <div>
             <span className="text-xs text-muted-foreground">Về sớm (lần)</span>
-            <InputNumber
-              min={0}
-              value={soLanVeSom}
-              onChange={(v) => setSoLanVeSom(typeof v === "number" ? v : 0)}
-              style={{ width: "100%" }}
-            />
+            <div>{record.soLanVeSom ?? 0}</div>
           </div>
           <div>
             <span className="text-xs text-muted-foreground">Ghi chú</span>
