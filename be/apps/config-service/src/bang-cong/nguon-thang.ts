@@ -1,5 +1,6 @@
 import type { AttendanceRecord, AttendanceRequest, Holiday } from '@app/entities';
 import type { DonNghiCuaNgay } from './suy-ky-hieu';
+import { tinhSoGioOt } from '../don-cham-cong/luat-don';
 
 /**
  * Gom dữ liệu nguồn của CẢ THÁNG thành các Map tra cứu O(1).
@@ -153,16 +154,6 @@ export function demMuonSom(
   return map;
 }
 
-/** Giờ giữa hai mốc "HH:mm"; 0 nếu thiếu, không đọc được, hoặc khoảng âm. */
-function gioGiuaHaiMoc(gioTu?: string, gioDen?: string): number {
-  if (!gioTu || !gioDen) return 0;
-  const [tuH, tuM] = gioTu.split(':').map(Number);
-  const [denH, denM] = gioDen.split(':').map(Number);
-  if ([tuH, tuM, denH, denM].some((n) => Number.isNaN(n))) return 0;
-  const phut = denH * 60 + denM - (tuH * 60 + tuM);
-  return phut > 0 ? phut / 60 : 0;
-}
-
 /** Tổng giờ OT đã duyệt trong tháng, theo nhân viên. */
 export function tongGioOt(
   requests: AttendanceRequest[],
@@ -176,7 +167,13 @@ export function tongGioOt(
     if (don.loaiDon !== 'lam_them_gio') continue;
     if (!don.ngay?.startsWith(thang)) continue;
 
-    const gio = gioGiuaHaiMoc(don.gioTu, don.gioDen);
+    // Ưu tiên số đã CHỐT trên đơn lúc tạo (P3.6 snapshot `soGioOt`) — cùng
+    // nguyên tắc "chốt lúc tạo, không tính lại khi đọc" của module đơn từ.
+    // Chỉ tính lại cho đơn cũ tạo trước P3.6 chưa có trường đó, và khi tính
+    // lại thì dùng CHUNG hàm với đơn từ chứ không chép thêm một bản: bản chép
+    // trong bang-cong.service.ts đang kẹp ca qua đêm về 0 giờ.
+    const gio =
+      don.soGioOt ?? (don.gioTu && don.gioDen ? tinhSoGioOt(don.gioTu, don.gioDen) : 0);
     map.set(don.employeeId, (map.get(don.employeeId) ?? 0) + gio);
   }
 

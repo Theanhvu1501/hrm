@@ -145,6 +145,16 @@ describe('gomTheoNgay', () => {
     expect(map.get(NV1)!.get('2026-08-02')!.donNghi).not.toBeNull();
     expect([...map.get(NV1)!.keys()].some((k) => k.startsWith('2026-07'))).toBe(false);
   });
+
+  it('input rỗng → map rỗng', () => {
+    const map = gomTheoNgay([], [], '2026-08');
+    expect(map.size).toBe(0);
+  });
+
+  it('map.get("<id lạ>") là undefined', () => {
+    const map = gomTheoNgay([banGhi()], [], '2026-08');
+    expect(map.get('unknown-id')).toBeUndefined();
+  });
 });
 
 describe('demMuonSom', () => {
@@ -158,6 +168,10 @@ describe('demMuonSom', () => {
     ]);
     expect(map.get(NV1)).toEqual({ diMuon: 2, veSom: 1 });
     expect(map.get(NV2)).toEqual({ diMuon: 1, veSom: 0 });
+  });
+
+  it('input rỗng → map rỗng', () => {
+    expect(demMuonSom([]).size).toBe(0);
   });
 });
 
@@ -177,5 +191,29 @@ describe('tongGioOt', () => {
 
   it('không có đơn nào → map rỗng', () => {
     expect(tongGioOt([], '2026-08').size).toBe(0);
+  });
+
+  it('ca OT qua đêm không bị kẹp về 0', () => {
+    const map = tongGioOt(
+      [don({ loaiDon: 'lam_them_gio', ngay: '2026-08-03', gioTu: '22:00', gioDen: '02:00' })],
+      '2026-08',
+    );
+    expect(map.get(NV1)).toBe(4);
+  });
+
+  it('ưu tiên soGioOt đã chốt trên đơn thay vì tính lại', () => {
+    const map = tongGioOt(
+      [
+        don({
+          loaiDon: 'lam_them_gio',
+          ngay: '2026-08-03',
+          gioTu: '18:00',
+          gioDen: '20:00',
+          soGioOt: 1.5, // HR đã điều chỉnh; số chốt phải thắng phép tính lại
+        }),
+      ],
+      '2026-08',
+    );
+    expect(map.get(NV1)).toBe(1.5);
   });
 });
