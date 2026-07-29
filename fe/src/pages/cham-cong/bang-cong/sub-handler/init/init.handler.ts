@@ -15,6 +15,7 @@ export class InitHandler extends CSubHanlder {
     this.setState("loading", false);
     this.setState("generating", false);
     this.setState("finalizing", false);
+    this.setState("reopening", false);
 
     await Promise.all([this.loadList(thang), this.loadKyHieu()]);
   }

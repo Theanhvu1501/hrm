@@ -22,6 +22,19 @@ export function BangCongLegend() {
           </Tag>
         ))}
       </Space>
+      {/* Màu/viền của ô trong lưới không tự giải thích — phải chú giải riêng.
+          Giá trị màu khớp NGUYÊN VĂN với DayCell.tsx (cellStyle) để chú giải
+          không lệch với ô thật trên lưới. */}
+      <Space size={16} className="mt-2">
+        <span>
+          <span style={{ border: "1px solid #1677ff", padding: "0 6px" }}>X</span>{" "}
+          HR sửa tay — máy sẽ không tự động ghi đè ô này nữa
+        </span>
+        <span>
+          <span style={{ background: "#fff7e6", padding: "0 6px" }}>X</span>{" "}
+          Có cảnh báo — di chuột để xem
+        </span>
+      </Space>
     </div>
   );
 }

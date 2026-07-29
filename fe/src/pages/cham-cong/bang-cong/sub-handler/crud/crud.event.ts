@@ -12,6 +12,7 @@ export interface CrudEvent extends BaseEvents {
     result: void;
   };
   finalizeBangCong: { params: { thang: string }; result: void };
+  moLaiBangCong: { params: { thang: string }; result: void };
 }
 
 declare module "../../bangCongHandler" {
