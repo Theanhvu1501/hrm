@@ -34,6 +34,41 @@ function timDoiLoiTruong(
   return errors.find((e) => e.property === property);
 }
 
+/**
+ * Finding K (review wave 2): `ChiTietNgayDto.ngay` chỉ có `@Min(1)`, thiếu
+ * `@Max(31)` mà `SetDayDto.ngay` (đường PATCH một ngày) đã có từ round 1 —
+ * hai đường ghi khác nhau (PUT nguyên khối `chiTietNgay` qua update() vs
+ * PATCH một ngày qua setDay()) có hai hợp đồng validate khác nhau cho CÙNG
+ * một trường `ngay`. Cùng lý do đã ghi ở `set-day.dto.spec.ts`: `ngay` ngoài
+ * số ngày thật của tháng qua PUT sẽ tạo ô ma mà `generate()` không bao giờ
+ * dọn (nó chỉ đi qua `cacNgayTrongThang()`).
+ */
+describe('ChiTietNgayDto — ngay', () => {
+  it('chấp nhận ngay trong khoảng 1..31', async () => {
+    const dto = plainToInstance(ChiTietNgayDto, { ngay: 31, kyHieu: 'X' });
+
+    const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
+
+    expect(timDoiLoiTruong(errors, 'ngay')).toBeUndefined();
+  });
+
+  it('từ chối ngay > 31', async () => {
+    const dto = plainToInstance(ChiTietNgayDto, { ngay: 32, kyHieu: 'X' });
+
+    const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
+
+    expect(timDoiLoiTruong(errors, 'ngay')).toBeDefined();
+  });
+
+  it('từ chối ngay < 1', async () => {
+    const dto = plainToInstance(ChiTietNgayDto, { ngay: 0, kyHieu: 'X' });
+
+    const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
+
+    expect(timDoiLoiTruong(errors, 'ngay')).toBeDefined();
+  });
+});
+
 describe('ChiTietNgayDto — nguon/canhBao', () => {
   it('chấp nhận ô kèm nguon và canhBao (round-trip từ GET)', async () => {
     const dto = plainToInstance(ChiTietNgayDto, {
@@ -78,6 +113,44 @@ describe('ChiTietNgayDto — nguon/canhBao', () => {
     const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
 
     expect(errors.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Finding E (review wave 2): `soLanDiMuon`/`soLanVeSom` trở thành máy tính từ
+ * spec §5.3 (đếm bản ghi có soPhutDiMuon/soPhutVeSom > 0 trong tháng — xem
+ * generate()/demMuonSom()), nhưng DTO này từng vẫn khai hai trường đó nên HR
+ * gõ tay qua RowNoteEditor vẫn "sửa" được — giá trị gõ tay sống sót cho tới
+ * lần Tổng hợp kế tiếp rồi bị máy ghi đè không cảnh báo. Xoá khỏi DTO +
+ * `forbidNonWhitelisted` (main.ts) khiến client gửi hai trường này bị 400
+ * ngay ở tầng validate.
+ */
+describe('UpdateTimesheetDto — soLanDiMuon/soLanVeSom đã chuyển sang tự tính', () => {
+  it('từ chối soLanDiMuon — không còn là input hợp lệ', async () => {
+    const dto = plainToInstance(UpdateTimesheetDto, { soLanDiMuon: 2 });
+
+    const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
+
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('từ chối soLanVeSom — không còn là input hợp lệ', async () => {
+    const dto = plainToInstance(UpdateTimesheetDto, { soLanVeSom: 1 });
+
+    const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
+
+    expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('soGioLamThem/ghiChu vẫn hợp lệ như cũ', async () => {
+    const dto = plainToInstance(UpdateTimesheetDto, {
+      soGioLamThem: 3,
+      ghiChu: 'ghi chú',
+    });
+
+    const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
+
+    expect(errors).toEqual([]);
   });
 });
 

@@ -3,14 +3,19 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class ChiTietNgayDto {
+  // Cùng chặn `@Max(31)` với SetDayDto.ngay (Finding K review) — hai đường
+  // ghi khác nhau (PATCH một ngày vs PUT nguyên khối chiTietNgay) không được
+  // phép có hai hợp đồng validate khác nhau cho CÙNG một trường.
   @IsNumber()
   @Min(1)
+  @Max(31)
   ngay: number;
 
   @IsString()
@@ -49,16 +54,14 @@ export class UpdateTimesheetDto {
   @Min(0)
   soGioLamThem?: number;
 
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  soLanDiMuon?: number;
-
-  @IsOptional()
-  @IsNumber()
-  @Min(0)
-  soLanVeSom?: number;
-
+  // soLanDiMuon/soLanVeSom KHÔNG còn ở đây (Finding E review wave 2): spec
+  // §5.3 đã chuyển hai cột này từ nhập tay sang tự tính (đếm số bản ghi có
+  // soPhutDiMuon/soPhutVeSom > 0 trong tháng, xem generate() → nguon-thang.ts
+  // demMuonSom()). Trước bản vá, DTO vẫn nhận hai trường này nên HR gõ tay
+  // qua RowNoteEditor vẫn "sửa" được — giá trị đó sống sót cho tới lần Tổng
+  // hợp kế tiếp rồi bị máy ghi đè không một cảnh báo nào. `whitelist: true` +
+  // `forbidNonWhitelisted: true` (main.ts) tự khiến client gửi hai trường
+  // này bị 400 — đúng ý: hai cột này không còn là input hợp lệ nữa.
   @IsOptional()
   @IsString()
   ghiChu?: string;
