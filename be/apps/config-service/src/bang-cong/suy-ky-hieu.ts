@@ -80,17 +80,25 @@ function kyHieuCuaDon(don: DonNghiCuaNgay): string {
   return KY_HIEU_THEO_LOAI_NGHI[don.loaiNghi ?? ''] ?? 'P';
 }
 
-const KHONG_TINH: SuyKyHieuKetQua = { kyHieu: null, canhBao: [], chuaXuLy: false };
+/**
+ * Ngày không thuộc phạm vi tính công. Trả object MỚI mỗi lần chứ không dùng
+ * chung một hằng: `canhBao` là mảng mutable, mà nơi gọi lặp hàm này 31 lần cho
+ * mỗi nhân viên rồi hậu xử lý kết quả — chỉ cần một chỗ `push` vào là mảng
+ * dùng chung bị bẩn cho mọi ngày của mọi người từng đi qua đây.
+ */
+function khongTinh(): SuyKyHieuKetQua {
+  return { kyHieu: null, canhBao: [], chuaXuLy: false };
+}
 
 export function suyKyHieuNgay(input: SuyKyHieuInput): SuyKyHieuKetQua {
   // Dòng 1: ngoài khoảng làm việc. Không cảnh báo gì — người chưa vào làm
   // hoặc đã nghỉ việc thì ô trống là đúng, không phải việc HR phải xử lý.
-  if (input.ngayVaoLam && input.ngay < input.ngayVaoLam) return KHONG_TINH;
-  if (input.ngayLamViecCuoi && input.ngay > input.ngayLamViecCuoi) return KHONG_TINH;
+  if (input.ngayVaoLam && input.ngay < input.ngayVaoLam) return khongTinh();
+  if (input.ngayLamViecCuoi && input.ngay > input.ngayLamViecCuoi) return khongTinh();
 
   // Dòng 2: ngoài lịch làm việc trong tuần. Đi làm Chủ nhật vẫn để trống —
   // giờ hôm đó đi vào cột làm thêm với hệ số 2.0, không phải một ngày công.
-  if (!laNgayLamViec(input.ngay, input.ngayLamViecTrongTuan)) return KHONG_TINH;
+  if (!laNgayLamViec(input.ngay, input.ngayLamViecTrongTuan)) return khongTinh();
 
   const canhBao: string[] = [];
   if (input.coBanGhiNgoaiVung) canhBao.push(MA_CANH_BAO.NGOAI_VUNG);

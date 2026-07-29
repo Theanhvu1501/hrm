@@ -56,6 +56,15 @@ describe('suyKyHieuNgay — bảng ưu tiên', () => {
     expect(kq.kyHieu).toBe('X');
   });
 
+  // Lễ rơi vào Chủ nhật của người làm T2–T7: dòng 2 (ngoài lịch làm việc)
+  // phải thắng dòng 3 (ngày lễ) — người vốn đã nghỉ hôm đó thì không có thêm
+  // một công nghỉ lễ nào để mà cộng.
+  it('lễ rơi vào ngày ngoài lịch làm việc → vẫn trống, không phải L', () => {
+    const kq = suyKyHieuNgay(nen({ ngay: '2026-08-02', laNgayLe: true }));
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(false);
+  });
+
   it('dòng 3: ngày lễ → L', () => {
     expect(suyKyHieuNgay(nen({ laNgayLe: true })).kyHieu).toBe('L');
   });
@@ -143,5 +152,14 @@ describe('suyKyHieuNgay — cờ cảnh báo', () => {
     );
     expect(kq.kyHieu).toBeNull();
     expect(kq.canhBao).toEqual([]);
+  });
+
+  it('mỗi lời gọi trả mảng canhBao RIÊNG, không dùng chung', () => {
+    const a = suyKyHieuNgay(nen({ ngay: '2026-08-02' }));
+    const b = suyKyHieuNgay(nen({ ngay: '2026-08-02' }));
+    expect(a.canhBao).not.toBe(b.canhBao);
+
+    a.canhBao.push('ban');
+    expect(b.canhBao).toEqual([]);
   });
 });
