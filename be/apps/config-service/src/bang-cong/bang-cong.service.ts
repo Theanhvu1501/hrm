@@ -94,7 +94,27 @@ export class BangCong_Service {
     const [employees, dongCoSan, banGhi, don, ngayLe, thoiViec] = await Promise.all([
       this.employeeRepo.find({ where: { isActive: true } as any }),
       this.repo.find({ where: { thang, isActive: true } as any }),
-      this.recordRepo.find({ where: { isActive: true } as any }),
+      // Chặn khoảng ngay ở tầng truy vấn: `attendance_records` ghi MỘT DÒNG
+      // MỖI LƯỢT BẤM, nên nạp cả bảng để tính một tháng là phép quét lớn dần
+      // vô hạn trong khi phần dùng được thì cố định.
+      //
+      // Dùng toán tử Mongo thô chứ không `Between` của TypeORM: driver Mongo
+      // ở đây chuyển thẳng `where` xuống native driver mà KHÔNG dịch
+      // FindOperator, nên `Between` trả về 0 dòng (đã kiểm bằng mongo:7
+      // thật). Đây cũng là cách `ban-ghi-cham-cong.service.ts:613` đang làm
+      // trên chính bảng này. Dùng `$lte: "${thang}-31"` chứ không
+      // `$lt: "${thang}-32"` — mọi ngày thật của tháng đều `<= "YYYY-MM-31"`
+      // khi so chuỗi, cùng tiền lệ ở `ban-ghi-cham-cong`.
+      //
+      // KHÔNG chặn tương tự cho requestRepo: đơn nghỉ có khoảng
+      // `ngay..denNgay` vắt qua ranh giới tháng, chặn theo `ngay` sẽ đánh
+      // rơi đơn bắt đầu từ tháng trước mà kéo sang tháng này.
+      this.recordRepo.find({
+        where: {
+          isActive: true,
+          ngay: { $gte: `${thang}-01`, $lte: `${thang}-31` },
+        } as any,
+      }),
       this.requestRepo.find({ where: { isActive: true } as any }),
       this.holidayRepo.find({ where: { isActive: true } as any }),
       this.resignationRepo.find({ where: { isActive: true } as any }),

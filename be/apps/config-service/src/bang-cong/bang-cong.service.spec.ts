@@ -366,14 +366,55 @@ describe('BangCong_Service', () => {
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Repo giả dùng chung cho mọi entity mà generate() đọc/ghi. */
+/**
+ * So một giá trị thực với một điều kiện trong `where`. Điều kiện có thể là
+ * giá trị trần (so bằng, khuôn cũ) hoặc toán tử Mongo thô (`{ $gte, $lte,
+ * ... }`) — review round 2 khiến `generate()` gửi thẳng
+ * `{ ngay: { $gte, $lte } }` xuống `recordRepo.find` (xem
+ * `bang-cong.service.ts`, driver Mongo ở đây không dịch `Between` của
+ * TypeORM). Repo giả PHẢI hiểu dạng này, nếu không mọi test đưa `banGhi` vào
+ * `dungService` sẽ âm thầm không match được gì (so một chuỗi với một object
+ * luôn ra `false`) và ca "điền X/P/..." sẽ đỏ hết dù service đúng.
+ */
+function khopGiaTri(giaTriThuc: any, dieuKien: any): boolean {
+  if (dieuKien && typeof dieuKien === 'object' && !Array.isArray(dieuKien)) {
+    return Object.entries(dieuKien).every(([toanTu, v]) => {
+      switch (toanTu) {
+        case '$gte':
+          return giaTriThuc >= v;
+        case '$lte':
+          return giaTriThuc <= v;
+        case '$gt':
+          return giaTriThuc > v;
+        case '$lt':
+          return giaTriThuc < v;
+        case '$in':
+          return (v as any[]).includes(giaTriThuc);
+        default:
+          // Toán tử lạ chưa hỗ trợ trong repo giả — thà báo không khớp còn
+          // hơn âm thầm coi là khớp.
+          return false;
+      }
+    });
+  }
+  return giaTriThuc === dieuKien;
+}
+
 function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
   const kho: any[] = [...banDau];
   let seq = 0;
   let soLanFindNoiBo = 0;
+  let lanFindCuoiNoiBo: any = undefined;
   return {
     kho,
     get soLanFind() {
       return soLanFindNoiBo;
+    },
+    // Tham số ĐẦY ĐỦ của lần gọi `find` gần nhất — để test khoá được HÌNH
+    // DẠNG truy vấn (vd `where.ngay` có đúng `$gte`/`$lte` của tháng hay
+    // không), không chỉ số lần gọi.
+    get lanFindCuoi() {
+      return lanFindCuoiNoiBo;
     },
     create: (x: any) => ({ ...x }),
     save: async (x: any) => {
@@ -389,11 +430,15 @@ function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
       return x;
     },
     // BẢN SAO NÔNG — xem giải thích ở đầu describe.
-    find: async ({ where }: any = {}) => {
+    find: async (options: any = {}) => {
       soLanFindNoiBo += 1;
+      lanFindCuoiNoiBo = options;
+      const { where } = options;
       return kho
         .filter((x) =>
-          Object.entries(where ?? {}).every(([k, v]) => (x as any)[k] === v),
+          Object.entries(where ?? {}).every(([k, v]) =>
+            khopGiaTri((x as any)[k], v),
+          ),
         )
         .map((x) => ({ ...x }));
     },
@@ -790,5 +835,21 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
     expect(repoBanGhi.soLanFind).toBe(1);
     expect(repoDon.soLanFind).toBe(1);
     expect(repoBc.soLanFind).toBe(1);
+  });
+
+  // Review round 2: `attendance_records` ghi MỘT DÒNG MỖI LƯỢT BẤM — 200
+  // nhân viên × 2 lượt × 26 ngày ≈ 10 nghìn dòng MỖI THÁNG. Không chặn theo
+  // khoảng ngày ở tầng truy vấn thì mỗi lần bấm "Tổng hợp" nạp cả lịch sử
+  // chấm công của công ty vào bộ nhớ Node để dùng đúng một tháng. Khoá hình
+  // dạng truy vấn thật, không chỉ số lần gọi — nếu ai đó sau này bỏ bộ chặn
+  // đi (vô tình đổi lại `{ where: { isActive: true } }` như code cũ), test
+  // này đỏ ngay dù `soLanFind` vẫn đúng là 1.
+  it('chặn khoảng ngày ngay ở tầng truy vấn, không nạp cả bảng chấm công', async () => {
+    const { service, repoBanGhi } = await dungService({ nhanVien: [HO_SO_NV1] });
+
+    await service.generate('2026-08');
+
+    const where = repoBanGhi.lanFindCuoi?.where ?? {};
+    expect(where.ngay).toEqual({ $gte: '2026-08-01', $lte: '2026-08-31' });
   });
 });
