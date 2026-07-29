@@ -178,3 +178,28 @@ tháng 1 vẫn cấp TRỌN quỹ cả năm cho một NV có `ngayChinhThuc` rơ
 NV thực sự chạm mốc chính thức. Sản phẩm chấp nhận rủi ro này để đổi lấy việc không phải dựng
 hạ tầng job định kỳ; nếu muốn siết chặt hơn (chỉ cấp đúng lúc `ngayChinhThuc` đã qua), phải
 chạy `capPhepDauNam` thường xuyên hơn (vd hàng tuần) thay vì đổi logic.
+
+## Rollout P3.9 — Bảng công tự sinh
+
+`generate()` suy ký hiệu bảng công từ dữ liệu đã có (chấm công, đơn từ, ngày lễ) thay vì HR
+tick tay từng ô — hai trường trên `Employee`/`Resignation` phải điền ĐÚNG **trước** lần Tổng
+hợp đầu tiên trong production, nếu không HR sẽ thấy hàng trăm ô "chưa xử lý" ma ngay lần bấm
+nút đầu tiên và nút Chốt khoá cứng không có cách nào gỡ nhanh:
+
+1. **Backfill `ngayLamViecTrongTuan` cho MỌI NV đang hoạt động** (qua màn Hồ sơ nhân viên, hoặc
+   script nhập liệu nội bộ nếu số lượng lớn) — trường này optional trên `Employee`, và FE mặc
+   định `[]` khi tạo mới. `laNgayLamViec()` (suy-ky-hieu.ts) đọc lịch rỗng/undefined là **"chưa
+   cấu hình ⇒ mọi ngày đều là ngày làm việc"** — cùng quy ước `luat-don.ts` đã dùng — nên một
+   NV chưa được điền lịch sẽ có khoảng 25–30 ô trống mỗi tháng (kể cả Chủ nhật), `soOTrong` của
+   tháng chạy vào hàng trăm, và nút Chốt khoá cứng: **không có** nút xoá/bỏ qua hàng loạt, phải
+   xử lý từng ô hoặc điền lại lịch rồi Tổng hợp lại.
+2. **Đảm bảo hồ sơ thôi việc `da_duyet`/`hoàn_thành` có `ngayLamViecCuoi`** trước khi duyệt. Đây
+   là trường optional trên `Resignation` và bỏ trống là ĐƯỜNG MẶC ĐỊNH ngoài production, không
+   phải ngoại lệ — `generate()` rơi về `ngayNopDon` khi thiếu (thường sớm hơn ngày nghỉ thật, vì
+   NV còn đi làm suốt thời gian báo trước). Từ CRITICAL A của đợt review P3.9,
+   `suyKyHieuNgay()` chặn chốt và gắn cờ `sau_ngay_nghi_viec` khi có chấm công/đơn nghỉ SAU mốc
+   đó — đây là lưới an toàn phát hiện, KHÔNG phải cách sửa; muốn hết cảnh báo thì phải quay lại
+   hồ sơ thôi việc điền đúng `ngayLamViecCuoi`, không có cách sửa nào ở tầng bảng công.
+
+Không cần chạy `ops/grant-quyen-module-moi.ts` cho đợt này — P3.9 không thêm module quyền mới,
+vẫn dùng `/cham-cong/bang-cong:xem|them|sua|xoa|xuat` đã có (xem spec §10).
