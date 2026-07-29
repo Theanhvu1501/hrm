@@ -88,9 +88,13 @@ export class BangCong_Controller {
     return { success: true, data };
   }
 
+  // `finalize` (khoá) và `mo-lai` (mở khoá) là một CẶP — spec §10 giao cả hai
+  // cho `:sua`. Trước bản vá này `finalize` còn gắn `:them`, nên một vai trò
+  // chỉ có `:sua` (không có `:them`) khoá được tháng công qua `mo-lai` nhưng
+  // không tự mở lại được chính tháng mình vừa khoá.
   @Post('finalize')
   @UseGuards(PermissionGuard)
-  @Permissions('/cham-cong/bang-cong:them')
+  @Permissions('/cham-cong/bang-cong:sua')
   async finalize(@Body() body: ThangDto) {
     const data = await this.bangCong_Service.finalize(body.thang);
     return { success: true, data };

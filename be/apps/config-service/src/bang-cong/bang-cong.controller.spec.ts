@@ -28,7 +28,10 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['generate', RequestMethod.POST, '/cham-cong/bang-cong:them'],
   ['update', RequestMethod.PUT, '/cham-cong/bang-cong:sua'],
   ['setDay', RequestMethod.PATCH, '/cham-cong/bang-cong:sua'],
-  ['finalize', RequestMethod.POST, '/cham-cong/bang-cong:them'],
+  // finalize/moLai là một CẶP khoá-mở khoá (Finding I review) — cả hai đều
+  // đòi ':sua', không phải finalize=':them' như trước: một vai trò chỉ có
+  // ':sua' phải mở lại được chính tháng mình vừa khoá.
+  ['finalize', RequestMethod.POST, '/cham-cong/bang-cong:sua'],
   ['moLai', RequestMethod.POST, '/cham-cong/bang-cong:sua'],
   ['remove', RequestMethod.DELETE, '/cham-cong/bang-cong:xoa'],
 ];
