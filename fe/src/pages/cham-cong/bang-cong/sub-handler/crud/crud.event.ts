@@ -8,7 +8,7 @@ export interface CrudEvent extends BaseEvents {
     result: void;
   };
   setDay: {
-    params: { id: string; ngay: number; kyHieu: string };
+    params: { id: string; ngay: number; kyHieu: string; veTuDong?: boolean };
     result: void;
   };
   finalizeBangCong: { params: { thang: string }; result: void };

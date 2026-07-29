@@ -5,6 +5,8 @@ export type TimesheetStatus = 'nhap' | 'chot';
 export interface ChiTietNgay {
   ngay: number; // 1..31
   kyHieu: string;
+  nguon?: string; // 'tu_dong' | 'hr_sua' — máy điền hay người đã sửa tay
+  canhBao?: string[]; // mã cảnh báo backend gắn vào ô, dịch qua nhanCanhBao()
 }
 
 export interface KyHieuDef {
@@ -31,6 +33,17 @@ export interface Timesheet {
   ghiChu?: string;
   trangThai: TimesheetStatus;
   isActive: boolean;
+  soOTrong?: number;
+  soOCanhBao?: number;
+}
+
+/** Tóm tắt trả về từ POST /generate — không còn là mảng Timesheet, phải nạp lại danh sách riêng. */
+export interface TomTatTongHop {
+  soDongXuLy: number;
+  soODaDien: number;
+  soOTrong: number;
+  soOCanhBao: number;
+  soDongBoQuaVIChot: number;
 }
 
 export interface TimesheetFilter {
@@ -50,6 +63,8 @@ export interface UpdateTimesheetDto {
 export interface SetDayDto {
   ngay: number;
   kyHieu: string;
+  // Khi bật, kyHieu bị BE bỏ qua và ô được trả về cho máy quản (nguon = 'tu_dong').
+  veTuDong?: boolean;
 }
 
 class TimesheetService extends ServiceBase {
@@ -62,12 +77,14 @@ class TimesheetService extends ServiceBase {
     return res.map(this.transform);
   }
 
-  async generate(thang: string): Promise<Timesheet[]> {
-    const res = await this.post<Array<Record<string, unknown>>>(
-      { thang },
-      { endpoint: '/generate' }
-    );
-    return res.map(this.transform);
+  /** POST /generate — giờ trả tóm tắt, KHÔNG còn là danh sách; gọi getList riêng để nạp lưới. */
+  async generate(thang: string): Promise<TomTatTongHop> {
+    return this.post<TomTatTongHop>({ thang }, { endpoint: '/generate' });
+  }
+
+  /** POST /mo-lai — mở lại bảng công đã chốt để sửa tiếp. */
+  async moLai(thang: string): Promise<{ soDong: number }> {
+    return this.post<{ soDong: number }>({ thang }, { endpoint: '/mo-lai' });
   }
 
   async update(id: string, dto: UpdateTimesheetDto): Promise<Timesheet> {
@@ -122,6 +139,8 @@ class TimesheetService extends ServiceBase {
       ghiChu: x.ghiChu as string | undefined,
       trangThai: (x.trangThai as TimesheetStatus) ?? 'nhap',
       isActive: (x.isActive as boolean) ?? true,
+      soOTrong: x.soOTrong as number | undefined,
+      soOCanhBao: x.soOCanhBao as number | undefined,
     };
   }
 }

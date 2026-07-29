@@ -15,7 +15,11 @@ export class CrudHandler extends CSubHanlder {
   async generateBangCong(params: { thang: string }): Promise<void> {
     this.setState("generating", true);
     try {
-      const list = await timesheetService.generate(params.thang);
+      // generate() giờ trả về tóm tắt (TomTatTongHop), KHÔNG còn là danh sách
+      // Timesheet — không thể nhét thẳng vào dataSource nữa. Nạp lại lưới bằng
+      // đường lấy danh sách sẵn có (giống init.handler) thay vì dùng giá trị trả về.
+      await timesheetService.generate(params.thang);
+      const list = await timesheetService.getList({ thang: params.thang });
       this.setState("timesheetList", list);
       message.success("Tạo/cập nhật bảng công thành công!");
     } catch (error) {
@@ -44,11 +48,17 @@ export class CrudHandler extends CSubHanlder {
   }
 
   @HandlerDecorator("setDay")
-  async setDay(params: { id: string; ngay: number; kyHieu: string }): Promise<void> {
+  async setDay(params: {
+    id: string;
+    ngay: number;
+    kyHieu: string;
+    veTuDong?: boolean;
+  }): Promise<void> {
     try {
       const updated = await timesheetService.setDay(params.id, {
         ngay: params.ngay,
         kyHieu: params.kyHieu,
+        veTuDong: params.veTuDong,
       });
       const currentList =
         (this.getState("timesheetList") as Timesheet[]) || [];

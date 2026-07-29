@@ -30,8 +30,13 @@ export function BangCongTable() {
     [thang]
   );
 
-  const handleSetDay = (id: string, ngay: number, kyHieu: string) => {
-    handler.executeEvent("setDay", { id, ngay, kyHieu });
+  const handleSetDay = (
+    id: string,
+    ngay: number,
+    kyHieu: string,
+    veTuDong?: boolean
+  ) => {
+    handler.executeEvent("setDay", { id, ngay, kyHieu, veTuDong });
   };
 
   const handleUpdate = (id: string, dto: UpdateTimesheetDto) => {
@@ -102,10 +107,14 @@ export function BangCongTable() {
             <DayCell
               day={day}
               kyHieu={entry?.kyHieu}
+              nguon={entry?.nguon}
+              canhBao={entry?.canhBao}
               kyHieuOptions={kyHieuList}
               isWeekend={weekend}
               disabled={!canEdit || record.trangThai === "chot"}
-              onChange={(kyHieu) => handleSetDay(record._id, day, kyHieu)}
+              onChange={(kyHieu, veTuDong) =>
+                handleSetDay(record._id, day, kyHieu, veTuDong)
+              }
             />
           );
         },
