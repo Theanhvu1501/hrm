@@ -39,6 +39,14 @@ describe('BangCong_Service', () => {
   const EMP1 = '507f1f77bcf86cd799439011';
   const EMP2 = '507f1f77bcf86cd799439022';
 
+  // `timesheetStore` khai `Partial<Timesheet>[]`, mà `Timesheet['_id']` là
+  // `ObjectId` thật (BaseEntity) — repo giả ở describe này chỉ so sánh qua
+  // `String(x._id)` (xem `matchesWhere`/`save` bên dưới), không bao giờ gọi
+  // API thật của `ObjectId`, nên một chuỗi trần là đủ cho test. Ép kiểu một
+  // chỗ duy nhất ở đây thay vì rải `as any`/`as unknown as ObjectId` ở từng
+  // fixture.
+  const idGia = (s: string) => s as unknown as Timesheet['_id'];
+
   function matchesWhere(item: any, where: Record<string, any>): boolean {
     return Object.entries(where).every(([k, v]) => item[k] === v);
   }
@@ -114,14 +122,14 @@ describe('BangCong_Service', () => {
     it('sets trangThai to chot for every row of the given thang', async () => {
       timesheetStore = [
         {
-          _id: 'row-1',
+          _id: idGia('row-1'),
           thang: '2026-07',
           employeeId: EMP1,
           trangThai: 'nhap',
           isActive: true,
         },
         {
-          _id: 'row-2',
+          _id: idGia('row-2'),
           thang: '2026-07',
           employeeId: EMP2,
           trangThai: 'nhap',
@@ -156,7 +164,7 @@ describe('BangCong_Service', () => {
     it('không ghi lại dòng đã chốt sẵn khi chốt lại một tháng đã chốt', async () => {
       timesheetStore = [
         {
-          _id: 'row-1',
+          _id: idGia('row-1'),
           thang: '2026-07',
           employeeId: EMP1,
           trangThai: 'chot',
@@ -178,7 +186,7 @@ describe('BangCong_Service', () => {
     it('vẫn chốt dòng chưa chốt khi tháng có lẫn dòng đã chốt sẵn', async () => {
       timesheetStore = [
         {
-          _id: 'row-1',
+          _id: idGia('row-1'),
           thang: '2026-07',
           employeeId: EMP1,
           trangThai: 'chot',
@@ -186,7 +194,7 @@ describe('BangCong_Service', () => {
           isActive: true,
         },
         {
-          _id: 'row-2',
+          _id: idGia('row-2'),
           thang: '2026-07',
           employeeId: EMP2,
           trangThai: 'nhap',
@@ -459,7 +467,12 @@ describe('BangCong_Service', () => {
  */
 function khopGiaTri(giaTriThuc: any, dieuKien: any): boolean {
   if (dieuKien && typeof dieuKien === 'object' && !Array.isArray(dieuKien)) {
-    return Object.entries(dieuKien).every(([toanTu, v]) => {
+    // `typeof dieuKien === 'object'` thu hẹp `dieuKien` từ `any` xuống
+    // `object` (tsc gốc của `be/` — không phải `tsconfig.app.json` — soi ra
+    // điều này), khiến `Object.entries()` trả `[string, unknown][]` thay vì
+    // `[string, any][]`. Khai kiểu tường minh cho tham số thay vì để
+    // `unknown` trôi xuống các phép so sánh `>=`/`<=`/`>`/`<` bên dưới.
+    return Object.entries(dieuKien).every(([toanTu, v]: [string, any]) => {
       switch (toanTu) {
         case '$gte':
           return giaTriThuc >= v;
