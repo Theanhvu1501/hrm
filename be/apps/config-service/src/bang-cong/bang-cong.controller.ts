@@ -96,6 +96,16 @@ export class BangCong_Controller {
     return { success: true, data };
   }
 
+  // Route tên cố định phải khai TRƯỚC route dùng `:id` — nếu không NestJS
+  // khớp chuỗi "mo-lai" thành tham số `:id` của route khác cùng động từ HTTP.
+  @Post('mo-lai')
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/bang-cong:sua')
+  async moLai(@Body() body: ThangDto) {
+    const soDong = await this.bangCong_Service.moLai(body.thang);
+    return { success: true, data: { soDong } };
+  }
+
   @Delete(':id')
   @UseGuards(PermissionGuard)
   @Permissions('/cham-cong/bang-cong:xoa')

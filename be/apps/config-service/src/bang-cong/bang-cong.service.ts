@@ -33,6 +33,8 @@ export interface BangCongFilter {
 export const MA_LOI_BANG_CONG = {
   /** Sửa bảng công đã chốt — kỳ lương có thể đã tính theo con số cũ. */
   BANG_CONG_DA_CHOT: 'BANG_CONG_DA_CHOT',
+  /** Chốt khi còn ô chưa xử lý = chốt một kỳ lương thiếu ngày công. */
+  CON_O_CHUA_XU_LY: 'CON_O_CHUA_XU_LY',
 } as const;
 
 /** Tóm tắt một lần tổng hợp `generate()` — xem doc-comment của hàm đó. */
@@ -494,8 +496,22 @@ export class BangCong_Service {
     return this.repo.save(item);
   }
 
+  /**
+   * Chốt cả tháng. Chặn TRƯỚC khi ghi bất kỳ dòng nào: chốt được nửa chừng
+   * rồi mới báo lỗi là trạng thái tệ nhất — HR không biết đã chốt tới đâu, và
+   * bảng công thành nửa chốt nửa không.
+   */
   async finalize(thang: string): Promise<Timesheet[]> {
-    const rows = await this.repo.find({ where: { thang, isActive: true } });
+    const rows = await this.repo.find({ where: { thang, isActive: true } as any });
+
+    const conTrong = rows.filter((r) => (r.soOTrong ?? 0) > 0);
+    if (conTrong.length > 0) {
+      const tongO = conTrong.reduce((s, r) => s + (r.soOTrong ?? 0), 0);
+      throw new ConflictException({
+        code: MA_LOI_BANG_CONG.CON_O_CHUA_XU_LY,
+        message: `Còn ${tongO} ô chưa xử lý ở ${conTrong.length} nhân viên. Xử lý hết rồi mới chốt được.`,
+      });
+    }
 
     const saved: Timesheet[] = [];
     for (const row of rows) {
@@ -504,6 +520,27 @@ export class BangCong_Service {
     }
 
     return saved;
+  }
+
+  /**
+   * Mở lại bảng công đã chốt để sửa.
+   *
+   * Có hàm này vì thực tế sẽ có lúc phải sửa bảng công đã chốt. Điểm khác so
+   * với trước P3.9 là việc đó trở thành hành động CÓ CHỦ Ý, thay vì sửa lén
+   * một ô trong khi kỳ lương đã tính theo con số cũ.
+   */
+  async moLai(thang: string): Promise<number> {
+    const rows = await this.repo.find({ where: { thang, isActive: true } as any });
+
+    let so = 0;
+    for (const row of rows) {
+      if (row.trangThai !== 'chot') continue;
+      row.trangThai = 'nhap';
+      await this.repo.save(row);
+      so += 1;
+    }
+
+    return so;
   }
 
   async remove(id: string): Promise<void> {

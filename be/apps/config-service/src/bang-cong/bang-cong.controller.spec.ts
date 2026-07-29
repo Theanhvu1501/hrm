@@ -29,6 +29,7 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['update', RequestMethod.PUT, '/cham-cong/bang-cong:sua'],
   ['setDay', RequestMethod.PATCH, '/cham-cong/bang-cong:sua'],
   ['finalize', RequestMethod.POST, '/cham-cong/bang-cong:them'],
+  ['moLai', RequestMethod.POST, '/cham-cong/bang-cong:sua'],
   ['remove', RequestMethod.DELETE, '/cham-cong/bang-cong:xoa'],
 ];
 
@@ -66,5 +67,39 @@ describe('BangCong_Controller — phân quyền', () => {
    */
   it('không route nào được miễn trừ theo diện tự phục vụ', () => {
     expect(quetPhanQuyenRoute(BangCong_Controller, [])).toEqual([]);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// mo-lai — route mới của Task 6 (P3.9): chuyển tiếp đúng `thang` xuống
+// service. Route tên cố định phải khai TRƯỚC `:id` trong controller — kiểm
+// bằng thứ tự khai báo giống describe "thứ tự route" của don-cham-cong.
+// ──────────────────────────────────────────────────────────────────────────
+describe('BangCong_Controller — mo-lai', () => {
+  let bangCong: any;
+
+  function dungController(): BangCong_Controller {
+    bangCong = {
+      moLai: jest.fn().mockResolvedValue(2),
+    };
+    return new BangCong_Controller(bangCong as any);
+  }
+
+  it('mo-lai gọi service với đúng tháng', async () => {
+    const controller = await dungController();
+    await controller.moLai({ thang: '2026-08' } as any);
+    expect(bangCong.moLai).toHaveBeenCalledWith('2026-08');
+  });
+
+  // `mo-lai` là route POST tên cố định — route tên cố định phải khai TRƯỚC
+  // bất kỳ route POST nào nhận `:id`, nếu không NestJS khớp nhầm chuỗi
+  // "mo-lai" thành tham số đó. Controller này hiện không có route POST nào
+  // nhận `:id` (chỉ `generate`/`finalize`/`mo-lai`, không tham số) — khoá lại
+  // tường minh để route POST `:id` thêm sau này (nếu có) buộc phải đứng SAU.
+  it('không route POST nào khác nhận tham số :id đứng trước mo-lai', () => {
+    const ten = Object.getOwnPropertyNames(proto);
+    const routePost = ten.filter((t) => httpMethodOf(proto[t]) === RequestMethod.POST);
+
+    expect(routePost).toEqual(['generate', 'finalize', 'moLai']);
   });
 });

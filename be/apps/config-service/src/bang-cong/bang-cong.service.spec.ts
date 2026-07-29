@@ -1121,3 +1121,74 @@ describe('BangCong_Service.setDay — nguồn ô và chốt (P3.9)', () => {
     expect(repoBc.kho[0].soOCanhBao).toBe(1);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// finalize / moLai (P3.9 Task 6) — chốt bảng công phải chặn khi còn ô trống,
+// và cho phép mở lại một cách CÓ CHỦ Ý (khác lỗ hổng cũ: sửa lén một ô sau khi
+// đã chốt mà không ai biết kỳ lương đã tính theo con số cũ).
+// ──────────────────────────────────────────────────────────────────────────
+describe('BangCong_Service.finalize / moLai (P3.9)', () => {
+  // Đếm riêng cho mỗi test (đặt trong describe, reset ngầm mỗi describe chạy
+  // lại module) để `_id` LUÔN duy nhất — dongCo(0), dongCo(0) trong cùng một
+  // test (hai dòng "hết ô trống") có cùng soOTrong/trangThai, nên nếu id chỉ
+  // ghép từ hai tham số đó thì hai dòng trùng `_id`, và `save()` của repo giả
+  // (so khớp qua `String(_id)`) sẽ âm thầm ghi đè dòng đầu hai lần thay vì
+  // cập nhật đúng từng dòng — che luôn service đúng dưới một lỗi fixture.
+  let demDongCo = 0;
+  function dongCo(soOTrong: number, trangThai = 'nhap') {
+    demDongCo += 1;
+    // `id` PHẢI chốt vào một const cục bộ ngay tại đây — nếu closure của
+    // `toString` đọc thẳng biến `demDongCo` (biến ngoài, còn thay đổi sau đó)
+    // thì mọi `_id` sẽ cùng trỏ về giá trị CUỐI CÙNG của bộ đếm tại thời điểm
+    // `toString()` thật sự được gọi (lúc `save()` so sánh id), không phải giá
+    // trị lúc `dongCo()` được tạo — quay lại đúng lỗi trùng `_id` ban đầu.
+    const id = `bc-${soOTrong}-${trangThai}-${demDongCo}`;
+    return {
+      _id: { toString: () => id },
+      thang: '2026-08',
+      employeeId: NV1,
+      chiTietNgay: [],
+      soOTrong,
+      trangThai,
+      isActive: true,
+    };
+  }
+
+  it('còn ô trống thì chốt bị chặn 409 và không dòng nào đổi trạng thái', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [dongCo(0), dongCo(3)],
+    });
+
+    const loi = await service.finalize('2026-08').catch((e) => e);
+
+    expect(loi).toBeInstanceOf(ConflictException);
+    // Không chỉ đúng LOẠI lỗi — bài học từ review Task 5: thiếu khẳng định
+    // `code` thì ai đó xoá trường này khỏi ConflictException vẫn qua test.
+    expect((loi as any).getResponse().code).toBe(MA_LOI_BANG_CONG.CON_O_CHUA_XU_LY);
+    expect(repoBc.kho.every((d: any) => d.trangThai === 'nhap')).toBe(true);
+  });
+
+  it('hết ô trống thì chốt được', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [dongCo(0), dongCo(0)],
+    });
+
+    await service.finalize('2026-08');
+
+    expect(repoBc.kho.every((d: any) => d.trangThai === 'chot')).toBe(true);
+  });
+
+  it('moLai đưa dòng đã chốt về nhap và đếm đúng', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [dongCo(0, 'chot'), dongCo(0, 'nhap')],
+    });
+
+    const so = await service.moLai('2026-08');
+
+    expect(so).toBe(1);
+    expect(repoBc.kho.every((d: any) => d.trangThai === 'nhap')).toBe(true);
+  });
+});
