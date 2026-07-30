@@ -73,10 +73,17 @@ export function BanGhiTable() {
               <span className="text-muted-foreground">Không khớp địa điểm</span>
             )}
           </div>
-          {r.latitude !== undefined && r.longitude !== undefined && (
+          {/*
+            Canh bằng `typeof === "number"`, KHÔNG bằng `!== undefined`: kiểu
+            `latitude?: number` không được kiểm ở ranh giới HTTP, một `null`
+            lọt qua là `.toFixed()` ném giữa lúc render — app không có
+            ErrorBoundary nên hỏng cả trang chứ không chỉ một ô.
+          */}
+          {typeof r.latitude === "number" && typeof r.longitude === "number" && (
             <div className="text-xs text-muted-foreground">
               {r.latitude.toFixed(5)}, {r.longitude.toFixed(5)}
-              {r.khoangCachMet !== undefined && ` — cách ${r.khoangCachMet}m`}
+              {typeof r.khoangCachMet === "number" &&
+                ` — cách ${r.khoangCachMet}m`}
             </div>
           )}
         </div>

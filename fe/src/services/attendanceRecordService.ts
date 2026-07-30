@@ -198,7 +198,22 @@ class AttendanceRecordService extends ServiceBase {
     return this.transform(res);
   }
 
+  /**
+   * `null` → `undefined` cho các trường số không bắt buộc.
+   *
+   * Kiểu khai `latitude?: number` chỉ là lời hứa của TypeScript, không ai
+   * kiểm ở ranh giới HTTP: bản ghi thiếu toạ độ có thể về dạng `null` (BSON
+   * lưu `null` cho khoá được gán `undefined`, và mọi client khác ghi vào
+   * collection này cũng có thể để `null`). Màn Bản ghi chấm công canh bằng
+   * `!== undefined` rồi gọi `.toFixed()`, nên một `null` lọt qua đây là ném
+   * TypeError giữa lúc render — mà app không có ErrorBoundary nên cả trang
+   * trắng, không phải chỉ hỏng một ô.
+   */
   private transform(x: Record<string, unknown>): AttendanceRecord {
+    // Hàm cục bộ, KHÔNG phải method: `transform` được truyền không ràng buộc
+    // (`res.map(this.transform)`) nên `this` là undefined lúc chạy.
+    const soHoacUndefined = (v: unknown): number | undefined =>
+      typeof v === 'number' ? v : undefined;
     return {
       id: (x._id as string) || (x.id as string),
       employeeId: x.employeeId as string,
@@ -212,9 +227,9 @@ class AttendanceRecordService extends ServiceBase {
       caGioKetThuc: x.caGioKetThuc as string | undefined,
       locationTen: x.locationTen as string | undefined,
       phuongThuc: x.phuongThuc as string | undefined,
-      latitude: x.latitude as number | undefined,
-      longitude: x.longitude as number | undefined,
-      khoangCachMet: x.khoangCachMet as number | undefined,
+      latitude: soHoacUndefined(x.latitude),
+      longitude: soHoacUndefined(x.longitude),
+      khoangCachMet: soHoacUndefined(x.khoangCachMet),
       ngoaiVung: (x.ngoaiVung as boolean) ?? false,
       soPhutDiMuon: (x.soPhutDiMuon as number) ?? 0,
       soPhutVeSom: (x.soPhutVeSom as number) ?? 0,
