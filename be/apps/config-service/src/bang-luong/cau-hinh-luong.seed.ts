@@ -1,4 +1,5 @@
 import { CauHinhLuongData } from '@app/entities';
+import { HE_SO_TICH_MAC_DINH } from '../quy-gio/luat-quy-gio';
 
 export const CAU_HINH_LUONG_MAC_DINH: CauHinhLuongData = {
   mucKhaiBaoMacDinh: 5_500_000,
@@ -27,4 +28,12 @@ export const CAU_HINH_LUONG_MAC_DINH: CauHinhLuongData = {
   quyTacThoiVu: { tyLe: 0.1, nguong: 2_000_000 },
   quyTacCamKet: { mienThue: true },
   lamTron: 1000,
+  soGioMoiNgay: 8,
+  // Chỉ hỗ trợ "chỉ nghỉ bù" ở chặng P4.2a — xem CauHinhLamThemHopLe.
+  lamThem: {
+    cheDoBu: 'chi_nghi_bu',
+    heSoTichQuy: HE_SO_TICH_MAC_DINH,
+    soThangHanDung: null,
+    khiHetHan: 'quy_ra_tien',
+  },
 };

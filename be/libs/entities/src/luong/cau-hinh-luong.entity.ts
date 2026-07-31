@@ -1,6 +1,6 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../base.entity';
-import type { KhoanLuong, BacThue } from './luong.types';
+import type { KhoanLuong, BacThue, CauHinhLamThem } from './luong.types';
 
 @Entity('cau_hinh_luong')
 export class CauHinhLuong extends BaseEntity {
@@ -16,6 +16,8 @@ export class CauHinhLuong extends BaseEntity {
   @Column('json', { nullable: true }) quyTacThoiVu: { tyLe: number; nguong: number };
   @Column('json', { nullable: true }) quyTacCamKet: { mienThue: boolean };
   @Column({ default: 1000 }) lamTron: number;
+  @Column({ default: 8 }) soGioMoiNgay: number;
+  @Column('json', { nullable: true }) lamThem: CauHinhLamThem;
   @Column({ default: true }) isActive: boolean;
 }
 
