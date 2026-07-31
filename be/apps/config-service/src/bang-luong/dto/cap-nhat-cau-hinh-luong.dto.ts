@@ -31,8 +31,23 @@ const SAN_HE_SO_CHI_NGHI_BU: Record<'ngay_thuong' | 'ngay_nghi' | 'ngay_le', num
 };
 
 const TRUONG_HE_SO = ['ngay_thuong', 'ngay_nghi', 'ngay_le'] as const;
-const KHONG_HO_TRO =
-  'Chế độ bù này chưa được hỗ trợ ở phiên bản hiện tại (mới hỗ trợ "chỉ nghỉ bù")';
+
+/** Nhãn tiếng Việt cho từng `cheDoBu` — thông điệp lỗi tới tay admin HR, không
+ *  phải lập trình viên, nên phải gọi đúng tên chế độ họ đã chọn trên form,
+ *  không phải slug enum thô. */
+const TEN_CHE_DO: Record<string, string> = {
+  chi_nghi_bu: 'chỉ nghỉ bù',
+  chi_tien: 'chỉ trả tiền',
+  nhan_vien_chon: 'nhân viên chọn',
+  nghi_bu_va_chenh: 'nghỉ bù và trả chênh',
+};
+
+/** Case 4 (`nghi_bu_va_chenh` hệ số đã đúng 1.0) và case 5 (`chi_tien`) đều
+ *  rớt vì "chế độ chưa hỗ trợ" — cùng LÝ DO, nên cùng dạng câu là đúng. Điểm
+ *  cần sửa không phải là ép hai câu khác nhau giả tạo, mà là nêu ĐÚNG chế độ
+ *  nào bị từ chối, để hai câu tự nhiên khác nhau vì chúng THẬT SỰ khác nhau. */
+const khongHoTro = (cheDoBu: string): string =>
+  `Chế độ bù "${TEN_CHE_DO[cheDoBu] ?? cheDoBu}" chưa được hỗ trợ ở phiên bản hiện tại (mới hỗ trợ "chỉ nghỉ bù")`;
 
 /**
  * Ba ràng buộc KHÔNG diễn đạt được bằng decorator rời, và cả ba đều sai thành
@@ -72,7 +87,7 @@ export class CauHinhLamThemHopLe implements ValidatorConstraintInterface {
       }
       // Hệ số đúng 1.0 cả ba rồi — vẫn còn vướng ở chỗ chế độ này CHƯA nối
       // bảng lương ở chặng này, không được lẫn với lỗi hệ số phía trên.
-      return KHONG_HO_TRO;
+      return khongHoTro(lt.cheDoBu);
     }
 
     if (lt.cheDoBu === 'chi_nghi_bu') {
@@ -88,7 +103,7 @@ export class CauHinhLamThemHopLe implements ValidatorConstraintInterface {
     }
 
     // chi_tien / nhan_vien_chon: chưa nối bảng lương, không cần xét hệ số.
-    return KHONG_HO_TRO;
+    return khongHoTro(lt.cheDoBu);
   }
 }
 

@@ -94,7 +94,12 @@ describe('CapNhatCauHinhLuongDto — cấu hình làm thêm', () => {
   // 4. nghi_bu_va_chenh với hệ số ĐÃ đúng 1.0 cả ba — Critical 2 của review:
   //    lý do từ chối bây giờ CHỈ có thể là "chế độ chưa hỗ trợ", KHÔNG được
   //    lặp lại thông điệp hệ số (đó sẽ là nói dối một admin đã cấu hình đúng).
-  it('4. nghi_bu_va_chenh + {1,1,1} → từ chối vì CHẾ ĐỘ chưa hỗ trợ, không phải hệ số', async () => {
+  //    Case 4 và case 5 rớt vì CÙNG một lý do (chế độ chưa hỗ trợ) — đúng là
+  //    vậy, không cần ép hai câu khác nhau giả tạo. Cái cần kiểm là thông điệp
+  //    nêu ĐÚNG TÊN chế độ bị từ chối, để hai câu tự khác nhau vì nội dung
+  //    thật sự khác nhau (case 4 nêu "nghỉ bù và trả chênh", case 5 nêu
+  //    "chỉ trả tiền"), chứ không phải vì bị ép khác nhau.
+  it('4. nghi_bu_va_chenh + {1,1,1} → từ chối vì CHẾ ĐỘ chưa hỗ trợ, nêu đúng tên chế độ', async () => {
     const loi = await layLoi(
       chay({
         lamThem: { ...lamThemHopLe, cheDoBu: 'nghi_bu_va_chenh', heSoTichQuy: { ngay_thuong: 1, ngay_nghi: 1, ngay_le: 1 } },
@@ -103,16 +108,21 @@ describe('CapNhatCauHinhLuongDto — cấu hình làm thêm', () => {
     expect(loi).toBeDefined();
     const noiDung = loi.getResponse().message.join(' ');
     expect(noiDung).toMatch(/chưa được hỗ trợ/);
+    expect(noiDung).toMatch(/nghỉ bù và trả chênh/);
+    // Net thật của Critical 2: không được lặp lại thông điệp hệ số khi hệ số
+    // đã đúng — nếu thiếu dòng này, một message chứa cả hai câu vẫn "pass".
     expect(noiDung).not.toMatch(/1\.0 cả ba/);
   });
 
   // 5. chi_tien — chưa nối bảng lương ở chặng này, hệ số không liên quan.
-  it('5. chi_tien → từ chối vì chế độ chưa hỗ trợ', async () => {
+  it('5. chi_tien → từ chối vì chế độ chưa hỗ trợ, nêu đúng tên chế độ', async () => {
     const loi = await layLoi(
       chay({ lamThem: { ...lamThemHopLe, cheDoBu: 'chi_tien' } }),
     );
     expect(loi).toBeDefined();
-    expect(loi.getResponse().message.join(' ')).toMatch(/chưa được hỗ trợ/);
+    const noiDung = loi.getResponse().message.join(' ');
+    expect(noiDung).toMatch(/chưa được hỗ trợ/);
+    expect(noiDung).toMatch(/chỉ trả tiền/);
   });
 
   it('từ chối soGioMoiNgay <= 0', async () => {
