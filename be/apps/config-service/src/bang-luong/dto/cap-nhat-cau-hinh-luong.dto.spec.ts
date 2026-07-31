@@ -47,29 +47,72 @@ describe('CapNhatCauHinhLuongDto — cấu hình làm thêm', () => {
     ).resolves.toBeDefined();
   });
 
-  // Chặng P4.2a chưa nối bảng lương. Lưu im lặng rồi hành xử sai là tệ hơn
-  // hẳn so với từ chối thẳng.
-  it('từ chối chế độ chưa hỗ trợ ở chặng này', async () => {
+  // Ma trận 5 ca dưới đây phải PHÂN BIỆT được nhau qua nội dung thông điệp —
+  // không chỉ "có ném lỗi". Review đã bắt một bug thật: cùng regex /hệ số.*1\.0/
+  // "pass" y hệt dù nhánh nghi_bu_va_chenh đứng trước hay sau nhánh "chưa hỗ
+  // trợ", vì defaultMessage() (bản cũ) đoán lý do một mình từ cheDoBu, không
+  // hỏi lại validate() thực sự rớt ở đâu. Ma trận này chốt bằng nội dung cụ
+  // thể (tên trường, ngưỡng số) để không thể "pass vì sai lý do" lần nữa.
+
+  // 1. chi_nghi_bu đúng sàn BLLĐ Đ98.1 (1.5 / 2.0 / 3.0) — được chấp nhận.
+  it('1. chi_nghi_bu + {1.5,2,3} → được chấp nhận', async () => {
+    await expect(
+      chay({
+        lamThem: { ...lamThemHopLe, cheDoBu: 'chi_nghi_bu', heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 } },
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  // 2. chi_nghi_bu dưới sàn ở ngay_le (1.0 < 3.0) — nghỉ bù là bù DUY NHẤT ở
+  //    chế độ này, tích thiếu là trả thiếu công thật. Thông điệp phải nêu
+  //    đúng TRƯỜNG (ngay_le) và đúng SÀN (3.0), không phải một câu chung chung.
+  it('2. chi_nghi_bu + {1.5,2,1.0} → từ chối, nêu đúng ngay_le và sàn 3.0', async () => {
+    const loi = await layLoi(
+      chay({
+        lamThem: { ...lamThemHopLe, cheDoBu: 'chi_nghi_bu', heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 1.0 } },
+      }),
+    );
+    expect(loi).toBeDefined();
+    const noiDung = loi.getResponse().message.join(' ');
+    expect(noiDung).toMatch(/ngay_le/);
+    expect(noiDung).toMatch(/3\.0/);
+  });
+
+  // 3. nghi_bu_va_chenh với hệ số đầy đủ (chưa ép về 1.0) — bảng lương ĐÃ trả
+  //    phần chênh, tích quỹ ở 1.5 nữa là trả gấp đôi. Thông điệp phải nói rõ
+  //    lý do là HỆ SỐ, không phải "chế độ chưa hỗ trợ" (dù cả hai đều đúng).
+  it('3. nghi_bu_va_chenh + {1.5,2,3} → từ chối vì hệ số phải đúng 1.0', async () => {
+    const loi = await layLoi(
+      chay({
+        lamThem: { ...lamThemHopLe, cheDoBu: 'nghi_bu_va_chenh', heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 } },
+      }),
+    );
+    expect(loi).toBeDefined();
+    expect(loi.getResponse().message.join(' ')).toMatch(/1\.0/);
+  });
+
+  // 4. nghi_bu_va_chenh với hệ số ĐÃ đúng 1.0 cả ba — Critical 2 của review:
+  //    lý do từ chối bây giờ CHỈ có thể là "chế độ chưa hỗ trợ", KHÔNG được
+  //    lặp lại thông điệp hệ số (đó sẽ là nói dối một admin đã cấu hình đúng).
+  it('4. nghi_bu_va_chenh + {1,1,1} → từ chối vì CHẾ ĐỘ chưa hỗ trợ, không phải hệ số', async () => {
+    const loi = await layLoi(
+      chay({
+        lamThem: { ...lamThemHopLe, cheDoBu: 'nghi_bu_va_chenh', heSoTichQuy: { ngay_thuong: 1, ngay_nghi: 1, ngay_le: 1 } },
+      }),
+    );
+    expect(loi).toBeDefined();
+    const noiDung = loi.getResponse().message.join(' ');
+    expect(noiDung).toMatch(/chưa được hỗ trợ/);
+    expect(noiDung).not.toMatch(/1\.0 cả ba/);
+  });
+
+  // 5. chi_tien — chưa nối bảng lương ở chặng này, hệ số không liên quan.
+  it('5. chi_tien → từ chối vì chế độ chưa hỗ trợ', async () => {
     const loi = await layLoi(
       chay({ lamThem: { ...lamThemHopLe, cheDoBu: 'chi_tien' } }),
     );
     expect(loi).toBeDefined();
     expect(loi.getResponse().message.join(' ')).toMatch(/chưa được hỗ trợ/);
-  });
-
-  // Bảng lương đã trả phần chênh (hệ số − 1); tích quỹ ở 1.5 nữa là trả gấp đôi.
-  it('ép heSoTichQuy = 1.0 ở chế độ nghi_bu_va_chenh', async () => {
-    const loi = await layLoi(
-      chay({
-        lamThem: {
-          ...lamThemHopLe,
-          cheDoBu: 'nghi_bu_va_chenh',
-          heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 },
-        },
-      }),
-    );
-    expect(loi).toBeDefined();
-    expect(loi.getResponse().message.join(' ')).toMatch(/hệ số.*1\.0/);
   });
 
   it('từ chối soGioMoiNgay <= 0', async () => {
