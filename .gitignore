@@ -8,3 +8,8 @@ coverage/
 # Real deploy env files (contain secrets) — keep only the .example templates tracked
 be/env/*.env
 !be/env/*.env.example
+
+# Scratch của quy trình subagent-driven (ledger, brief, review package) — không phải mã nguồn
+.superpowers/
+# Worktree do phiên làm việc tạo ra, nằm trong repo nhưng là checkout riêng
+.claude/worktrees/
