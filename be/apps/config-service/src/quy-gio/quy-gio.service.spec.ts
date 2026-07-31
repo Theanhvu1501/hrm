@@ -168,6 +168,58 @@ describe('QuyGio_Service.tichTuDonOt', () => {
     await expect(service.tichTuDonOt(donOt())).resolves.toBeUndefined();
     expect(quyRepo.rows).toHaveLength(0);
   });
+
+  // Bấm duyệt hai lần / retry sau lỗi mạng gọi lại đúng requestId — không
+  // được cộng giờ hai lần cho một sự kiện duyệt duy nhất.
+  it('gọi lại cùng requestId chỉ áp dụng một lần (chống trùng)', async () => {
+    const { service, quyRepo, soRepo } = await dungService();
+
+    await service.tichTuDonOt(donOt());
+    await service.tichTuDonOt(donOt()); // gọi lại y hệt, cùng requestId 'don1'
+
+    expect(quyRepo.rows).toHaveLength(1);
+    expect(quyRepo.rows[0].soGioTich).toBe(12); // không cộng lần hai
+    expect(soRepo.rows).toHaveLength(1); // chỉ một dòng sổ duyet_don_ot
+  });
+});
+
+describe('QuyGio_Service.thuHoiTichTuDonOt', () => {
+  it('thu hồi lần đầu: trừ giờ khỏi quỹ và ghi một dòng sổ huy_don_ot', async () => {
+    const { service, quyRepo, soRepo } = await dungService();
+    await service.tichTuDonOt(donOt()); // don1: +12h vào nv1/2026-01
+
+    await service.thuHoiTichTuDonOt('don1', 'nv1', 'hr1');
+
+    expect(quyRepo.rows[0].soGioTich).toBe(0);
+    expect(quyRepo.rows[0].soGioConLai).toBe(0);
+    expect(soRepo.rows).toHaveLength(2);
+    expect(soRepo.rows[1]).toMatchObject({
+      employeeId: 'nv1',
+      kyTich: '2026-01',
+      soGio: -12,
+      lyDo: 'huy_don_ot',
+      requestId: 'don1',
+      nguoiThucHien: 'hr1',
+    });
+  });
+
+  // Kịch bản đúng cái reviewer nêu: thu hồi don1 xong, một đơn KHÁC (don4)
+  // tích vào cùng kỳ, rồi thu hồi don1 bị gọi LẶP LẠI (retry/double-click).
+  // Sổ append-only nên dòng duyet_don_ot cũ của don1 vẫn còn — nếu lặp lại
+  // theo dòng cũ thay vì theo RÒNG, lần gọi lặp sẽ trừ nhầm vào giờ của don4.
+  it('gọi thu hồi lặp lại không được ăn vào giờ của đơn khác tích sau đó cùng kỳ', async () => {
+    const { service, quyRepo } = await dungService();
+
+    await service.tichTuDonOt(donOt()); // don1: +12h vào nv1/2026-01
+    await service.thuHoiTichTuDonOt('don1', 'nv1', 'hr1'); // -12h => soGioTich = 0
+    await service.tichTuDonOt(
+      donOt({ requestId: 'don4', soGioOt: 10, loaiNgayOt: 'ngay_nghi' }),
+    ); // don4 không liên quan: +20h (10 × 2) vào cùng kỳ nv1/2026-01
+
+    await service.thuHoiTichTuDonOt('don1', 'nv1', 'hr1'); // gọi lặp lại don1
+
+    expect(quyRepo.rows[0].soGioTich).toBe(20); // giờ của don4 còn nguyên
+  });
 });
 
 describe('QuyGio_Service.soDuKhaDung', () => {

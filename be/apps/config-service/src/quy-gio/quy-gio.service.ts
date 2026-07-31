@@ -90,6 +90,42 @@ export class QuyGio_Service {
   }
 
   /**
+   * Các dòng sổ `duyet_don_ot`/`huy_don_ot` của một đơn — nguồn để tính RÒNG
+   * (cùng cách `soRongDaDung()` bên `quy-phep.service.ts` làm cho quỹ phép).
+   */
+  private async donLienQuanOt(
+    requestId: string,
+    employeeId: string,
+  ): Promise<OvertimeBalanceEntry[]> {
+    return (await this.soRepo.find({ where: { requestId } as any })).filter(
+      (d) =>
+        d.employeeId === employeeId &&
+        (d.lyDo === 'duyet_don_ot' || d.lyDo === 'huy_don_ot'),
+    );
+  }
+
+  /**
+   * RÒNG đã tích của một đơn, theo từng kỳ tích — `duyet_don_ot` +soGio,
+   * `huy_don_ot` đã lưu sẵn -soGio nên cộng thẳng là ra ròng.
+   *
+   * Ròng > 0 ở một kỳ nghĩa là đơn này đang có giờ tích CÒN HIỆU LỰC ở kỳ đó
+   * (chưa từng thu hồi, hoặc đã tích lại sau khi thu hồi). Ròng <= 0 nghĩa là
+   * chưa từng tích, hoặc đã thu hồi xong — cả hai đều là "không có gì để làm
+   * lại", dùng để chặn double-apply ở cả hai chiều tích/thu hồi.
+   */
+  private async rongTichTheoKy(
+    requestId: string,
+    employeeId: string,
+  ): Promise<Map<string, number>> {
+    const ds = await this.donLienQuanOt(requestId, employeeId);
+    const theoKy = new Map<string, number>();
+    for (const d of ds) {
+      theoKy.set(d.kyTich, (theoKy.get(d.kyTich) ?? 0) + d.soGio);
+    }
+    return theoKy;
+  }
+
+  /**
    * Tích giờ vào quỹ khi một đơn làm thêm được duyệt.
    *
    * Không tích ở chế độ `chi_tien` (giờ đó đi ra tiền, tích nữa là trả hai
@@ -122,6 +158,18 @@ export class QuyGio_Service {
     if (soGio <= 0) return;
 
     const kyTich = input.ngay.slice(0, 7);
+
+    // (chống trùng): đơn này đã tích cho đúng kỳ này và CHƯA bị thu hồi (ròng
+    // > 0) thì gọi lại — bấm hai lần, retry sau lỗi mạng — phải là no-op.
+    // Không chặn thì cộng giờ hai lần và ghi hai dòng sổ `duyet_don_ot` cho
+    // cùng một sự kiện thật; đây đúng bẫy round 3 mà `chuyenSangDaDung()` bên
+    // `quy-phep.service.ts` đã vá cho quỹ phép.
+    const rongTheoKy = await this.rongTichTheoKy(
+      input.requestId,
+      input.employeeId,
+    );
+    if ((rongTheoKy.get(kyTich) ?? 0) > 0) return;
+
     let quy = await this.repo.findOne({
       where: { employeeId: input.employeeId, kyTich } as any,
     });
@@ -163,38 +211,45 @@ export class QuyGio_Service {
    * Giờ đã bị TIÊU rồi thì ném 409 và bắt HR xử lý tay — không tự đẩy quỹ
    * xuống âm, và không tự thu hồi ngược các đơn nghỉ bù đã duyệt (người ta
    * đã nghỉ thật rồi, không đòi lại được bằng một phép trừ).
+   *
+   * Duyệt theo RÒNG chứ không theo "có dòng duyet_don_ot chưa": sổ append-only
+   * nên dòng duyet_don_ot của lần tích đầu KHÔNG BAO GIỜ biến mất, kể cả sau
+   * khi đã thu hồi. Gọi lại thu hồi cho cùng `requestId` (retry, huỷ hai lần)
+   * mà lặp theo dòng cũ sẽ trừ NHẦM vào quỹ hiện tại — quỹ đó lúc này có thể
+   * đã được một đơn KHÁC bồi thêm cùng kỳ. Ròng <= 0 nghĩa là đơn này không
+   * còn gì cần thu hồi ở kỳ đó → bỏ qua, không trừ, không ghi sổ.
    */
   async thuHoiTichTuDonOt(
     requestId: string,
     employeeId: string,
     nguoiThucHien: string,
   ): Promise<void> {
-    const dongDaTich = (
-      await this.soRepo.find({ where: { requestId, lyDo: 'duyet_don_ot' } as any })
-    ).filter((d) => d.employeeId === employeeId);
+    const rongTheoKy = await this.rongTichTheoKy(requestId, employeeId);
 
-    for (const dong of dongDaTich) {
+    for (const [kyTich, rong] of rongTheoKy) {
+      if (rong <= 0) continue;
+
       const quy = await this.repo.findOne({
-        where: { employeeId, kyTich: dong.kyTich } as any,
+        where: { employeeId, kyTich } as any,
       });
       if (!quy) continue;
 
-      if (quy.soGioConLai < dong.soGio) {
+      if (quy.soGioConLai < rong) {
         throw new ConflictException({
           code: MA_LOI_QUY_GIO.DA_TIEU_KHONG_THU_HOI_DUOC,
-          message: `Giờ tích từ đơn này đã được nghỉ bù mất một phần (kỳ ${dong.kyTich} chỉ còn ${quy.soGioConLai} giờ, cần thu hồi ${dong.soGio}). Xử lý tay trước khi hủy đơn.`,
+          message: `Giờ tích từ đơn này đã được nghỉ bù mất một phần (kỳ ${kyTich} chỉ còn ${quy.soGioConLai} giờ, cần thu hồi ${rong}). Xử lý tay trước khi hủy đơn.`,
         });
       }
 
-      quy.soGioTich -= dong.soGio;
+      quy.soGioTich -= rong;
       this.tinhLaiConLai(quy);
       await this.repo.save(quy);
 
       await this.ghiSo({
         balanceId: String((quy as any)._id),
         employeeId,
-        kyTich: dong.kyTich,
-        soGio: -dong.soGio,
+        kyTich,
+        soGio: -rong,
         lyDo: 'huy_don_ot',
         requestId,
         nguoiThucHien,
@@ -209,6 +264,26 @@ export class QuyGio_Service {
       .sort((a, b) => (a.kyTich < b.kyTich ? -1 : 1));
   }
 
+  /**
+   * Quỹ còn hiệu lực, chưa quá hạn tại ngày `den`, còn giờ để dùng — LUẬT DUY
+   * NHẤT cho "khả dụng". `soDuKhaDung()` (số hiển thị cho HR/nhân viên) và
+   * `quyKhaDung()` (danh sách FIFO thật sự bị tiêu ở Task 5) phải đi qua
+   * chung một cửa: khác cửa là số hiển thị và số tiêu được có thể trôi khỏi
+   * nhau mà không ai biết, nếu sau này có ai thêm một điều kiện loại trừ vào
+   * một trong hai bên mà quên bên còn lại.
+   */
+  private async quyDuDieuKienDung(
+    employeeId: string,
+    den: string,
+  ): Promise<OvertimeBalance[]> {
+    return (await this.layQuyCuaNhanVien(employeeId)).filter(
+      (q) =>
+        q.trangThai === 'dang_hieu_luc' &&
+        q.hanDung >= den &&
+        q.soGioConLai > 0,
+    );
+  }
+
   /** Số dư dùng được tại ngày `den` — bỏ quỹ đã đóng và quỹ quá hạn. */
   async soDuKhaDung(
     employeeId: string,
@@ -217,12 +292,7 @@ export class QuyGio_Service {
     soGioConLai: number;
     theoKy: Array<{ kyTich: string; hanDung: string; soGioConLai: number }>;
   }> {
-    const ds = (await this.layQuyCuaNhanVien(employeeId)).filter(
-      (q) =>
-        q.trangThai === 'dang_hieu_luc' &&
-        q.hanDung >= den &&
-        q.soGioConLai > 0,
-    );
+    const ds = await this.quyDuDieuKienDung(employeeId, den);
 
     return {
       soGioConLai: ds.reduce((t, q) => t + q.soGioConLai, 0),
@@ -239,12 +309,7 @@ export class QuyGio_Service {
     employeeId: string,
     den: string,
   ): Promise<QuyKhaDung[]> {
-    const ds = (await this.layQuyCuaNhanVien(employeeId)).filter(
-      (q) =>
-        q.trangThai === 'dang_hieu_luc' &&
-        q.hanDung >= den &&
-        q.soGioConLai > 0,
-    );
+    const ds = await this.quyDuDieuKienDung(employeeId, den);
 
     return ds.map((q) => ({
       balanceId: String((q as any)._id),
