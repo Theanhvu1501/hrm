@@ -29,10 +29,13 @@ export interface ResignationFilter {
   isActive?: boolean | string;
 }
 
+// CỐ Ý không có `employeeName`/`employeeCode`: đó là hai trường denormalize do
+// BE tự điền từ hồ sơ nhân viên (`ThoiViec_Service.create`), không nằm trong
+// `CreateThoiViecDto`. Thêm lại vào đây là mở đường cho FE gửi kèm, mà
+// config-service bật `forbidNonWhitelisted` nên khoá lạ làm hỏng cả request
+// (400 trống trơn). Chiều đọc vẫn có hai trường — xem `Resignation` bên trên.
 export interface CreateResignationDto {
   employeeId: string;
-  employeeName?: string;
-  employeeCode?: string;
   ngayNopDon: string;
   ngayLamViecCuoi?: string;
   loaiThoiViec: string;

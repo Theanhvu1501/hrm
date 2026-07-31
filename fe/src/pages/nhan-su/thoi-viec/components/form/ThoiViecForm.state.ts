@@ -8,8 +8,6 @@ export interface ChecklistBanGiaoFormItem {
 
 export interface ThoiViecFormValues {
   employeeId: string;
-  employeeName?: string;
-  employeeCode?: string;
   ngayNopDon: string;
   ngayLamViecCuoi?: string;
   loaiThoiViec: string;

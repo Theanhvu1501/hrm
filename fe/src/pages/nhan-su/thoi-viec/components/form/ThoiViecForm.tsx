@@ -18,16 +18,15 @@ import {
   useThoiViecHandler,
   useThoiViecState,
 } from "../../ThoiViecHandlerContext";
-import { CreateResignationDto, Resignation } from "@/services/resignationService";
+import { Resignation } from "@/services/resignationService";
 import { Employee } from "@/services/employeeService";
 import { LOAI_THOI_VIEC_OPTIONS } from "../../constants";
+import { toCreateThoiViecDto } from "./thoiViecForm.convert";
 import { ThoiViecFormValues } from "./ThoiViecForm.state";
 import "./ThoiViecForm.state";
 
 const DEFAULT_VALUES: ThoiViecFormValues = {
   employeeId: "",
-  employeeName: "",
-  employeeCode: "",
   ngayNopDon: "",
   ngayLamViecCuoi: "",
   loaiThoiViec: "tu_nguyen",
@@ -43,8 +42,6 @@ function toFormValues(record: Resignation | null): ThoiViecFormValues {
 
   return {
     employeeId: record.employeeId || "",
-    employeeName: record.employeeName || "",
-    employeeCode: record.employeeCode || "",
     ngayNopDon: record.ngayNopDon || "",
     ngayLamViecCuoi: record.ngayLamViecCuoi || "",
     loaiThoiViec: record.loaiThoiViec || "tu_nguyen",
@@ -115,31 +112,13 @@ export function ThoiViecForm() {
   };
 
   const handleEmployeeChange = (employeeId: string) => {
-    const employee = employeeList.find((e) => e.id === employeeId);
+    // CHỈ đặt employeeId. Tên và mã nhân viên là hai trường denormalize do BE
+    // tự tra từ hồ sơ (`ThoiViec_Service.create`) — xem `toCreateThoiViecDto`.
     setValue("employeeId", employeeId);
-    // Denormalize employeeName/employeeCode ngay khi chọn nhân viên, để BE
-    // lưu kèm đơn thôi việc (phục vụ hiển thị danh sách mà không cần join).
-    setValue("employeeName", employee?.hoTen || "");
-    setValue("employeeCode", employee?.employeeId || "");
   };
 
   const onSubmit = (values: ThoiViecFormValues) => {
-    const dto: CreateResignationDto = {
-      employeeId: values.employeeId,
-      employeeName: values.employeeName || undefined,
-      employeeCode: values.employeeCode || undefined,
-      ngayNopDon: values.ngayNopDon,
-      ngayLamViecCuoi: values.ngayLamViecCuoi || undefined,
-      loaiThoiViec: values.loaiThoiViec,
-      lyDo: values.lyDo || undefined,
-      viPham: values.viPham || undefined,
-      checklistBanGiao:
-        values.checklistBanGiao && values.checklistBanGiao.length > 0
-          ? values.checklistBanGiao
-          : undefined,
-      soQuyetDinh: values.soQuyetDinh || undefined,
-      ghiChu: values.ghiChu || undefined,
-    };
+    const dto = toCreateThoiViecDto(values);
 
     if (isEditing && editingResignation) {
       handler.executeEvent("updateResignation", { id: editingResignation.id, dto });
