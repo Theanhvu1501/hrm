@@ -10,6 +10,7 @@ import { DonChamCong_Service, MA_LOI_DON_CHAM_CONG } from './don-cham-cong.servi
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
+import { QuyGio_Service } from '../quy-gio/quy-gio.service';
 import { tinhSoNgayNghi } from './luat-don';
 import { AttendanceRequest, Employee } from '@app/entities';
 
@@ -42,6 +43,17 @@ describe('DonChamCong_Service', () => {
   };
   let mockNhanVienService: {
     resolveEmployeeFromUser: jest.Mock;
+  };
+  let mockQuyGioService: {
+    soGioMoiNgay: jest.Mock;
+    phanBoChoNghiBu: jest.Mock;
+    giuCho: jest.Mock;
+    nhaCho: jest.Mock;
+    chuyenSangDaDung: jest.Mock;
+    hoanTraDaDung: jest.Mock;
+    tichTuDonOt: jest.Mock;
+    thuHoiTichTuDonOt: jest.Mock;
+    soDuKhaDung: jest.Mock;
   };
   let mockQuyPhepService: {
     layQuyCuaNhanVien: jest.Mock;
@@ -110,6 +122,21 @@ describe('DonChamCong_Service', () => {
       hoanTraDaDung: jest.fn().mockResolvedValue(undefined),
     };
 
+    // Task 7: mặc định vô hại cho các describe cũ không quan tâm tới quỹ giờ
+    // — cùng lý do đã ghi ở mockQuyPhepService phía trên. Describe "nghỉ bù
+    // trừ quỹ giờ" bên dưới tự cấp provider riêng qua `dungService()`.
+    mockQuyGioService = {
+      soGioMoiNgay: jest.fn().mockResolvedValue(8),
+      phanBoChoNghiBu: jest.fn().mockResolvedValue([]),
+      giuCho: jest.fn().mockResolvedValue(undefined),
+      nhaCho: jest.fn().mockResolvedValue(undefined),
+      chuyenSangDaDung: jest.fn().mockResolvedValue(undefined),
+      hoanTraDaDung: jest.fn().mockResolvedValue(undefined),
+      tichTuDonOt: jest.fn().mockResolvedValue(undefined),
+      thuHoiTichTuDonOt: jest.fn().mockResolvedValue(undefined),
+      soDuKhaDung: jest.fn().mockResolvedValue({ soGioConLai: 0, theoKy: [] }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DonChamCong_Service,
@@ -121,6 +148,7 @@ describe('DonChamCong_Service', () => {
         { provide: NgayLe_Service, useValue: mockNgayLeService },
         { provide: NhanVien_Service, useValue: mockNhanVienService },
         { provide: QuyPhep_Service, useValue: mockQuyPhepService },
+        { provide: QuyGio_Service, useValue: mockQuyGioService },
       ],
     }).compile();
 
@@ -760,6 +788,205 @@ describe('DonChamCong_Service', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // update — Task 7b (gap 2): PUT :id là cửa THỨ HAI vào quỹ GIỜ, cùng lớp
+  // lỗi hệt describe quỹ phép ở trên — mirror trực tiếp exploit (a)/(b)/(c)
+  // nhưng cho nghi_bu (giữ chỗ) và lam_them_gio (đã tích lúc duyệt).
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('update — PUT không được sửa các trường ảnh hưởng quỹ giờ (Task 7b, gap 2)', () => {
+    const DON_ID = '507f1f77bcf86cd799439099';
+
+    it('nghi_bu ĐANG GIỮ CHỖ (phanBoQuyGio) → PUT sửa gioDen → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_bu',
+        kieuNghi: 'theo_gio',
+        ngay: '2027-02-01',
+        gioTu: '15:00',
+        gioDen: '17:00',
+        soGioNghiBu: 2,
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2027-01', soGio: 2 }],
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { gioDen: '19:00' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('nghi_bu ĐANG GIỮ CHỖ → PUT sửa kieuNghi → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_bu',
+        kieuNghi: 'theo_gio',
+        ngay: '2027-02-01',
+        gioTu: '15:00',
+        gioDen: '17:00',
+        soGioNghiBu: 2,
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2027-01', soGio: 2 }],
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { kieuNghi: 'theo_ngay' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    // Mirror exploit (c) của quỹ phép: đổi loaiDon RA KHỎI nghi_bu để né
+    // laDonTruQuyGio() ở mọi đường sau đó (updateStatus/huyDonCuaToi/remove)
+    // — giữ chỗ đã có (phanBoQuyGio) sẽ không bao giờ được nhả nữa.
+    it('nghi_bu ĐANG GIỮ CHỖ → PUT đổi loaiDon sang giai_trinh → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_bu',
+        kieuNghi: 'theo_gio',
+        ngay: '2027-02-01',
+        gioTu: '15:00',
+        gioDen: '17:00',
+        soGioNghiBu: 2,
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2027-01', soGio: 2 }],
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { loaiDon: 'giai_trinh' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('OT ĐÃ DUYỆT (đã tích quỹ) → PUT sửa gioTu → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'da_duyet',
+        loaiDon: 'lam_them_gio',
+        ngay: '2027-02-01',
+        gioTu: '18:00',
+        gioDen: '20:00',
+        soGioOt: 2,
+        heSoOt: 1.5,
+        loaiNgayOt: 'ngay_thuong',
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { gioTu: '17:00' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    // OT còn cho_duyet chưa từng đụng quỹ (tích lúc DUYỆT, không phải lúc
+    // nộp) — sửa giờ ở đây KHÔNG chạm gì tới quỹ, phải được phép bình
+    // thường. Không bị chặn quá tay là điều kiện sống còn của guard này.
+    it('OT còn CHỜ DUYỆT (chưa tích quỹ) → PUT sửa gioTu vẫn được phép', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'lam_them_gio',
+        ngay: '2027-02-01',
+        gioTu: '18:00',
+        gioDen: '20:00',
+        soGioOt: 2,
+        heSoOt: 1.5,
+        loaiNgayOt: 'ngay_thuong',
+      });
+      // (review round 2): sửa gioTu/gioDen/ngay trên OT còn cho_duyet giờ
+      // TÍNH LẠI snapshot qua tinhCacTruongSnapshot() — cần tra hồ sơ nhân
+      // viên (ngayLamViecTrongTuan) như create() vẫn cần.
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        ngayLamViecTrongTuan: T2_DEN_T6,
+      });
+
+      const result = await service.update(DON_ID, { gioTu: '17:00' } as any);
+
+      expect(result.gioTu).toBe('17:00');
+      expect(mockRequestRepo.save).toHaveBeenCalled();
+    });
+
+    // Không bị chặn quá tay: sửa lyDo (không ảnh hưởng quỹ giờ) trên một đơn
+    // OT ĐÃ DUYỆT vẫn phải đi qua bình thường — cùng tinh thần với test
+    // "sửa lyDo trên đơn phép năm" ở describe quỹ phép phía trên.
+    it('sửa lyDo trên OT ĐÃ DUYỆT (giá trị các trường ảnh hưởng quỹ giữ nguyên) vẫn được phép', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'da_duyet',
+        loaiDon: 'lam_them_gio',
+        ngay: '2027-02-01',
+        gioTu: '18:00',
+        gioDen: '20:00',
+        soGioOt: 2,
+        heSoOt: 1.5,
+        loaiNgayOt: 'ngay_thuong',
+        lyDo: 'Lý do cũ',
+      });
+
+      const result = await service.update(DON_ID, {
+        loaiDon: 'lam_them_gio',
+        ngay: '2027-02-01',
+        gioTu: '18:00',
+        gioDen: '20:00',
+        lyDo: 'Lý do mới',
+      } as any);
+
+      expect(result.lyDo).toBe('Lý do mới');
+      expect(mockRequestRepo.save).toHaveBeenCalled();
+    });
+
+    // Task 7b (gap 2b): phanBoQuyGio gửi kèm trong body PUT không được phép
+    // chạm tới entity dưới bất kỳ hình thức nào — cùng lý do phanBoQuy đã bị
+    // bóc từ P3.8. Đơn ở đây KHÔNG giữ chỗ gì (nghi_bu nhưng phanBoQuyGio
+    // rỗng từ đầu) để cô lập đúng assertion: guard 2a không nhúng vào đây
+    // (không có gì để mà chặn 409), chỉ còn phép bóc-và-bỏ ở đầu update() là
+    // thứ duy nhất có thể ngăn phanBoQuyGio-giả-mạo chạm entity.
+    it('phanBoQuyGio gửi kèm trong body PUT không được ghi vào entity', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_bu',
+        kieuNghi: 'theo_gio',
+        ngay: '2027-02-01',
+        gioTu: '15:00',
+        gioDen: '17:00',
+        lyDo: 'cũ',
+        // Không có phanBoQuyGio trên item gốc — đơn này chưa từng giữ chỗ.
+      });
+
+      const result = await service.update(DON_ID, {
+        lyDo: 'mới',
+        phanBoQuyGio: [{ balanceId: 'gia-mao', kyTich: '2099-01', soGio: 999 }],
+      } as any);
+
+      expect(result.phanBoQuyGio).toBeUndefined();
+      expect(mockRequestRepo.save).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          phanBoQuyGio: [{ balanceId: 'gia-mao', kyTich: '2099-01', soGio: 999 }],
+        }),
+      );
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   // findAll
   // ──────────────────────────────────────────────────────────────────────────
   describe('findAll', () => {
@@ -979,6 +1206,20 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
         .fn()
         .mockRejectedValue(new NotFoundException()),
     };
+    // Task 7: describe này nhắm vào quỹ phép (phep_nam), không đơn nào ở đây
+    // là nghi_bu/lam_them_gio nên quyGio_Service không bao giờ thực sự được
+    // gọi tới — vẫn phải cấp provider để DonChamCong_Service resolve được.
+    const quyGio = {
+      soGioMoiNgay: jest.fn().mockResolvedValue(8),
+      phanBoChoNghiBu: jest.fn().mockResolvedValue([]),
+      giuCho: jest.fn().mockResolvedValue(undefined),
+      nhaCho: jest.fn().mockResolvedValue(undefined),
+      chuyenSangDaDung: jest.fn().mockResolvedValue(undefined),
+      hoanTraDaDung: jest.fn().mockResolvedValue(undefined),
+      tichTuDonOt: jest.fn().mockResolvedValue(undefined),
+      thuHoiTichTuDonOt: jest.fn().mockResolvedValue(undefined),
+      soDuKhaDung: jest.fn().mockResolvedValue({ soGioConLai: 0, theoKy: [] }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -988,6 +1229,7 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
         { provide: NgayLe_Service, useValue: ngayLe },
         { provide: NhanVien_Service, useValue: nhanVienSvc },
         { provide: QuyPhep_Service, useValue: quyPhep },
+        { provide: QuyGio_Service, useValue: quyGio },
       ],
     }).compile();
 
@@ -1570,5 +1812,1006 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
     const [, cacNgayGoi, soNgayGoi] = quyPhep.phanBoChoNgayNghi.mock.calls[0];
     expect(cacNgayGoi).toHaveLength(1);
     expect(soNgayGoi).toBe(0.5);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// Task 7 (P4.2a) — nối quỹ giờ vào vòng đời đơn: đơn lam_them_gio tích quỹ
+// lúc duyệt/thu hồi khi rời khỏi da_duyet; đơn nghi_bu giữ chỗ lúc nộp rồi
+// chuyển đã dùng/nhả/hoàn theo ĐÚNG bảng chuyển trạng thái đã dùng cho quỹ
+// phép ở describe phía trên — xem updateStatus().
+//
+// `dungService()` dùng harness jest.fn() rời rạc (cùng khuôn với beforeEach
+// đầu file), KHÔNG dùng "kho" mảng bền trạng thái như `dungServiceDon()`:
+// nhóm test này chỉ cần đọc lại BẢN GHI CUỐI CÙNG mà repo.save() nhận (biến
+// `luu`), không cần giữ nhiều bản ghi qua nhiều lệnh gọi cho cùng một đơn.
+// `luu` là một object BỀN THAM CHIẾU (không bao giờ gán lại `luu = ...`, chỉ
+// Object.assign lên chính nó) — nên test destructure `luu` TRƯỚC khi gọi
+// service.create() vẫn đọc đúng giá trị SAU cùng, vì destructure chỉ lấy
+// tham chiếu, không sao chép giá trị tại thời điểm đó.
+// ────────────────────────────────────────────────────────────────────────
+describe('DonChamCong_Service — nghỉ bù trừ quỹ giờ (Task 7)', () => {
+  // ObjectId hợp lệ (24 hex) — findEmployee()/findOne() đều tự tạo
+  // `new ObjectId(...)` từ id truyền vào TRƯỚC khi chạm tới repo giả, nên id
+  // kiểu 'nv1'/'d1' sẽ ném BSONError ngay cả khi repo.findOne() đã được mock.
+  const ID_NV1 = '650000000000000000000101';
+
+  function mockQuyGio(ghiDe: Record<string, any> = {}) {
+    return {
+      soGioMoiNgay: jest.fn().mockResolvedValue(8),
+      // Trả đúng số giờ ĐƯỢC YÊU CẦU (soGioCan) thay vì một giá trị cố định
+      // — test "giữ chỗ ngay lúc tạo đơn" đối chiếu đúng số đã giữ.
+      phanBoChoNghiBu: jest
+        .fn()
+        .mockImplementation((_employeeId: string, soGioCan: number) =>
+          Promise.resolve([{ balanceId: 'b1', kyTich: '2026-01', soGio: soGioCan }]),
+        ),
+      giuCho: jest.fn().mockResolvedValue(undefined),
+      nhaCho: jest.fn().mockResolvedValue(undefined),
+      chuyenSangDaDung: jest.fn().mockResolvedValue(undefined),
+      hoanTraDaDung: jest.fn().mockResolvedValue(undefined),
+      tichTuDonOt: jest.fn().mockResolvedValue(undefined),
+      thuHoiTichTuDonOt: jest.fn().mockResolvedValue(undefined),
+      soDuKhaDung: jest.fn().mockResolvedValue({ soGioConLai: 0, theoKy: [] }),
+      ...ghiDe,
+    };
+  }
+
+  async function dungService(
+    tuyChon: { don?: any; quyGio?: any; nhanVien?: any; ngayLe?: any } = {},
+  ) {
+    const luu: Record<string, any> = {};
+    const mockRequestRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(tuyChon.don ?? null),
+      create: jest.fn((v: any) => v),
+      save: jest.fn(async (v: any) => {
+        Object.assign(luu, v);
+        if (!luu._id) luu._id = 'generated-request-id';
+        return luu;
+      }),
+    };
+    const mockEmployeeRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(
+        tuyChon.nhanVien ?? {
+          _id: ID_NV1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyễn Văn A',
+          ngayLamViecTrongTuan: [0, 1, 2, 3, 4, 5, 6],
+        },
+      ),
+      save: jest.fn((v: any) => Promise.resolve(v)),
+    };
+    const mockNgayLeService =
+      tuyChon.ngayLe ?? { timTheoNgay: jest.fn().mockResolvedValue(null) };
+    const mockNhanVienService = {
+      resolveEmployeeFromUser: jest
+        .fn()
+        .mockRejectedValue(new NotFoundException()),
+    };
+    // Không đơn nào trong describe này là phep_nam — quỹ phép không bao giờ
+    // thực sự được gọi tới, chỉ cần cấp đủ provider để DI resolve được.
+    const mockQuyPhepService = {
+      layQuyCuaNhanVien: jest.fn().mockResolvedValue([{ trangThai: 'dang_hieu_luc' }]),
+      phanBoChoNgayNghi: jest.fn().mockResolvedValue([]),
+      giuCho: jest.fn().mockResolvedValue(undefined),
+      nhaCho: jest.fn().mockResolvedValue(undefined),
+      chuyenSangDaDung: jest.fn().mockResolvedValue(undefined),
+      hoanTraDaDung: jest.fn().mockResolvedValue(undefined),
+    };
+    const quyGio = tuyChon.quyGio ?? mockQuyGio();
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        DonChamCong_Service,
+        { provide: getRepositoryToken(AttendanceRequest), useValue: mockRequestRepo },
+        { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
+        { provide: NgayLe_Service, useValue: mockNgayLeService },
+        { provide: NhanVien_Service, useValue: mockNhanVienService },
+        { provide: QuyPhep_Service, useValue: mockQuyPhepService },
+        { provide: QuyGio_Service, useValue: quyGio },
+      ],
+    }).compile();
+
+    return {
+      service: module.get<DonChamCong_Service>(DonChamCong_Service),
+      quyGio,
+      luu,
+    };
+  }
+
+  it('đơn theo_ngay quy ra giờ theo soGioMoiNgay', async () => {
+    const { service, quyGio } = await dungService();
+    await service.create({
+      employeeId: ID_NV1, loaiDon: 'nghi_bu', ngay: '2026-02-10',
+      denNgay: '2026-02-10', buoi: 'ca_ngay', kieuNghi: 'theo_ngay',
+    } as any);
+
+    expect(quyGio.phanBoChoNghiBu).toHaveBeenCalledWith(ID_NV1, 8, expect.any(String));
+  });
+
+  it('đơn theo_ngay nửa buổi trừ nửa số giờ', async () => {
+    const { service, quyGio } = await dungService();
+    await service.create({
+      employeeId: ID_NV1, loaiDon: 'nghi_bu', ngay: '2026-02-10',
+      denNgay: '2026-02-10', buoi: 'sang', kieuNghi: 'theo_ngay',
+    } as any);
+
+    expect(quyGio.phanBoChoNghiBu).toHaveBeenCalledWith(ID_NV1, 4, expect.any(String));
+  });
+
+  it('đơn theo_gio trừ đúng số giờ khai', async () => {
+    const { service, quyGio } = await dungService();
+    await service.create({
+      employeeId: ID_NV1, loaiDon: 'nghi_bu', ngay: '2026-02-10',
+      gioTu: '15:00', gioDen: '17:30', kieuNghi: 'theo_gio',
+    } as any);
+
+    expect(quyGio.phanBoChoNghiBu).toHaveBeenCalledWith(ID_NV1, 2.5, expect.any(String));
+  });
+
+  it('giữ chỗ ngay lúc tạo đơn và snapshot phanBoQuyGio', async () => {
+    const { service, quyGio, luu } = await dungService();
+    await service.create({
+      employeeId: ID_NV1, loaiDon: 'nghi_bu', ngay: '2026-02-10',
+      gioTu: '15:00', gioDen: '17:00', kieuNghi: 'theo_gio',
+    } as any);
+
+    expect(quyGio.giuCho).toHaveBeenCalled();
+    expect(luu.phanBoQuyGio).toEqual([{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }]);
+    expect(luu.soGioNghiBu).toBe(2);
+  });
+
+  it('duyệt đơn OT thì tích quỹ', async () => {
+    const { service, quyGio } = await dungService({
+      don: {
+        _id: '650000000000000000000201', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+        ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'cho_duyet',
+      },
+    });
+
+    await service.updateStatus(
+      '650000000000000000000201', 'da_duyet', 'HR', { id: 'hr1' } as any,
+    );
+
+    expect(quyGio.tichTuDonOt).toHaveBeenCalledWith(
+      expect.objectContaining({ employeeId: ID_NV1, soGioOt: 8, loaiNgayOt: 'ngay_thuong' }),
+    );
+  });
+
+  it('từ chối đơn OT ĐÃ duyệt thì thu hồi giờ đã tích', async () => {
+    const { service, quyGio } = await dungService({
+      don: {
+        _id: '650000000000000000000206', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+        ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'da_duyet',
+      },
+    });
+
+    await service.updateStatus(
+      '650000000000000000000206', 'tu_choi', undefined, { id: 'hr1' } as any,
+    );
+
+    expect(quyGio.thuHoiTichTuDonOt).toHaveBeenCalledWith(
+      '650000000000000000000206', ID_NV1, 'hr1',
+    );
+    expect(quyGio.tichTuDonOt).not.toHaveBeenCalled();
+  });
+
+  it('duyệt đơn nghỉ bù thì chuyển giữ chỗ sang đã dùng', async () => {
+    const { service, quyGio } = await dungService({
+      don: {
+        _id: '650000000000000000000202', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+        ngay: '2026-02-10', trangThai: 'cho_duyet',
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      },
+    });
+
+    await service.updateStatus(
+      '650000000000000000000202', 'da_duyet', 'HR', { id: 'hr1' } as any,
+    );
+
+    expect(quyGio.chuyenSangDaDung).toHaveBeenCalledWith(
+      ID_NV1,
+      [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      '650000000000000000000202',
+      'hr1',
+    );
+  });
+
+  it('từ chối đơn nghỉ bù đang chờ thì nhả chỗ', async () => {
+    const { service, quyGio } = await dungService({
+      don: {
+        _id: '650000000000000000000203', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+        ngay: '2026-02-10', trangThai: 'cho_duyet',
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      },
+    });
+
+    await service.updateStatus(
+      '650000000000000000000203', 'tu_choi', 'HR', { id: 'hr1' } as any,
+    );
+
+    // Assertion đủ tham số — với một fund service bị mock TOÀN BỘ, đối
+    // chiếu tham số là thứ DUY NHẤT phát hiện được nhầm employeeId với _id.
+    expect(quyGio.nhaCho).toHaveBeenCalledWith(
+      ID_NV1,
+      [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      '650000000000000000000203',
+      'hr1',
+    );
+    expect(quyGio.chuyenSangDaDung).not.toHaveBeenCalled();
+  });
+
+  it('từ chối đơn nghỉ bù ĐÃ duyệt thì hoàn trả', async () => {
+    const { service, quyGio } = await dungService({
+      don: {
+        _id: '650000000000000000000204', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+        ngay: '2026-02-10', trangThai: 'da_duyet',
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      },
+    });
+
+    await service.updateStatus(
+      '650000000000000000000204', 'tu_choi', 'HR', { id: 'hr1' } as any,
+    );
+
+    expect(quyGio.hoanTraDaDung).toHaveBeenCalledWith(
+      ID_NV1,
+      [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      '650000000000000000000204',
+      'hr1',
+    );
+    expect(quyGio.nhaCho).not.toHaveBeenCalled();
+  });
+
+  it('mở lại đơn nghỉ bù đã từ chối (tu_choi → cho_duyet) thì giữ chỗ lại', async () => {
+    const { service, quyGio } = await dungService({
+      don: {
+        _id: '650000000000000000000207', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+        ngay: '2026-02-10', trangThai: 'tu_choi',
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      },
+    });
+
+    await service.updateStatus(
+      '650000000000000000000207', 'cho_duyet', undefined, { id: 'hr1' } as any,
+    );
+
+    expect(quyGio.giuCho).toHaveBeenCalledWith(
+      ID_NV1,
+      [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      '650000000000000000000207',
+      'hr1',
+    );
+  });
+
+  // ── Self-review: "Does the failed-reservation rollback actually run on
+  // the throw path? Prove it with a test." — mirror trực tiếp test cùng tên
+  // ở describe "nối quỹ phép (P3.8)" phía trên, cho quỹ giờ.
+  it('giữ chỗ quỹ giờ hỏng sau khi đã lưu đơn → đơn bị vô hiệu hoá, không để lại đơn ma', async () => {
+    const quyGio = mockQuyGio({
+      giuCho: jest.fn().mockRejectedValue(new Error('mất kết nối')),
+    });
+    const { service, luu } = await dungService({ quyGio });
+
+    await expect(
+      service.create({
+        employeeId: ID_NV1, loaiDon: 'nghi_bu', ngay: '2026-02-10',
+        gioTu: '15:00', gioDen: '17:00', kieuNghi: 'theo_gio',
+      } as any),
+    ).rejects.toThrow('mất kết nối');
+
+    expect(luu.isActive).toBe(false);
+    expect(luu.phanBoQuyGio).toBeUndefined();
+    // Best-effort nhả phần có thể đã giữ được TRƯỚC khi vô hiệu hoá đơn —
+    // cùng khuôn với create() bên quỹ phép.
+    expect(quyGio.nhaCho).toHaveBeenCalledWith(
+      ID_NV1,
+      [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      expect.any(String),
+      ID_NV1,
+    );
+  });
+
+  // ── Self-review: guard mở rộng có thực sự chặn nghi_bu-có-phanBoQuyGio,
+  // không chỉ đơn phep_nam.
+  it('nghi_bu có phanBoQuyGio: da_duyet → cho_duyet bị chặn 409 (không có lối quỹ hợp lệ)', async () => {
+    const { service, quyGio } = await dungService({
+      don: {
+        _id: '650000000000000000000205', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+        ngay: '2026-02-10', trangThai: 'da_duyet',
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      },
+    });
+
+    const loi = await service
+      .updateStatus('650000000000000000000205', 'cho_duyet', undefined, { id: 'hr1' } as any)
+      .catch((e) => e);
+
+    expect(loi).toBeInstanceOf(ConflictException);
+    expect((loi as any).getResponse().code).toBe('CHUYEN_TRANG_THAI_KHONG_HOP_LE');
+    expect(quyGio.giuCho).not.toHaveBeenCalled();
+  });
+
+  it('nghi_bu có phanBoQuyGio: tu_choi → da_duyet bị chặn 409 (không có lối quỹ hợp lệ)', async () => {
+    const { service, quyGio } = await dungService({
+      don: {
+        _id: '650000000000000000000208', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+        ngay: '2026-02-10', trangThai: 'tu_choi',
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+      },
+    });
+
+    const loi = await service
+      .updateStatus('650000000000000000000208', 'da_duyet', undefined, { id: 'hr1' } as any)
+      .catch((e) => e);
+
+    expect(loi).toBeInstanceOf(ConflictException);
+    expect((loi as any).getResponse().code).toBe('CHUYEN_TRANG_THAI_KHONG_HOP_LE');
+    expect(quyGio.chuyenSangDaDung).not.toHaveBeenCalled();
+  });
+
+  // ── Self-review: theo_ngay thực sự đi qua tinhSoNgayNghi (bỏ ngày lễ +
+  // ngày ngoài lịch làm việc), không đếm ngày lịch thô.
+  it('theo_ngay bỏ ngày lễ và ngày ngoài lịch làm việc khi tính soGioNghiBu', async () => {
+    const NGAY_LE = '2026-03-04'; // thứ Tư, giữa khoảng
+    const ngayLe = {
+      timTheoNgay: jest
+        .fn()
+        .mockImplementation((ngay: string) =>
+          Promise.resolve(ngay === NGAY_LE ? { _id: 'hl1' } : null),
+        ),
+    };
+    const { service, quyGio } = await dungService({
+      ngayLe,
+      nhanVien: {
+        _id: ID_NV1, employeeId: 'NV0001', hoTen: 'Nguyễn Văn A',
+        ngayLamViecTrongTuan: [1, 2, 3, 4, 5], // T2→T6
+      },
+    });
+
+    // 2026-03-02 (T2) .. 2026-03-08 (CN): 7 ngày, trừ T7(7/3)+CN(8/3)+lễ(4/3)
+    // giữa tuần → còn 4 ngày làm việc thật (2,3,5,6/3) → soGioNghiBu = 4*8=32.
+    await service.create({
+      employeeId: ID_NV1, loaiDon: 'nghi_bu', ngay: '2026-03-02',
+      denNgay: '2026-03-08', kieuNghi: 'theo_ngay',
+    } as any);
+
+    expect(quyGio.phanBoChoNghiBu).toHaveBeenCalledWith(ID_NV1, 32, expect.any(String));
+  });
+
+  // ── Self-review: soGioMoiNgay() gọi ĐÚNG MỘT LẦN cho một đơn nhiều ngày,
+  // không phải một lần mỗi ngày trong khoảng.
+  it('soGioMoiNgay() chỉ được gọi một lần cho một đơn theo_ngay nhiều ngày', async () => {
+    const { service, quyGio } = await dungService();
+    await service.create({
+      employeeId: ID_NV1, loaiDon: 'nghi_bu', ngay: '2026-02-09',
+      denNgay: '2026-02-13', kieuNghi: 'theo_ngay',
+    } as any);
+
+    expect(quyGio.soGioMoiNgay).toHaveBeenCalledTimes(1);
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Review round 1, CRITICAL 1 — updateStatus() phải khôi phục NGUYÊN VẸN
+  // trạng thái/vết duyệt cũ khi quỹ giờ hỏng SAU KHI trangThai đã lưu,
+  // cùng khuôn với khối quỹ phép (xem doc-comment ở updateStatus()). Thiếu
+  // khối này: đơn kẹt ở trạng thái MỚI mà quỹ giờ chưa hề đổi — ca xấu nhất
+  // là "tu_choi → cho_duyet" trên nghi_bu để lại một đơn cho_duyet mang
+  // phanBoQuyGio mà quỹ chưa hề giữ lại, và duyệt đơn đó sau này sẽ chi
+  // tiêu giờ chưa từng được giữ.
+  //
+  // Mỗi test dưới đây: (1) mock đúng MỘT hàm quỹ giờ ném lỗi, (2) gọi
+  // updateStatus(), (3) assert nó ném lại lỗi gốc, VÀ (4) đọc `luu` (bản ghi
+  // CUỐI CÙNG mà repo.save() nhận) để xác nhận trangThai/vết duyệt đã được
+  // khôi phục về đúng giá trị TRƯỚC lệnh gọi — không phải chỉ đọc lỗi ném ra
+  // mà bỏ qua trạng thái đã persist.
+  // ────────────────────────────────────────────────────────────────────
+  describe('updateStatus — quỹ giờ hỏng SAU khi trangThai đã lưu ⇒ khôi phục nguyên vẹn (review CRITICAL 1)', () => {
+    it('OT: tichTuDonOt hỏng (cho_duyet → da_duyet) → khôi phục cho_duyet, không vết duyệt', async () => {
+      const quyGio = mockQuyGio({
+        tichTuDonOt: jest.fn().mockRejectedValue(new Error('mất kết nối')),
+      });
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000301', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'cho_duyet',
+        },
+      });
+
+      await expect(
+        service.updateStatus('650000000000000000000301', 'da_duyet', 'HR', { id: 'hr1' } as any),
+      ).rejects.toThrow('mất kết nối');
+
+      expect(luu.trangThai).toBe('cho_duyet');
+      expect(luu.nguoiDuyetId).toBeUndefined();
+      expect(luu.thoiDiemDuyet).toBeUndefined();
+    });
+
+    it('OT: thuHoiTichTuDonOt hỏng (da_duyet → tu_choi) → khôi phục da_duyet + vết duyệt cũ nguyên vẹn', async () => {
+      const quyGio = mockQuyGio({
+        thuHoiTichTuDonOt: jest
+          .fn()
+          .mockRejectedValue(new ConflictException({ code: 'QUY_GIO_DA_TIEU' })),
+      });
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000302', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'da_duyet',
+          nguoiDuyet: 'HR cũ', nguoiDuyetId: 'hr-cu', thoiDiemDuyet: '2026-01-16T00:00:00.000Z',
+        },
+      });
+
+      await expect(
+        service.updateStatus('650000000000000000000302', 'tu_choi', 'HR mới', { id: 'hr-moi' } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(luu.trangThai).toBe('da_duyet');
+      expect(luu.nguoiDuyet).toBe('HR cũ');
+      expect(luu.nguoiDuyetId).toBe('hr-cu');
+      expect(luu.thoiDiemDuyet).toBe('2026-01-16T00:00:00.000Z');
+    });
+
+    it('nghi_bu: chuyenSangDaDung hỏng (cho_duyet → da_duyet) → khôi phục cho_duyet', async () => {
+      const quyGio = mockQuyGio({
+        chuyenSangDaDung: jest.fn().mockRejectedValue(new Error('mất kết nối')),
+      });
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000303', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+          ngay: '2026-02-10', trangThai: 'cho_duyet',
+          phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        },
+      });
+
+      await expect(
+        service.updateStatus('650000000000000000000303', 'da_duyet', 'HR', { id: 'hr1' } as any),
+      ).rejects.toThrow('mất kết nối');
+
+      expect(luu.trangThai).toBe('cho_duyet');
+      expect(luu.nguoiDuyetId).toBeUndefined();
+      expect(luu.thoiDiemDuyet).toBeUndefined();
+    });
+
+    it('nghi_bu: nhaCho hỏng (cho_duyet → tu_choi) → khôi phục cho_duyet', async () => {
+      const quyGio = mockQuyGio({
+        nhaCho: jest.fn().mockRejectedValue(new Error('mất kết nối')),
+      });
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000304', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+          ngay: '2026-02-10', trangThai: 'cho_duyet',
+          phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        },
+      });
+
+      await expect(
+        service.updateStatus('650000000000000000000304', 'tu_choi', 'HR', { id: 'hr1' } as any),
+      ).rejects.toThrow('mất kết nối');
+
+      expect(luu.trangThai).toBe('cho_duyet');
+    });
+
+    it('nghi_bu: hoanTraDaDung hỏng (da_duyet → tu_choi) → khôi phục da_duyet + vết duyệt cũ', async () => {
+      const quyGio = mockQuyGio({
+        hoanTraDaDung: jest.fn().mockRejectedValue(new Error('mất kết nối')),
+      });
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000305', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+          ngay: '2026-02-10', trangThai: 'da_duyet',
+          nguoiDuyet: 'HR cũ', nguoiDuyetId: 'hr-cu', thoiDiemDuyet: '2026-01-16T00:00:00.000Z',
+          phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        },
+      });
+
+      await expect(
+        service.updateStatus('650000000000000000000305', 'tu_choi', 'HR mới', { id: 'hr-moi' } as any),
+      ).rejects.toThrow('mất kết nối');
+
+      expect(luu.trangThai).toBe('da_duyet');
+      expect(luu.nguoiDuyet).toBe('HR cũ');
+      expect(luu.nguoiDuyetId).toBe('hr-cu');
+      expect(luu.thoiDiemDuyet).toBe('2026-01-16T00:00:00.000Z');
+    });
+
+    // Path A từ review — ca quan trọng nhất: "mở lại" một đơn nghi_bu đã bị
+    // từ chối, nhưng giờ đã bị tiêu ở chỗ khác trong lúc đơn chờ. Nếu
+    // trangThai không được khôi phục về tu_choi, đơn sống ở cho_duyet mang
+    // phanBoQuyGio mà quỹ CHƯA HỀ giữ lại — duyệt đơn đó sau này sẽ chi tiêu
+    // giờ chưa từng được giữ (chuyenSangDaDung không có gì để mà chặn, vì nó
+    // tin phanBoQuyGio trên đơn là đã được giữ thật).
+    it('nghi_bu: giuCho hỏng khi MỞ LẠI (tu_choi → cho_duyet) → khôi phục tu_choi, không để đơn sống ở cho_duyet mang giữ chỗ ma', async () => {
+      const quyGio = mockQuyGio({
+        giuCho: jest
+          .fn()
+          .mockRejectedValue(new ConflictException({ code: 'QUY_GIO_KHONG_DU_SO_DU' })),
+      });
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000306', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+          ngay: '2026-02-10', trangThai: 'tu_choi',
+          phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        },
+      });
+
+      await expect(
+        service.updateStatus('650000000000000000000306', 'cho_duyet', undefined, { id: 'hr1' } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(luu.trangThai).toBe('tu_choi');
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Review round 1, CRITICAL 2 — huyDonCuaToi() và remove() phải nhả/hoàn
+  // quỹ giờ cho đơn nghi_bu, mirror hệt cách chúng đã làm cho phanBoQuy
+  // (quỹ phép). Thiếu khối này: tự huỷ một đơn nghi_bu còn cho_duyet để
+  // soGioDangChoDuyet của quỹ đó bị KẸT VĨNH VIỄN (không bao giờ được nhả),
+  // và xoá một đơn nghi_bu ĐÃ DUYỆT để soGioDaDung bị trừ oan vĩnh viễn —
+  // cả hai đều không bị doiSoat() (Task 12) phát hiện vì ledger vẫn khớp
+  // balance (hai bên cùng "quên" một khoản như nhau, không lệch số).
+  // ────────────────────────────────────────────────────────────────────
+  describe('huyDonCuaToi() / remove() — nhả/hoàn quỹ giờ cho đơn nghi_bu (review CRITICAL 2)', () => {
+    it('huyDonCuaToi() trên đơn nghi_bu cho_duyet → nhaCho quỹ giờ, isActive=false, phanBoQuyGio xoá', async () => {
+      const quyGio = mockQuyGio();
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000401', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+          ngay: '2026-02-10', trangThai: 'cho_duyet', isActive: true,
+          phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        },
+      });
+
+      await service.huyDonCuaToi('650000000000000000000401', ID_NV1);
+
+      expect(quyGio.nhaCho).toHaveBeenCalledWith(
+        ID_NV1,
+        [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        '650000000000000000000401',
+        ID_NV1,
+      );
+      expect(luu.isActive).toBe(false);
+      expect(luu.phanBoQuyGio).toBeUndefined();
+    });
+
+    it('remove() trên đơn nghi_bu CHỜ DUYỆT → nhaCho quỹ giờ (chưa từng trừ thật)', async () => {
+      const quyGio = mockQuyGio();
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000402', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+          ngay: '2026-02-10', trangThai: 'cho_duyet', isActive: true,
+          phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        },
+      });
+
+      await service.remove('650000000000000000000402');
+
+      expect(quyGio.nhaCho).toHaveBeenCalledWith(
+        ID_NV1,
+        [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        '650000000000000000000402',
+        'he_thong',
+      );
+      expect(quyGio.hoanTraDaDung).not.toHaveBeenCalled();
+      expect(luu.isActive).toBe(false);
+      expect(luu.phanBoQuyGio).toBeUndefined();
+    });
+
+    it('remove() trên đơn nghi_bu ĐÃ DUYỆT → hoanTraDaDung quỹ giờ (không phải nhaCho), đúng người xoá', async () => {
+      const quyGio = mockQuyGio();
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000403', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+          ngay: '2026-02-10', trangThai: 'da_duyet', isActive: true,
+          phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        },
+      });
+
+      await service.remove('650000000000000000000403', { id: 'hr-xoa-don' } as any);
+
+      expect(quyGio.hoanTraDaDung).toHaveBeenCalledWith(
+        ID_NV1,
+        [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        '650000000000000000000403',
+        'hr-xoa-don',
+      );
+      expect(quyGio.nhaCho).not.toHaveBeenCalled();
+      expect(luu.isActive).toBe(false);
+      expect(luu.phanBoQuyGio).toBeUndefined();
+    });
+
+    it('remove() sau khi đơn nghi_bu đã bị huyDonCuaToi() KHÔNG nhả chỗ lần hai', async () => {
+      const quyGio = mockQuyGio();
+      const { service } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000404', employeeId: ID_NV1, loaiDon: 'nghi_bu', kieuNghi: 'theo_gio',
+          ngay: '2026-02-10', trangThai: 'cho_duyet', isActive: true,
+          phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 2 }],
+        },
+      });
+
+      await service.huyDonCuaToi('650000000000000000000404', ID_NV1);
+      expect(quyGio.nhaCho).toHaveBeenCalledTimes(1);
+
+      // isActive đã false, phanBoQuyGio đã xoá — remove() gọi lại trên
+      // cùng đơn phải là no-op về mặt quỹ.
+      await service.remove('650000000000000000000404');
+      expect(quyGio.nhaCho).toHaveBeenCalledTimes(1);
+      expect(quyGio.hoanTraDaDung).not.toHaveBeenCalled();
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Task 7b (gap 1) — remove() trên đơn OT ĐÃ DUYỆT phải THU HỒI giờ đã
+  // tích, mirror hệt cách remove() đã xử lý phanBoQuy/phanBoQuyGio ở trên
+  // — nhưng theo hướng NGƯỢC LẠI (đây là fund đã CẤP, không phải đã GIỮ).
+  //
+  // Quyết định thiết kế (xem lý do đầy đủ ở doc-comment `canThuHoiOt` trong
+  // remove()): nếu `thuHoiTichTuDonOt()` ném DA_TIEU_KHONG_THU_HOI_DUOC
+  // (giờ đã bị TIÊU một phần qua nghỉ bù), remove() PHẢI CHẶN việc xoá —
+  // không soft-delete, không lưu gì cả — chứ không được nuốt lỗi rồi xoá
+  // tiếp. Message của lỗi đó tự nói "xử lý tay TRƯỚC KHI hủy đơn": nếu
+  // remove() nuốt lỗi và xoá đơn như bình thường, HR mất luôn đầu mối duy
+  // nhất (đơn) để mà biết cần xử lý tay ở đâu — một soft-delete "thành
+  // công" trong khi quỹ sai chính là cách cái leak gốc (Critical 2) đã xảy
+  // ra, lặp lại nó ở đây để đổi lấy UX xoá mượt hơn là đánh đổi sai chỗ.
+  // ────────────────────────────────────────────────────────────────────
+  describe('remove() — đơn OT ĐÃ DUYỆT phải thu hồi giờ đã tích (Task 7b, gap 1)', () => {
+    it('xoá đơn OT ĐÃ DUYỆT → thuHoiTichTuDonOt được gọi, đơn bị vô hiệu hoá', async () => {
+      const quyGio = mockQuyGio();
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000501', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'da_duyet',
+          isActive: true,
+        },
+      });
+
+      await service.remove('650000000000000000000501', { id: 'hr-xoa-don' } as any);
+
+      expect(quyGio.thuHoiTichTuDonOt).toHaveBeenCalledWith(
+        '650000000000000000000501',
+        ID_NV1,
+        'hr-xoa-don',
+      );
+      expect(luu.isActive).toBe(false);
+    });
+
+    it('xoá đơn OT còn CHỜ DUYỆT (chưa tích quỹ) → KHÔNG gọi thuHoiTichTuDonOt', async () => {
+      const quyGio = mockQuyGio();
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000502', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'cho_duyet',
+          isActive: true,
+        },
+      });
+
+      await service.remove('650000000000000000000502');
+
+      expect(quyGio.thuHoiTichTuDonOt).not.toHaveBeenCalled();
+      expect(luu.isActive).toBe(false);
+    });
+
+    it('xoá đơn OT ĐÃ BỊ TỪ CHỐI (đã thu hồi từ updateStatus rồi) → KHÔNG gọi thuHoiTichTuDonOt lần hai', async () => {
+      const quyGio = mockQuyGio();
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000503', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'tu_choi',
+          isActive: true,
+        },
+      });
+
+      await service.remove('650000000000000000000503');
+
+      expect(quyGio.thuHoiTichTuDonOt).not.toHaveBeenCalled();
+      expect(luu.isActive).toBe(false);
+    });
+
+    // Quyết định thiết kế chính của gap 1: giờ đã TIÊU một phần (nghỉ bù đã
+    // ăn vào) → thuHoiTichTuDonOt() ném DA_TIEU_KHONG_THU_HOI_DUOC → remove()
+    // PHẢI NÉM LẠI, KHÔNG được soft-delete. `luu` (bản ghi cuối cùng
+    // repo.save() nhận, khởi tạo `{}` trong dungService()) phải vẫn rỗng —
+    // repo.save() chưa từng được gọi, không có gì để mà rollback vì chưa có
+    // gì được ghi xuống DB.
+    it('giờ đã bị tiêu một phần → thuHoiTichTuDonOt ném lỗi → remove() ném lại, KHÔNG soft-delete, KHÔNG gọi repo.save()', async () => {
+      const quyGio = mockQuyGio({
+        thuHoiTichTuDonOt: jest
+          .fn()
+          .mockRejectedValue(new ConflictException({ code: 'QUY_GIO_DA_TIEU' })),
+      });
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000504', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'da_duyet',
+          isActive: true,
+        },
+      });
+
+      await expect(
+        service.remove('650000000000000000000504', { id: 'hr-xoa-don' } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(luu).toEqual({});
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Task 7b, review round 2 (IMPORTANT) — guard gap 2a chỉ CHẶN sửa
+  // gioTu/gioDen/ngay trên OT ĐÃ DUYỆT; sửa trên OT còn cho_duyet vẫn được
+  // PHÉP (đúng — quỹ chưa đụng gì). Nhưng cho phép sửa không đồng nghĩa
+  // snapshot soGioOt/heSoOt/loaiNgayOt được tính lại — trước bản vá này,
+  // update() chỉ Object.assign() giá trị gioTu/gioDen/ngay MỚI xuống trong
+  // khi snapshot vẫn đứng yên ở số create() tính lúc nộp. Duyệt sau đó
+  // tichTuDonOt() theo snapshot CŨ — lệch với số giờ HR vừa nhìn thấy trên
+  // màn hình lúc bấm duyệt. Vá bằng cách tính lại qua tinhCacTruongSnapshot()
+  // — cùng một nguồn luật với create(), không chép công thức lần hai.
+  // ────────────────────────────────────────────────────────────────────
+  describe('update() — PUT sửa OT còn cho_duyet phải tính lại snapshot (Task 7b, review round 2)', () => {
+    // T2→T6, không phải ngày lễ mặc định — cùng lịch làm việc dùng xuyên
+    // suốt file (T2_DEN_T6 ở describe ngoài cùng, lặp lại cục bộ ở đây vì
+    // describe này nằm trong khối dùng dungService(), không có T2_DEN_T6
+    // trong scope).
+    const T2_DEN_T6_CUC_BO = [1, 2, 3, 4, 5];
+
+    it('sửa gioTu 18:00→17:00 trên OT còn cho_duyet → soGioOt tính lại thành 3 (không phải 2) ngay trên kết quả update()', async () => {
+      const { service, luu } = await dungService({
+        nhanVien: {
+          _id: ID_NV1, employeeId: 'NV0001', hoTen: 'Nguyễn Văn A',
+          ngayLamViecTrongTuan: T2_DEN_T6_CUC_BO,
+        },
+        don: {
+          _id: '650000000000000000000601', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-07-22', gioTu: '18:00', gioDen: '20:00',
+          soGioOt: 2, heSoOt: 1.5, loaiNgayOt: 'ngay_thuong',
+          trangThai: 'cho_duyet',
+        },
+      });
+
+      const result = await service.update(
+        '650000000000000000000601',
+        { gioTu: '17:00' } as any,
+      );
+
+      expect(result.soGioOt).toBe(3);
+      expect(luu.soGioOt).toBe(3);
+    });
+
+    // Kịch bản chính xác từ review: sửa rồi duyệt phải tích ĐÚNG số giờ MỚI.
+    // Dùng dungService() vì mock findOne() trong đó trả lại CHÍNH tham chiếu
+    // `don` — update() mutate tại chỗ nên updateStatus() gọi sau đọc lại
+    // đúng snapshot đã tính lại, mô phỏng đúng luồng thật (PUT rồi mới bấm
+    // Duyệt trên cùng một bản ghi).
+    it('duyệt SAU KHI sửa giờ → tichTuDonOt() tích đúng 3 giờ (số MỚI), không phải 2 giờ (số CŨ)', async () => {
+      const quyGio = mockQuyGio();
+      const { service } = await dungService({
+        quyGio,
+        nhanVien: {
+          _id: ID_NV1, employeeId: 'NV0001', hoTen: 'Nguyễn Văn A',
+          ngayLamViecTrongTuan: T2_DEN_T6_CUC_BO,
+        },
+        don: {
+          _id: '650000000000000000000602', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-07-22', gioTu: '18:00', gioDen: '20:00',
+          soGioOt: 2, heSoOt: 1.5, loaiNgayOt: 'ngay_thuong',
+          trangThai: 'cho_duyet',
+        },
+      });
+
+      await service.update('650000000000000000000602', { gioTu: '17:00' } as any);
+      await service.updateStatus(
+        '650000000000000000000602', 'da_duyet', 'HR', { id: 'hr1' } as any,
+      );
+
+      expect(quyGio.tichTuDonOt).toHaveBeenCalledWith(
+        expect.objectContaining({ soGioOt: 3 }),
+      );
+    });
+
+    it('ngay chuyển sang ngày lễ khi sửa → loaiNgayOt/heSoOt tính lại theo ngày mới (ngay_le, 3.0)', async () => {
+      const NGAY_LE_MOI = '2026-07-23';
+      const ngayLe = {
+        timTheoNgay: jest
+          .fn()
+          .mockImplementation((ngay: string) =>
+            Promise.resolve(
+              ngay === NGAY_LE_MOI
+                ? { _id: 'hl1', tenNgayLe: 'Lễ test', tuNgay: NGAY_LE_MOI, denNgay: NGAY_LE_MOI }
+                : null,
+            ),
+          ),
+      };
+      const { service } = await dungService({
+        ngayLe,
+        nhanVien: {
+          _id: ID_NV1, employeeId: 'NV0001', hoTen: 'Nguyễn Văn A',
+          ngayLamViecTrongTuan: T2_DEN_T6_CUC_BO,
+        },
+        don: {
+          _id: '650000000000000000000603', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-07-22', gioTu: '18:00', gioDen: '20:00',
+          soGioOt: 2, heSoOt: 1.5, loaiNgayOt: 'ngay_thuong',
+          trangThai: 'cho_duyet',
+        },
+      });
+
+      const result = await service.update(
+        '650000000000000000000603',
+        { ngay: NGAY_LE_MOI } as any,
+      );
+
+      expect(result.loaiNgayOt).toBe('ngay_le');
+      expect(result.heSoOt).toBe(3.0);
+    });
+
+    // Không bị tính lại quá tay: sửa một trường KHÔNG nuôi công thức OT
+    // (lyDo) phải để soGioOt/heSoOt/loaiNgayOt đứng yên, và không được kéo
+    // theo một lượt hỏi NgayLe_Service/EmployeeRepo vô ích — chứng minh
+    // guard "chỉ tính lại khi cần" hoạt động đúng, không phải lúc nào cũng
+    // tính lại rồi tình cờ ra cùng số.
+    it('sửa lyDo (không nuôi công thức OT) trên OT còn cho_duyet → soGioOt/heSoOt/loaiNgayOt KHÔNG đổi, không hỏi NgayLe_Service', async () => {
+      const ngayLe = { timTheoNgay: jest.fn().mockResolvedValue(null) };
+      const { service } = await dungService({
+        ngayLe,
+        don: {
+          _id: '650000000000000000000604', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-07-22', gioTu: '18:00', gioDen: '20:00',
+          soGioOt: 2, heSoOt: 1.5, loaiNgayOt: 'ngay_thuong',
+          trangThai: 'cho_duyet', lyDo: 'cũ',
+        },
+      });
+
+      const result = await service.update(
+        '650000000000000000000604',
+        { lyDo: 'mới' } as any,
+      );
+
+      expect(result.lyDo).toBe('mới');
+      expect(result.soGioOt).toBe(2);
+      expect(result.heSoOt).toBe(1.5);
+      expect(result.loaiNgayOt).toBe('ngay_thuong');
+      expect(ngayLe.timTheoNgay).not.toHaveBeenCalled();
+    });
+  });
+
+  /**
+   * (review nhánh, IMPORTANT 5) Áp dụng MỘT PHẦN rồi hỏng — khác hẳn RETRY.
+   *
+   * `phanBoQuyGio` trải 2 kỳ; `giuCho()` giữ xong kỳ 1 rồi ném ở kỳ 2. Bản
+   * trước chỉ khôi phục trạng thái, nên chỗ giữ ở kỳ 1 kẹt vĩnh viễn: lần
+   * bấm lại bị `demRongTheoLyDo()` bỏ qua kỳ 1 (ròng > 0) và lại hỏng ở kỳ
+   * 2; `remove()` trên đơn `tu_choi` không đi vào nhánh nhả nào; và
+   * `doiSoat()` không thấy gì bất thường vì một chỗ giữ bị rò vẫn nhất quán
+   * giữa sổ và số dư. Chỉ sửa thẳng DB mới gỡ được.
+   */
+  describe('bù best-effort khi quỹ giờ hỏng GIỮA CHỪNG (IMPORTANT 5)', () => {
+    const HAI_KY = [
+      { balanceId: 'b1', kyTich: '2026-01', soGio: 2 },
+      { balanceId: 'b2', kyTich: '2026-02', soGio: 1 },
+    ];
+    const donTuChoi = () => ({
+      _id: '650000000000000000000701',
+      employeeId: ID_NV1,
+      loaiDon: 'nghi_bu',
+      kieuNghi: 'theo_gio',
+      ngay: '2026-03-10',
+      soGioNghiBu: 3,
+      phanBoQuyGio: HAI_KY,
+      trangThai: 'tu_choi',
+      isActive: true,
+    });
+
+    it('tu_choi → cho_duyet: giuCho hỏng ở kỳ 2 thì NHẢ lại TOÀN BỘ phân bổ', async () => {
+      const daGiu: string[] = [];
+      const quyGio = mockQuyGio({
+        // Mô phỏng áp dụng MỘT PHẦN thật: kỳ 1 giữ xong mới ném ở kỳ 2.
+        giuCho: jest.fn(async (_nv: string, p: any[]) => {
+          for (const x of p) {
+            if (x.kyTich === '2026-02') throw new Error('kỳ 2 hỏng');
+            daGiu.push(x.kyTich);
+          }
+        }),
+      });
+      const { service, luu } = await dungService({ don: donTuChoi(), quyGio });
+
+      await expect(
+        service.updateStatus(
+          '650000000000000000000701', 'cho_duyet', 'HR', { id: 'hr1' } as any,
+        ),
+      ).rejects.toThrow('kỳ 2 hỏng');
+
+      // Vế then chốt: nhả lại trên TOÀN BỘ phân bổ, không chỉ kỳ đã giữ —
+      // nơi gọi không biết hàm kia dừng ở đâu, và `nhaCho()` an toàn trên kỳ
+      // chưa bị đụng (Math.max kẹp + apDung bỏ qua khi không có gì đổi).
+      expect(daGiu).toEqual(['2026-01']);
+      // Tham số thứ 5 `chiPhanDaGiuCuaDon = true`: nhả TRÊN TOÀN BỘ phân bổ
+      // nhưng chỉ ở kỳ mà SỔ xác nhận đơn NÀY đang giữ. Nhả mù sẽ ăn mất chỗ
+      // giữ của đơn KHÁC ở kỳ chưa bị đụng (`soGioDangChoDuyet` là bộ đếm
+      // dùng chung theo quỹ) — và kỳ đó gần như chắc chắn đang có đơn khác
+      // giữ, vì đó chính là lý do `giuCho()` vừa ném ở đấy. Bài tích hợp
+      // `don-cham-cong.quy-gio.tich-hop.spec.ts` chứng minh hậu quả thật.
+      expect(quyGio.nhaCho).toHaveBeenCalledWith(
+        ID_NV1, HAI_KY, '650000000000000000000701', 'hr1', true,
+      );
+      // Trạng thái vẫn phải được khôi phục — bù không thay thế việc đó.
+      expect(luu.trangThai).toBe('tu_choi');
+    });
+
+    it('cho_duyet → tu_choi: nhaCho hỏng giữa chừng thì GIỮ lại toàn bộ phân bổ', async () => {
+      const quyGio = mockQuyGio({
+        nhaCho: jest.fn(async (_nv: string, p: any[]) => {
+          for (const x of p) if (x.kyTich === '2026-02') throw new Error('kỳ 2 hỏng');
+        }),
+      });
+      const { service } = await dungService({
+        don: { ...donTuChoi(), trangThai: 'cho_duyet' },
+        quyGio,
+      });
+
+      await expect(
+        service.updateStatus(
+          '650000000000000000000701', 'tu_choi', 'HR', { id: 'hr1' } as any,
+        ),
+      ).rejects.toThrow('kỳ 2 hỏng');
+
+      expect(quyGio.giuCho).toHaveBeenCalledWith(
+        ID_NV1, HAI_KY, '650000000000000000000701', 'hr1',
+      );
+    });
+
+    it('chính lời gọi bù cũng hỏng thì vẫn ném LỖI GỐC, không nuốt mất', async () => {
+      const quyGio = mockQuyGio({
+        giuCho: jest.fn().mockRejectedValue(new Error('lỗi gốc')),
+        nhaCho: jest.fn().mockRejectedValue(new Error('lỗi phụ khi bù')),
+      });
+      const { service, luu } = await dungService({ don: donTuChoi(), quyGio });
+
+      await expect(
+        service.updateStatus(
+          '650000000000000000000701', 'cho_duyet', 'HR', { id: 'hr1' } as any,
+        ),
+      ).rejects.toThrow('lỗi gốc');
+      expect(luu.trangThai).toBe('tu_choi');
+    });
+
+    // Hai nhánh duyệt/hoàn CỐ Ý không bù (xem comment trong service): chúng
+    // dùng chung lý do sổ `huy_nghi_bu` với cặp giữ/nhả nên một lời gọi bù sẽ
+    // làm sai bộ đếm chống trùng của giuCho().
+    it('cho_duyet → da_duyet hỏng thì KHÔNG gọi hoanTraDaDung để bù', async () => {
+      const quyGio = mockQuyGio({
+        chuyenSangDaDung: jest.fn().mockRejectedValue(new Error('hỏng')),
+      });
+      const { service } = await dungService({
+        don: { ...donTuChoi(), trangThai: 'cho_duyet' },
+        quyGio,
+      });
+
+      await expect(
+        service.updateStatus(
+          '650000000000000000000701', 'da_duyet', 'HR', { id: 'hr1' } as any,
+        ),
+      ).rejects.toThrow('hỏng');
+
+      expect(quyGio.hoanTraDaDung).not.toHaveBeenCalled();
+      expect(quyGio.nhaCho).not.toHaveBeenCalled();
+      expect(quyGio.giuCho).not.toHaveBeenCalled();
+    });
   });
 });

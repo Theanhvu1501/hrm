@@ -111,6 +111,11 @@ export function gomTheoNgay(
     if (don.isActive === false) continue;
     if (don.trangThai !== 'da_duyet') continue;
     if (!LOAI_DON_NGHI.has(don.loaiDon)) continue;
+    // Nghỉ bù LẺ GIỜ không sinh ký hiệu: người đó vẫn đi làm hôm ấy, chỉ vắng
+    // vài tiếng, và quỹ giờ làm thêm đã gánh phần vắng đó. Ngày vẫn ra `X` từ
+    // chấm công. Thiếu `kieuNghi` = đơn cũ trước P4.2a ⇒ giữ hành vi theo ngày,
+    // nếu không lần Tổng hợp đầu tiên sau deploy xoá trắng NB của mọi đơn cũ.
+    if (don.loaiDon === 'nghi_bu' && don.kieuNghi === 'theo_gio') continue;
     if (!don.ngay) continue;
 
     const den = don.denNgay || don.ngay;

@@ -9,7 +9,12 @@ import {
 import { AttendanceRequest } from "@/services/attendanceRequestService";
 import { Employee } from "@/services/employeeService";
 import { leaveBalanceService, LeaveBalance } from "@/services/leaveBalanceService";
-import { BUOI_OPTIONS, LOAI_DON_OPTIONS, LOAI_NGHI_OPTIONS } from "../../constants";
+import {
+  BUOI_OPTIONS,
+  KIEU_NGHI_BU_OPTIONS,
+  LOAI_DON_OPTIONS,
+  LOAI_NGHI_OPTIONS,
+} from "../../constants";
 import { TruongDon, hienTruong } from "../../truongTheoLoaiDon";
 import { DonChamCongFormValues } from "./DonChamCongForm.state";
 import {
@@ -18,6 +23,7 @@ import {
   toFormValues,
 } from "./donChamCongForm.convert";
 import { KhoiSoDuPhep, LoiSoDuPhep } from "@/components/shared/KhoiSoDuPhep";
+import { SoDuQuyGioBanner } from "../SoDuQuyGioBanner";
 import { homNayVN } from "@/ultils/thoiGianVN";
 import { usePagePermission } from "@/hooks/usePagePermission";
 import { layStatus } from "@/pages/cham-cong/cua-toi/trangThai";
@@ -71,6 +77,7 @@ export function DonChamCongForm() {
   const ngay = watch("ngay");
   const denNgay = watch("denNgay");
   const loaiNghi = watch("loaiNghi");
+  const kieuNghi = watch("kieuNghi");
   const employeeId = watch("employeeId");
 
   /**
@@ -80,14 +87,31 @@ export function DonChamCongForm() {
    *
    * `buoi` phụ thuộc thêm vào ngay/denNgay (nửa buổi chỉ có nghĩa với đơn nghỉ
    * đúng một ngày) nên phải watch cả hai, nếu không ô Buổi sẽ không tự ẩn đi
-   * khi HR kéo khoảng nghỉ dài ra.
+   * khi HR kéo khoảng nghỉ dài ra. `kieuNghi` (P4.2a) quyết định hình dạng
+   * đơn nghi_bu — cũng phải watch, nếu không đổi "Nghỉ cả ngày" ↔ "Nghỉ theo
+   * giờ" sẽ không đổi được trường nào hiện ra.
    */
   const co = (truong: TruongDon) =>
-    hienTruong({ loaiDon, ngay, denNgay }, truong);
+    hienTruong({ loaiDon, ngay, denNgay, kieuNghi }, truong);
+
+  // Số dư quỹ giờ (P4.2a) — chỉ đơn nghi_bu quan tâm. `hetQuy` khoá nút
+  // Lưu/Cập nhật khi SoDuQuyGioBanner báo hết quỹ; reset về false khi đổi
+  // sang loại đơn khác để không rò rỉ khoá sang đơn không liên quan tới quỹ
+  // giờ (banner không unmount kịp khi loaiDon vừa đổi trong cùng lượt render).
+  const [hetQuyGio, setHetQuyGio] = useState(false);
+  useEffect(() => {
+    if (loaiDon !== "nghi_bu") setHetQuyGio(false);
+  }, [loaiDon]);
 
   // Chỉ đơn phép năm mới trừ quỹ — nghỉ bù/không lương/ốm đau... không liên
   // quan tới KhoiSoDuPhep.
   const laDonPhepNam = loaiDon === "nghi_phep" && loaiNghi === "phep_nam";
+
+  // gioTu/gioDen bắt buộc cho đơn OT VÀ đơn nghỉ bù theo giờ — xem lý do ở
+  // rules validate của hai ô bên dưới.
+  const batBuocGio =
+    loaiDon === "lam_them_gio" ||
+    (loaiDon === "nghi_bu" && kieuNghi === "theo_gio");
 
   // Số dư phép của NHÂN VIÊN ĐANG CHỌN, không phải `getCuaToi()` (đó là "của
   // chính người đăng nhập" — ở đây người đăng nhập là HR, không phải chủ
@@ -185,6 +209,10 @@ export function DonChamCongForm() {
           key="submit"
           type="primary"
           loading={saving}
+          // Chỉ khoá vì hết quỹ giờ khi đơn ĐANG LÀ nghi_bu — hetQuyGio có
+          // thể còn true một nhịp render sau khi HR vừa đổi loại đơn, trước
+          // khi effect reset nó chạy.
+          disabled={loaiDon === "nghi_bu" && hetQuyGio}
           onClick={handleSubmit(onSubmit)}
         >
           {isEditing ? "Cập nhật" : "Tạo đơn"}
@@ -307,6 +335,39 @@ export function DonChamCongForm() {
             />
           </Col>
         )}
+        {loaiDon === "nghi_bu" && (
+          <>
+            <Col span={12} className="mt-3">
+              <FieldLabel required>Kiểu nghỉ</FieldLabel>
+              <Controller
+                name="kieuNghi"
+                control={control}
+                render={({ field }) => (
+                  <Select
+                    {...field}
+                    className="w-full"
+                    options={KIEU_NGHI_BU_OPTIONS.map((o) => ({
+                      value: o.value,
+                      label: o.label,
+                    }))}
+                  />
+                )}
+              />
+            </Col>
+            {/* Cùng lý lẽ như KhoiSoDuPhep ở trên: số dư phải thấy được lúc HR
+                còn đang chọn, không phải sau khi bấm Tạo đơn mới biết hết
+                quỹ. `employeeId` của NHÂN VIÊN ĐANG CHỌN — HR xem hộ số dư
+                của người khác, không phải số dư của chính HR. */}
+            {employeeId && (
+              <Col span={24} className="mt-3">
+                <SoDuQuyGioBanner
+                  employeeId={employeeId}
+                  onHetQuy={setHetQuyGio}
+                />
+              </Col>
+            )}
+          </>
+        )}
         {co("buoi") && (
           <Col span={12} className="mt-3">
             <FieldLabel>Buổi</FieldLabel>
@@ -359,18 +420,20 @@ export function DonChamCongForm() {
         {co("gioTu") && (
           <>
             <Col span={12} className="mt-3">
-              <FieldLabel required={loaiDon === "lam_them_gio"}>Giờ từ</FieldLabel>
+              <FieldLabel required={batBuocGio}>Giờ từ</FieldLabel>
               <Controller
                 name="gioTu"
                 control={control}
                 rules={{
-                  // CHỈ đơn OT bắt buộc: backend tính số giờ OT bằng
+                  // Đơn OT bắt buộc: backend tính số giờ OT bằng
                   // `tinhSoGioOt(dto.gioTu!, dto.gioDen!)` — thiếu giờ là nổ
-                  // TypeError ở server chứ không phải 400 có thông điệp.
+                  // TypeError ở server chứ không phải 400 có thông điệp. Đơn
+                  // nghi_bu theo_gio cũng bắt buộc: thiếu giờ thì backend
+                  // tính soGioNghiBu = 0 (return sớm ở tinhCacTruongSnapshot),
+                  // tức HR tưởng đã tạo đơn nghỉ bù nhưng không trừ quỹ giờ
+                  // nào — một đơn vô nghĩa lặng lẽ được tạo ra.
                   validate: (value: string) =>
-                    loaiDon !== "lam_them_gio" ||
-                    !!value ||
-                    "Vui lòng chọn giờ từ",
+                    !batBuocGio || !!value || "Vui lòng chọn giờ từ",
                 }}
                 render={({ field }) => (
                   <TimePicker
@@ -390,15 +453,13 @@ export function DonChamCongForm() {
               )}
             </Col>
             <Col span={12} className="mt-3">
-              <FieldLabel required={loaiDon === "lam_them_gio"}>Giờ đến</FieldLabel>
+              <FieldLabel required={batBuocGio}>Giờ đến</FieldLabel>
               <Controller
                 name="gioDen"
                 control={control}
                 rules={{
                   validate: (value: string) =>
-                    loaiDon !== "lam_them_gio" ||
-                    !!value ||
-                    "Vui lòng chọn giờ đến",
+                    !batBuocGio || !!value || "Vui lòng chọn giờ đến",
                 }}
                 render={({ field }) => (
                   <TimePicker

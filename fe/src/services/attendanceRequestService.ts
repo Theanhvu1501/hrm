@@ -24,6 +24,21 @@ export type LoaiNghi =
 /** Kết quả suyHeSoOt() ở be/.../don-cham-cong/luat-don.ts — backend tự tính. */
 export type LoaiNgayOt = 'ngay_thuong' | 'ngay_nghi' | 'ngay_le';
 
+/**
+ * Chỉ đơn `nghi_bu`: nghỉ trọn ngày hay nghỉ lẻ giờ — khớp
+ * `CreateDonChamCongDto.kieuNghi` ở backend. KHAI TƯỜNG MINH bởi người nộp
+ * đơn qua một control riêng (KIEU_NGHI_BU_OPTIONS), không suy từ `gioTu` có
+ * rỗng hay không — đó là cách hai lỗi sản xuất trước đây trong repo này xảy
+ * ra (`userId: ""`, hai trường thừa ở đơn thôi việc).
+ */
+export type KieuNghi = 'theo_ngay' | 'theo_gio';
+
+/**
+ * Chỉ đơn `lam_them_gio`, và chỉ có nghĩa khi công ty đặt chế độ bù là
+ * `nhan_vien_chon` — các chế độ khác backend tự quyết, bỏ qua trường này.
+ */
+export type HinhThucBu = 'tien' | 'nghi_bu';
+
 export interface AttendanceRequest {
   id: string;
   employeeId: string;
@@ -44,6 +59,14 @@ export interface AttendanceRequest {
   denNgay?: string;
   buoi?: Buoi;
   loaiNghi?: LoaiNghi;
+
+  // ── Chỉ đơn nghi_bu (kieuNghi) và lam_them_gio (hinhThucBu) — client GỬI
+  // kieuNghi/hinhThucBu lên (khai trong CreateAttendanceRequestDto bên dưới),
+  // nhưng soGioNghiBu là BACKEND TỰ TÍNH, CHỈ Ở CHIỀU ĐỌC — xem cảnh báo ở
+  // CreateAttendanceRequestDto.
+  kieuNghi?: KieuNghi;
+  hinhThucBu?: HinhThucBu;
+  soGioNghiBu?: number;
 
   // ── Backend TỰ TÍNH (luat-don.ts) — client không gửi lên, chỉ đọc về.
   // Tất cả optional và KHÔNG có giá trị mặc định: 0 (vd. soGioOt=0) là giá
@@ -73,6 +96,13 @@ export interface CreateAttendanceRequestDto {
   denNgay?: string;
   buoi?: Buoi;
   loaiNghi?: LoaiNghi;
+  // kieuNghi/hinhThucBu là hai trường FE MỚI GỬI LÊN (khớp
+  // CreateDonChamCongDto ở backend). soGioNghiBu/phanBoQuyGio KHÔNG được
+  // thêm vào đây dù có mặt trên AttendanceRequest đọc về — backend tự tính,
+  // một khoá thừa làm ValidationPipe({ forbidNonWhitelisted: true }) từ chối
+  // cả request với 400 không kèm tên trường.
+  kieuNghi?: KieuNghi;
+  hinhThucBu?: HinhThucBu;
   lyDo?: string;
   gioTu?: string;
   gioDen?: string;
@@ -100,6 +130,8 @@ export interface TaoDonCuaToiDto {
   denNgay?: string;
   buoi?: Buoi;
   loaiNghi?: LoaiNghi;
+  kieuNghi?: KieuNghi;
+  hinhThucBu?: HinhThucBu;
   lyDo?: string;
   gioTu?: string;
   gioDen?: string;
@@ -207,6 +239,12 @@ class AttendanceRequestService extends ServiceBase {
       denNgay: x.denNgay as string | undefined,
       buoi: x.buoi as Buoi | undefined,
       loaiNghi: x.loaiNghi as LoaiNghi | undefined,
+
+      kieuNghi: x.kieuNghi as KieuNghi | undefined,
+      hinhThucBu: x.hinhThucBu as HinhThucBu | undefined,
+      // Passthrough thuần — CHỈ chiều đọc, không có mặt ở CreateAttendanceRequestDto.
+      // 0 giờ là giá trị THẬT (giờ từ = giờ đến), không được `||`/`??` xoá mất.
+      soGioNghiBu: x.soGioNghiBu as number | undefined,
 
       // Passthrough thuần, KHÔNG fallback: 0 (vd. soGioOt=0) phải giữ nguyên
       // là 0, không phải bị `||`/`??` biến thành undefined hay giá trị khác.

@@ -35,15 +35,31 @@ export function khungGio(don: AttendanceRequest): string {
 }
 
 /**
- * Cột "Số liệu": số ngày nghỉ (đơn nghỉ) hoặc số giờ OT × hệ số (đơn OT) —
- * đều là snapshot BACKEND TỰ TÍNH lúc tạo đơn (luat-don.ts), FE chỉ hiển thị.
+ * Cột "Số liệu": số ngày nghỉ (đơn nghỉ), số giờ OT × hệ số (đơn OT), hoặc số
+ * giờ nghỉ bù (đơn nghi_bu theo_gio) — đều là snapshot BACKEND TỰ TÍNH lúc
+ * tạo đơn (luat-don.ts / don-cham-cong.service.ts), FE chỉ hiển thị.
  *
- * Dùng `!== undefined` chứ KHÔNG `if (don.soGioOt)`: 0 là giá trị THẬT
- * (khoảng nghỉ rơi hết vào ngày lễ → 0 ngày nghỉ; đơn OT khai giờ từ = giờ
- * đến → 0 giờ). HR cần thấy đúng con số 0 để biết đơn này không cộng gì cả,
- * thay vì thấy "-" rồi tưởng hệ thống chưa tính xong và cứ thế duyệt.
+ * P4.2a (review): nghi_bu theo_gio là con đường THỨ HAI của cùng loại đơn,
+ * và backend đặt `soGioNghiBu` cho nhánh này thay vì `soNgayNghi` (xem
+ * `tinhCacTruongSnapshot()` — nhánh `kieuNghi === 'theo_gio'` return sớm,
+ * không bao giờ tính `soNgayNghi`). Đọc thẳng `soNgayNghi` như đơn nghi_bu
+ * theo_ngay sẽ luôn ra "-" cho MỌI đơn nghỉ bù theo giờ dù nó có trừ quỹ
+ * giờ thật — đúng cột HR cần đọc để biết đơn này tốn bao nhiêu TRƯỚC KHI
+ * duyệt. Nhánh này PHẢI đứng TRƯỚC nhánh nghi_phep/nghi_bu chung, vì
+ * nghi_bu khớp cả hai điều kiện.
+ *
+ * Dùng `!== undefined` chứ KHÔNG `if (don.soGioOt)`/`if (don.soGioNghiBu)`:
+ * 0 là giá trị THẬT (khoảng nghỉ rơi hết vào ngày lễ → 0 ngày nghỉ; đơn OT
+ * hoặc nghỉ bù theo giờ khai giờ từ = giờ đến → 0 giờ). HR cần thấy đúng
+ * con số 0 để biết đơn này không cộng/trừ gì cả, thay vì thấy "-" rồi
+ * tưởng hệ thống chưa tính xong và cứ thế duyệt.
  */
 export function soLieuDon(don: AttendanceRequest): string {
+  if (don.loaiDon === "nghi_bu" && don.kieuNghi === "theo_gio") {
+    if (don.soGioNghiBu === undefined) return "-";
+    return `${don.soGioNghiBu} giờ nghỉ bù`;
+  }
+
   if (don.loaiDon === "nghi_phep" || don.loaiDon === "nghi_bu") {
     if (don.soNgayNghi === undefined) return "-";
     return `${don.soNgayNghi} ngày nghỉ`;

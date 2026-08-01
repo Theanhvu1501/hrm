@@ -80,6 +80,10 @@ export const QuyPhepPage = loadable(() => import('./cham-cong/quy-phep/QuyPhepPa
   fallback: <PageLoader />
 });
 
+export const QuyGioPage = loadable(() => import('./cham-cong/quy-gio/QuyGioPage'), {
+  fallback: <PageLoader />
+});
+
 export const ThietBiPage = loadable(() => import('./cham-cong/thiet-bi/ThietBiPage'), {
   fallback: <PageLoader />
 });

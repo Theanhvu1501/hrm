@@ -114,4 +114,36 @@ describe("soLieuDon — cột số liệu HR nhìn TRƯỚC KHI duyệt", () => 
   it("đơn giải trình không có số liệu nào để hiện", () => {
     expect(soLieuDon(don({ loaiDon: "giai_trinh" }))).toBe("-");
   });
+
+  // P4.2a review: nghi_bu theo_gio chỉ có soGioNghiBu (backend không đặt
+  // soNgayNghi cho nhánh này — xem tinhCacTruongSnapshot() phía BE), đọc
+  // soNgayNghi như trước sẽ luôn ra "-" cho MỌI đơn nghỉ bù theo giờ, dù
+  // đơn đó có trừ quỹ giờ thật. Đây là con số HR cần thấy TRƯỚC KHI duyệt.
+  it("nghỉ bù theo_gio: hiện số giờ nghỉ bù, KHÔNG phải '-'", () => {
+    expect(
+      soLieuDon(don({ loaiDon: "nghi_bu", kieuNghi: "theo_gio", soGioNghiBu: 2 }))
+    ).toBe("2 giờ nghỉ bù");
+  });
+
+  it("nghỉ bù theo_gio 0 giờ (khai giờ từ = giờ đến) vẫn hiện 0, KHÔNG phải '-'", () => {
+    expect(
+      soLieuDon(don({ loaiDon: "nghi_bu", kieuNghi: "theo_gio", soGioNghiBu: 0 }))
+    ).toBe("0 giờ nghỉ bù");
+  });
+
+  it("nghỉ bù theo_gio chưa có snapshot → '-'", () => {
+    expect(soLieuDon(don({ loaiDon: "nghi_bu", kieuNghi: "theo_gio" }))).toBe("-");
+  });
+
+  it("nghỉ bù theo_ngay vẫn hiện số ngày nghỉ như trước (không đổi hành vi cũ)", () => {
+    expect(
+      soLieuDon(don({ loaiDon: "nghi_bu", kieuNghi: "theo_ngay", soNgayNghi: 1 }))
+    ).toBe("1 ngày nghỉ");
+  });
+
+  it("nghỉ bù thiếu kieuNghi (đơn cũ trước P4.2a) vẫn hiện số ngày nghỉ", () => {
+    expect(soLieuDon(don({ loaiDon: "nghi_bu", soNgayNghi: 2 }))).toBe(
+      "2 ngày nghỉ"
+    );
+  });
 });

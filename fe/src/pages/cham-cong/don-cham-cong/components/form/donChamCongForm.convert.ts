@@ -24,6 +24,7 @@ export const GIA_TRI_MAC_DINH: DonChamCongFormValues = {
   denNgay: "",
   buoi: "ca_ngay",
   loaiNghi: "",
+  kieuNghi: "theo_ngay",
   lyDo: "",
   gioTu: "",
   gioDen: "",
@@ -45,6 +46,9 @@ export function toFormValues(
     // thay vì để trống, vì Select buổi không có lựa chọn rỗng hợp lệ.
     buoi: request.buoi || "ca_ngay",
     loaiNghi: request.loaiNghi || "",
+    // Đơn cũ (trước P4.2a) không có kieuNghi → mặc định "theo_ngay", đúng
+    // hành vi trước khi trường này tồn tại (xem truongCuaDon()).
+    kieuNghi: request.kieuNghi || "theo_ngay",
     lyDo: request.lyDo || "",
     gioTu: request.gioTu || "",
     gioDen: request.gioDen || "",
@@ -87,6 +91,10 @@ export function dungDtoQuanTri(
   if (co("loaiNghi") && v.loaiNghi) dto.loaiNghi = v.loaiNghi;
   if (co("gioTu") && v.gioTu) dto.gioTu = v.gioTu;
   if (co("gioDen") && v.gioDen) dto.gioDen = v.gioDen;
+  // kieuNghi không nằm trong bảng TRUONG_THEO_LOAI (nó là thứ QUYẾT ĐỊNH
+  // truongCuaDon() cho nghi_bu, không phải một trường bị nó chi phối) nên
+  // gửi trực tiếp theo loaiDon, không qua co().
+  if (v.loaiDon === "nghi_bu") dto.kieuNghi = v.kieuNghi;
 
   // lyDo/minhChung/ghiChu đi kèm mọi loại đơn — không nằm trong bảng
   // TRUONG_THEO_LOAI vì chúng không bao giờ bị ẩn.

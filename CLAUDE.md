@@ -31,8 +31,8 @@ Only **3 services** remain (the other 8 accounting microservices from master-seo
 - `apps/auth-service` (port **4001**) — session/tenant-switch, SSO integration with identity.
   **Has no local `/login` endpoint** — see Known limitations below.
 - `apps/config-service` (port **4007**) — platform config modules: `phan-quyen`, `vai-tro`,
-  `nguoi-dung`. (It also still wires `quy-chuan`, `phieu-template`, `tai-lieu` modules left
-  over from the accounting fork — see Known limitations.)
+  `nguoi-dung`, `quy-gio`. (It also still wires `quy-chuan`, `phieu-template`, `tai-lieu`
+  modules left over from the accounting fork — see Known limitations.)
 
 Shared libs: `libs/auth` (copied whole from master-seo, kept as `@app/auth`, not extracted
 into a shared package — see design spec §5), `libs/core`, `libs/database`, `libs/dto`,

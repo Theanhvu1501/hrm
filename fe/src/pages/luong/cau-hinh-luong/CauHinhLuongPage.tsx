@@ -9,6 +9,7 @@ import {
 import { KhoanLuongEditor } from "./components/KhoanLuongEditor";
 import { BacThueEditor } from "./components/BacThueEditor";
 import { HangSoEditor } from "./components/HangSoEditor";
+import { LamThemEditor } from "./components/LamThemEditor";
 import { usePagePermission } from "@/hooks/usePagePermission";
 import type { CauHinhLuong } from "@/services/cauHinhLuongService";
 import "./CauHinhLuongPage.state";
@@ -70,6 +71,11 @@ function CauHinhLuongPageInner() {
                   key: "hang-so",
                   label: "Hằng số",
                   children: <HangSoEditor canEdit={canEdit} />,
+                },
+                {
+                  key: "lam-them",
+                  label: "Làm thêm & quỹ giờ",
+                  children: <LamThemEditor canEdit={canEdit} />,
                 },
               ]}
             />

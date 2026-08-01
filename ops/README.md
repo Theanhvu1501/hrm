@@ -179,6 +179,189 @@ NV thực sự chạm mốc chính thức. Sản phẩm chấp nhận rủi ro n
 hạ tầng job định kỳ; nếu muốn siết chặt hơn (chỉ cấp đúng lúc `ngayChinhThuc` đã qua), phải
 chạy `capPhepDauNam` thường xuyên hơn (vd hàng tuần) thay vì đổi logic.
 
+## Bật quỹ giờ làm thêm cho một công ty (P4.2a)
+
+Module `quy-gio` (BE: `be/apps/config-service/src/quy-gio/`, hai collection
+`overtime_balances` + `overtime_balance_entries`, entity ở
+`be/libs/entities/src/cham-cong/overtime-balance.entity.ts`) tích giờ làm thêm đã duyệt
+thành quỹ, và từ nay **đơn nghỉ bù (`nghi_bu`) trừ vào quỹ này thay vì tự do như trước** —
+xem "Báo HR trước" ở bước 4 dưới đây trước khi bật.
+
+**Đúng thứ tự:**
+
+1. **Tạo index bằng tay trên MongoDB production.** `synchronize` (`be/libs/database/src/database.module.ts`)
+   chỉ bật khi `NODE_ENV=development`, nên production **không tự sinh bất kỳ chỉ mục nào** —
+   kể cả `unique` khai trong entity. Chạy trong `mongosh` trên server, DB `nhan_su`:
+
+   ```js
+   // unique(tenantId, employeeId, kyTich) là RÀNG BUỘC ĐÚNG ĐẮN, không phải tối ưu tốc độ:
+   // hai hàng cùng kỳ nghĩa là số dư bị chẻ đôi và soDuKhaDung()/doiSoat() đọc sai.
+   db.overtime_balances.createIndex({ tenantId: 1, employeeId: 1, kyTich: 1 }, { unique: true });
+   // Hỗ trợ xemTruocDongQuy()/dongQuyGio() quét theo trạng thái (toàn bộ NV).
+   db.overtime_balances.createIndex({ trangThai: 1 });
+   // Hỗ trợ donLienQuanOt()/demRongTheoLyDo() (tra sổ theo một đơn cụ thể).
+   db.overtime_balance_entries.createIndex({ requestId: 1 });
+   // Hỗ trợ doiSoat() (tra sổ theo nhân viên).
+   db.overtime_balance_entries.createIndex({ employeeId: 1 });
+   ```
+
+   > **`tenantId` bắt buộc phải dẫn đầu ở chỉ mục UNIQUE, dù `quy-gio.service.ts` không tự
+   > tay lọc theo `tenantId` ở bất kỳ query nào.** Lý do KHÔNG mâu thuẫn với việc bỏ
+   > `tenantId` khỏi hai chỉ mục `overtime_balance_entries` phía dưới:
+   > `DatabaseModule.forFeature()` (`be/libs/database/src/database.module.ts`) bọc MỌI
+   > repository (trừ danh sách `TENANT_EXEMPT_ENTITIES`, không có `OvertimeBalance`/
+   > `OvertimeBalanceEntry` trong đó) bằng một proxy tự động chèn `tenantId` vào mọi
+   > `find`/`findOne`/`save`/... — nên các query của `quy-gio.service.ts` VẪN được lọc theo
+   > tenant dù code không viết `tenantId` ra, và một chỉ mục KHÔNG unique (như hai chỉ mục
+   > `overtime_balance_entries` phía dưới) vẫn được planner dùng đúng dù thiếu `tenantId`
+   > làm tiền tố. Nhưng ràng buộc UNIQUE thì khác hẳn về bản chất: MongoDB áp `unique` ở
+   > tầng engine, trên TOÀN BỘ collection, không biết gì tới proxy hay tenant context của
+   > tầng ứng dụng. Một unique index thiếu `tenantId` nghĩa là "một hàng cho mỗi
+   > (nhân viên, kỳ) TRÊN TOÀN HỆ THỐNG", không phải "trên mỗi công ty" — công ty B tạo quỹ
+   > tháng đầu tiên có thể bị MongoDB từ chối với lỗi duplicate-key nếu trùng khoá với một
+   > hàng có sẵn của công ty A.
+   >
+   > **Đã kiểm tra `OvertimeBalance.employeeId` thực sự chứa gì** trước khi viết đoạn này:
+   > nó là `_id` Mongo của nhân viên (ép `String`), KHÔNG phải mã `NV####` trên
+   > `Employee.employeeId`. Bằng chứng: `quy-gio.controller.ts` gọi
+   > `quyGio_Service.soDuKhaDung(String((emp as any)._id), ...)`, và phía tạo đơn
+   > (`don-cham-cong.service.ts` → `findEmployee()`) đọc `employeeId` bằng
+   > `new ObjectId(employeeId)` — tức toàn bộ đường đi từ đơn tới quỹ đều mang `_id` Mongo,
+   > vốn đã gần như duy nhất toàn cục (12 byte gồm thời gian + máy + counter), không phải
+   > chuỗi `NV0001` mà mỗi tenant đều bắt đầu lại từ đầu. Nghĩa là va chạm thật giữa hai
+   > công ty gần như không xảy ra trong thực tế — NHƯNG vẫn phải khai `tenantId` dẫn đầu:
+   > chi phí hai chiều không đối xứng (thêm vào vô hại nếu id đã duy nhất toàn cục; bỏ đi mà
+   > lỡ va chạm thì một công ty hoàn toàn hợp lệ bị MongoDB từ chối ghi giữa lúc vận hành
+   > thật, khó chẩn đoán). Đúng quy ước sẵn có của repo: `IDX_employee_device_unique`
+   > (`be/libs/entities/src/cham-cong/employee-device.entity.ts`, unique trên
+   > `[tenantId, employeeId, deviceId]`) và `IDX_app_user_role_unique`
+   > (`be/libs/entities/src/auth/app-user-role.entity.ts`, unique trên `[userId, tenantId]`)
+   > đều để `tenantId` dẫn đầu ở MỌI chỉ mục unique trong repo — không có ngoại lệ nào.
+   >
+   > Ngược lại, việc bỏ `tenantId` khỏi hai chỉ mục KHÔNG unique bên dưới
+   > (`overtime_balances.trangThai`, `overtime_balance_entries.requestId`/`employeeId`) là
+   > ĐÚNG và chỉ áp dụng cho trường hợp không-unique này — đừng suy rộng "quy-gio không cần
+   > tenantId" sang một chỉ mục unique thêm sau này.
+
+2. **Chạy `ops/grant-quyen-module-moi.ts` để cấp `/cham-cong/quy-gio`.**
+
+   `/cham-cong/quy-gio` đã được đăng ký ở cả ba nơi (T13b), theo đúng khuôn mẫu
+   `/cham-cong/quy-phep`: `PERMISSION_MODULES`
+   (`be/libs/core/src/permissions/all-permissions.ts`), catalog FE
+   `fe/src/pages/cau-hinh/phan-quyen/constants/permissionModules.ts` (nhãn "Quỹ giờ làm
+   thêm"), và `MODULE_CAN_CAP` của `ops/grant-quyen-module-moi.ts`. Route quản trị chỉ thực
+   sự enforce hai hành động `:xem` và `:sua` (xem `quy-gio.controller.ts`) — không route nào
+   đòi `:them`/`:xoa`/`:xuat`, nhưng script vẫn cấp NGUYÊN bộ hành động mà vai trò đang có
+   cho module khuôn (`/cham-cong/ca-lam-viec`), giống hệt cách nó đã làm cho `quy-phep`.
+   Quyền thừa không dùng tới không hại gì.
+
+   ```bash
+   # 1. Xem trước, không ghi gì
+   MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
+     npx ts-node ops/grant-quyen-module-moi.ts --dry-run
+
+   # 2. Ghi thật
+   MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
+     npx ts-node ops/grant-quyen-module-moi.ts
+   ```
+
+   Bỏ qua bước này thì màn "Quỹ giờ làm thêm" vẫn 403 với mọi vai trò trừ
+   `SUPER_ADMIN_EMAIL` (permissions `['*']`, xem `permission.guard.ts`) — đúng lỗi mà repo đã
+   gặp với 3 module chấm công trước đây. Route `GET /quy-gio/cua-toi/so-du` (nhân viên tự xem
+   số dư) không bị ảnh hưởng bởi bước này — nó chỉ có `JwtGuard`, không đòi quyền module.
+
+3. **Khai `soGioMoiNgay` và `lamThem` ở màn Cấu hình lương** — tab **"Làm thêm & quỹ
+   giờ"** (`/cau-hinh/cau-hinh-luong`, quyền `/luong/cau-hinh:sua`).
+
+   > **Đây là công tắc BẬT tính năng, và nó là công tắc TAY có chủ đích.** Tab này được
+   > bổ sung trong đợt vá review nhánh (IMPORTANT 6): trước đó runbook mô tả một thao
+   > tác không tồn tại — màn Cấu hình lương chưa hề có hai trường này
+   > (`grep -rn "lamThem\|soGioMoiNgay" fe/src` không ra gì), nên tenant nào đã từng
+   > chạy bảng lương trước P4.2a KHÔNG có đường nào bật được quỹ giờ.
+   >
+   > **CỐ Ý KHÔNG backfill kiểu `bhCongTy`** (`bang-luong.service.ts:64`, thêm ở P4.1
+   > cho đúng tình huống này). Backfill sẽ bật NGẦM tính năng cho mọi tenant ngay lúc
+   > deploy — mà bật nó nghĩa là **chặn nộp đơn nghỉ bù của TOÀN CÔNG TY** cho tới khi
+   > có đơn làm thêm đầu tiên được duyệt (xem bước 4). `bhCongTy` backfill được vì nó
+   > chỉ sửa một con số báo cáo chi phí; `lamThem` thì đổi hành vi nộp đơn của mọi
+   > nhân viên. Cái giá của lựa chọn này: HR phải chủ động vào bấm, deploy xong mà
+   > không ai bấm thì quỹ giờ đứng yên (đúng trạng thái an toàn, `tichTuDonOt()` chỉ
+   > log cảnh báo và bỏ qua).
+   >
+   > **Giới hạn còn lại:** tab này chỉ BẬT được, chưa TẮT được. Gỡ `lamThem` khỏi một
+   > bản ghi đã lưu cần `$unset` thẳng trên MongoDB — `CapNhatCauHinhLuongDto` không có
+   > đường diễn đạt "xoá trường này", và `capNhatCauHinh()` dùng `Object.assign` nên
+   > một `lamThem: undefined` gửi lên sẽ bị bỏ qua im lặng chứ không xoá.
+
+   Trường `lamThem` (kiểu `CauHinhLamThem`, xem
+   `be/libs/entities/src/luong/luong.types.ts`) gồm:
+   - `cheDoBu`: **chỉ `'chi_nghi_bu'` được hỗ trợ ở P4.2a** — ba chế độ còn lại
+     (`chi_tien`, `nhan_vien_chon`, `nghi_bu_va_chenh`) bị DTO từ chối là "chưa được hỗ trợ"
+     (xem `CauHinhLamThemHopLe` trong `be/apps/config-service/src/bang-luong/dto/cap-nhat-cau-hinh-luong.dto.ts`).
+   - `heSoTichQuy` (`{ ngay_thuong, ngay_nghi, ngay_le }`): với `chi_nghi_bu`, mỗi hệ số
+     phải **≥ sàn BLLĐ 2019 Đ98.1** (1.5 / 2.0 / 3.0) — DTO chặn nếu thấp hơn.
+   - `soThangHanDung`: số tháng quỹ còn hiệu lực trước khi hết hạn, `null` = không hết hạn.
+   - `khiHetHan`: `'quy_ra_tien'` hoặc `'huy_bo'`.
+   - `soGioMoiNgay` (trên `CauHinhLuongData`, cùng cấp `lamThem` chứ không nằm trong nó):
+     số giờ của một ngày công, dùng quy đổi ngày↔giờ cho đơn nghỉ bù.
+
+   Với công ty **đã có** bản ghi `CauHinhLuong` từ trước (đã từng mở màn Cấu hình lương /
+   chạy Tổng hợp lương trước khi P4.2a deploy), bản ghi đó **không có `lamThem`** — mở tab
+   "Làm thêm & quỹ giờ", tab sẽ hiện cảnh báo "Công ty chưa bật quỹ giờ làm thêm" kèm nút
+   **"Bật quỹ giờ làm thêm"**. Nút đó chỉ điền sẵn giá trị mặc định (chế độ "chỉ nghỉ bù",
+   hệ số đúng sàn BLLĐ, không hết hạn, hết hạn thì quy ra tiền) vào form — **vẫn phải bấm
+   "Lưu cấu hình"** mới có hiệu lực, và sửa lại các giá trị trước khi lưu nếu công ty khai
+   khác. `QuyGio_Service.layCauHinh()` cố ý trả `null` (không rơi về mặc định ngầm) khi
+   `lamThem` rỗng, nên trước khi lưu, `tichTuDonOt()` chỉ log cảnh báo và bỏ qua — không
+   tích quỹ cho bất kỳ đơn OT nào.
+
+   Với công ty **hoàn toàn mới** (chưa từng có bản ghi `CauHinhLuong`), lần đầu ai đó mở màn
+   Cấu hình lương hoặc chạy Tổng hợp lương sau khi deploy, `CAU_HINH_LUONG_MAC_DINH`
+   (`be/apps/config-service/src/bang-luong/cau-hinh-luong.seed.ts`) tự tạo một bản ghi đã có
+   sẵn `lamThem: { cheDoBu: 'chi_nghi_bu', heSoTichQuy: sàn BLLĐ, soThangHanDung: null,
+   khiHetHan: 'quy_ra_tien' }` — nghĩa là tính năng **coi như đã bật ngay từ đầu** cho công
+   ty mới, không cần bước điền tay này. Bước 4 dưới đây vẫn áp dụng cho công ty mới y hệt.
+
+4. **⚠️ Báo HR TRƯỚC khi hoàn tất bước 3 — BẮT BUỘC, không phải khuyến nghị.** Từ thời
+   điểm công ty có `lamThem` hợp lệ:
+   - Đơn nghỉ bù (`nghi_bu`) **không còn tự do nộp** — nó trừ vào quỹ giờ và bị
+     `ConflictException` (mã `QUY_GIO_KHONG_DU_SO_DU`) chặn ngay lúc nộp nếu không đủ số dư
+     (xem `phanBoChoNghiBu()` trong `quy-gio.service.ts`, gọi từ `don-cham-cong.service.ts`).
+   - **Cố ý KHÔNG có backfill.** Mọi nhân viên bắt đầu ở số dư 0 giờ và **không nộp được
+     bất kỳ đơn nghỉ bù nào** cho tới khi có ít nhất một đơn làm thêm (OT) MỚI được duyệt
+     sau thời điểm này và tích quỹ.
+   - Đây là hành vi **có chủ đích**, nhưng nếu HR không được báo trước, ngày đầu tiên họ sẽ
+     thấy hàng loạt đơn nghỉ bù bị từ chối nộp và báo cáo như một lỗi hệ thống.
+
+   Nói cách khác: bật tính năng này = tắt khả năng nộp nghỉ bù của TOÀN BỘ công ty cho tới
+   khi có đơn OT đầu tiên được duyệt. Xếp lịch bật cùng lúc với đợt duyệt OT đầu tiên, không
+   bật rồi im lặng.
+
+Xem thêm hai route vận hành khác của module (không bắt buộc để "bật" tính năng, nhưng nên
+biết khi vận hành lâu dài):
+- `GET /quy-gio/xem-truoc-dong-quy?den=YYYY-MM-DD` + `POST /quy-gio/dong-quy` (quyền
+  `/cham-cong/quy-gio:sua`) — xem trước rồi đóng các quỹ đã quá `hanDung`, ghi sổ
+  `quy_ra_tien`/`het_han` theo `khiHetHan`. Không tự chạy định kỳ (không có cron trong repo)
+  — phải có người bấm/gọi tay, hoặc dựng job riêng nếu muốn tự động.
+
+  Xem trước trả **hai** danh sách: `seDong` (sẽ đóng) và `vuongCho` (quá hạn NHƯNG còn
+  `soGioDangChoDuyet` > 0 — tức còn một đơn nghỉ bù đang chờ giữ chỗ trong đó).
+  `dong-quy` **bỏ qua** nhóm `vuongCho` và trả `soQuyVuongCho` để người vận hành biết mình
+  vừa không đóng cái gì. Cách xử lý: duyệt hoặc từ chối đơn đang treo đó trước, rồi chạy
+  lại `dong-quy`. Đóng một quỹ còn giữ chỗ sẽ làm số giờ đang treo hoặc mất trắng hoặc
+  được trả chồng lên số đã chốt — xem docblock `xemTruocDongQuy()`.
+- `GET /quy-gio/:employeeId/doi-soat` (quyền `/cham-cong/quy-gio:xem`) — dựng lại số dư từ
+  sổ `overtime_balance_entries` và so với `overtime_balances`, trả từng kỳ kèm `lech` và
+  `soGioDaDong`. Dùng khi nhân viên thắc mắc số giờ, hoặc sau rollout để xác nhận không
+  lệch.
+
+  **`lech` phải bằng 0 với mọi kỳ**, kể cả kỳ đã đóng. Con số giờ được lưu 2 chữ số thập
+  phân (0.01 giờ = 36 giây, xem `SO_LE_GIO` trong `luat-quy-gio.ts`) nên `lech` không bao
+  giờ ra dạng `1e-15`; thấy `lech` khác 0 nghĩa là có nơi ghi số dư mà quên ghi sổ — báo
+  lại, đừng tự sửa số dư (sửa là xoá mất bằng chứng của chính cái bug cần tìm).
+  `soGioDaDong` là phần đã được cộng ngược từ hai dòng `quy_ra_tien`/`het_han`: quỹ đóng
+  rồi vẫn giữ `soGioConLai` cho chặng lương P4.2b đọc, nên phải cộng lại mới so được.
+
 ## Rollout P3.9 — Bảng công tự sinh
 
 `generate()` suy ký hiệu bảng công từ dữ liệu đã có (chấm công, đơn từ, ngày lễ) thay vì HR

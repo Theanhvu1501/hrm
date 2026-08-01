@@ -52,6 +52,8 @@ export interface DonDangSoan {
   loaiDon: AttendanceRequestType;
   ngay: string;
   denNgay?: string;
+  /** Chỉ đọc khi loaiDon === "nghi_bu" — xem truongCuaDon(). */
+  kieuNghi?: string;
 }
 
 /** Đơn nghỉ đúng MỘT ngày mới có khái niệm nửa buổi. */
@@ -62,9 +64,30 @@ export function hienBuoi(v: DonDangSoan): boolean {
   return !v.denNgay || v.denNgay === v.ngay;
 }
 
+/**
+ * Trường hiển thị của một đơn. Với `nghi_bu`, hình dạng phụ thuộc `kieuNghi`
+ * — KHAI TƯỜNG MINH bởi một control riêng (KIEU_NGHI_BU_OPTIONS), không suy
+ * từ việc `gioTu` có rỗng hay không (đó là cách hai lỗi sản xuất trước đây
+ * trong repo này xảy ra — xem docblock CreateAttendanceRequestDto).
+ *
+ * Thiếu `kieuNghi` mặc định `theo_ngay`: đó là hành vi trước P4.2a, và đơn cũ
+ * nạp vào form sửa không mang trường này.
+ *
+ * Ba loại đơn còn lại (`giai_trinh`/`lam_them_gio`/`nghi_phep`) tra thẳng
+ * `TRUONG_THEO_LOAI` — bảng đó vẫn là nguồn sự thật cho chúng.
+ */
+export function truongCuaDon(v: DonDangSoan): readonly TruongDon[] {
+  if (v.loaiDon === "nghi_bu") {
+    return v.kieuNghi === "theo_gio"
+      ? (["ngay", "gioTu", "gioDen", "lyDo"] as const)
+      : (["ngay", "denNgay", "buoi", "lyDo"] as const);
+  }
+  return TRUONG_THEO_LOAI[v.loaiDon] ?? [];
+}
+
 /** Trường nào được vẽ ra cho loại đơn đang chọn. */
 export function hienTruong(v: DonDangSoan, truong: TruongDon): boolean {
-  if (!TRUONG_THEO_LOAI[v.loaiDon].includes(truong)) return false;
+  if (!truongCuaDon(v).includes(truong)) return false;
   if (truong === "buoi") return hienBuoi(v);
   return true;
 }

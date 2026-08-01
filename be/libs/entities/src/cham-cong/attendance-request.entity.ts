@@ -1,6 +1,7 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../base.entity';
 import type { PhanBoQuy } from './leave-balance.entity';
+import type { PhanBoQuyGio as PhanBoQuyGioType } from './overtime-balance.entity';
 
 @Entity('attendance_requests')
 export class AttendanceRequest extends BaseEntity {
@@ -23,6 +24,21 @@ export class AttendanceRequest extends BaseEntity {
   @Column({ nullable: true }) buoi?: string; // ca_ngay|sang|chieu — chỉ có ý nghĩa khi đơn đúng 1 ngày
   @Column({ nullable: true }) loaiNghi?: string; // phep_nam|khong_luong|om_dau|thai_san|cuoi_hoi|tang
 
+  /**
+   * Chỉ đơn `nghi_bu`: nghỉ trọn ngày hay nghỉ lẻ giờ.
+   *
+   * KHAI TƯỜNG MINH, không suy từ việc `gioTu` có rỗng hay không. Suy ngầm từ
+   * chuỗi rỗng chính là lớp lỗi đã làm chết toàn bộ chức năng lập đơn thôi việc
+   * và làm hỏng việc tạo nhân viên (`userId: ""` lọt vào partial unique index).
+   */
+  @Column({ nullable: true }) kieuNghi?: string; // theo_ngay|theo_gio
+
+  /**
+   * Chỉ đơn `lam_them_gio`, và chỉ có nghĩa khi công ty đặt chế độ bù là
+   * `nhan_vien_chon`. Các chế độ khác backend tự quyết và bỏ qua giá trị này.
+   */
+  @Column({ nullable: true }) hinhThucBu?: string; // tien|nghi_bu
+
   // ── Các trường BACKEND TỰ TÍNH (Task 3, dùng luat-don.ts) ─────────────────
   // Cố ý KHÔNG có mặt trong CreateDonChamCongDto: nhận từ client là mở đường
   // cho người nộp đơn tự khai số ngày nghỉ hoặc hệ số OT của chính mình.
@@ -40,6 +56,12 @@ export class AttendanceRequest extends BaseEntity {
    * thành phép mới.
    */
   @Column('json', { nullable: true }) phanBoQuy?: PhanBoQuy[];
+
+  /** Số giờ đơn `nghi_bu` này trừ vào quỹ giờ. Backend tự tính — CỐ Ý không có trong DTO. */
+  @Column({ nullable: true }) soGioNghiBu?: number;
+
+  /** Đơn `nghi_bu` đã giữ chỗ ở quỹ giờ nào, bao nhiêu. Snapshot lúc tạo, cùng lý do `phanBoQuy`. */
+  @Column('json', { nullable: true }) phanBoQuyGio?: PhanBoQuyGioType[];
 
   // ── Vết duyệt đơn ─────────────────────────────────────────────────────────
   @Column({ nullable: true }) nguoiDuyetId?: string; // id người duyệt, khác `nguoiDuyet` (tên hiển thị)

@@ -32,6 +32,7 @@ import {
   TableOutlined,
   CalendarOutlined,
   WalletOutlined,
+  FieldTimeOutlined,
   TabletOutlined,
   AuditOutlined,
   CheckCircleOutlined,
@@ -173,6 +174,7 @@ const MainLayout: React.FC = () => {
   const canViewBangCong = hasPermission('/cham-cong/bang-cong:xem') || user?.isSuperAdmin;
   const canViewNgayLe = hasPermission('/cham-cong/ngay-le:xem') || user?.isSuperAdmin;
   const canViewQuyPhep = hasPermission('/cham-cong/quy-phep:xem') || user?.isSuperAdmin;
+  const canViewQuyGio = hasPermission('/cham-cong/quy-gio:xem') || user?.isSuperAdmin;
   const canViewThietBi = hasPermission('/cham-cong/thiet-bi:xem') || user?.isSuperAdmin;
   const canViewBanGhi = hasPermission('/cham-cong/ban-ghi:xem') || user?.isSuperAdmin;
   // Nhóm CHẤM CÔNG luôn hiện vì "Chấm công của tôi" là mục tự phục vụ, hiển
@@ -249,6 +251,11 @@ const MainLayout: React.FC = () => {
           key: "/cham-cong/quy-phep",
           icon: <WalletOutlined />,
           label: "Quỹ phép",
+        }] : []),
+        ...(canViewQuyGio ? [{
+          key: "/cham-cong/quy-gio",
+          icon: <FieldTimeOutlined />,
+          label: "Quỹ giờ làm thêm",
         }] : []),
         ...(canViewBangCong ? [{
           key: "/cham-cong/bang-cong",

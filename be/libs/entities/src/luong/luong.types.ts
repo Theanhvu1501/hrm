@@ -34,6 +34,21 @@ export interface BacThue {
   suat: number; // 0..1
 }
 
+/** Chế độ bù giờ làm thêm — cấu hình theo TỪNG công ty (nền tảng đa tenant). */
+export type CheDoBuLamThem =
+  | 'chi_nghi_bu'        // tích quỹ giờ, bảng lương không trả gì
+  | 'chi_tien'           // không tích quỹ, bảng lương trả đủ  (P4.2b)
+  | 'nhan_vien_chon'     // người nộp chọn từng đơn            (P4.2b)
+  | 'nghi_bu_va_chenh';  // tích quỹ ở 1.0 + trả phần chênh    (P4.2b)
+
+export interface CauHinhLamThem {
+  cheDoBu: CheDoBuLamThem;
+  heSoTichQuy: { ngay_thuong: number; ngay_nghi: number; ngay_le: number };
+  /** null = quỹ không bao giờ hết hạn. */
+  soThangHanDung: number | null;
+  khiHetHan: 'quy_ra_tien' | 'huy_bo';
+}
+
 export interface CauHinhLuongData {
   mucKhaiBaoMacDinh: number;
   congChuan: number;
@@ -52,6 +67,9 @@ export interface CauHinhLuongData {
    */
   bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
   lamTron: number;
+  /** Số giờ của MỘT ngày công. Quy đổi ngày↔giờ cho nghỉ bù, và là mẫu số của đơn giá giờ. */
+  soGioMoiNgay: number;
+  lamThem: CauHinhLamThem;
 }
 
 /** Đầu vào engine cho MỘT dòng (một NV, một mức lương). */

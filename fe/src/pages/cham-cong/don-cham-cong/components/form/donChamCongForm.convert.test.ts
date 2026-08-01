@@ -238,6 +238,10 @@ describe("toFormValues — mở form sửa một đơn đã có", () => {
       ngay: "2026-08-03",
       denNgay: "2026-08-05",
       lyDo: "Bù ngày trực",
+      // P4.2a: đơn nghi_bu cũ (trước khi có kieuNghi) nạp lại vào form mặc
+      // định "theo_ngay" (toFormValues) rồi gửi tường minh trở lại
+      // (dungDtoQuanTri) — không còn là trường "im lặng" ở round-trip nữa.
+      kieuNghi: "theo_ngay",
     });
   });
 });
