@@ -30,11 +30,20 @@ const MODULE_KHUON = '/cham-cong/ca-lam-viec';
 
 /**
  * Module thêm sau, đang thiếu trong `phan_quyen.permissions`.
- * Đợt P3.8 (Quỹ phép): cấp `/cham-cong/quy-phep`. (Đợt P4 đã cấp `/luong/*`.)
+ * Đợt P4.2a (Quỹ giờ làm thêm): cấp `/cham-cong/quy-gio`. (Đợt P3.8 đã cấp
+ * `/cham-cong/quy-phep`; đợt P4 đã cấp `/luong/*`.)
  * Script chỉ THÊM, idempotent — đổi lại danh sách này mỗi đợt deploy module mới.
+ *
+ * Controller `quy-gio.controller.ts` chỉ thực sự enforce hai hành động
+ * `:xem` và `:sua` (`@Permissions('/cham-cong/quy-gio:xem'|'sua')`) — không
+ * có route nào đòi `:them`/`:xoa`/`:xuat`. Script vẫn sao NGUYÊN bộ hành động
+ * mà vai trò đang có cho `MODULE_KHUON` (giống hệt cách đã làm cho
+ * `/cham-cong/quy-phep`, module cũng chỉ enforce một phần của 5 hành động)
+ * — quyền thừa không dùng tới không hại gì, tách logic "chỉ cấp đúng cái cần"
+ * ra khỏi script này sẽ phức tạp hơn giá trị nó mang lại.
  */
 const MODULE_CAN_CAP = [
-  '/cham-cong/quy-phep',
+  '/cham-cong/quy-gio',
 ];
 
 const DRY_RUN = process.argv.includes('--dry-run');

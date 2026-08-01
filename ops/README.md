@@ -209,45 +209,36 @@ xem "Báo HR trước" ở bước 4 dưới đây trước khi bật.
    > xem mục "Tạo chỉ mục cho quỹ phép (P3.8)" bên dưới) không lọc theo `tenantId` ở bất
    > kỳ câu query nào — `tenantId` trên `BaseEntity` tồn tại nhưng module này không dùng.
    > Chỉ mục ở trên bám đúng theo các trường THẬT SỰ xuất hiện trong `where` của
-   > `quy-gio.service.ts`, không thêm `tenantId` như one bản nháp ban đầu từng đề — thêm
+   > `quy-gio.service.ts`, không thêm `tenantId` như bản nháp ban đầu từng đề xuất — thêm
    > vào sẽ không sai nhưng không phục vụ query nào, và làm ai đọc lại tưởng nhầm module
    > này có phân vùng theo tenant.
 
-2. **Cấp quyền `/cham-cong/quy-gio:xem` và `/cham-cong/quy-gio:sua`.**
+2. **Chạy `ops/grant-quyen-module-moi.ts` để cấp `/cham-cong/quy-gio`.**
 
-   > ⚠️ **Khác với các module trước (`quy-phep`, `luong/*`): module `/cham-cong/quy-gio`
-   > CHƯA có trong danh mục quyền.** Nó không nằm trong `PERMISSION_MODULES`
-   > (`be/libs/core/src/permissions/all-permissions.ts`), không nằm trong catalog FE
-   > `fe/src/pages/cau-hinh/phan-quyen/constants/permissionModules.ts`, và **không** nằm
-   > trong `MODULE_CAN_CAP` của `ops/grant-quyen-module-moi.ts`. Mọi module trước đó
-   > (`/cham-cong/quy-phep`, `/luong/*`) đều có một commit riêng thêm vào ba nơi này khi
-   > module ra đời — module `quy-gio` này thì chưa. Nghĩa là:
-   >   - Màn hình Phân quyền **không có checkbox** nào cho `quy-gio` để admin tự cấp.
-   >   - Chạy `ops/grant-quyen-module-moi.ts` **như hiện tại sẽ KHÔNG cấp gì** cho
-   >     `quy-gio` (nó không có trong `MODULE_CAN_CAP`).
-   >   - Route enforce bằng `PermissionGuard` + `@Permissions('/cham-cong/quy-gio:xem'|'sua')`
-   >     (xem `quy-gio.controller.ts`) — nên **mọi vai trò, kể cả vai trò admin bình thường,
-   >     đều 403** ở cả 3 route quản trị (`GET /quy-gio`, `GET /quy-gio/:id/so-du`,
-   >     `GET /quy-gio/:id/doi-soat`, `GET /quy-gio/xem-truoc-dong-quy`, `POST /quy-gio/dong-quy`)
-   >     cho tới khi việc này được vá. Chỉ tài khoản `SUPER_ADMIN_EMAIL` (permissions `['*']`,
-   >     xem `permission.guard.ts`) đi qua được, không phải giải pháp cho vận hành thường
-   >     ngày. Route `GET /quy-gio/cua-toi/so-du` (nhân viên tự xem số dư) KHÔNG bị ảnh
-   >     hưởng — nó chỉ có `JwtGuard`, không đòi quyền module.
-   >
-   >   **Trước khi công ty đầu tiên cần màn Quỹ giờ làm thêm cho HR**, phải thêm
-   >   `/cham-cong/quy-gio` vào cả ba nơi trên (theo đúng khuôn mẫu commit đã thêm
-   >   `/cham-cong/quy-phep` hoặc `/luong/*`) rồi mới chạy được bước cấp quyền hàng loạt
-   >   dưới đây. Việc này là sửa code, nằm ngoài phạm vi tài liệu vận hành này.
-   >
-   >   Sau khi ba nơi trên đã có `/cham-cong/quy-gio`, cấp quyền như các module trước:
-   >   ```bash
-   >   MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
-   >     npx ts-node ops/grant-quyen-module-moi.ts --dry-run
-   >   MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
-   >     npx ts-node ops/grant-quyen-module-moi.ts
-   >   ```
-   >   Bỏ qua bước này (sau khi đã vá danh mục) thì màn "Quỹ giờ làm thêm" vẫn 403 với
-   >   mọi người — đúng lỗi mà repo đã gặp với 3 module chấm công trước đây.
+   `/cham-cong/quy-gio` đã được đăng ký ở cả ba nơi (T13b), theo đúng khuôn mẫu
+   `/cham-cong/quy-phep`: `PERMISSION_MODULES`
+   (`be/libs/core/src/permissions/all-permissions.ts`), catalog FE
+   `fe/src/pages/cau-hinh/phan-quyen/constants/permissionModules.ts` (nhãn "Quỹ giờ làm
+   thêm"), và `MODULE_CAN_CAP` của `ops/grant-quyen-module-moi.ts`. Route quản trị chỉ thực
+   sự enforce hai hành động `:xem` và `:sua` (xem `quy-gio.controller.ts`) — không route nào
+   đòi `:them`/`:xoa`/`:xuat`, nhưng script vẫn cấp NGUYÊN bộ hành động mà vai trò đang có
+   cho module khuôn (`/cham-cong/ca-lam-viec`), giống hệt cách nó đã làm cho `quy-phep`.
+   Quyền thừa không dùng tới không hại gì.
+
+   ```bash
+   # 1. Xem trước, không ghi gì
+   MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
+     npx ts-node ops/grant-quyen-module-moi.ts --dry-run
+
+   # 2. Ghi thật
+   MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
+     npx ts-node ops/grant-quyen-module-moi.ts
+   ```
+
+   Bỏ qua bước này thì màn "Quỹ giờ làm thêm" vẫn 403 với mọi vai trò trừ
+   `SUPER_ADMIN_EMAIL` (permissions `['*']`, xem `permission.guard.ts`) — đúng lỗi mà repo đã
+   gặp với 3 module chấm công trước đây. Route `GET /quy-gio/cua-toi/so-du` (nhân viên tự xem
+   số dư) không bị ảnh hưởng bởi bước này — nó chỉ có `JwtGuard`, không đòi quyền module.
 
 3. **Khai `soGioMoiNgay` và `lamThem` ở màn Cấu hình lương** (`/cau-hinh/cau-hinh-luong`,
    quyền `/luong/cau-hinh:sua`). Trường `lamThem` (kiểu `CauHinhLamThem`, xem
