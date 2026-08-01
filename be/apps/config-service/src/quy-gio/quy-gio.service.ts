@@ -349,8 +349,16 @@ export class QuyGio_Service {
   }
 
   /**
-   * RÒNG các dòng sổ của một đơn nghỉ bù cho MỘT CẶP lý do đối nghịch nhau,
-   * theo từng kỳ tích — cùng vai trò `rongTichTheoKy()` bên tích quỹ OT.
+   * ĐẾM ròng các dòng sổ của một đơn nghỉ bù cho MỘT CẶP lý do đối nghịch
+   * nhau, theo từng kỳ tích — mỗi dòng khớp `lyDoTang` tính +1, mỗi dòng khớp
+   * `lyDoGiam` tính −1.
+   *
+   * KHÁC `rongTichTheoKy()` bên tích quỹ OT (hàm đó CỘNG DỒN GIÁ TRỊ `soGio`
+   * thật của các dòng, để ra "còn bao nhiêu giờ ròng"). Hàm này chỉ ĐẾM SỐ
+   * LƯỢT xảy ra của mỗi loại, không quan tâm mỗi dòng bao nhiêu giờ — dùng để
+   * trả lời "đã áp dụng lượt này chưa", không phải "còn bao nhiêu giờ". Hai
+   * hàm tên gần giống nhau CỐ Ý đặt tên khác hẳn (`demRongTheoLyDo` so với
+   * `rongTichTheoKy`) để không ai nhầm ý nghĩa khi đọc lướt.
    *
    * CHỈ dùng để chống trùng cho HAI hàm "tiến" — `giuCho` (cặp
    * `giu_cho_nghi_bu`/`huy_nghi_bu`) và `chuyenSangDaDung` (cặp
@@ -366,13 +374,12 @@ export class QuyGio_Service {
    *     tồn tại để chặn.
    *
    * CỐ Ý KHÔNG dùng cho `nhaCho`/`hoanTraDaDung` (hai hàm "lùi", chỉ giảm
-   * dần về 0 qua `Math.max(0, …)`) — xem doc-comment của hai hàm đó để biết
-   * vì sao: guard theo net-ledger đòi hỏi phải có sẵn dòng sổ của thao tác
-   * "tiến" tương ứng, điều không đúng khi số dư bị set thẳng (fixture test,
-   * điều chỉnh tay), trong khi cái giá của việc không guard ở hai hàm lùi
-   * chỉ là một dòng sổ thừa — không phải số dư sai.
+   * dần về 0 qua `Math.max(0, …)`) — một guard kiểu này đòi hỏi phải có sẵn
+   * dòng sổ của thao tác "tiến" tương ứng, điều không đúng khi số dư bị set
+   * thẳng (fixture test, điều chỉnh tay). Hai hàm đó tự chống trùng bằng
+   * cách khác — xem `apDung()` (tham số `boQuaKhiKhongDoi`).
    */
-  private async rongTheoKy(
+  private async demRongTheoLyDo(
     requestId: string,
     employeeId: string,
     lyDoTang: string,
@@ -391,15 +398,45 @@ export class QuyGio_Service {
     return theoKy;
   }
 
+  /**
+   * `doi()` giờ TRẢ VỀ số giờ THỰC SỰ đã áp dụng (sau khi Math.max kẹp), chứ
+   * không phải số giờ YÊU CẦU (`p.soGio`) — hai số này lệch nhau đúng lúc một
+   * lần gọi lại (retry/bấm hai lần) rơi vào phần đã bị kẹp về 0.
+   *
+   * Review round phát hiện: bản cũ ghi `dauSo(p.soGio)` (theo YÊU CẦU) trong
+   * khi `doi()` áp dụng theo THỰC TẾ (bị Math.max kẹp) — với `nhaCho`/
+   * `hoanTraDaDung`, một lần gọi lại sau khi đã về 0 thì SỐ DƯ đúng (kẹp ở
+   * 0, không đổi thêm) nhưng SỔ vẫn ghi thêm một dòng `+p.soGio` như thể có
+   * di chuyển thật — sổ cộng dồn ra nhiều hơn số dư thực sự đã đổi. `sổ là
+   * nguồn sự thật` (nguyên tắc `doiSoat()`, Task 12, dựng lại số dư từ tổng
+   * sổ và báo lệch) — dòng sổ ma này khiến MỘT QUỸ HOÀN TOÀN ĐÚNG bị báo lệch
+   * vĩnh viễn, đúng thứ mà sổ append-only tồn tại để tránh.
+   *
+   * `boQuaKhiKhongDoi = true` (dùng cho `nhaCho`/`hoanTraDaDung`): khi số
+   * thực tế áp dụng là 0 (đã bị kẹp từ trước — không còn gì để nhả/hoàn) thì
+   * BỎ QUA hẳn cả `repo.save()` lẫn `ghiSo()` — không có biến động thật thì
+   * không có gì để ghi.
+   *
+   * `giuCho`/`chuyenSangDaDung` giữ `boQuaKhiKhongDoi = false` (mặc định):
+   * `giuCho` chưa từng đụng Math.max (kiem() chặn trước khi tràn, không kẹp
+   * âm thầm) nên số thực tế luôn bằng số yêu cầu; `chuyenSangDaDung` CỐ Ý
+   * luôn ghi `soGio: 0` làm VẾT TRẠNG THÁI bất kể số thực tế di chuyển bao
+   * nhiêu (xem doc-comment hàm đó) — nếu bật `boQuaKhiKhongDoi` ở đây, vết đó
+   * sẽ bị nuốt mất ngay ở lần gọi hợp lệ đầu tiên. Cả hai hàm này vẫn có
+   * guard `demRongTheoLyDo()` riêng chặn retry TRƯỚC khi vào `apDung()` —
+   * nếu không, `soGioDaDung` của `chuyenSangDaDung` (không hề bị Math.max
+   * kẹp) vẫn cộng dồn sai dù dòng sổ trông vô hại (toàn số 0).
+   */
   private async apDung(
     employeeId: string,
     phanBo: PhanBoQuyGio[],
     lyDo: string,
     requestId: string,
     nguoiThucHien: string,
-    doi: (quy: OvertimeBalance, soGio: number) => void,
-    dauSo: (soGio: number) => number,
+    doi: (quy: OvertimeBalance, soGio: number) => number,
+    dauSo: (soGioThucTe: number) => number,
     kiem?: (quy: OvertimeBalance, soGio: number) => string | null,
+    boQuaKhiKhongDoi = false,
   ): Promise<void> {
     for (const p of phanBo) {
       const quy = await this.repo.findOne({
@@ -415,7 +452,9 @@ export class QuyGio_Service {
         });
       }
 
-      doi(quy, p.soGio);
+      const thucTe = doi(quy, p.soGio);
+      if (boQuaKhiKhongDoi && thucTe === 0) continue; // đã bị kẹp từ trước — không có gì để ghi
+
       this.tinhLaiConLai(quy);
       await this.repo.save(quy);
 
@@ -423,7 +462,7 @@ export class QuyGio_Service {
         balanceId: String((quy as any)._id),
         employeeId,
         kyTich: p.kyTich,
-        soGio: dauSo(p.soGio),
+        soGio: dauSo(thucTe),
         lyDo,
         requestId,
         nguoiThucHien,
@@ -434,10 +473,24 @@ export class QuyGio_Service {
   /**
    * Nộp đơn → giữ chỗ ngay, để hai đơn nộp cùng lúc không cùng ăn một số dư.
    *
-   * Chống trùng bằng `rongTheoKy(giu_cho_nghi_bu, huy_nghi_bu)`: kỳ nào ròng
-   * đã > 0 (đang giữ chỗ, chưa được nhả) thì bỏ qua — gọi lại `giuCho` cho
-   * đúng `requestId` (bấm hai lần, retry) không được giữ thêm chỗ đè lên chỗ
-   * đã giữ. Xem lý do đầy đủ ở doc-comment `rongTheoKy()`.
+   * Chống trùng bằng `demRongTheoLyDo(giu_cho_nghi_bu, huy_nghi_bu)`: kỳ nào
+   * ròng đã > 0 (đang giữ chỗ, chưa được nhả) thì bỏ qua — gọi lại `giuCho`
+   * cho đúng `requestId` (bấm hai lần, retry) không được giữ thêm chỗ đè lên
+   * chỗ đã giữ. Xem lý do đầy đủ ở doc-comment `demRongTheoLyDo()`.
+   *
+   * GIỚI HẠN CÒN LẠI (review round, cố ý ghi nhận chứ không sửa ở đây): đây
+   * là read-then-write thường (`findOne` → sửa trong bộ nhớ → `save`), KHÔNG
+   * có điều kiện nguyên tử ở tầng DB. Guard trên chỉ đóng cửa sổ hở của việc
+   * GỌI LẠI cùng một `requestId` (retry/bấm hai lần) — nó KHÔNG đóng được
+   * cửa sổ hở của HAI ĐƠN KHÁC NHAU nộp gần như đồng thời: cả hai có thể
+   * cùng đọc một `soGioConLai` trước khi bên nào kịp `save()`, cùng thấy đủ
+   * chỗ, và cùng giữ chỗ thành công — tổng hai lần giữ có thể vượt số dư
+   * thật. Đây đúng là giới hạn mà `quy-phep.service.ts` đã ghi nhận cho
+   * `giuCho()` của nó (xem doc-comment ở đó) — quỹ giờ này CỐ Ý giữ nguyên
+   * y hệt hình dạng với quỹ phép, không siết chặt hơn một mình nó ở đây.
+   * Cửa sổ hở nhỏ (chỉ mở giữa lúc đọc và lúc ghi của MỘT request), và việc
+   * đóng nó hẳn cần transaction hoặc `$inc` nguyên tử ở tầng DB — được theo
+   * dõi như việc riêng (đồng thời cho cả hai quỹ), không làm ở Task 5.
    */
   async giuCho(
     employeeId: string,
@@ -445,7 +498,7 @@ export class QuyGio_Service {
     requestId: string,
     nguoiThucHien: string,
   ): Promise<void> {
-    const rong = await this.rongTheoKy(
+    const rong = await this.demRongTheoLyDo(
       requestId,
       employeeId,
       'giu_cho_nghi_bu',
@@ -455,8 +508,8 @@ export class QuyGio_Service {
 
     await this.apDung(
       employeeId, canGiu, 'giu_cho_nghi_bu', requestId, nguoiThucHien,
-      (q, g) => { q.soGioDangChoDuyet += g; },
-      (g) => -g,
+      (q, g) => { q.soGioDangChoDuyet += g; return g; },
+      (thucTe) => -thucTe,
       (q, g) =>
         q.soGioDangChoDuyet + g > q.soGioTich - q.soGioDaDung
           ? `Quỹ kỳ ${q.kyTich} không còn đủ để giữ chỗ`
@@ -467,25 +520,19 @@ export class QuyGio_Service {
   /**
    * Từ chối đơn còn ở `cho_duyet` → nhả chỗ.
    *
-   * KHÔNG có guard chống trùng ở đây (khác `giuCho`/`chuyenSangDaDung`, xem
-   * doc-comment `rongTheoKy()`) — quyết định có cân nhắc, không phải bỏ sót:
+   * KHÔNG có guard lọc-trước ở đây (khác `giuCho`/`chuyenSangDaDung`, xem
+   * doc-comment `demRongTheoLyDo()`) — quyết định có cân nhắc, không phải bỏ
+   * sót: một guard kiểu `demRongTheoLyDo(giu_cho_nghi_bu, huy_nghi_bu) > 0`
+   * sẽ đòi hỏi PHẢI có sẵn dòng sổ `giu_cho_nghi_bu` cho đúng `requestId` mới
+   * cho nhả — đúng trong vận hành thật, nhưng vỡ ngay khi số dư bị set thẳng
+   * (fixture test, sửa tay của HR) — guard sẽ coi "không có dòng
+   * giu_cho_nghi_bu" là "không có gì để nhả" và bỏ qua NHẦM.
    *
-   *   1. `Math.max(0, soGioDangChoDuyet - g)` đã tự chặn số dư khỏi âm — gọi
-   *      lại `nhaCho` hai lần cho cùng `requestId` không thể kéo
-   *      `soGioDangChoDuyet` xuống dưới 0, khác hẳn `chuyenSangDaDung` (vế
-   *      `soGioDaDung += g` không có trần).
-   *   2. Một guard kiểu `rongTheoKy(giu_cho_nghi_bu, huy_nghi_bu) > 0` sẽ đòi
-   *      hỏi PHẢI có sẵn dòng sổ `giu_cho_nghi_bu` cho đúng `requestId` mới
-   *      cho nhả — đúng trong vận hành thật (mọi đường ghi `soGioDangChoDuyet`
-   *      đều đi qua `apDung()`, luôn kèm dòng sổ), nhưng vỡ ngay khi ai đó
-   *      set thẳng `soGioDangChoDuyet` trên bản ghi (test dựng fixture kiểu
-   *      này, và một thao tác sửa tay của HR trong tương lai cũng có thể làm
-   *      vậy) — guard sẽ coi "không có dòng giu_cho_nghi_bu" là "không có gì
-   *      để nhả" và bỏ qua NHẦM, để chỗ giữ kẹt lại dù đáng lẽ phải nhả.
-   *   3. Cái giá của việc KHÔNG guard chỉ là một dòng sổ `huy_nghi_bu` thừa
-   *      nếu bị gọi lặp — không làm sai số dư (do (1)) — trong khi cái giá
-   *      của việc CÓ guard kiểu net-ledger là nhả sai/bỏ sót thật trên dữ
-   *      liệu không đi qua đúng đường ghi sổ. Rủi ro thấp hơn thắng.
+   * Chống trùng thay vào đó bằng `apDung(…, boQuaKhiKhongDoi = true)`:
+   * `Math.max(0, soGioDangChoDuyet - g)` đã tự chặn SỐ DƯ khỏi âm, nên việc
+   * còn lại chỉ là chặn SỔ khỏi ghi trùng — `apDung()` tự phát hiện lần gọi
+   * lại đã bị kẹp về 0 (không còn gì thay đổi thật) và bỏ qua cả `save()` lẫn
+   * `ghiSo()`. Xem doc-comment đầy đủ ở `apDung()`.
    */
   async nhaCho(
     employeeId: string,
@@ -495,18 +542,29 @@ export class QuyGio_Service {
   ): Promise<void> {
     await this.apDung(
       employeeId, phanBo, 'huy_nghi_bu', requestId, nguoiThucHien,
-      (q, g) => { q.soGioDangChoDuyet = Math.max(0, q.soGioDangChoDuyet - g); },
-      (g) => g,
+      (q, g) => {
+        const truoc = q.soGioDangChoDuyet;
+        q.soGioDangChoDuyet = Math.max(0, truoc - g);
+        return truoc - q.soGioDangChoDuyet; // số giờ THỰC SỰ vừa nhả — 0 nếu đã kẹp từ trước
+      },
+      (thucTe) => thucTe,
+      undefined,
+      true,
     );
   }
 
   /**
    * Duyệt đơn → phần giữ chỗ thành đã dùng. `soGioConLai` KHÔNG đổi.
    *
-   * Chống trùng bằng `rongTheoKy(duyet_nghi_bu, huy_nghi_bu)`: kỳ nào ròng
-   * đã > 0 (đã chuyển thành đã dùng, chưa được hoàn) thì bỏ qua — gọi lại
-   * `chuyenSangDaDung` không được cộng dồn `soGioDaDung` lần hai (vế này
+   * Chống trùng bằng `demRongTheoLyDo(duyet_nghi_bu, huy_nghi_bu)`: kỳ nào
+   * ròng đã > 0 (đã chuyển thành đã dùng, chưa được hoàn) thì bỏ qua — gọi
+   * lại `chuyenSangDaDung` không được cộng dồn `soGioDaDung` lần hai (vế này
    * KHÔNG bị Math.max chặn trần, nên trùng ở đây là lệch số vĩnh viễn).
+   *
+   * `apDung()` gọi với `boQuaKhiKhongDoi` mặc định `false`: dòng sổ ở đây
+   * LUÔN là `soGio: 0` (vết trạng thái, không phải biến động — xem
+   * doc-comment `apDung()`) bất kể số giờ thực tế di chuyển bao nhiêu, nên
+   * không được để `apDung()` coi "ghi 0" là "không có gì xảy ra" rồi bỏ qua.
    */
   async chuyenSangDaDung(
     employeeId: string,
@@ -514,7 +572,7 @@ export class QuyGio_Service {
     requestId: string,
     nguoiThucHien: string,
   ): Promise<void> {
-    const rong = await this.rongTheoKy(
+    const rong = await this.demRongTheoLyDo(
       requestId,
       employeeId,
       'duyet_nghi_bu',
@@ -527,6 +585,7 @@ export class QuyGio_Service {
       (q, g) => {
         q.soGioDangChoDuyet = Math.max(0, q.soGioDangChoDuyet - g);
         q.soGioDaDung += g;
+        return 0; // vết trạng thái — luôn 0, không phải số giờ thực tế di chuyển
       },
       () => 0,
     );
@@ -535,15 +594,10 @@ export class QuyGio_Service {
   /**
    * Đơn ĐÃ DUYỆT bị từ chối → hoàn trả phần đã dùng.
    *
-   * KHÔNG có guard chống trùng — cùng lý do đã ghi ở `nhaCho()`:
-   * `Math.max(0, soGioDaDung - g)` tự chặn khỏi âm nên trùng lặp không làm
-   * sai số dư, còn một guard theo net-ledger sẽ vỡ trên dữ liệu không đi qua
-   * đúng đường ghi sổ (fixture test, sửa tay). Khác `hoanTraDaDung` bên
-   * `quy-phep.service.ts` (CÓ guard `soRongDaDung`) vì bên đó `giuCho`/
-   * `nhaCho` không ghi sổ nên không có nguồn dữ liệu nào để guard dựa vào
-   * ngoài chính dòng `duyet_don`/`huy_don` — ở đây `giuCho`/`nhaCho` CÓ ghi
-   * sổ, nên việc thiếu guard không đổi bản chất rủi ro (vẫn chỉ là một dòng
-   * sổ thừa, không phải số dư sai).
+   * KHÔNG có guard lọc-trước — cùng lý do đã ghi ở `nhaCho()`. Chống trùng
+   * bằng `apDung(…, boQuaKhiKhongDoi = true)`: `Math.max(0, soGioDaDung - g)`
+   * tự chặn số dư khỏi âm, và `apDung()` bỏ qua ghi sổ khi số giờ thực tế
+   * hoàn được là 0 (đã hoàn xong từ lần gọi trước).
    */
   async hoanTraDaDung(
     employeeId: string,
@@ -553,8 +607,14 @@ export class QuyGio_Service {
   ): Promise<void> {
     await this.apDung(
       employeeId, phanBo, 'huy_nghi_bu', requestId, nguoiThucHien,
-      (q, g) => { q.soGioDaDung = Math.max(0, q.soGioDaDung - g); },
-      (g) => g,
+      (q, g) => {
+        const truoc = q.soGioDaDung;
+        q.soGioDaDung = Math.max(0, truoc - g);
+        return truoc - q.soGioDaDung; // số giờ THỰC SỰ vừa hoàn — 0 nếu đã hoàn từ trước
+      },
+      (thucTe) => thucTe,
+      undefined,
+      true,
     );
   }
 }

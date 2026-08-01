@@ -341,8 +341,8 @@ describe('QuyGio_Service — vòng đời giữ chỗ', () => {
   // Task 5, quyết định cân nhắc riêng (ngoài brief): giuCho/chuyenSangDaDung
   // là hai hàm "tiến" không có Math.max chặn trần — gọi lại cùng requestId
   // (bấm hai lần, retry sau lỗi mạng) phải là no-op, không được cộng dồn đè.
-  // nhaCho/hoanTraDaDung KHÔNG có guard tương ứng (xem doc-comment service) —
-  // không test chống trùng cho hai hàm đó ở đây, cố ý.
+  // Chặn bằng guard `demRongTheoLyDo()` NGAY TRƯỚC khi vào apDung() — phần tử
+  // đã trùng bị lọc khỏi `phanBo` nên không tới lượt ghi số dư lẫn ghi sổ.
   it('giuCho gọi lại cùng requestId không giữ chỗ hai lần (chống trùng)', async () => {
     const { service, quyRepo, soRepo } = await dungService({ quy: [quyMau()] });
 
@@ -365,5 +365,37 @@ describe('QuyGio_Service — vòng đời giữ chỗ', () => {
       soGioDangChoDuyet: 0, soGioDaDung: 4, soGioConLai: 8,
     });
     expect(soRepo.rows).toHaveLength(1);
+  });
+
+  // Review round: nhaCho/hoanTraDaDung không có guard lọc trước (xem
+  // doc-comment `demRongTheoLyDo`/`apDung` trong service — Math.max(0, …) đã
+  // đủ chặn SỐ DƯ khỏi âm), nhưng bản thân apDung() phải TỰ nhận ra một lần
+  // gọi lại là no-op thật (đã bị Math.max kẹp về đúng giá trị cũ) và KHÔNG
+  // ghi thêm dòng sổ — nếu không, `doiSoat()` (Task 12) dựng lại số dư từ sổ
+  // sẽ cộng dư phần bị ghi trùng và báo lệch giả trên một quỹ hoàn toàn đúng.
+  it('nhaCho gọi lại cùng requestId không sinh dòng sổ ma — số dư và tổng sổ khớp nhau', async () => {
+    const { service, quyRepo, soRepo } = await dungService({
+      quy: [quyMau({ soGioDangChoDuyet: 4, soGioConLai: 8 })],
+    });
+
+    await service.nhaCho('nv1', [{ balanceId: 'b1', kyTich: '2026-01', soGio: 4 }], 'don9', 'hr1');
+    await service.nhaCho('nv1', [{ balanceId: 'b1', kyTich: '2026-01', soGio: 4 }], 'don9', 'hr1');
+
+    expect(quyRepo.rows[0]).toMatchObject({ soGioDangChoDuyet: 0, soGioConLai: 12 });
+    expect(soRepo.rows).toHaveLength(1); // lần gọi lại không ghi thêm — đã bị kẹp về 0, không có gì để nhả nữa
+    expect(soRepo.rows.reduce((t, r) => t + r.soGio, 0)).toBe(4); // đúng bằng số giờ THẬT đã nhả
+  });
+
+  it('hoanTraDaDung gọi lại cùng requestId không sinh dòng sổ ma — số dư và tổng sổ khớp nhau', async () => {
+    const { service, quyRepo, soRepo } = await dungService({
+      quy: [quyMau({ soGioDaDung: 4, soGioConLai: 8 })],
+    });
+
+    await service.hoanTraDaDung('nv1', [{ balanceId: 'b1', kyTich: '2026-01', soGio: 4 }], 'don9', 'hr1');
+    await service.hoanTraDaDung('nv1', [{ balanceId: 'b1', kyTich: '2026-01', soGio: 4 }], 'don9', 'hr1');
+
+    expect(quyRepo.rows[0]).toMatchObject({ soGioDaDung: 0, soGioConLai: 12 });
+    expect(soRepo.rows).toHaveLength(1);
+    expect(soRepo.rows.reduce((t, r) => t + r.soGio, 0)).toBe(4);
   });
 });
