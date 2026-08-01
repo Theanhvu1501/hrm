@@ -194,9 +194,9 @@ xem "Báo HR trước" ở bước 4 dưới đây trước khi bật.
    kể cả `unique` khai trong entity. Chạy trong `mongosh` trên server, DB `nhan_su`:
 
    ```js
-   // unique(employeeId, kyTich) là RÀNG BUỘC ĐÚNG ĐẮN, không phải tối ưu tốc độ:
+   // unique(tenantId, employeeId, kyTich) là RÀNG BUỘC ĐÚNG ĐẮN, không phải tối ưu tốc độ:
    // hai hàng cùng kỳ nghĩa là số dư bị chẻ đôi và soDuKhaDung()/doiSoat() đọc sai.
-   db.overtime_balances.createIndex({ employeeId: 1, kyTich: 1 }, { unique: true });
+   db.overtime_balances.createIndex({ tenantId: 1, employeeId: 1, kyTich: 1 }, { unique: true });
    // Hỗ trợ xemTruocDongQuy()/dongQuyGio() quét theo trạng thái (toàn bộ NV).
    db.overtime_balances.createIndex({ trangThai: 1 });
    // Hỗ trợ donLienQuanOt()/demRongTheoLyDo() (tra sổ theo một đơn cụ thể).
@@ -205,13 +205,43 @@ xem "Báo HR trước" ở bước 4 dưới đây trước khi bật.
    db.overtime_balance_entries.createIndex({ employeeId: 1 });
    ```
 
-   > **Lưu ý khác brief gốc:** `QuyGio_Service` (giống hệt `QuyPhep_Service` bên quỹ phép,
-   > xem mục "Tạo chỉ mục cho quỹ phép (P3.8)" bên dưới) không lọc theo `tenantId` ở bất
-   > kỳ câu query nào — `tenantId` trên `BaseEntity` tồn tại nhưng module này không dùng.
-   > Chỉ mục ở trên bám đúng theo các trường THẬT SỰ xuất hiện trong `where` của
-   > `quy-gio.service.ts`, không thêm `tenantId` như bản nháp ban đầu từng đề xuất — thêm
-   > vào sẽ không sai nhưng không phục vụ query nào, và làm ai đọc lại tưởng nhầm module
-   > này có phân vùng theo tenant.
+   > **`tenantId` bắt buộc phải dẫn đầu ở chỉ mục UNIQUE, dù `quy-gio.service.ts` không tự
+   > tay lọc theo `tenantId` ở bất kỳ query nào.** Lý do KHÔNG mâu thuẫn với việc bỏ
+   > `tenantId` khỏi hai chỉ mục `overtime_balance_entries` phía dưới:
+   > `DatabaseModule.forFeature()` (`be/libs/database/src/database.module.ts`) bọc MỌI
+   > repository (trừ danh sách `TENANT_EXEMPT_ENTITIES`, không có `OvertimeBalance`/
+   > `OvertimeBalanceEntry` trong đó) bằng một proxy tự động chèn `tenantId` vào mọi
+   > `find`/`findOne`/`save`/... — nên các query của `quy-gio.service.ts` VẪN được lọc theo
+   > tenant dù code không viết `tenantId` ra, và một chỉ mục KHÔNG unique (như hai chỉ mục
+   > `overtime_balance_entries` phía dưới) vẫn được planner dùng đúng dù thiếu `tenantId`
+   > làm tiền tố. Nhưng ràng buộc UNIQUE thì khác hẳn về bản chất: MongoDB áp `unique` ở
+   > tầng engine, trên TOÀN BỘ collection, không biết gì tới proxy hay tenant context của
+   > tầng ứng dụng. Một unique index thiếu `tenantId` nghĩa là "một hàng cho mỗi
+   > (nhân viên, kỳ) TRÊN TOÀN HỆ THỐNG", không phải "trên mỗi công ty" — công ty B tạo quỹ
+   > tháng đầu tiên có thể bị MongoDB từ chối với lỗi duplicate-key nếu trùng khoá với một
+   > hàng có sẵn của công ty A.
+   >
+   > **Đã kiểm tra `OvertimeBalance.employeeId` thực sự chứa gì** trước khi viết đoạn này:
+   > nó là `_id` Mongo của nhân viên (ép `String`), KHÔNG phải mã `NV####` trên
+   > `Employee.employeeId`. Bằng chứng: `quy-gio.controller.ts` gọi
+   > `quyGio_Service.soDuKhaDung(String((emp as any)._id), ...)`, và phía tạo đơn
+   > (`don-cham-cong.service.ts` → `findEmployee()`) đọc `employeeId` bằng
+   > `new ObjectId(employeeId)` — tức toàn bộ đường đi từ đơn tới quỹ đều mang `_id` Mongo,
+   > vốn đã gần như duy nhất toàn cục (12 byte gồm thời gian + máy + counter), không phải
+   > chuỗi `NV0001` mà mỗi tenant đều bắt đầu lại từ đầu. Nghĩa là va chạm thật giữa hai
+   > công ty gần như không xảy ra trong thực tế — NHƯNG vẫn phải khai `tenantId` dẫn đầu:
+   > chi phí hai chiều không đối xứng (thêm vào vô hại nếu id đã duy nhất toàn cục; bỏ đi mà
+   > lỡ va chạm thì một công ty hoàn toàn hợp lệ bị MongoDB từ chối ghi giữa lúc vận hành
+   > thật, khó chẩn đoán). Đúng quy ước sẵn có của repo: `IDX_employee_device_unique`
+   > (`be/libs/entities/src/cham-cong/employee-device.entity.ts`, unique trên
+   > `[tenantId, employeeId, deviceId]`) và `IDX_app_user_role_unique`
+   > (`be/libs/entities/src/auth/app-user-role.entity.ts`, unique trên `[userId, tenantId]`)
+   > đều để `tenantId` dẫn đầu ở MỌI chỉ mục unique trong repo — không có ngoại lệ nào.
+   >
+   > Ngược lại, việc bỏ `tenantId` khỏi hai chỉ mục KHÔNG unique bên dưới
+   > (`overtime_balances.trangThai`, `overtime_balance_entries.requestId`/`employeeId`) là
+   > ĐÚNG và chỉ áp dụng cho trường hợp không-unique này — đừng suy rộng "quy-gio không cần
+   > tenantId" sang một chỉ mục unique thêm sau này.
 
 2. **Chạy `ops/grant-quyen-module-moi.ts` để cấp `/cham-cong/quy-gio`.**
 
