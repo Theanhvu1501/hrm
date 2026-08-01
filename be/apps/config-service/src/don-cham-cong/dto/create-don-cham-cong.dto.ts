@@ -34,6 +34,18 @@ export class CreateDonChamCongDto {
   )
   loaiNghi?: string;
 
+  // Chỉ đơn nghi_bu: nghỉ trọn ngày hay nghỉ lẻ giờ. KHAI TƯỜNG MINH — xem
+  // docblock cùng tên trên entity vì sao không suy từ gioTu có rỗng hay không.
+  @IsOptional()
+  @IsIn(['theo_ngay', 'theo_gio'], { message: 'Kiểu nghỉ bù không hợp lệ' })
+  kieuNghi?: string;
+
+  // Chỉ đơn lam_them_gio, và chỉ có nghĩa khi công ty đặt chế độ bù là
+  // nhan_vien_chon. Các chế độ khác backend tự quyết và bỏ qua giá trị này.
+  @IsOptional()
+  @IsIn(['tien', 'nghi_bu'], { message: 'Hình thức bù không hợp lệ' })
+  hinhThucBu?: string;
+
   @IsOptional()
   @IsString()
   lyDo?: string;
@@ -46,13 +58,15 @@ export class CreateDonChamCongDto {
   @IsString()
   gioDen?: string;
 
-  // Cố ý KHÔNG có soNgayNghi/soGioOt/heSoOt/loaiNgayOt/phanBoQuy ở đây — đây là
-  // các trường BACKEND TỰ TÍNH (Task 3, dùng luat-don.ts), không nhận từ client.
-  // Nhận từ client là mở đường cho người nộp đơn tự khai số ngày nghỉ hoặc
-  // tự khai hệ số OT của chính mình (ví dụ khai heSoOt = 3.0 cho ngày thường).
-  // phanBoQuy (P3.8) được backend ghi lúc tạo đơn nghi_phep để snapshot quỹ
-  // được sử dụng. Cùng lý do, KHÔNG thêm nguoiDuyetId/thoiDiemDuyet: đó là vết
-  // duyệt do luồng phê duyệt ghi, không phải điều người nộp đơn tự khai.
+  // Cố ý KHÔNG có soNgayNghi/soGioOt/heSoOt/loaiNgayOt/phanBoQuy/soGioNghiBu/
+  // phanBoQuyGio ở đây — đây là các trường BACKEND TỰ TÍNH (Task 3 và Task 6,
+  // dùng luat-don.ts), không nhận từ client. Nhận từ client là mở đường cho
+  // người nộp đơn tự khai số ngày nghỉ, tự khai hệ số OT (ví dụ khai heSoOt =
+  // 3.0 cho ngày thường), hoặc tự khai số giờ nghỉ bù của chính mình.
+  // phanBoQuy (P3.8) / phanBoQuyGio (Task 6) được backend ghi lúc tạo đơn để
+  // snapshot quỹ được sử dụng. Cùng lý do, KHÔNG thêm nguoiDuyetId/
+  // thoiDiemDuyet: đó là vết duyệt do luồng phê duyệt ghi, không phải điều
+  // người nộp đơn tự khai.
 
   @IsOptional()
   @IsString()

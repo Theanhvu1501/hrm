@@ -1,3 +1,4 @@
+import { ValidationPipe } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate, ValidationError } from 'class-validator';
 import { CreateDonChamCongDto } from './create-don-cham-cong.dto';
@@ -200,5 +201,83 @@ describe.each([
         expect(loi?.constraints).toHaveProperty('whitelistValidation');
       },
     );
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Task 6: đơn nghỉ bù đổi hình dạng — kieuNghi (theo_ngay|theo_gio) trên đơn
+// nghi_bu, hinhThucBu (tien|nghi_bu) trên đơn lam_them_gio. Dùng ValidationPipe
+// thật (không phải validate() trần) để forbidNonWhitelisted chạy đúng như
+// main.ts, và để khoá luôn việc soGioNghiBu/phanBoQuyGio (backend tự tính)
+// không được lọt vào DTO.
+// ────────────────────────────────────────────────────────────────────────────
+const pipe = new ValidationPipe({
+  whitelist: true,
+  transform: true,
+  forbidNonWhitelisted: true,
+});
+const chay = (payload: any) =>
+  pipe.transform(payload, { type: 'body', metatype: CreateDonChamCongDto });
+
+const nghiBu = (over: any = {}) => ({
+  employeeId: 'nv1',
+  loaiDon: 'nghi_bu',
+  ngay: '2026-02-10',
+  kieuNghi: 'theo_ngay',
+  denNgay: '2026-02-10',
+  buoi: 'ca_ngay',
+  ...over,
+});
+
+describe('CreateDonChamCongDto — nghỉ bù', () => {
+  it('nhận đơn nghỉ bù theo ngày', async () => {
+    await expect(chay(nghiBu())).resolves.toBeDefined();
+  });
+
+  it('nhận đơn nghỉ bù theo giờ', async () => {
+    await expect(
+      chay(
+        nghiBu({
+          kieuNghi: 'theo_gio',
+          gioTu: '15:00',
+          gioDen: '17:00',
+          denNgay: undefined,
+          buoi: undefined,
+        }),
+      ),
+    ).resolves.toBeDefined();
+  });
+
+  it('từ chối kieuNghi lạ', async () => {
+    await expect(chay(nghiBu({ kieuNghi: 'theo_tuan' }))).rejects.toThrow();
+  });
+
+  // Backend tự tính; nhận từ client là mở đường cho người nộp tự khai số giờ
+  // nghỉ bù của chính mình.
+  it('từ chối soGioNghiBu gửi từ client', async () => {
+    await expect(chay(nghiBu({ soGioNghiBu: 99 }))).rejects.toThrow();
+  });
+
+  it('từ chối phanBoQuyGio gửi từ client', async () => {
+    await expect(
+      chay(
+        nghiBu({
+          phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2026-01', soGio: 99 }],
+        }),
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('nhận hinhThucBu trên đơn làm thêm', async () => {
+    await expect(
+      chay({
+        employeeId: 'nv1',
+        loaiDon: 'lam_them_gio',
+        ngay: '2026-02-10',
+        gioTu: '18:00',
+        gioDen: '20:00',
+        hinhThucBu: 'nghi_bu',
+      }),
+    ).resolves.toBeDefined();
   });
 });
