@@ -271,7 +271,7 @@ xem "Báo HR trước" ở bước 4 dưới đây trước khi bật.
    số dư) không bị ảnh hưởng bởi bước này — nó chỉ có `JwtGuard`, không đòi quyền module.
 
 3. **Khai `soGioMoiNgay` và `lamThem` ở màn Cấu hình lương** — tab **"Làm thêm & quỹ
-   giờ"** (`/luong/cau-hinh-luong`, quyền `/luong/cau-hinh:sua`).
+   giờ"** (`/cau-hinh/cau-hinh-luong`, quyền `/luong/cau-hinh:sua`).
 
    > **Đây là công tắc BẬT tính năng, và nó là công tắc TAY có chủ đích.** Tab này được
    > bổ sung trong đợt vá review nhánh (IMPORTANT 6): trước đó runbook mô tả một thao
