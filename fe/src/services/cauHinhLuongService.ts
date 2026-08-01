@@ -35,6 +35,42 @@ export interface BacThue {
   suat: number; // 0..1
 }
 
+/**
+ * Cấu hình làm thêm / quỹ giờ (P4.2a). Khớp `CauHinhLamThem` ở
+ * `be/libs/entities/src/luong/luong.types.ts` và `CauHinhLamThemDto`.
+ *
+ * P4.2a mới hỗ trợ `chi_nghi_bu`; ba chế độ còn lại bị DTO backend từ chối
+ * (chưa nối bảng lương) — FE chỉ cho chọn chế độ được hỗ trợ, không bày ra
+ * lựa chọn chắc chắn 400.
+ */
+export type CheDoBuLamThem =
+  | 'chi_nghi_bu'
+  | 'chi_tien'
+  | 'nhan_vien_chon'
+  | 'nghi_bu_va_chenh';
+
+export interface CauHinhLamThem {
+  cheDoBu: CheDoBuLamThem;
+  heSoTichQuy: { ngay_thuong: number; ngay_nghi: number; ngay_le: number };
+  /** null = quỹ không bao giờ hết hạn. */
+  soThangHanDung: number | null;
+  khiHetHan: 'quy_ra_tien' | 'huy_bo';
+}
+
+/** Sàn BLLĐ 2019 Đ98.1 — backend chặn nếu khai thấp hơn ở chế độ chi_nghi_bu. */
+export const HE_SO_TICH_SAN = {
+  ngay_thuong: 1.5,
+  ngay_nghi: 2.0,
+  ngay_le: 3.0,
+} as const;
+
+export const LAM_THEM_MAC_DINH: CauHinhLamThem = {
+  cheDoBu: 'chi_nghi_bu',
+  heSoTichQuy: { ...HE_SO_TICH_SAN },
+  soThangHanDung: null,
+  khiHetHan: 'quy_ra_tien',
+};
+
 export interface CauHinhLuong {
   id?: string;
   mucKhaiBaoMacDinh: number;
@@ -50,6 +86,17 @@ export interface CauHinhLuong {
   quyTacThoiVu: { tyLe: number; nguong: number };
   quyTacCamKet: { mienThue: boolean };
   lamTron: number;
+  /**
+   * Số giờ của một ngày công — dùng quy đổi ngày↔giờ cho đơn nghỉ bù. Optional
+   * ở FE vì bản ghi tạo trước P4.2a không có trường này (backend rơi về 8).
+   */
+  soGioMoiNgay?: number;
+  /**
+   * Vắng mặt = công ty CHƯA bật quỹ giờ làm thêm. `QuyGio_Service.layCauHinh()`
+   * cố ý trả `null` (không rơi về mặc định ngầm) khi trường này rỗng, nên
+   * không đơn OT nào tích quỹ cho tới khi HR khai và lưu ở màn này.
+   */
+  lamThem?: CauHinhLamThem;
 }
 
 /**

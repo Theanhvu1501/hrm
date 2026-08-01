@@ -270,8 +270,30 @@ xem "Báo HR trước" ở bước 4 dưới đây trước khi bật.
    gặp với 3 module chấm công trước đây. Route `GET /quy-gio/cua-toi/so-du` (nhân viên tự xem
    số dư) không bị ảnh hưởng bởi bước này — nó chỉ có `JwtGuard`, không đòi quyền module.
 
-3. **Khai `soGioMoiNgay` và `lamThem` ở màn Cấu hình lương** (`/cau-hinh/cau-hinh-luong`,
-   quyền `/luong/cau-hinh:sua`). Trường `lamThem` (kiểu `CauHinhLamThem`, xem
+3. **Khai `soGioMoiNgay` và `lamThem` ở màn Cấu hình lương** — tab **"Làm thêm & quỹ
+   giờ"** (`/luong/cau-hinh-luong`, quyền `/luong/cau-hinh:sua`).
+
+   > **Đây là công tắc BẬT tính năng, và nó là công tắc TAY có chủ đích.** Tab này được
+   > bổ sung trong đợt vá review nhánh (IMPORTANT 6): trước đó runbook mô tả một thao
+   > tác không tồn tại — màn Cấu hình lương chưa hề có hai trường này
+   > (`grep -rn "lamThem\|soGioMoiNgay" fe/src` không ra gì), nên tenant nào đã từng
+   > chạy bảng lương trước P4.2a KHÔNG có đường nào bật được quỹ giờ.
+   >
+   > **CỐ Ý KHÔNG backfill kiểu `bhCongTy`** (`bang-luong.service.ts:64`, thêm ở P4.1
+   > cho đúng tình huống này). Backfill sẽ bật NGẦM tính năng cho mọi tenant ngay lúc
+   > deploy — mà bật nó nghĩa là **chặn nộp đơn nghỉ bù của TOÀN CÔNG TY** cho tới khi
+   > có đơn làm thêm đầu tiên được duyệt (xem bước 4). `bhCongTy` backfill được vì nó
+   > chỉ sửa một con số báo cáo chi phí; `lamThem` thì đổi hành vi nộp đơn của mọi
+   > nhân viên. Cái giá của lựa chọn này: HR phải chủ động vào bấm, deploy xong mà
+   > không ai bấm thì quỹ giờ đứng yên (đúng trạng thái an toàn, `tichTuDonOt()` chỉ
+   > log cảnh báo và bỏ qua).
+   >
+   > **Giới hạn còn lại:** tab này chỉ BẬT được, chưa TẮT được. Gỡ `lamThem` khỏi một
+   > bản ghi đã lưu cần `$unset` thẳng trên MongoDB — `CapNhatCauHinhLuongDto` không có
+   > đường diễn đạt "xoá trường này", và `capNhatCauHinh()` dùng `Object.assign` nên
+   > một `lamThem: undefined` gửi lên sẽ bị bỏ qua im lặng chứ không xoá.
+
+   Trường `lamThem` (kiểu `CauHinhLamThem`, xem
    `be/libs/entities/src/luong/luong.types.ts`) gồm:
    - `cheDoBu`: **chỉ `'chi_nghi_bu'` được hỗ trợ ở P4.2a** — ba chế độ còn lại
      (`chi_tien`, `nhan_vien_chon`, `nghi_bu_va_chenh`) bị DTO từ chối là "chưa được hỗ trợ"
@@ -284,10 +306,14 @@ xem "Báo HR trước" ở bước 4 dưới đây trước khi bật.
      số giờ của một ngày công, dùng quy đổi ngày↔giờ cho đơn nghỉ bù.
 
    Với công ty **đã có** bản ghi `CauHinhLuong` từ trước (đã từng mở màn Cấu hình lương /
-   chạy Tổng hợp lương trước khi P4.2a deploy), bản ghi đó **không có `lamThem`** — phải vào
-   màn Cấu hình lương điền và lưu tay. `QuyGio_Service.layCauHinh()` cố ý trả `null` (không
-   rơi về mặc định ngầm) khi `lamThem` rỗng, nên trước khi điền, `tichTuDonOt()` chỉ log
-   cảnh báo và bỏ qua — không tích quỹ cho bất kỳ đơn OT nào.
+   chạy Tổng hợp lương trước khi P4.2a deploy), bản ghi đó **không có `lamThem`** — mở tab
+   "Làm thêm & quỹ giờ", tab sẽ hiện cảnh báo "Công ty chưa bật quỹ giờ làm thêm" kèm nút
+   **"Bật quỹ giờ làm thêm"**. Nút đó chỉ điền sẵn giá trị mặc định (chế độ "chỉ nghỉ bù",
+   hệ số đúng sàn BLLĐ, không hết hạn, hết hạn thì quy ra tiền) vào form — **vẫn phải bấm
+   "Lưu cấu hình"** mới có hiệu lực, và sửa lại các giá trị trước khi lưu nếu công ty khai
+   khác. `QuyGio_Service.layCauHinh()` cố ý trả `null` (không rơi về mặc định ngầm) khi
+   `lamThem` rỗng, nên trước khi lưu, `tichTuDonOt()` chỉ log cảnh báo và bỏ qua — không
+   tích quỹ cho bất kỳ đơn OT nào.
 
    Với công ty **hoàn toàn mới** (chưa từng có bản ghi `CauHinhLuong`), lần đầu ai đó mở màn
    Cấu hình lương hoặc chạy Tổng hợp lương sau khi deploy, `CAU_HINH_LUONG_MAC_DINH`
@@ -296,7 +322,8 @@ xem "Báo HR trước" ở bước 4 dưới đây trước khi bật.
    khiHetHan: 'quy_ra_tien' }` — nghĩa là tính năng **coi như đã bật ngay từ đầu** cho công
    ty mới, không cần bước điền tay này. Bước 4 dưới đây vẫn áp dụng cho công ty mới y hệt.
 
-4. **⚠️ Báo HR TRƯỚC khi hoàn tất bước 3.** Từ thời điểm công ty có `lamThem` hợp lệ:
+4. **⚠️ Báo HR TRƯỚC khi hoàn tất bước 3 — BẮT BUỘC, không phải khuyến nghị.** Từ thời
+   điểm công ty có `lamThem` hợp lệ:
    - Đơn nghỉ bù (`nghi_bu`) **không còn tự do nộp** — nó trừ vào quỹ giờ và bị
      `ConflictException` (mã `QUY_GIO_KHONG_DU_SO_DU`) chặn ngay lúc nộp nếu không đủ số dư
      (xem `phanBoChoNghiBu()` trong `quy-gio.service.ts`, gọi từ `don-cham-cong.service.ts`).
@@ -316,9 +343,24 @@ biết khi vận hành lâu dài):
   `/cham-cong/quy-gio:sua`) — xem trước rồi đóng các quỹ đã quá `hanDung`, ghi sổ
   `quy_ra_tien`/`het_han` theo `khiHetHan`. Không tự chạy định kỳ (không có cron trong repo)
   — phải có người bấm/gọi tay, hoặc dựng job riêng nếu muốn tự động.
+
+  Xem trước trả **hai** danh sách: `seDong` (sẽ đóng) và `vuongCho` (quá hạn NHƯNG còn
+  `soGioDangChoDuyet` > 0 — tức còn một đơn nghỉ bù đang chờ giữ chỗ trong đó).
+  `dong-quy` **bỏ qua** nhóm `vuongCho` và trả `soQuyVuongCho` để người vận hành biết mình
+  vừa không đóng cái gì. Cách xử lý: duyệt hoặc từ chối đơn đang treo đó trước, rồi chạy
+  lại `dong-quy`. Đóng một quỹ còn giữ chỗ sẽ làm số giờ đang treo hoặc mất trắng hoặc
+  được trả chồng lên số đã chốt — xem docblock `xemTruocDongQuy()`.
 - `GET /quy-gio/:employeeId/doi-soat` (quyền `/cham-cong/quy-gio:xem`) — dựng lại số dư từ
-  sổ `overtime_balance_entries` và so với `overtime_balances`, trả từng kỳ kèm `lech`. Dùng
-  khi nhân viên thắc mắc số giờ, hoặc sau rollout để xác nhận không lệch.
+  sổ `overtime_balance_entries` và so với `overtime_balances`, trả từng kỳ kèm `lech` và
+  `soGioDaDong`. Dùng khi nhân viên thắc mắc số giờ, hoặc sau rollout để xác nhận không
+  lệch.
+
+  **`lech` phải bằng 0 với mọi kỳ**, kể cả kỳ đã đóng. Con số giờ được lưu 2 chữ số thập
+  phân (0.01 giờ = 36 giây, xem `SO_LE_GIO` trong `luat-quy-gio.ts`) nên `lech` không bao
+  giờ ra dạng `1e-15`; thấy `lech` khác 0 nghĩa là có nơi ghi số dư mà quên ghi sổ — báo
+  lại, đừng tự sửa số dư (sửa là xoá mất bằng chứng của chính cái bug cần tìm).
+  `soGioDaDong` là phần đã được cộng ngược từ hai dòng `quy_ra_tien`/`het_han`: quỹ đóng
+  rồi vẫn giữ `soGioConLai` cho chặng lương P4.2b đọc, nên phải cộng lại mới so được.
 
 ## Rollout P3.9 — Bảng công tự sinh
 
