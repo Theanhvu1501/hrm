@@ -906,6 +906,15 @@ describe('DonChamCong_Service', () => {
         heSoOt: 1.5,
         loaiNgayOt: 'ngay_thuong',
       });
+      // (review round 2): sửa gioTu/gioDen/ngay trên OT còn cho_duyet giờ
+      // TÍNH LẠI snapshot qua tinhCacTruongSnapshot() — cần tra hồ sơ nhân
+      // viên (ngayLamViecTrongTuan) như create() vẫn cần.
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        ngayLamViecTrongTuan: T2_DEN_T6,
+      });
 
       const result = await service.update(DON_ID, { gioTu: '17:00' } as any);
 
@@ -2541,6 +2550,144 @@ describe('DonChamCong_Service — nghỉ bù trừ quỹ giờ (Task 7)', () => 
       ).rejects.toBeInstanceOf(ConflictException);
 
       expect(luu).toEqual({});
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Task 7b, review round 2 (IMPORTANT) — guard gap 2a chỉ CHẶN sửa
+  // gioTu/gioDen/ngay trên OT ĐÃ DUYỆT; sửa trên OT còn cho_duyet vẫn được
+  // PHÉP (đúng — quỹ chưa đụng gì). Nhưng cho phép sửa không đồng nghĩa
+  // snapshot soGioOt/heSoOt/loaiNgayOt được tính lại — trước bản vá này,
+  // update() chỉ Object.assign() giá trị gioTu/gioDen/ngay MỚI xuống trong
+  // khi snapshot vẫn đứng yên ở số create() tính lúc nộp. Duyệt sau đó
+  // tichTuDonOt() theo snapshot CŨ — lệch với số giờ HR vừa nhìn thấy trên
+  // màn hình lúc bấm duyệt. Vá bằng cách tính lại qua tinhCacTruongSnapshot()
+  // — cùng một nguồn luật với create(), không chép công thức lần hai.
+  // ────────────────────────────────────────────────────────────────────
+  describe('update() — PUT sửa OT còn cho_duyet phải tính lại snapshot (Task 7b, review round 2)', () => {
+    // T2→T6, không phải ngày lễ mặc định — cùng lịch làm việc dùng xuyên
+    // suốt file (T2_DEN_T6 ở describe ngoài cùng, lặp lại cục bộ ở đây vì
+    // describe này nằm trong khối dùng dungService(), không có T2_DEN_T6
+    // trong scope).
+    const T2_DEN_T6_CUC_BO = [1, 2, 3, 4, 5];
+
+    it('sửa gioTu 18:00→17:00 trên OT còn cho_duyet → soGioOt tính lại thành 3 (không phải 2) ngay trên kết quả update()', async () => {
+      const { service, luu } = await dungService({
+        nhanVien: {
+          _id: ID_NV1, employeeId: 'NV0001', hoTen: 'Nguyễn Văn A',
+          ngayLamViecTrongTuan: T2_DEN_T6_CUC_BO,
+        },
+        don: {
+          _id: '650000000000000000000601', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-07-22', gioTu: '18:00', gioDen: '20:00',
+          soGioOt: 2, heSoOt: 1.5, loaiNgayOt: 'ngay_thuong',
+          trangThai: 'cho_duyet',
+        },
+      });
+
+      const result = await service.update(
+        '650000000000000000000601',
+        { gioTu: '17:00' } as any,
+      );
+
+      expect(result.soGioOt).toBe(3);
+      expect(luu.soGioOt).toBe(3);
+    });
+
+    // Kịch bản chính xác từ review: sửa rồi duyệt phải tích ĐÚNG số giờ MỚI.
+    // Dùng dungService() vì mock findOne() trong đó trả lại CHÍNH tham chiếu
+    // `don` — update() mutate tại chỗ nên updateStatus() gọi sau đọc lại
+    // đúng snapshot đã tính lại, mô phỏng đúng luồng thật (PUT rồi mới bấm
+    // Duyệt trên cùng một bản ghi).
+    it('duyệt SAU KHI sửa giờ → tichTuDonOt() tích đúng 3 giờ (số MỚI), không phải 2 giờ (số CŨ)', async () => {
+      const quyGio = mockQuyGio();
+      const { service } = await dungService({
+        quyGio,
+        nhanVien: {
+          _id: ID_NV1, employeeId: 'NV0001', hoTen: 'Nguyễn Văn A',
+          ngayLamViecTrongTuan: T2_DEN_T6_CUC_BO,
+        },
+        don: {
+          _id: '650000000000000000000602', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-07-22', gioTu: '18:00', gioDen: '20:00',
+          soGioOt: 2, heSoOt: 1.5, loaiNgayOt: 'ngay_thuong',
+          trangThai: 'cho_duyet',
+        },
+      });
+
+      await service.update('650000000000000000000602', { gioTu: '17:00' } as any);
+      await service.updateStatus(
+        '650000000000000000000602', 'da_duyet', 'HR', { id: 'hr1' } as any,
+      );
+
+      expect(quyGio.tichTuDonOt).toHaveBeenCalledWith(
+        expect.objectContaining({ soGioOt: 3 }),
+      );
+    });
+
+    it('ngay chuyển sang ngày lễ khi sửa → loaiNgayOt/heSoOt tính lại theo ngày mới (ngay_le, 3.0)', async () => {
+      const NGAY_LE_MOI = '2026-07-23';
+      const ngayLe = {
+        timTheoNgay: jest
+          .fn()
+          .mockImplementation((ngay: string) =>
+            Promise.resolve(
+              ngay === NGAY_LE_MOI
+                ? { _id: 'hl1', tenNgayLe: 'Lễ test', tuNgay: NGAY_LE_MOI, denNgay: NGAY_LE_MOI }
+                : null,
+            ),
+          ),
+      };
+      const { service } = await dungService({
+        ngayLe,
+        nhanVien: {
+          _id: ID_NV1, employeeId: 'NV0001', hoTen: 'Nguyễn Văn A',
+          ngayLamViecTrongTuan: T2_DEN_T6_CUC_BO,
+        },
+        don: {
+          _id: '650000000000000000000603', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-07-22', gioTu: '18:00', gioDen: '20:00',
+          soGioOt: 2, heSoOt: 1.5, loaiNgayOt: 'ngay_thuong',
+          trangThai: 'cho_duyet',
+        },
+      });
+
+      const result = await service.update(
+        '650000000000000000000603',
+        { ngay: NGAY_LE_MOI } as any,
+      );
+
+      expect(result.loaiNgayOt).toBe('ngay_le');
+      expect(result.heSoOt).toBe(3.0);
+    });
+
+    // Không bị tính lại quá tay: sửa một trường KHÔNG nuôi công thức OT
+    // (lyDo) phải để soGioOt/heSoOt/loaiNgayOt đứng yên, và không được kéo
+    // theo một lượt hỏi NgayLe_Service/EmployeeRepo vô ích — chứng minh
+    // guard "chỉ tính lại khi cần" hoạt động đúng, không phải lúc nào cũng
+    // tính lại rồi tình cờ ra cùng số.
+    it('sửa lyDo (không nuôi công thức OT) trên OT còn cho_duyet → soGioOt/heSoOt/loaiNgayOt KHÔNG đổi, không hỏi NgayLe_Service', async () => {
+      const ngayLe = { timTheoNgay: jest.fn().mockResolvedValue(null) };
+      const { service } = await dungService({
+        ngayLe,
+        don: {
+          _id: '650000000000000000000604', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-07-22', gioTu: '18:00', gioDen: '20:00',
+          soGioOt: 2, heSoOt: 1.5, loaiNgayOt: 'ngay_thuong',
+          trangThai: 'cho_duyet', lyDo: 'cũ',
+        },
+      });
+
+      const result = await service.update(
+        '650000000000000000000604',
+        { lyDo: 'mới' } as any,
+      );
+
+      expect(result.lyDo).toBe('mới');
+      expect(result.soGioOt).toBe(2);
+      expect(result.heSoOt).toBe(1.5);
+      expect(result.loaiNgayOt).toBe('ngay_thuong');
+      expect(ngayLe.timTheoNgay).not.toHaveBeenCalled();
     });
   });
 });

@@ -1144,7 +1144,52 @@ export class DonChamCong_Service {
       });
     }
 
-    Object.assign(item, phanConLaiDuocPhepSua);
+    // Task 7b (review round 2, IMPORTANT): một đơn lam_them_gio CÒN cho_duyet
+    // được PHÉP sửa gioTu/gioDen/ngay qua PUT (guard ở trên chỉ chặn khi ĐÃ
+    // duyệt — laDonTruQuyGio() coi OT chưa duyệt là chưa đụng quỹ). Nhưng
+    // soGioOt/heSoOt/loaiNgayOt chỉ được tinhCacTruongSnapshot() tính MỘT LẦN
+    // ở create() — PUT trước đây ghi thẳng gioTu/gioDen/ngay mới xuống mà để
+    // snapshot cũ đứng yên. Duyệt sau đó tichTuDonOt() theo snapshot CŨ, lệch
+    // với số giờ HR vừa nhìn thấy trên màn hình lúc bấm duyệt — tranh chấp
+    // lương xuất hiện vài tháng sau mới lộ ra.
+    //
+    // Vá bằng TÍNH LẠI qua ĐÚNG một nguồn luật (tinhCacTruongSnapshot(), hàm
+    // create() cũng dùng) — không chép công thức tinhSoGioOt()/suyHeSoOt()
+    // lần hai ở đây. Chỉ tính lại khi THỰC SỰ cần (đơn (sẽ) là lam_them_gio
+    // VÀ một trong ba trường nuôi công thức đó đổi giá trị) — PUT chỉ sửa
+    // lyDo không nên trả thêm một lượt hỏi NgayLe_Service/EmployeeRepo vô ích.
+    const loaiDonSauKhiSua =
+      (phanConLaiDuocPhepSuaAny.loaiDon as string | undefined) ?? item.loaiDon;
+    const doiTruongNuoiCongThucOt = (
+      ['gioTu', 'gioDen', 'ngay'] as const
+    ).some(
+      (truong) =>
+        truong in phanConLaiDuocPhepSuaAny &&
+        itemAny[truong] !== phanConLaiDuocPhepSuaAny[truong],
+    );
+
+    let snapshotOtTinhLai: Partial<
+      Pick<AttendanceRequest, 'soGioOt' | 'heSoOt' | 'loaiNgayOt'>
+    > = {};
+    if (loaiDonSauKhiSua === 'lam_them_gio' && doiTruongNuoiCongThucOt) {
+      const emp = await this.findEmployee(item.employeeId);
+      const dtoChoTinhLai = {
+        ...item,
+        ...phanConLaiDuocPhepSua,
+      } as unknown as CreateDonChamCongDto;
+      const ketQua = await this.tinhCacTruongSnapshot(dtoChoTinhLai, emp);
+      snapshotOtTinhLai = {
+        soGioOt: ketQua.soGioOt,
+        heSoOt: ketQua.heSoOt,
+        loaiNgayOt: ketQua.loaiNgayOt,
+      };
+    }
+
+    // `snapshotOtTinhLai` ĐẶT SAU `phanConLaiDuocPhepSua` — dù DTO không có
+    // ba trường này (backend tự tính, không nhận từ client, xem doc-comment
+    // CreateDonChamCongDto), thứ tự này đảm bảo bản tính lại LUÔN thắng, kể
+    // cả nếu whitelist bị nới lỏng sau này.
+    Object.assign(item, phanConLaiDuocPhepSua, snapshotOtTinhLai);
     return this.repo.save(item);
   }
 
