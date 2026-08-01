@@ -13,8 +13,15 @@ describe('QuyGio_Controller', () => {
     layQuyCuaNhanVien: jest.fn().mockResolvedValue([]),
     dongQuyGio: jest
       .fn()
-      .mockResolvedValue({ soQuyDong: 0, soGioHetHan: 0, soGioChoTraTien: 0 }),
-    xemTruocDongQuy: jest.fn().mockResolvedValue([]),
+      .mockResolvedValue({
+        soQuyDong: 0,
+        soGioHetHan: 0,
+        soGioChoTraTien: 0,
+        soQuyVuongCho: 0,
+      }),
+    xemTruocDongQuy: jest
+      .fn()
+      .mockResolvedValue({ seDong: [], vuongCho: [] }),
     doiSoat: jest.fn().mockResolvedValue([]),
   };
   const nhanVien = {
@@ -145,7 +152,7 @@ describe('QuyGio_Controller', () => {
       const controller = await dungController();
       expect(await controller.xemTruocDongQuy('2026-02-01')).toEqual({
         success: true,
-        data: [],
+        data: { seDong: [], vuongCho: [] },
       });
     });
 
@@ -157,7 +164,12 @@ describe('QuyGio_Controller', () => {
         } as any),
       ).toEqual({
         success: true,
-        data: { soQuyDong: 0, soGioHetHan: 0, soGioChoTraTien: 0 },
+        data: {
+          soQuyDong: 0,
+          soGioHetHan: 0,
+          soGioChoTraTien: 0,
+          soQuyVuongCho: 0,
+        },
       });
     });
 

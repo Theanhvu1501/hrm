@@ -419,10 +419,87 @@ describe('QuyGio_Service — đóng quỹ hết hạn', () => {
 
     const ds = await service.xemTruocDongQuy('2026-02-01');
 
-    expect(ds).toEqual([
+    expect(ds.seDong).toEqual([
       expect.objectContaining({ balanceId: 'b1', kyTich: '2025-06', soGioConLai: 6 }),
     ]);
+    expect(ds.vuongCho).toEqual([]);
     expect(quyRepo.rows.find((r: any) => r._id === 'b1').trangThai).toBe('dang_hieu_luc');
+  });
+
+  /**
+   * (review nhánh, IMPORTANT 4) Quỹ quá hạn NHƯNG còn giữ chỗ sống.
+   *
+   * Kịch bản mất/nhân đôi giờ nếu cứ đóng: quỹ `soGioTich 12,
+   * soGioDangChoDuyet 4, soGioConLai 8` bị đóng và ghi sổ `-8`; đơn nghỉ bù
+   * đang chờ sau đó bị từ chối → `nhaCho()` chạy trên quỹ đã đóng →
+   * `tinhLaiConLai()` dựng `soGioConLai` về 12. Bốn giờ đó vô hình với
+   * `soDuKhaDung()` (chỉ nhìn `dang_hieu_luc`) và chưa từng có trong con số
+   * chốt lúc đóng.
+   */
+  describe('quỹ còn giữ chỗ sống thì KHÔNG đóng, chỉ cảnh báo', () => {
+    const quyVuongCho = () =>
+      quyHetHan({ soGioTich: 12, soGioDaDung: 0, soGioDangChoDuyet: 4, soGioConLai: 8 });
+
+    it('xem trước tách nó ra ô cảnh báo riêng, KHÔNG nằm trong danh sách sẽ đóng', async () => {
+      const { service } = await dungService({ quy: [quyVuongCho()] });
+
+      const ds = await service.xemTruocDongQuy('2026-02-01');
+
+      expect(ds.seDong).toEqual([]);
+      expect(ds.vuongCho).toEqual([
+        expect.objectContaining({
+          balanceId: 'b1',
+          kyTich: '2025-06',
+          soGioConLai: 8,
+          soGioDangChoDuyet: 4,
+        }),
+      ]);
+    });
+
+    it('dongQuyGio bỏ qua nó: không đổi trạng thái, không ghi sổ, báo số quỹ vướng', async () => {
+      const { service, quyRepo, soRepo } = await dungService({ quy: [quyVuongCho()] });
+
+      const tomTat = await service.dongQuyGio('2026-02-01', 'hr1');
+
+      expect(tomTat).toMatchObject({
+        soQuyDong: 0,
+        soGioHetHan: 0,
+        soQuyVuongCho: 1,
+      });
+      expect(quyRepo.rows[0].trangThai).toBe('dang_hieu_luc');
+      expect(soRepo.rows).toHaveLength(0);
+    });
+
+    it('HR nhả chỗ xong chạy lại thì đóng bình thường — cảnh báo là tạm, không phải khoá', async () => {
+      const { service, quyRepo, soRepo } = await dungService({ quy: [quyVuongCho()] });
+
+      await service.nhaCho(
+        'nv1',
+        [{ balanceId: 'b1', kyTich: '2025-06', soGio: 4 }],
+        'don-treo',
+        'hr1',
+      );
+      const tomTat = await service.dongQuyGio('2026-02-01', 'hr1');
+
+      expect(tomTat).toMatchObject({ soQuyDong: 1, soGioHetHan: 12, soQuyVuongCho: 0 });
+      expect(quyRepo.rows[0].trangThai).toBe('da_dong');
+      expect(soRepo.rows.some((d: any) => d.lyDo === 'quy_ra_tien' && d.soGio === -12)).toBe(true);
+    });
+
+    it('quỹ khác cùng lượt vẫn đóng bình thường — một quỹ vướng không chặn cả mẻ', async () => {
+      const { service, quyRepo } = await dungService({
+        quy: [
+          quyVuongCho(),
+          quyHetHan({ _id: 'b3', kyTich: '2025-07', hanDung: '2025-12-31' }),
+        ],
+      });
+
+      const tomTat = await service.dongQuyGio('2026-02-01', 'hr1');
+
+      expect(tomTat).toMatchObject({ soQuyDong: 1, soQuyVuongCho: 1 });
+      expect(quyRepo.rows.find((r: any) => r._id === 'b1').trangThai).toBe('dang_hieu_luc');
+      expect(quyRepo.rows.find((r: any) => r._id === 'b3').trangThai).toBe('da_dong');
+    });
   });
 
   it('đóng quỹ quá hạn và ghi sổ', async () => {

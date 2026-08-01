@@ -654,29 +654,64 @@ export class QuyGio_Service {
    *
    * Bảng xem trước là BẮT BUỘC, khác `generate()` của bảng công: thao tác này
    * phá dữ liệu người (giờ làm thêm đã tích), không phải tính lại phần của máy.
+   *
+   * ── Vì sao tách làm HAI danh sách (review nhánh, IMPORTANT 4)
+   * Bản cũ lọc mỗi `hanDung` + `trangThai`, không ngó tới
+   * `soGioDangChoDuyet`. Kịch bản mất giờ:
+   *   quỹ `soGioTich 12, soGioDangChoDuyet 4, soGioConLai 8` quá hạn → đóng,
+   *   ghi sổ `-8`. Đơn nghỉ bù đang chờ SAU ĐÓ bị từ chối → `nhaCho()` chạy
+   *   trên quỹ ĐÃ ĐÓNG → `tinhLaiConLai()` dựng `soGioConLai` về 12. Bốn giờ
+   *   đó vô hình với `soDuKhaDung()` (chỉ nhìn `dang_hieu_luc`) và chưa từng
+   *   có mặt trong con số chốt lúc đóng — sau này hoặc mất trắng, hoặc được
+   *   trả CHỒNG lên 8 giờ đã ghi.
+   *
+   * Không tự đoán hộ (đóng luôn 12, hay đóng 8 rồi kệ): cả hai đều là quyết
+   * định thay người dùng trên tiền thật của NLĐ. Đúng lý lẽ mà chính bảng
+   * xem trước này viện ra ("thao tác này phá dữ liệu người") — nêu ra cho HR,
+   * để HR duyệt/từ chối đơn treo trước, rồi chạy lại.
    */
-  async xemTruocDongQuy(den: string): Promise<
-    Array<{
+  async xemTruocDongQuy(den: string): Promise<{
+    seDong: Array<{
       balanceId: string;
       employeeId: string;
       employeeName?: string;
       kyTich: string;
       hanDung: string;
       soGioConLai: number;
-    }>
-  > {
+    }>;
+    vuongCho: Array<{
+      balanceId: string;
+      employeeId: string;
+      employeeName?: string;
+      kyTich: string;
+      hanDung: string;
+      soGioConLai: number;
+      soGioDangChoDuyet: number;
+    }>;
+  }> {
     const ds = await this.repo.find({ where: { trangThai: 'dang_hieu_luc' } as any });
+    const quaHan = ds.filter((q) => q.isActive !== false && q.hanDung < den);
 
-    return ds
-      .filter((q) => q.isActive !== false && q.hanDung < den)
-      .map((q) => ({
-        balanceId: String((q as any)._id),
-        employeeId: q.employeeId,
-        employeeName: q.employeeName,
-        kyTich: q.kyTich,
-        hanDung: q.hanDung,
-        soGioConLai: q.soGioConLai,
-      }));
+    const chung = (q: OvertimeBalance) => ({
+      balanceId: String((q as any)._id),
+      employeeId: q.employeeId,
+      employeeName: q.employeeName,
+      kyTich: q.kyTich,
+      hanDung: q.hanDung,
+      soGioConLai: lamTronGio(q.soGioConLai),
+    });
+
+    return {
+      seDong: quaHan
+        .filter((q) => q.soGioDangChoDuyet <= EPSILON_GIO)
+        .map(chung),
+      vuongCho: quaHan
+        .filter((q) => q.soGioDangChoDuyet > EPSILON_GIO)
+        .map((q) => ({
+          ...chung(q),
+          soGioDangChoDuyet: lamTronGio(q.soGioDangChoDuyet),
+        })),
+    };
   }
 
   /**
@@ -685,16 +720,29 @@ export class QuyGio_Service {
    * `quy_ra_tien` chỉ ĐÓNG và ghi sổ ở chặng này; tiền thật do P4.2b trả, dựa
    * vào `kyLuongTra` còn rỗng. Tách hai bước là cố ý: đóng quỹ phải chạy được
    * ngay cả khi công ty chưa bật phần lương.
+   *
+   * BỎ QUA quỹ còn giữ chỗ sống (`vuongCho`, review nhánh IMPORTANT 4 — xem
+   * lý do đầy đủ ở `xemTruocDongQuy()`) và trả số lượng ra ngoài, để nơi gọi
+   * biết mình VỪA KHÔNG đóng cái gì thay vì tưởng đã đóng sạch.
    */
   async dongQuyGio(
     den: string,
     nguoiThucHien: string,
-  ): Promise<{ soQuyDong: number; soGioHetHan: number; soGioChoTraTien: number }> {
+  ): Promise<{
+    soQuyDong: number;
+    soGioHetHan: number;
+    soGioChoTraTien: number;
+    soQuyVuongCho: number;
+  }> {
     const cauHinh = await this.layCauHinh();
     const quyRaTien = cauHinh?.khiHetHan !== 'huy_bo';
 
-    const sePhaiDong = await this.xemTruocDongQuy(den);
+    const { seDong: sePhaiDong, vuongCho } = await this.xemTruocDongQuy(den);
     let soGioHetHan = 0;
+    // Đếm số quỹ THỰC SỰ đã đóng chứ không `sePhaiDong.length`: vòng lặp có
+    // ba nhánh `continue` (quỹ biến mất, đã đóng bởi lượt khác, vừa có giữ
+    // chỗ mới) — báo số dự kiến thay vì số thật là nói dối người vận hành.
+    let soQuyDong = 0;
 
     for (const m of sePhaiDong) {
       const quy = await this.repo.findOne({
@@ -702,10 +750,16 @@ export class QuyGio_Service {
       });
       if (!quy || quy.trangThai !== 'dang_hieu_luc') continue;
 
-      const conLai = quy.soGioConLai;
+      // Đọc lại `soGioDangChoDuyet` NGAY TRƯỚC KHI ghi, không tin bản chụp
+      // của `xemTruocDongQuy()`: giữa lúc HR xem bảng xem trước và lúc bấm
+      // đóng, một đơn nghỉ bù mới hoàn toàn có thể vừa giữ chỗ vào quỹ này.
+      if (quy.soGioDangChoDuyet > EPSILON_GIO) continue;
+
+      const conLai = lamTronGio(quy.soGioConLai);
       quy.trangThai = 'da_dong';
       await this.repo.save(quy);
-      soGioHetHan += conLai;
+      soQuyDong += 1;
+      soGioHetHan = lamTronGio(soGioHetHan + conLai);
 
       if (conLai > 0) {
         await this.ghiSo({
@@ -723,9 +777,10 @@ export class QuyGio_Service {
     }
 
     return {
-      soQuyDong: sePhaiDong.length,
+      soQuyDong,
       soGioHetHan,
       soGioChoTraTien: quyRaTien ? soGioHetHan : 0,
+      soQuyVuongCho: vuongCho.length,
     };
   }
 
