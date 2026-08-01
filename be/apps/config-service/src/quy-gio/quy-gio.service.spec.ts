@@ -399,3 +399,113 @@ describe('QuyGio_Service — vòng đời giữ chỗ', () => {
     expect(soRepo.rows.reduce((t, r) => t + r.soGio, 0)).toBe(4);
   });
 });
+
+describe('QuyGio_Service — đóng quỹ hết hạn', () => {
+  // Factory, KHÔNG phải const dùng chung: `dongQuyGio` mutate thẳng object
+  // `quy` lấy từ `findOne()` (cùng nếp với `tichTuDonOt`/`apDung` phía trên)
+  // — nếu nhiều `it()` cùng share một object literal, mutate ở test này sẽ
+  // rò sang test chạy sau trong cùng describe (fake repo không clone khi save).
+  const quyHetHan = (over: any = {}) => ({
+    _id: 'b1', employeeId: 'nv1', employeeName: 'Hải', kyTich: '2025-06',
+    soGioTich: 8, soGioDaDung: 2, soGioDangChoDuyet: 0, soGioConLai: 6,
+    hanDung: '2025-12-31', trangThai: 'dang_hieu_luc', isActive: true,
+    ...over,
+  });
+  const quyConHan = (over: any = {}) =>
+    quyHetHan({ _id: 'b2', kyTich: '2026-01', hanDung: '2026-07-31', ...over });
+
+  it('xem trước liệt kê đúng quỹ sẽ đóng, KHÔNG ghi gì', async () => {
+    const { service, quyRepo } = await dungService({ quy: [quyHetHan(), quyConHan()] });
+
+    const ds = await service.xemTruocDongQuy('2026-02-01');
+
+    expect(ds).toEqual([
+      expect.objectContaining({ balanceId: 'b1', kyTich: '2025-06', soGioConLai: 6 }),
+    ]);
+    expect(quyRepo.rows.find((r: any) => r._id === 'b1').trangThai).toBe('dang_hieu_luc');
+  });
+
+  it('đóng quỹ quá hạn và ghi sổ', async () => {
+    const { service, quyRepo, soRepo } = await dungService({ quy: [quyHetHan(), quyConHan()] });
+
+    const tomTat = await service.dongQuyGio('2026-02-01', 'hr1');
+
+    expect(tomTat).toMatchObject({ soQuyDong: 1, soGioChoTraTien: 6 });
+    expect(quyRepo.rows.find((r: any) => r._id === 'b1').trangThai).toBe('da_dong');
+    expect(quyRepo.rows.find((r: any) => r._id === 'b2').trangThai).toBe('dang_hieu_luc');
+    expect(soRepo.rows[0]).toMatchObject({ lyDo: 'quy_ra_tien', soGio: -6 });
+  });
+
+  // khiHetHan='huy_bo' thì giờ mất hẳn — vẫn phải để lại vết trong sổ, nếu
+  // không nhân viên hỏi "sao tôi mất 6 giờ" là không ai trả lời được.
+  it('chế độ huy_bo ghi sổ het_han thay vì quy_ra_tien', async () => {
+    const { service, soRepo } = await dungService({
+      quy: [quyHetHan()],
+      cauHinh: {
+        ...cauHinhMacDinh,
+        lamThem: { ...cauHinhMacDinh.lamThem, khiHetHan: 'huy_bo' },
+      },
+    });
+
+    const tomTat = await service.dongQuyGio('2026-02-01', 'hr1');
+
+    expect(tomTat.soGioChoTraTien).toBe(0);
+    expect(soRepo.rows[0]).toMatchObject({ lyDo: 'het_han', soGio: -6 });
+  });
+
+  it('quỹ đã đóng rồi thì không đóng lại', async () => {
+    const { service } = await dungService({
+      quy: [quyHetHan({ trangThai: 'da_dong' })],
+    });
+
+    expect((await service.dongQuyGio('2026-02-01', 'hr1')).soQuyDong).toBe(0);
+  });
+
+  // Quỹ đã đóng hết giờ (soGioConLai = 0) trước khi hết hạn: vẫn phải chuyển
+  // trangThai sang da_dong (nếu không sẽ bị xemTruocDongQuy liệt kê lại mãi
+  // mỗi lần chạy), nhưng KHÔNG được ghi một dòng sổ -0 giờ vô nghĩa.
+  it('quỹ hết hạn nhưng đã dùng sạch (soGioConLai = 0) đóng sạch, không ghi sổ', async () => {
+    const { service, quyRepo, soRepo } = await dungService({
+      quy: [quyHetHan({ soGioDaDung: 8, soGioConLai: 0 })],
+    });
+
+    const tomTat = await service.dongQuyGio('2026-02-01', 'hr1');
+
+    expect(tomTat).toMatchObject({ soQuyDong: 1, soGioHetHan: 0, soGioChoTraTien: 0 });
+    expect(quyRepo.rows[0].trangThai).toBe('da_dong');
+    expect(soRepo.rows).toHaveLength(0);
+  });
+});
+
+describe('QuyGio_Service.doiSoat', () => {
+  it('báo lệch khi số dư không khớp sổ', async () => {
+    const { service } = await dungService({
+      quy: [{
+        _id: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGioTich: 12,
+        soGioDaDung: 0, soGioDangChoDuyet: 0, soGioConLai: 12,
+        hanDung: '2026-07-31', trangThai: 'dang_hieu_luc', isActive: true,
+      }],
+      so: [{ balanceId: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGio: 8, lyDo: 'duyet_don_ot', thoiDiem: '' }],
+    });
+
+    const kq = await service.doiSoat('nv1');
+
+    expect(kq).toEqual([{ kyTich: '2026-01', theoSo: 8, theoSoDu: 12, lech: 4 }]);
+  });
+
+  it('khớp thì lệch bằng 0', async () => {
+    const { service } = await dungService({
+      quy: [{
+        _id: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGioTich: 12,
+        soGioDaDung: 4, soGioDangChoDuyet: 0, soGioConLai: 8,
+        hanDung: '2026-07-31', trangThai: 'dang_hieu_luc', isActive: true,
+      }],
+      so: [
+        { balanceId: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGio: 12, lyDo: 'duyet_don_ot', thoiDiem: '' },
+        { balanceId: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGio: -4, lyDo: 'giu_cho_nghi_bu', thoiDiem: '' },
+      ],
+    });
+
+    expect((await service.doiSoat('nv1'))[0].lech).toBe(0);
+  });
+});

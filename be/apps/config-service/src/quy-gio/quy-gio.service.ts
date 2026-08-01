@@ -26,6 +26,7 @@ interface CauHinhLamThemApDung {
   cheDoBu: string;
   heSoTichQuy: HeSoTichQuy;
   soThangHanDung: number | null;
+  khiHetHan: string;
 }
 
 @Injectable()
@@ -58,6 +59,7 @@ export class QuyGio_Service {
       cheDoBu: ch.lamThem.cheDoBu,
       heSoTichQuy: ch.lamThem.heSoTichQuy,
       soThangHanDung: ch.lamThem.soThangHanDung ?? null,
+      khiHetHan: ch.lamThem.khiHetHan ?? 'quy_ra_tien',
     };
   }
 
@@ -616,5 +618,112 @@ export class QuyGio_Service {
       undefined,
       true,
     );
+  }
+
+  /**
+   * Danh sách quỹ SẼ bị đóng nếu chạy `dongQuyGio(den)` — không ghi gì.
+   *
+   * Bảng xem trước là BẮT BUỘC, khác `generate()` của bảng công: thao tác này
+   * phá dữ liệu người (giờ làm thêm đã tích), không phải tính lại phần của máy.
+   */
+  async xemTruocDongQuy(den: string): Promise<
+    Array<{
+      balanceId: string;
+      employeeId: string;
+      employeeName?: string;
+      kyTich: string;
+      hanDung: string;
+      soGioConLai: number;
+    }>
+  > {
+    const ds = await this.repo.find({ where: { trangThai: 'dang_hieu_luc' } as any });
+
+    return ds
+      .filter((q) => q.isActive !== false && q.hanDung < den)
+      .map((q) => ({
+        balanceId: String((q as any)._id),
+        employeeId: q.employeeId,
+        employeeName: q.employeeName,
+        kyTich: q.kyTich,
+        hanDung: q.hanDung,
+        soGioConLai: q.soGioConLai,
+      }));
+  }
+
+  /**
+   * Đóng mọi quỹ quá hạn tại ngày `den`.
+   *
+   * `quy_ra_tien` chỉ ĐÓNG và ghi sổ ở chặng này; tiền thật do P4.2b trả, dựa
+   * vào `kyLuongTra` còn rỗng. Tách hai bước là cố ý: đóng quỹ phải chạy được
+   * ngay cả khi công ty chưa bật phần lương.
+   */
+  async dongQuyGio(
+    den: string,
+    nguoiThucHien: string,
+  ): Promise<{ soQuyDong: number; soGioHetHan: number; soGioChoTraTien: number }> {
+    const cauHinh = await this.layCauHinh();
+    const quyRaTien = cauHinh?.khiHetHan !== 'huy_bo';
+
+    const sePhaiDong = await this.xemTruocDongQuy(den);
+    let soGioHetHan = 0;
+
+    for (const m of sePhaiDong) {
+      const quy = await this.repo.findOne({
+        where: { employeeId: m.employeeId, kyTich: m.kyTich } as any,
+      });
+      if (!quy || quy.trangThai !== 'dang_hieu_luc') continue;
+
+      const conLai = quy.soGioConLai;
+      quy.trangThai = 'da_dong';
+      await this.repo.save(quy);
+      soGioHetHan += conLai;
+
+      if (conLai > 0) {
+        await this.ghiSo({
+          balanceId: m.balanceId,
+          employeeId: m.employeeId,
+          kyTich: m.kyTich,
+          soGio: -conLai,
+          lyDo: quyRaTien ? 'quy_ra_tien' : 'het_han',
+          nguoiThucHien,
+          ghiChu: quyRaTien
+            ? 'Chờ kỳ lương kế tiếp trả tiền'
+            : 'Hết hạn, không quy ra tiền theo cấu hình công ty',
+        });
+      }
+    }
+
+    return {
+      soQuyDong: sePhaiDong.length,
+      soGioHetHan,
+      soGioChoTraTien: quyRaTien ? soGioHetHan : 0,
+    };
+  }
+
+  /**
+   * Dựng lại số dư từ SỔ và so với bản tổng hợp.
+   *
+   * Sổ là nguồn sự thật; `overtime_balances` chỉ là bản tổng hợp cho nhanh.
+   * Lệch nghĩa là có nơi nào đó ghi số dư mà quên ghi sổ — báo cáo, KHÔNG tự
+   * sửa: tự sửa là xoá mất bằng chứng của chính cái bug cần tìm.
+   */
+  async doiSoat(
+    employeeId: string,
+  ): Promise<Array<{ kyTich: string; theoSo: number; theoSoDu: number; lech: number }>> {
+    const quy = await this.layQuyCuaNhanVien(employeeId);
+    const so = await this.soRepo.find({ where: { employeeId } as any });
+
+    return quy.map((q) => {
+      const theoSo = so
+        .filter((d) => d.kyTich === q.kyTich)
+        .reduce((t, d) => t + d.soGio, 0);
+
+      return {
+        kyTich: q.kyTich,
+        theoSo,
+        theoSoDu: q.soGioConLai,
+        lech: q.soGioConLai - theoSo,
+      };
+    });
   }
 }

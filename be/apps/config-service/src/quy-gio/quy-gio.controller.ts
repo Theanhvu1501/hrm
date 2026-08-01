@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
+  Post,
   Query,
   Req,
   UnauthorizedException,
@@ -10,6 +12,7 @@ import {
 import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 import { QuyGio_Service } from './quy-gio.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
+import { DongQuyGioDto } from './dto';
 
 /**
  * Hai nhóm route như mọi module chấm công khác trong repo:
@@ -21,8 +24,8 @@ import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
  * thứ không ai có trên production) và không dùng `@Roles(...)` (`RoleGuard`
  * trong repo hiện `return true`).
  *
- * Task 9 CHỈ dựng ba route đọc (danh sách HR, số dư của tôi, số dư theo
- * nhân viên) — route đóng quỹ/đối soát thuộc Task 12, không dựng ở đây.
+ * Task 9 dựng ba route đọc (danh sách HR, số dư của tôi, số dư theo nhân
+ * viên). Task 12 bồi thêm xem-trước/đóng quỹ hết hạn và đối soát sổ.
  */
 @Controller('quy-gio')
 @UseGuards(JwtGuard)
@@ -67,5 +70,31 @@ export class QuyGio_Controller {
   @Permissions('/cham-cong/quy-gio:xem')
   async soDu(@Param('employeeId') employeeId: string) {
     return this.quyGio_Service.soDuKhaDung(employeeId, this.homNay());
+  }
+
+  /** Xem trước quỹ sẽ bị đóng nếu chạy `dong-quy` — không ghi gì. */
+  @Get('xem-truoc-dong-quy')
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/quy-gio:sua')
+  async xemTruocDongQuy(@Query('den') den?: string) {
+    return this.quyGio_Service.xemTruocDongQuy(den || this.homNay());
+  }
+
+  @Post('dong-quy')
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/quy-gio:sua')
+  async dongQuy(@Body() body: DongQuyGioDto, @Req() req: any) {
+    const id = req.user?.id;
+    // Sổ biến động dựng lên để TRUY VẾT ai làm gì — actor rỗng là lỗ hổng
+    // audit trail, không phải giá trị hợp lệ để mặc định vào.
+    if (!id) throw new UnauthorizedException('Token thiếu định danh người dùng');
+    return this.quyGio_Service.dongQuyGio(body.den || this.homNay(), String(id));
+  }
+
+  @Get(':employeeId/doi-soat')
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/quy-gio:xem')
+  async doiSoat(@Param('employeeId') employeeId: string) {
+    return this.quyGio_Service.doiSoat(employeeId);
   }
 }
