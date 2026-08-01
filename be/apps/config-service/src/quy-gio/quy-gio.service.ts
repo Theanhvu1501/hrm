@@ -7,11 +7,13 @@ import {
   OvertimeBalanceEntry,
 } from '@app/entities';
 import {
+  EPSILON_GIO,
   HeSoTichQuy,
   PhanBoQuyGio,
   QuyKhaDung,
   gioTichTuDonOt,
   hanDungCuaKy,
+  lamTronGio,
   phanBoFifo,
 } from './luat-quy-gio';
 
@@ -81,14 +83,32 @@ export class QuyGio_Service {
     await this.soRepo.save(
       this.soRepo.create({
         ...input,
+        // Sổ append-only là NGUỒN SỰ THẬT của `doiSoat()` — nếu số dư lưu 2
+        // chữ số mà sổ lưu số thô, hai bên lệch nhau theo đúng phần đã làm
+        // tròn và `doiSoat()` báo lệch trên quỹ hoàn toàn đúng.
+        soGio: lamTronGio(input.soGio),
         thoiDiem: new Date().toISOString(),
       } as Partial<OvertimeBalanceEntry>),
     );
   }
 
+  /**
+   * ĐIỂM CHẶN LÀM TRÒN DUY NHẤT của số dư (review nhánh, IMPORTANT 2).
+   *
+   * Mọi đường ghi số dư trong service này đều đi qua đây trước khi `save()`
+   * (`tichTuDonOt`, `thuHoiTichTuDonOt`, và cả bốn hàm vòng đời nghỉ bù qua
+   * `apDung()`) — nên làm tròn ở đúng một chỗ này là đủ để không có con số
+   * giờ thô nào chạm tới DB. Làm tròn cả ba trường cộng dồn chứ không chỉ
+   * `soGioConLai`: `soGioTich += 6.999999…` lặp lại nhiều tháng sẽ trôi xa
+   * dần, và `soGioTich` mới là con số HR đọc trên màn quỹ giờ.
+   */
   private tinhLaiConLai(quy: OvertimeBalance): void {
-    quy.soGioConLai =
-      quy.soGioTich - quy.soGioDaDung - quy.soGioDangChoDuyet;
+    quy.soGioTich = lamTronGio(quy.soGioTich);
+    quy.soGioDaDung = lamTronGio(quy.soGioDaDung);
+    quy.soGioDangChoDuyet = lamTronGio(quy.soGioDangChoDuyet);
+    quy.soGioConLai = lamTronGio(
+      quy.soGioTich - quy.soGioDaDung - quy.soGioDangChoDuyet,
+    );
   }
 
   /**
@@ -236,10 +256,13 @@ export class QuyGio_Service {
       });
       if (!quy) continue;
 
-      if (quy.soGioConLai < rong) {
+      // `- EPSILON_GIO`: số dư và số cần thu hồi đều đã làm tròn 2 chữ số,
+      // nhưng phép trừ ngay trước đó vẫn sinh dư nhị phân — so `<` trần trụi
+      // sẽ chặn NHẦM một lần thu hồi hoàn toàn hợp lệ (còn đúng bằng cần).
+      if (quy.soGioConLai < rong - EPSILON_GIO) {
         throw new ConflictException({
           code: MA_LOI_QUY_GIO.DA_TIEU_KHONG_THU_HOI_DUOC,
-          message: `Giờ tích từ đơn này đã được nghỉ bù mất một phần (kỳ ${kyTich} chỉ còn ${quy.soGioConLai} giờ, cần thu hồi ${rong}). Xử lý tay trước khi hủy đơn.`,
+          message: `Giờ tích từ đơn này đã được nghỉ bù mất một phần (kỳ ${kyTich} chỉ còn ${lamTronGio(quy.soGioConLai)} giờ, cần thu hồi ${lamTronGio(rong)}). Xử lý tay trước khi hủy đơn.`,
         });
       }
 
@@ -282,7 +305,10 @@ export class QuyGio_Service {
       (q) =>
         q.trangThai === 'dang_hieu_luc' &&
         q.hanDung >= den &&
-        q.soGioConLai > 0,
+        // `> EPSILON_GIO` chứ không `> 0`: một quỹ đã tiêu hết nhưng còn dư
+        // nhị phân 4e-16 vẫn "còn giờ" theo `> 0`, và sẽ lọt vào cả số dư
+        // hiển thị lẫn danh sách FIFO như một kỳ có thể tiêu được.
+        q.soGioConLai > EPSILON_GIO,
     );
   }
 
@@ -297,11 +323,13 @@ export class QuyGio_Service {
     const ds = await this.quyDuDieuKienDung(employeeId, den);
 
     return {
-      soGioConLai: ds.reduce((t, q) => t + q.soGioConLai, 0),
+      // Đây là con số ĐI THẲNG RA MÀN HÌNH ("Bạn còn X giờ nghỉ bù") — tổng
+      // của nhiều kỳ nên phải làm tròn LẠI sau khi cộng, dù từng kỳ đã tròn.
+      soGioConLai: lamTronGio(ds.reduce((t, q) => t + q.soGioConLai, 0)),
       theoKy: ds.map((q) => ({
         kyTich: q.kyTich,
         hanDung: q.hanDung,
-        soGioConLai: q.soGioConLai,
+        soGioConLai: lamTronGio(q.soGioConLai),
       })),
     };
   }
@@ -317,7 +345,7 @@ export class QuyGio_Service {
       balanceId: String((q as any)._id),
       kyTich: q.kyTich,
       hanDung: q.hanDung,
-      soGioConLai: q.soGioConLai,
+      soGioConLai: lamTronGio(q.soGioConLai),
     }));
   }
 
@@ -333,18 +361,19 @@ export class QuyGio_Service {
     den: string,
   ): Promise<PhanBoQuyGio[]> {
     const khaDung = await this.quyKhaDung(employeeId, den);
-    const conLai = khaDung.reduce((t, q) => t + q.soGioConLai, 0);
+    const conLai = lamTronGio(khaDung.reduce((t, q) => t + q.soGioConLai, 0));
+    const can = lamTronGio(soGioCan);
 
     try {
-      return phanBoFifo(khaDung, soGioCan);
+      return phanBoFifo(khaDung, can);
     } catch {
       throw new ConflictException({
         code: MA_LOI_QUY_GIO.KHONG_DU_SO_DU,
         message:
-          conLai <= 0
+          conLai <= EPSILON_GIO
             ? 'Bạn chưa có giờ làm thêm nào để nghỉ bù.'
-            : `Quỹ giờ làm thêm không đủ: cần ${soGioCan} giờ, chỉ còn ${conLai} giờ.`,
-        soGioCan,
+            : `Quỹ giờ làm thêm không đủ: cần ${can} giờ, chỉ còn ${conLai} giờ.`,
+        soGioCan: can,
         soGioConLai: conLai,
       });
     }
@@ -706,23 +735,58 @@ export class QuyGio_Service {
    * Sổ là nguồn sự thật; `overtime_balances` chỉ là bản tổng hợp cho nhanh.
    * Lệch nghĩa là có nơi nào đó ghi số dư mà quên ghi sổ — báo cáo, KHÔNG tự
    * sửa: tự sửa là xoá mất bằng chứng của chính cái bug cần tìm.
+   *
+   * ── Vì sao phải BỎ dòng đóng quỹ ra khi dựng lại (review nhánh, IMPORTANT 3)
+   * `dongQuyGio()` ghi một dòng sổ `-conLai` nhưng CỐ Ý giữ nguyên
+   * `soGioConLai` (chặng lương P4.2b còn phải đọc số đó để trả tiền). Nên
+   * với một quỹ ĐÃ ĐÓNG ĐÚNG, tổng sổ về 0 trong khi `theoSoDu` vẫn giữ số
+   * giờ còn lại: `lech = soGioConLai` VĨNH VIỄN, trên MỌI nhân viên từng có
+   * giờ hết hạn. `ops/README.md` bảo vận hành chạy đối soát sau rollout để
+   * xác nhận không lệch — một cột lệch toàn số khác 0 làm đúng cái việc đó
+   * trở nên vô nghĩa, và nhấn chìm một sai lệch THẬT nếu có.
+   *
+   * Cách vá KHÔNG phải là bỏ qua quỹ đã đóng (thế thì mất luôn khả năng phát
+   * hiện sai lệch thật trên chúng), mà là dựng lại số dư theo đúng ĐỊNH
+   * NGHĨA mà `soGioConLai` đang mang: "số giờ còn lại TRƯỚC bước đóng". Tức
+   * cộng ngược phần đã ghi bởi hai lý do đóng quỹ (`quy_ra_tien`/`het_han`,
+   * đều là số ÂM) vào tổng sổ. Quỹ chưa đóng không có dòng nào loại này nên
+   * công thức thoái về đúng công thức cũ.
+   *
+   * `soGioDaDong` được trả ra ngoài để người đối soát nhìn thấy phần đã cộng
+   * ngược, thay vì phải tin một phép trừ vô hình.
    */
-  async doiSoat(
-    employeeId: string,
-  ): Promise<Array<{ kyTich: string; theoSo: number; theoSoDu: number; lech: number }>> {
+  async doiSoat(employeeId: string): Promise<
+    Array<{
+      kyTich: string;
+      theoSo: number;
+      theoSoDu: number;
+      lech: number;
+      soGioDaDong: number;
+    }>
+  > {
     const quy = await this.layQuyCuaNhanVien(employeeId);
     const so = await this.soRepo.find({ where: { employeeId } as any });
 
     return quy.map((q) => {
-      const theoSo = so
-        .filter((d) => d.kyTich === q.kyTich)
-        .reduce((t, d) => t + d.soGio, 0);
+      const cuaKy = so.filter((d) => d.kyTich === q.kyTich);
+      const tongSo = cuaKy.reduce((t, d) => t + d.soGio, 0);
+      // Âm (dongQuyGio ghi `-conLai`); đảo dấu để ra số giờ đã bị đóng.
+      const soGioDaDong = lamTronGio(
+        -cuaKy
+          .filter((d) => d.lyDo === 'quy_ra_tien' || d.lyDo === 'het_han')
+          .reduce((t, d) => t + d.soGio, 0),
+      );
+      const theoSo = lamTronGio(tongSo + soGioDaDong);
 
       return {
         kyTich: q.kyTich,
         theoSo,
-        theoSoDu: q.soGioConLai,
-        lech: q.soGioConLai - theoSo,
+        theoSoDu: lamTronGio(q.soGioConLai),
+        // Làm tròn CẢ hiệu, không chỉ hai vế: hai số đã tròn trừ nhau vẫn ra
+        // 1e-15 (0.1 - 0.3 + 0.2 …), và một cột "lệch" toàn 1e-15 là đúng
+        // thứ nhiễu mà IMPORTANT 2 đã đo được trên ~22% quỹ HOÀN TOÀN ĐÚNG.
+        lech: lamTronGio(q.soGioConLai - theoSo),
+        soGioDaDong,
       };
     });
   }

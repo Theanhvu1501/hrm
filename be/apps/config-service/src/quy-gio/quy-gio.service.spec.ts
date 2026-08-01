@@ -490,7 +490,9 @@ describe('QuyGio_Service.doiSoat', () => {
 
     const kq = await service.doiSoat('nv1');
 
-    expect(kq).toEqual([{ kyTich: '2026-01', theoSo: 8, theoSoDu: 12, lech: 4 }]);
+    expect(kq).toEqual([
+      { kyTich: '2026-01', theoSo: 8, theoSoDu: 12, lech: 4, soGioDaDong: 0 },
+    ]);
   });
 
   it('khớp thì lệch bằng 0', async () => {
@@ -507,5 +509,170 @@ describe('QuyGio_Service.doiSoat', () => {
     });
 
     expect((await service.doiSoat('nv1'))[0].lech).toBe(0);
+  });
+});
+
+/**
+ * (review nhánh, IMPORTANT 2) Làm tròn ở BIÊN. Mọi con số ở đây đều là số
+ * sinh dư nhị phân thật: 4h10' × hệ số ngày nghỉ 2.0 = 8.333333333333334 —
+ * đúng con số đã lọt ra tới câu "Bạn còn 8.333333333333334 giờ nghỉ bù".
+ */
+describe('QuyGio_Service — làm tròn giờ ở biên', () => {
+  const BON_GIO_MUOI = 250 / 60; // 4h10'
+
+  it('tichTuDonOt lưu số dư 2 chữ số, không phải 8.333333333333334', async () => {
+    const { service, quyRepo, soRepo } = await dungService();
+
+    await service.tichTuDonOt(
+      donOt({ soGioOt: BON_GIO_MUOI, loaiNgayOt: 'ngay_nghi' }),
+    );
+
+    expect(quyRepo.rows[0].soGioTich).toBe(8.33);
+    expect(quyRepo.rows[0].soGioConLai).toBe(8.33);
+    // Sổ là nguồn sự thật của doiSoat() — nó phải tròn Y HỆT số dư, nếu
+    // không thì chính doiSoat() sinh ra lệch giả.
+    expect(soRepo.rows[0].soGio).toBe(8.33);
+  });
+
+  it('cộng dồn nhiều đơn lẻ vẫn giữ 2 chữ số, không trôi dần', async () => {
+    const { service, quyRepo } = await dungService();
+
+    for (const requestId of ['d1', 'd2', 'd3']) {
+      await service.tichTuDonOt(
+        donOt({ requestId, soGioOt: BON_GIO_MUOI, loaiNgayOt: 'ngay_nghi' }),
+      );
+    }
+
+    // 8.33 × 3. Không làm tròn, ba lần `+=` cho 24.999999999999996.
+    expect(quyRepo.rows[0].soGioTich).toBe(24.99);
+  });
+
+  it('soDuKhaDung trả số hiển thị được cho người dùng', async () => {
+    const { service } = await dungService();
+    await service.tichTuDonOt(
+      donOt({ soGioOt: BON_GIO_MUOI, loaiNgayOt: 'ngay_nghi' }),
+    );
+
+    const soDu = await service.soDuKhaDung('nv1', '2026-02-01');
+
+    expect(soDu.soGioConLai).toBe(8.33);
+    expect(soDu.theoKy[0].soGioConLai).toBe(8.33);
+  });
+
+  /**
+   * Đúng kịch bản mà review nhánh đo được: đơn nghỉ bù xin ĐÚNG số dư đang
+   * hiển thị, trải qua ≥2 kỳ tích, bị từ chối với câu "cần X giờ, chỉ còn X
+   * giờ". Ba kỳ 8.33/8.33/8.34 = 25.00 hiển thị.
+   */
+  it('phanBoChoNghiBu KHÔNG từ chối yêu cầu đúng bằng số dư đang hiển thị (3 kỳ)', async () => {
+    const quy = [8.33, 8.33, 8.34].map((soGio, i) => ({
+      _id: `b${i + 1}`,
+      employeeId: 'nv1',
+      kyTich: `2026-0${i + 1}`,
+      soGioTich: soGio,
+      soGioDaDung: 0,
+      soGioDangChoDuyet: 0,
+      soGioConLai: soGio,
+      hanDung: `2026-1${i}-31`,
+      trangThai: 'dang_hieu_luc',
+      isActive: true,
+    }));
+    const { service } = await dungService({ quy });
+
+    const soDu = await service.soDuKhaDung('nv1', '2026-02-01');
+    expect(soDu.soGioConLai).toBe(25);
+
+    const phanBo = await service.phanBoChoNghiBu(
+      'nv1',
+      soDu.soGioConLai,
+      '2026-02-01',
+    );
+    expect(phanBo.map((p) => p.soGio)).toEqual([8.33, 8.33, 8.34]);
+  });
+});
+
+/**
+ * (review nhánh, IMPORTANT 3) `dongQuyGio()` ghi sổ `-conLai` nhưng CỐ Ý giữ
+ * nguyên `soGioConLai` (chặng lương P4.2b còn đọc). Trước bản vá, mọi quỹ
+ * ĐÃ ĐÓNG ĐÚNG đều báo `lech = soGioConLai` VĨNH VIỄN — và `ops/README.md`
+ * bảo vận hành chạy đúng lệnh này sau rollout để xác nhận không lệch.
+ */
+describe('QuyGio_Service.doiSoat — quỹ đã đóng', () => {
+  async function dungQuyDaTieuMotPhan() {
+    const { service, quyRepo, soRepo } = await dungService({
+      quy: [{
+        _id: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGioTich: 12,
+        soGioDaDung: 4, soGioDangChoDuyet: 0, soGioConLai: 8,
+        hanDung: '2026-01-31', trangThai: 'dang_hieu_luc', isActive: true,
+      }],
+      so: [
+        { balanceId: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGio: 12, lyDo: 'duyet_don_ot', thoiDiem: '' },
+        { balanceId: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGio: -4, lyDo: 'giu_cho_nghi_bu', thoiDiem: '' },
+        { balanceId: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGio: 0, lyDo: 'duyet_nghi_bu', thoiDiem: '' },
+      ],
+    });
+    return { service, quyRepo, soRepo };
+  }
+
+  it('đóng quỹ xong đối soát vẫn ra lech = 0', async () => {
+    const { service, quyRepo, soRepo } = await dungQuyDaTieuMotPhan();
+
+    // Trước khi đóng: đã khớp.
+    expect((await service.doiSoat('nv1'))[0].lech).toBe(0);
+
+    await service.dongQuyGio('2026-02-01', 'hr1');
+
+    expect(quyRepo.rows[0].trangThai).toBe('da_dong');
+    // Sổ đã có thêm dòng -8 (quy_ra_tien) trong khi soGioConLai vẫn là 8.
+    expect(soRepo.rows.some((d: any) => d.lyDo === 'quy_ra_tien' && d.soGio === -8)).toBe(true);
+
+    const kq = await service.doiSoat('nv1');
+    expect(kq[0]).toMatchObject({
+      kyTich: '2026-01',
+      theoSo: 8,
+      theoSoDu: 8,
+      lech: 0,
+      soGioDaDong: 8,
+    });
+  });
+
+  it('vẫn phát hiện được LỆCH THẬT trên quỹ đã đóng', async () => {
+    const { service, quyRepo } = await dungQuyDaTieuMotPhan();
+    await service.dongQuyGio('2026-02-01', 'hr1');
+
+    // Mô phỏng đúng lớp bug mà doiSoat() sinh ra để bắt: có nơi nào đó ghi
+    // số dư mà quên ghi sổ.
+    quyRepo.rows[0].soGioConLai = 11;
+
+    expect((await service.doiSoat('nv1'))[0].lech).toBe(3);
+  });
+
+  it('quỹ huy_bo (không quy ra tiền) cũng đối soát về 0', async () => {
+    const { service } = await dungService({
+      cauHinh: {
+        soGioMoiNgay: 8,
+        lamThem: {
+          cheDoBu: 'chi_nghi_bu',
+          heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 },
+          soThangHanDung: 6,
+          khiHetHan: 'huy_bo',
+        },
+      },
+      quy: [{
+        _id: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGioTich: 6,
+        soGioDaDung: 0, soGioDangChoDuyet: 0, soGioConLai: 6,
+        hanDung: '2026-01-31', trangThai: 'dang_hieu_luc', isActive: true,
+      }],
+      so: [
+        { balanceId: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGio: 6, lyDo: 'duyet_don_ot', thoiDiem: '' },
+      ],
+    });
+
+    await service.dongQuyGio('2026-02-01', 'hr1');
+
+    expect((await service.doiSoat('nv1'))[0]).toMatchObject({
+      lech: 0,
+      soGioDaDong: 6,
+    });
   });
 });

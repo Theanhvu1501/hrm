@@ -14,6 +14,7 @@ import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 import { QuyGio_Service } from '../quy-gio/quy-gio.service';
 import { suyHeSoOt, tinhSoGioOt, tinhSoNgayNghi } from './luat-don';
+import { lamTronGio } from '../quy-gio/luat-quy-gio';
 
 // Khoảng nghỉ vượt quá ngần này thì từ chối luôn thay vì âm thầm quét hàng
 // nghìn ngày lễ — một đơn nghỉ nhiều ngày là chuyện thường, nhưng vài chục
@@ -256,9 +257,17 @@ export class DonChamCong_Service {
         // TRƯỚC khi hỏi soGioMoiNgay() — nhánh này không cần tới nó, hỏi
         // trước rồi mới rẽ nhánh là một lượt đọc cấu hình lãng phí trên MỌI
         // đơn theo_gio (review: Minor, đã sửa).
+        //
+        // `lamTronGio()` (review nhánh, IMPORTANT 2): `tinhSoGioOt()` trả
+        // `(phutDen - phutTu)/60` nên mọi khoảng không rơi đúng mốc nửa giờ
+        // đều là phân số nhị phân vô hạn (2h20' = 2.3333…). `soGioNghiBu` là
+        // con số đi thẳng vào `phanBoChoNghiBu()` để TRỪ QUỸ và được lưu lại
+        // trên đơn — làm tròn ở ĐÂY, tại biên sinh ra nó, là cách duy nhất
+        // để phía quỹ không phải đoán xem con số mình nhận đã sạch chưa.
         if (dto.kieuNghi === 'theo_gio') {
-          const soGioNghiBu =
-            dto.gioTu && dto.gioDen ? tinhSoGioOt(dto.gioTu, dto.gioDen) : 0;
+          const soGioNghiBu = lamTronGio(
+            dto.gioTu && dto.gioDen ? tinhSoGioOt(dto.gioTu, dto.gioDen) : 0,
+          );
           return { soGioNghiBu };
         }
 
@@ -274,7 +283,12 @@ export class DonChamCong_Service {
           ngayLeTrongKhoang,
           ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
         });
-        return { soNgayNghi: soNgay, soGioNghiBu: soNgay * soGioMoiNgay };
+        return {
+          soNgayNghi: soNgay,
+          // Nửa buổi × soGioMoiNgay lẻ (vd 7.5) cũng sinh số lẻ — cùng biên
+          // làm tròn với nhánh theo_gio ở trên.
+          soGioNghiBu: lamTronGio(soNgay * soGioMoiNgay),
+        };
       }
 
       const soNgayNghi = tinhSoNgayNghi({
