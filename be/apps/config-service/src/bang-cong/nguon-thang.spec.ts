@@ -157,6 +157,34 @@ describe('gomTheoNgay', () => {
   });
 });
 
+describe('gomTheoNgay — nghỉ bù theo giờ', () => {
+  const donNghiBu = (over: any = {}) => ({
+    employeeId: 'nv1', loaiDon: 'nghi_bu', trangThai: 'da_duyet',
+    ngay: '2026-02-10', isActive: true, ...over,
+  });
+
+  // Nghỉ bù lẻ giờ KHÔNG được sinh ký hiệu: người đó vẫn đi làm hôm ấy, chỉ
+  // về sớm vài tiếng, và quỹ giờ đã gánh phần vắng mặt. Sinh NB là biến một
+  // ngày công thật thành ngày nghỉ.
+  it('bỏ qua đơn nghỉ bù theo_gio', () => {
+    const map = gomTheoNgay([], [donNghiBu({ kieuNghi: 'theo_gio', gioTu: '15:00', gioDen: '17:00' })], '2026-02');
+    expect(map.get('nv1')?.get('2026-02-10')?.donNghi).toBeFalsy();
+  });
+
+  it('vẫn nhận đơn nghỉ bù theo_ngay', () => {
+    const map = gomTheoNgay([], [donNghiBu({ kieuNghi: 'theo_ngay', denNgay: '2026-02-10', buoi: 'ca_ngay' })], '2026-02');
+    expect(map.get('nv1')?.get('2026-02-10')?.donNghi).toMatchObject({ loaiDon: 'nghi_bu' });
+  });
+
+  // Đơn cũ tạo trước P4.2a không có kieuNghi — phải giữ nguyên hành vi cũ,
+  // nếu không lần Tổng hợp đầu tiên sau deploy sẽ xoá trắng ký hiệu NB của
+  // mọi đơn nghỉ bù lịch sử.
+  it('đơn cũ thiếu kieuNghi vẫn được coi là theo ngày', () => {
+    const map = gomTheoNgay([], [donNghiBu({ denNgay: '2026-02-10', buoi: 'ca_ngay' })], '2026-02');
+    expect(map.get('nv1')?.get('2026-02-10')?.donNghi).toMatchObject({ loaiDon: 'nghi_bu' });
+  });
+});
+
 describe('demMuonSom', () => {
   it('đếm số LƯỢT đi muộn và về sớm theo nhân viên', () => {
     const map = demMuonSom([
