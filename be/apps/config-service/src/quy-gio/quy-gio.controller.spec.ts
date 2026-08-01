@@ -1,0 +1,84 @@
+import { Test } from '@nestjs/testing';
+import { UnauthorizedException } from '@nestjs/common';
+import { JwtService, AuthzLoaderService } from '@app/auth';
+import { QuyGio_Controller } from './quy-gio.controller';
+import { QuyGio_Service } from './quy-gio.service';
+import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
+
+describe('QuyGio_Controller', () => {
+  const quyGio = {
+    soDuKhaDung: jest
+      .fn()
+      .mockResolvedValue({ soGioConLai: 12, theoKy: [] }),
+    layQuyCuaNhanVien: jest.fn().mockResolvedValue([]),
+  };
+  const nhanVien = {
+    resolveEmployeeFromUser: jest
+      .fn()
+      .mockResolvedValue({ _id: { toString: () => 'nv1' } }),
+  };
+
+  async function dungController() {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [QuyGio_Controller],
+      providers: [
+        { provide: QuyGio_Service, useValue: quyGio },
+        { provide: NhanVien_Service, useValue: nhanVien },
+        // Test gọi thẳng method của controller, không đi qua HTTP nên
+        // JwtGuard/PermissionGuard không thực sự canActivate() — nhưng Nest
+        // vẫn resolve chúng lúc compile() vì chúng đứng ở @UseGuards cấp
+        // class/route, nên hai dependency của JwtGuard vẫn phải có mặt trong
+        // DI container dù không được gọi tới (xem quy-phep.controller.spec.ts).
+        { provide: JwtService, useValue: {} },
+        { provide: AuthzLoaderService, useValue: {} },
+      ],
+    }).compile();
+    return moduleRef.get(QuyGio_Controller);
+  }
+
+  beforeEach(() => jest.clearAllMocks());
+
+  // Controller đọc `req.user` (do JwtGuard gán vào request thật), không phải
+  // id trực tiếp — khớp quy ước `nhanVien_Service.resolveEmployeeFromUser(req.user)`
+  // dùng xuyên suốt các controller chấm công khác trong repo.
+
+  it('cua-toi/so-du suy employeeId TỪ TOKEN, bỏ qua employeeId client gửi kèm ở query', async () => {
+    const controller = await dungController();
+    await controller.soDuCuaToi({
+      user: { id: 'u1' },
+      query: { employeeId: 'nv-khac' },
+    } as any);
+
+    expect(nhanVien.resolveEmployeeFromUser).toHaveBeenCalledWith({
+      id: 'u1',
+    });
+    expect(quyGio.soDuKhaDung).toHaveBeenCalledWith('nv1', expect.any(String));
+  });
+
+  it('cua-toi/so-du: token thiếu id thì ném UnauthorizedException, KHÔNG mặc định về chuỗi rỗng', async () => {
+    const controller = await dungController();
+    await expect(
+      controller.soDuCuaToi({ user: {} } as any),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(nhanVien.resolveEmployeeFromUser).not.toHaveBeenCalled();
+    expect(quyGio.soDuKhaDung).not.toHaveBeenCalled();
+  });
+
+  it('danh-sach không truyền employeeId trả mảng rỗng, không gọi service', async () => {
+    const controller = await dungController();
+    expect(await controller.danhSach(undefined)).toEqual([]);
+    expect(quyGio.layQuyCuaNhanVien).not.toHaveBeenCalled();
+  });
+
+  it('danh-sach có employeeId gọi service với đúng employeeId', async () => {
+    const controller = await dungController();
+    await controller.danhSach('nv2');
+    expect(quyGio.layQuyCuaNhanVien).toHaveBeenCalledWith('nv2');
+  });
+
+  it('so-du (quản trị) gọi service với employeeId từ param', async () => {
+    const controller = await dungController();
+    await controller.soDu('nv3');
+    expect(quyGio.soDuKhaDung).toHaveBeenCalledWith('nv3', expect.any(String));
+  });
+});

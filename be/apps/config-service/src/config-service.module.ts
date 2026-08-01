@@ -23,6 +23,7 @@ import { ThietBiChamCong_Module } from './thiet-bi-cham-cong/thiet-bi-cham-cong.
 import { BanGhiChamCong_Module } from './ban-ghi-cham-cong/ban-ghi-cham-cong.module';
 import { BangLuong_Module } from './bang-luong/bang-luong.module';
 import { QuyPhep_Module } from './quy-phep/quy-phep.module';
+import { QuyGio_Module } from './quy-gio/quy-gio.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { QuyPhep_Module } from './quy-phep/quy-phep.module';
     BanGhiChamCong_Module,
     BangLuong_Module,
     QuyPhep_Module,
+    QuyGio_Module,
   ],
 })
 export class ConfigServiceModule {}
