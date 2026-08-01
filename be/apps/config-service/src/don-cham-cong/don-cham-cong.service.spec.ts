@@ -2690,4 +2690,122 @@ describe('DonChamCong_Service — nghỉ bù trừ quỹ giờ (Task 7)', () => 
       expect(ngayLe.timTheoNgay).not.toHaveBeenCalled();
     });
   });
+
+  /**
+   * (review nhánh, IMPORTANT 5) Áp dụng MỘT PHẦN rồi hỏng — khác hẳn RETRY.
+   *
+   * `phanBoQuyGio` trải 2 kỳ; `giuCho()` giữ xong kỳ 1 rồi ném ở kỳ 2. Bản
+   * trước chỉ khôi phục trạng thái, nên chỗ giữ ở kỳ 1 kẹt vĩnh viễn: lần
+   * bấm lại bị `demRongTheoLyDo()` bỏ qua kỳ 1 (ròng > 0) và lại hỏng ở kỳ
+   * 2; `remove()` trên đơn `tu_choi` không đi vào nhánh nhả nào; và
+   * `doiSoat()` không thấy gì bất thường vì một chỗ giữ bị rò vẫn nhất quán
+   * giữa sổ và số dư. Chỉ sửa thẳng DB mới gỡ được.
+   */
+  describe('bù best-effort khi quỹ giờ hỏng GIỮA CHỪNG (IMPORTANT 5)', () => {
+    const HAI_KY = [
+      { balanceId: 'b1', kyTich: '2026-01', soGio: 2 },
+      { balanceId: 'b2', kyTich: '2026-02', soGio: 1 },
+    ];
+    const donTuChoi = () => ({
+      _id: '650000000000000000000701',
+      employeeId: ID_NV1,
+      loaiDon: 'nghi_bu',
+      kieuNghi: 'theo_gio',
+      ngay: '2026-03-10',
+      soGioNghiBu: 3,
+      phanBoQuyGio: HAI_KY,
+      trangThai: 'tu_choi',
+      isActive: true,
+    });
+
+    it('tu_choi → cho_duyet: giuCho hỏng ở kỳ 2 thì NHẢ lại TOÀN BỘ phân bổ', async () => {
+      const daGiu: string[] = [];
+      const quyGio = mockQuyGio({
+        // Mô phỏng áp dụng MỘT PHẦN thật: kỳ 1 giữ xong mới ném ở kỳ 2.
+        giuCho: jest.fn(async (_nv: string, p: any[]) => {
+          for (const x of p) {
+            if (x.kyTich === '2026-02') throw new Error('kỳ 2 hỏng');
+            daGiu.push(x.kyTich);
+          }
+        }),
+      });
+      const { service, luu } = await dungService({ don: donTuChoi(), quyGio });
+
+      await expect(
+        service.updateStatus(
+          '650000000000000000000701', 'cho_duyet', 'HR', { id: 'hr1' } as any,
+        ),
+      ).rejects.toThrow('kỳ 2 hỏng');
+
+      // Vế then chốt: nhả lại trên TOÀN BỘ phân bổ, không chỉ kỳ đã giữ —
+      // nơi gọi không biết hàm kia dừng ở đâu, và `nhaCho()` an toàn trên kỳ
+      // chưa bị đụng (Math.max kẹp + apDung bỏ qua khi không có gì đổi).
+      expect(daGiu).toEqual(['2026-01']);
+      expect(quyGio.nhaCho).toHaveBeenCalledWith(
+        ID_NV1, HAI_KY, '650000000000000000000701', 'hr1',
+      );
+      // Trạng thái vẫn phải được khôi phục — bù không thay thế việc đó.
+      expect(luu.trangThai).toBe('tu_choi');
+    });
+
+    it('cho_duyet → tu_choi: nhaCho hỏng giữa chừng thì GIỮ lại toàn bộ phân bổ', async () => {
+      const quyGio = mockQuyGio({
+        nhaCho: jest.fn(async (_nv: string, p: any[]) => {
+          for (const x of p) if (x.kyTich === '2026-02') throw new Error('kỳ 2 hỏng');
+        }),
+      });
+      const { service } = await dungService({
+        don: { ...donTuChoi(), trangThai: 'cho_duyet' },
+        quyGio,
+      });
+
+      await expect(
+        service.updateStatus(
+          '650000000000000000000701', 'tu_choi', 'HR', { id: 'hr1' } as any,
+        ),
+      ).rejects.toThrow('kỳ 2 hỏng');
+
+      expect(quyGio.giuCho).toHaveBeenCalledWith(
+        ID_NV1, HAI_KY, '650000000000000000000701', 'hr1',
+      );
+    });
+
+    it('chính lời gọi bù cũng hỏng thì vẫn ném LỖI GỐC, không nuốt mất', async () => {
+      const quyGio = mockQuyGio({
+        giuCho: jest.fn().mockRejectedValue(new Error('lỗi gốc')),
+        nhaCho: jest.fn().mockRejectedValue(new Error('lỗi phụ khi bù')),
+      });
+      const { service, luu } = await dungService({ don: donTuChoi(), quyGio });
+
+      await expect(
+        service.updateStatus(
+          '650000000000000000000701', 'cho_duyet', 'HR', { id: 'hr1' } as any,
+        ),
+      ).rejects.toThrow('lỗi gốc');
+      expect(luu.trangThai).toBe('tu_choi');
+    });
+
+    // Hai nhánh duyệt/hoàn CỐ Ý không bù (xem comment trong service): chúng
+    // dùng chung lý do sổ `huy_nghi_bu` với cặp giữ/nhả nên một lời gọi bù sẽ
+    // làm sai bộ đếm chống trùng của giuCho().
+    it('cho_duyet → da_duyet hỏng thì KHÔNG gọi hoanTraDaDung để bù', async () => {
+      const quyGio = mockQuyGio({
+        chuyenSangDaDung: jest.fn().mockRejectedValue(new Error('hỏng')),
+      });
+      const { service } = await dungService({
+        don: { ...donTuChoi(), trangThai: 'cho_duyet' },
+        quyGio,
+      });
+
+      await expect(
+        service.updateStatus(
+          '650000000000000000000701', 'da_duyet', 'HR', { id: 'hr1' } as any,
+        ),
+      ).rejects.toThrow('hỏng');
+
+      expect(quyGio.hoanTraDaDung).not.toHaveBeenCalled();
+      expect(quyGio.nhaCho).not.toHaveBeenCalled();
+      expect(quyGio.giuCho).not.toHaveBeenCalled();
+    });
+  });
 });

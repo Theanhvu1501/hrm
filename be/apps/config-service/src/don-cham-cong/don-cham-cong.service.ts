@@ -787,12 +787,37 @@ export class DonChamCong_Service {
     //     `trangThaiCu` đọc lại lúc đó đã là `tu_choi`, không còn khớp
     //     nhánh `da_duyet → khác` ở trên.
     //
-    // KHÔNG cần bù best-effort như khối quỹ phép ở trên (đó là vì
-    // giuCho()/nhaCho() bên QuyPhep_Service không ghi sổ, không tự chống
-    // trùng): cả sáu hàm quỹ giờ ở đây ĐỀU tự chống trùng qua sổ ròng theo
-    // kỳ tích ngay trong QuyGio_Service (`rongTichTheoKy`/`demRongTheoLyDo`)
-    // — khôi phục trạng thái rồi ĐỂ HR BẤM LẠI là đủ, không cần gọi thêm
-    // hàm ngược lại nào ở đây.
+    // (review nhánh, IMPORTANT 5 — SỬA lập luận cũ ở đây). Bản trước viết
+    // "KHÔNG cần bù best-effort, vì cả sáu hàm quỹ giờ đều tự chống trùng
+    // qua sổ ròng". Lập luận đó đúng cho RETRY nhưng KHÔNG đúng cho ÁP DỤNG
+    // MỘT PHẦN — và chính cơ chế tự chống trùng lại là thứ khoá chặt trạng
+    // thái hỏng lại:
+    //   `tu_choi → cho_duyet` trên đơn nghi_bu có `phanBoQuyGio` trải 2 kỳ;
+    //   `giuCho()` giữ xong kỳ 1 rồi ném ở kỳ 2. Trạng thái được khôi phục
+    //   về `tu_choi`, nhưng chỗ giữ ở kỳ 1 VẪN CÒN. HR bấm lại:
+    //   `demRongTheoLyDo()` thấy kỳ 1 ròng > 0 nên BỎ QUA kỳ 1, kỳ 2 lại
+    //   hỏng — y nguyên trạng thái cũ. `remove()` trên đơn `tu_choi` không
+    //   đi vào nhánh nhả nào, `huyDonCuaToi()` chỉ nhận đơn `cho_duyet`, và
+    //   `doiSoat()` KHÔNG thấy gì bất thường (một chỗ giữ bị rò vẫn nhất
+    //   quán giữa sổ và số dư). Chỉ sửa thẳng DB mới gỡ được.
+    //
+    // Nên bù y hệt khối quỹ phép ở trên: gọi hàm NGƯỢC LẠI trên TOÀN BỘ
+    // phân bổ trước khi khôi phục trạng thái. An toàn trên kỳ CHƯA bị đụng:
+    // `nhaCho()` kẹp `Math.max(0, …)` và `apDung(boQuaKhiKhongDoi = true)`
+    // bỏ qua cả `save()` lẫn `ghiSo()` khi không có gì thật để nhả; `giuCho()`
+    // thì tự bỏ qua kỳ đang còn ròng > 0. Bù xong, dòng sổ `huy_nghi_bu` đưa
+    // ròng của kỳ 1 về 0 nên lần HR bấm lại giữ chỗ được ĐẦY ĐỦ cả hai kỳ.
+    //
+    // Hai nhánh `chuyenSangDaDung`/`hoanTraDaDung` CỐ Ý không bù — giữ đúng
+    // hình dạng mà `quy-phep.service.ts` đã chọn và ghi lý do cho cặp tương
+    // ứng của nó: chúng dùng chung lý do sổ `huy_nghi_bu` với cặp giữ/nhả,
+    // nên một lời gọi bù ở đây sẽ làm sai bộ đếm chống trùng của `giuCho()`.
+    // Chúng cũng không rò chỗ giữ: lần bấm lại bỏ qua đúng phần đã áp dụng
+    // và làm nốt phần còn thiếu.
+    //
+    // Bọc try/catch RIÊNG, nuốt lỗi phụ — lỗi gốc `e` mới là thứ ném ra
+    // dưới. Đây là bù GẦN ĐÚNG, KHÔNG PHẢI transaction (cùng họ giới hạn
+    // "không transaction" mà `giuCho()` đã tự nhận trong doc-comment).
     try {
       if (item.loaiDon === 'lam_them_gio') {
         if (trangThaiCu !== 'da_duyet' && trangThai === 'da_duyet') {
@@ -851,6 +876,38 @@ export class DonChamCong_Service {
         }
       }
     } catch (e) {
+      // Bù best-effort cho hai nhánh giữ/nhả — xem lý do đầy đủ ở khối
+      // comment ngay trên `try`.
+      if (donTruQuyGio) {
+        const requestId = String((daLuu as any)._id);
+        const nguoiThucHienId = String(nguoiThucHien?.id ?? '');
+        const p = item.phanBoQuyGio!;
+
+        if (trangThaiCu === 'tu_choi' && trangThai === 'cho_duyet') {
+          try {
+            await this.quyGio_Service.nhaCho(
+              item.employeeId,
+              p,
+              requestId,
+              nguoiThucHienId,
+            );
+          } catch {
+            // nuốt lỗi phụ — xem giải thích ở trên.
+          }
+        } else if (trangThaiCu === 'cho_duyet' && trangThai === 'tu_choi') {
+          try {
+            await this.quyGio_Service.giuCho(
+              item.employeeId,
+              p,
+              requestId,
+              nguoiThucHienId,
+            );
+          } catch {
+            // nuốt lỗi phụ — xem giải thích ở trên.
+          }
+        }
+      }
+
       // Khôi phục NGUYÊN VẸN trạng thái/vết duyệt cũ — cùng lý do đã ghi ở
       // khối quỹ phép phía trên: không chỉ tránh "nghỉ bù/OT miễn phí", mà
       // còn là điều kiện để HR BẤM LẠI kích được đúng lời gọi quỹ vừa hỏng.
