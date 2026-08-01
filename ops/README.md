@@ -187,6 +187,24 @@ Module `quy-gio` (BE: `be/apps/config-service/src/quy-gio/`, hai collection
 thành quỹ, và từ nay **đơn nghỉ bù (`nghi_bu`) trừ vào quỹ này thay vì tự do như trước** —
 xem "Báo HR trước" ở bước 4 dưới đây trước khi bật.
 
+> **Deploy code của phần này KHÔNG tự bật gì cho công ty nào** (rollout blocker, chốt
+> ngay trước lần rollout đầu tiên — ghi lại ở đây để không ai vô tình gỡ mất phần gate
+> khi sửa `don-cham-cong.service.ts` sau này). Bản vá trước đó có một khoảng hở: `create()`
+> gọi `phanBoChoNghiBu()` cho MỌI đơn `nghi_bu` miễn `soGioNghiBu > 0`, không hỏi trước
+> công ty đã khai `lamThem` hay chưa — `QuyGio_Service.soGioMoiNgay()` rơi về mặc định 8
+> khi chưa có cấu hình, nên `soGioNghiBu` vẫn > 0 và `phanBoChoNghiBu()` vẫn bị gọi, luôn
+> thấy quỹ rỗng (chưa ai từng tích) và ném 409 `QUY_GIO_KHONG_DU_SO_DU` — chặn đứng nghỉ
+> bù ở **MỌI công ty ngay khi deploy code**, kể cả công ty không hề đụng tới bước 3 dưới
+> đây. Đã vá bằng một cửa chặn duy nhất, `QuyGio_Service.dangKichHoat()`
+> (đi qua đúng `layCauHinh()`, cùng nguồn `tichTuDonOt()` đã dùng để quyết định có tích
+> hay không), gọi TRƯỚC `phanBoChoNghiBu()` trong `create()`. Sau bản vá: công ty **chưa**
+> khai `lamThem` thì `nghi_bu` xử sự Y HỆT trước P4.2a (không giữ chỗ, không gọi quỹ,
+> không 409) — cảnh báo "Báo HR trước" ở bước 4 vì vậy đúng nghĩa đen: blackout chỉ bắt
+> đầu ĐÚNG lúc bước 3 được lưu, không sớm hơn. Có test tích hợp (dùng `QuyGio_Service`
+> thật) khẳng định cả hai vế ở
+> `be/apps/config-service/src/don-cham-cong/don-cham-cong.quy-gio.tich-hop.spec.ts`,
+> describe `"Rollout blocker: quỹ giờ là opt-in — công ty CHƯA khai lamThem"`.
+
 **Đúng thứ tự:**
 
 1. **Tạo index bằng tay trên MongoDB production.** `synchronize` (`be/libs/database/src/database.module.ts`)

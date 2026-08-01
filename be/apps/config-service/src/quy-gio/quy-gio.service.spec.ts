@@ -183,6 +183,24 @@ describe('QuyGio_Service.tichTuDonOt', () => {
   });
 });
 
+// Rollout blocker: `dangKichHoat()` là cửa mà `DonChamCong_Service.create()`
+// phải hỏi TRƯỚC khi gọi `phanBoChoNghiBu()` cho đơn nghỉ bù — PHẢI đi qua
+// đúng `layCauHinh()`, cùng nguồn với `tichTuDonOt()` ở trên, để tích/tiêu
+// không bao giờ lệch pha nhau về việc quỹ "đã bật" hay chưa.
+describe('QuyGio_Service.dangKichHoat', () => {
+  it('công ty CHƯA khai cấu hình (layCauHinh trả null) → false', async () => {
+    const { service } = await dungService({ cauHinh: null as any });
+
+    await expect(service.dangKichHoat()).resolves.toBe(false);
+  });
+
+  it('công ty ĐÃ khai lamThem → true', async () => {
+    const { service } = await dungService(); // cauHinhMacDinh có lamThem
+
+    await expect(service.dangKichHoat()).resolves.toBe(true);
+  });
+});
+
 describe('QuyGio_Service.thuHoiTichTuDonOt', () => {
   it('thu hồi lần đầu: trừ giờ khỏi quỹ và ghi một dòng sổ huy_don_ot', async () => {
     const { service, quyRepo, soRepo } = await dungService();

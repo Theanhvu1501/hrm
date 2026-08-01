@@ -46,6 +46,7 @@ describe('DonChamCong_Service', () => {
   };
   let mockQuyGioService: {
     soGioMoiNgay: jest.Mock;
+    dangKichHoat: jest.Mock;
     phanBoChoNghiBu: jest.Mock;
     giuCho: jest.Mock;
     nhaCho: jest.Mock;
@@ -127,6 +128,10 @@ describe('DonChamCong_Service', () => {
     // trừ quỹ giờ" bên dưới tự cấp provider riêng qua `dungService()`.
     mockQuyGioService = {
       soGioMoiNgay: jest.fn().mockResolvedValue(8),
+      // Mặc định "đã bật" — hầu hết describe cũ dựng đơn nghi_bu với kỳ
+      // vọng có giữ chỗ quỹ giờ (phanBoChoNghiBu được gọi). Describe chuyên
+      // trách gate opt-in (rollout blocker) tự override thành `false`.
+      dangKichHoat: jest.fn().mockResolvedValue(true),
       phanBoChoNghiBu: jest.fn().mockResolvedValue([]),
       giuCho: jest.fn().mockResolvedValue(undefined),
       nhaCho: jest.fn().mockResolvedValue(undefined),
@@ -1211,6 +1216,7 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
     // gọi tới — vẫn phải cấp provider để DonChamCong_Service resolve được.
     const quyGio = {
       soGioMoiNgay: jest.fn().mockResolvedValue(8),
+      dangKichHoat: jest.fn().mockResolvedValue(true),
       phanBoChoNghiBu: jest.fn().mockResolvedValue([]),
       giuCho: jest.fn().mockResolvedValue(undefined),
       nhaCho: jest.fn().mockResolvedValue(undefined),
@@ -1839,6 +1845,9 @@ describe('DonChamCong_Service — nghỉ bù trừ quỹ giờ (Task 7)', () => 
   function mockQuyGio(ghiDe: Record<string, any> = {}) {
     return {
       soGioMoiNgay: jest.fn().mockResolvedValue(8),
+      // Mặc định "đã bật" — describe này nhắm vào đúng luồng trừ quỹ giờ.
+      // Nhóm test "gate opt-in" bên dưới tự override thành `false`.
+      dangKichHoat: jest.fn().mockResolvedValue(true),
       // Trả đúng số giờ ĐƯỢC YÊU CẦU (soGioCan) thay vì một giá trị cố định
       // — test "giữ chỗ ngay lúc tạo đơn" đối chiếu đúng số đã giữ.
       phanBoChoNghiBu: jest

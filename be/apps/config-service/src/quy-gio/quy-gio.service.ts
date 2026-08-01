@@ -70,6 +70,23 @@ export class QuyGio_Service {
     return (await this.layCauHinh())?.soGioMoiNgay ?? 8;
   }
 
+  /**
+   * Công ty đã bật quỹ giờ làm thêm chưa (đã khai `lamThem`) — nơi gọi bên
+   * ngoài (đơn nghỉ bù) PHẢI hỏi câu này TRƯỚC khi định giữ chỗ.
+   *
+   * Đi qua ĐÚNG một cửa `layCauHinh()` — cùng cửa `tichTuDonOt()` đã dùng để
+   * quyết định có tích hay không (xem log "Bỏ qua tích quỹ giờ..." ở đó).
+   * Tích và tiêu phải luôn đồng thanh trả lời "bật hay chưa": nếu nơi gọi tự
+   * suy ra câu trả lời bằng cách khác (vd tự đọc thẳng trường khác trên
+   * `CauHinhLuong`), hai bên có thể lệch pha — tiêu từ một quỹ CHƯA TỪNG được
+   * tích (đúng lỗi rollout-blocker P4.2a: công ty chưa khai cấu hình mà
+   * `nghi_bu` vẫn cố trừ quỹ trống, ném 409 cho MỌI đơn nghỉ bù ngay khi
+   * deploy, chứ không đợi tới lúc HR thật sự bật tính năng).
+   */
+  async dangKichHoat(): Promise<boolean> {
+    return (await this.layCauHinh()) !== null;
+  }
+
   private async ghiSo(input: {
     balanceId: string;
     employeeId: string;

@@ -397,8 +397,22 @@ export class DonChamCong_Service {
     // ngày) và không có các cửa "chưa lên chính thức" (quỹ giờ không đụng gì
     // tới thời gian thử việc). `phanBoChoNghiBu` tự ném ConflictException nếu
     // không đủ số dư — không cần chặn tay ở đây.
+    //
+    // (rollout blocker, chốt ngay trước khi deploy): quỹ giờ là tính năng
+    // OPT-IN theo công ty (runbook `ops/README.md` bước 4) — công ty CHƯA
+    // khai `lamThem` thì `nghi_bu` phải xử sự Y HỆT trước P4.2a: không giữ
+    // chỗ, không gọi quỹ, không 409. Cửa chặn ở đây phải hỏi
+    // `dangKichHoat()` (cùng nguồn `layCauHinh()` với `tichTuDonOt()`)
+    // TRƯỚC khi gọi `phanBoChoNghiBu()` — thiếu cửa này, `phanBoChoNghiBu()`
+    // luôn thấy quỹ trống (chưa ai từng tích) và ném KHONG_DU_SO_DU cho MỌI
+    // đơn nghỉ bù ở MỌI công ty ngay khi deploy code, sớm hơn một nhịp so
+    // với đúng lúc HR bật tính năng mà runbook đã cảnh báo.
     let phanBoQuyGio: PhanBoQuyGio[] | undefined;
-    if (dto.loaiDon === 'nghi_bu' && (truongTinhToan.soGioNghiBu ?? 0) > 0) {
+    if (
+      dto.loaiDon === 'nghi_bu' &&
+      (truongTinhToan.soGioNghiBu ?? 0) > 0 &&
+      (await this.quyGio_Service.dangKichHoat())
+    ) {
       phanBoQuyGio = await this.quyGio_Service.phanBoChoNghiBu(
         dto.employeeId,
         truongTinhToan.soGioNghiBu!,

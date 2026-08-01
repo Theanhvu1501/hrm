@@ -13,7 +13,7 @@
  * đây là số quỹ thật sự tính ra.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   AttendanceRequest,
@@ -85,7 +85,16 @@ const CAU_HINH = {
 };
 
 async function dungHeThong(
-  tuyChon: { ngayLe?: string[]; quy?: any[]; don?: any[] } = {},
+  tuyChon: {
+    ngayLe?: string[];
+    quy?: any[];
+    don?: any[];
+    // Rollout blocker: `cauHinh: null` mô phỏng công ty CHƯA khai `lamThem`
+    // (repoCauHinh phải RỖNG THẬT, không phải một hàng thiếu `lamThem`) —
+    // cùng quy ước `undefined` = mặc định đã bật với `dungService()` bên
+    // `quy-gio.service.spec.ts`.
+    cauHinh?: any;
+  } = {},
 ) {
   const repoDon = repoGia(tuyChon.don);
   const repoNv = repoGia([
@@ -99,7 +108,13 @@ async function dungHeThong(
   ]);
   const repoQuy = repoGia(tuyChon.quy);
   const repoSo = repoGia();
-  const repoCauHinh = repoGia([CAU_HINH]);
+  const repoCauHinh = repoGia(
+    tuyChon.cauHinh === undefined
+      ? [CAU_HINH]
+      : tuyChon.cauHinh
+        ? [tuyChon.cauHinh]
+        : [],
+  );
 
   const ngayLe = {
     timTheoNgay: jest.fn(async (ngay: string) =>
@@ -338,5 +353,84 @@ describe('Tích hợp: duyệt OT → tích quỹ → nghỉ bù → đối soá
     });
     // Kỳ 2 không bị đụng tới (chỗ giữ của đơn KHÁC vẫn nguyên).
     expect(repoQuy.rows[1].soGioDangChoDuyet).toBe(2);
+  });
+});
+
+/**
+ * Rollout blocker (chốt ngay trước khi deploy P4.2a): quỹ giờ làm thêm là
+ * tính năng OPT-IN theo công ty — runbook `ops/README.md` bước 4 nói rõ
+ * "từ lúc lưu cấu hình, nghỉ bù bắt đầu tiêu từ quỹ và bị chặn khi hết số
+ * dư". Trước bản vá này, `QuyGio_Service.soGioMoiNgay()` rơi về mặc định 8
+ * khi `layCauHinh()` trả `null`, nên MỌI đơn `nghi_bu` ở MỘT công ty CHƯA
+ * từng khai `lamThem` vẫn tính ra `soGioNghiBu > 0`, vẫn gọi
+ * `phanBoChoNghiBu()`, và vẫn ăn 409 `KHONG_DU_SO_DU` vì quỹ luôn rỗng
+ * (chưa ai từng tích) — chặn đứng TOÀN BỘ nghỉ bù ngay khi deploy code,
+ * sớm hơn một nhịp so với đúng lúc HR bật tính năng.
+ *
+ * Dùng `QuyGio_Service` THẬT (không mock) — như describe phía trên — để
+ * chứng minh bằng hành vi thật của quỹ, không phải "đã gọi đúng mock".
+ */
+describe('Rollout blocker: quỹ giờ là opt-in — công ty CHƯA khai lamThem', () => {
+  it('công ty CHƯA khai lamThem: nghi_bu tạo thành công, KHÔNG giữ chỗ, KHÔNG chạm quỹ', async () => {
+    const { don, repoQuy, repoSo } = await dungHeThong({ cauHinh: null });
+
+    const donNghiBu = await don.create({
+      employeeId: ID_NV,
+      loaiDon: 'nghi_bu',
+      kieuNghi: 'theo_gio',
+      ngay: '2026-02-10',
+      gioTu: '09:00',
+      gioDen: '12:30',
+    } as any);
+
+    // Vẫn tính ra soGioNghiBu (bảng công vẫn cần con số này để ra ký hiệu
+    // NB) — CHỈ khác ở chỗ không có gì đụng tới quỹ.
+    expect(donNghiBu.soGioNghiBu).toBe(3.5);
+    expect((donNghiBu as any).phanBoQuyGio).toBeUndefined();
+    expect(repoQuy.rows).toHaveLength(0);
+    expect(repoSo.rows).toHaveLength(0);
+  });
+
+  it('công ty ĐÃ khai lamThem: vẫn giữ chỗ như cũ, và vẫn 409 khi quỹ không đủ', async () => {
+    const { don } = await dungHeThong(); // mặc định CAU_HINH (đã bật)
+
+    const loi = await don
+      .create({
+        employeeId: ID_NV,
+        loaiDon: 'nghi_bu',
+        kieuNghi: 'theo_gio',
+        ngay: '2026-02-10',
+        gioTu: '09:00',
+        gioDen: '12:30',
+      } as any)
+      .catch((e) => e);
+
+    // Chưa từng có đơn OT nào được duyệt ⇒ quỹ trống thật ⇒ đúng 409 —
+    // hành vi ENABLED phải giữ nguyên y hệt trước bản vá này.
+    expect(loi).toBeInstanceOf(ConflictException);
+    expect((loi as any).getResponse().code).toBe('QUY_GIO_KHONG_DU_SO_DU');
+  });
+
+  /**
+   * Yêu cầu báo cáo: duyệt đơn OT ở công ty chưa bật vẫn KHÔNG tích gì —
+   * hành vi đã có sẵn từ `tichTuDonOt()` (xem log cảnh báo), bài này xác
+   * nhận nó KHÔNG bị bản vá gate ở `create()` (chỉ đụng nhánh nghi_bu) làm
+   * hỏng lây.
+   */
+  it('công ty CHƯA khai lamThem: duyệt đơn OT vẫn không tích quỹ giờ nào', async () => {
+    const { don, repoQuy, repoSo } = await dungHeThong({ cauHinh: null });
+
+    const donOt = await don.create({
+      employeeId: ID_NV,
+      loaiDon: 'lam_them_gio',
+      ngay: '2026-01-15',
+      gioTu: '18:00',
+      gioDen: '20:20',
+    } as any);
+
+    await don.updateStatus(String((donOt as any)._id), 'da_duyet', 'HR', HR);
+
+    expect(repoQuy.rows).toHaveLength(0);
+    expect(repoSo.rows).toHaveLength(0);
   });
 });
