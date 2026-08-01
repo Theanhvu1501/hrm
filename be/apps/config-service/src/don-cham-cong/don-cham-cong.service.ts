@@ -885,11 +885,18 @@ export class DonChamCong_Service {
 
         if (trangThaiCu === 'tu_choi' && trangThai === 'cho_duyet') {
           try {
+            // `chiPhanDaGiuCuaDon = true`: nhả TRÊN TOÀN BỘ phân bổ nhưng
+            // chỉ ở những kỳ mà SỔ xác nhận đơn NÀY đang giữ chỗ. Nhả mù sẽ
+            // ăn mất chỗ giữ của đơn KHÁC ở kỳ chưa bị đụng
+            // (`soGioDangChoDuyet` là bộ đếm dùng chung theo quỹ) — mà kỳ đó
+            // gần như chắc chắn đang có đơn khác giữ, vì đó chính là lý do
+            // `giuCho()` vừa ném ở đấy. Xem doc-comment `nhaCho()`.
             await this.quyGio_Service.nhaCho(
               item.employeeId,
               p,
               requestId,
               nguoiThucHienId,
+              true,
             );
           } catch {
             // nuốt lỗi phụ — xem giải thích ở trên.

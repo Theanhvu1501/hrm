@@ -753,3 +753,60 @@ describe('QuyGio_Service.doiSoat — quỹ đã đóng', () => {
     });
   });
 });
+
+/**
+ * (review nhánh, IMPORTANT 5) Cờ `chiPhanDaGiuCuaDon` của `nhaCho()` — chỉ
+ * đường BÙ trong `don-cham-cong.service.ts` dùng tới. Nó tồn tại vì
+ * `soGioDangChoDuyet` là bộ đếm DÙNG CHUNG theo quỹ, không tách theo đơn.
+ */
+describe('QuyGio_Service.nhaCho — chiPhanDaGiuCuaDon', () => {
+  const haiKy = () => [
+    {
+      _id: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGioTich: 4,
+      soGioDaDung: 0, soGioDangChoDuyet: 2, soGioConLai: 2,
+      hanDung: '2026-07-31', trangThai: 'dang_hieu_luc', isActive: true,
+    },
+    {
+      // Chỗ giữ này thuộc về một đơn KHÁC — không có dòng sổ nào của 'donA'.
+      _id: 'b2', employeeId: 'nv1', kyTich: '2026-02', soGioTich: 2,
+      soGioDaDung: 0, soGioDangChoDuyet: 2, soGioConLai: 0,
+      hanDung: '2026-08-31', trangThai: 'dang_hieu_luc', isActive: true,
+    },
+  ];
+  const phanBo = [
+    { balanceId: 'b1', kyTich: '2026-01', soGio: 2 },
+    { balanceId: 'b2', kyTich: '2026-02', soGio: 1 },
+  ];
+  // Sổ: donA đã giữ chỗ THÀNH CÔNG ở kỳ 1, chưa từng chạm kỳ 2.
+  const soDaGiuKy1 = [
+    {
+      balanceId: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGio: -2,
+      lyDo: 'giu_cho_nghi_bu', requestId: 'donA', thoiDiem: '',
+    },
+  ];
+
+  it('true: chỉ nhả kỳ có dòng sổ giữ chỗ của ĐÚNG đơn này', async () => {
+    const { service, quyRepo } = await dungService({
+      quy: haiKy(), so: [...soDaGiuKy1],
+    });
+
+    await service.nhaCho('nv1', phanBo, 'donA', 'hr1', true);
+
+    expect(quyRepo.rows[0].soGioDangChoDuyet).toBe(0); // kỳ 1: nhả
+    expect(quyRepo.rows[1].soGioDangChoDuyet).toBe(2); // kỳ 2: KHÔNG đụng
+  });
+
+  it('mặc định (false) nhả mù cả hai kỳ — ăn vào chỗ giữ của đơn khác', async () => {
+    const { service, quyRepo } = await dungService({
+      quy: haiKy(), so: [...soDaGiuKy1],
+    });
+
+    await service.nhaCho('nv1', phanBo, 'donA', 'hr1');
+
+    expect(quyRepo.rows[0].soGioDangChoDuyet).toBe(0);
+    // Chốt lại hành vi CŨ là có thật (2 - 1 = 1) — đây đúng là lý do đường
+    // BÙ phải bật cờ, còn các đường nghiệp vụ bình thường (từ chối/tự
+    // huỷ/xoá đơn) thì KHÔNG, vì ở đó ta biết chắc đơn này đã giữ đủ.
+    expect(quyRepo.rows[1].soGioDangChoDuyet).toBe(1);
+  });
+});

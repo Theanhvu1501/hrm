@@ -2741,8 +2741,14 @@ describe('DonChamCong_Service — nghỉ bù trừ quỹ giờ (Task 7)', () => 
       // nơi gọi không biết hàm kia dừng ở đâu, và `nhaCho()` an toàn trên kỳ
       // chưa bị đụng (Math.max kẹp + apDung bỏ qua khi không có gì đổi).
       expect(daGiu).toEqual(['2026-01']);
+      // Tham số thứ 5 `chiPhanDaGiuCuaDon = true`: nhả TRÊN TOÀN BỘ phân bổ
+      // nhưng chỉ ở kỳ mà SỔ xác nhận đơn NÀY đang giữ. Nhả mù sẽ ăn mất chỗ
+      // giữ của đơn KHÁC ở kỳ chưa bị đụng (`soGioDangChoDuyet` là bộ đếm
+      // dùng chung theo quỹ) — và kỳ đó gần như chắc chắn đang có đơn khác
+      // giữ, vì đó chính là lý do `giuCho()` vừa ném ở đấy. Bài tích hợp
+      // `don-cham-cong.quy-gio.tich-hop.spec.ts` chứng minh hậu quả thật.
       expect(quyGio.nhaCho).toHaveBeenCalledWith(
-        ID_NV1, HAI_KY, '650000000000000000000701', 'hr1',
+        ID_NV1, HAI_KY, '650000000000000000000701', 'hr1', true,
       );
       // Trạng thái vẫn phải được khôi phục — bù không thay thế việc đó.
       expect(luu.trangThai).toBe('tu_choi');

@@ -564,15 +564,42 @@ export class QuyGio_Service {
    * còn lại chỉ là chặn SỔ khỏi ghi trùng — `apDung()` tự phát hiện lần gọi
    * lại đã bị kẹp về 0 (không còn gì thay đổi thật) và bỏ qua cả `save()` lẫn
    * `ghiSo()`. Xem doc-comment đầy đủ ở `apDung()`.
+   *
+   * ── `chiPhanDaGiuCuaDon` (review nhánh, IMPORTANT 5)
+   * Mặc định `false` = hành vi cũ, dùng cho MỌI lời gọi nghiệp vụ bình
+   * thường (từ chối đơn, tự huỷ, xoá đơn) — nơi ta biết chắc đơn này đã giữ
+   * chỗ theo đúng `phanBo` truyền vào.
+   *
+   * `true` CHỈ dùng cho đường BÙ khi `giuCho()` hỏng giữa chừng
+   * (`don-cham-cong.service.ts`): ở đó nơi gọi KHÔNG biết `giuCho()` đã kịp
+   * giữ tới kỳ nào, nên phải nhả trên TOÀN BỘ `phanBo`. Nhả mù trên kỳ chưa
+   * hề bị đụng là NGUY HIỂM: `soGioDangChoDuyet` là bộ đếm DÙNG CHUNG theo
+   * quỹ, không tách theo đơn (đúng cái bẫy đã ghi ở `huyDonCuaToi()`), nên
+   * `Math.max(0, 2 - 1)` sẽ ăn mất chỗ giữ của một đơn KHÁC — mà kỳ đó gần
+   * như chắc chắn đang có đơn khác giữ chỗ, vì đó chính là lý do `giuCho()`
+   * vừa ném ở đấy. `true` giới hạn việc nhả vào đúng những kỳ mà SỔ xác nhận
+   * đơn NÀY đang giữ chỗ.
    */
   async nhaCho(
     employeeId: string,
     phanBo: PhanBoQuyGio[],
     requestId: string,
     nguoiThucHien: string,
+    chiPhanDaGiuCuaDon = false,
   ): Promise<void> {
+    let canNha = phanBo;
+    if (chiPhanDaGiuCuaDon) {
+      const rong = await this.demRongTheoLyDo(
+        requestId,
+        employeeId,
+        'giu_cho_nghi_bu',
+        'huy_nghi_bu',
+      );
+      canNha = phanBo.filter((p) => (rong.get(p.kyTich) ?? 0) > 0);
+    }
+
     await this.apDung(
-      employeeId, phanBo, 'huy_nghi_bu', requestId, nguoiThucHien,
+      employeeId, canNha, 'huy_nghi_bu', requestId, nguoiThucHien,
       (q, g) => {
         const truoc = q.soGioDangChoDuyet;
         q.soGioDangChoDuyet = Math.max(0, truoc - g);
