@@ -11,6 +11,9 @@ describe('QuyGio_Controller', () => {
       .fn()
       .mockResolvedValue({ soGioConLai: 12, theoKy: [] }),
     layQuyCuaNhanVien: jest.fn().mockResolvedValue([]),
+    dongQuyGio: jest
+      .fn()
+      .mockResolvedValue({ soQuyDong: 0, soGioHetHan: 0, soGioChoTraTien: 0 }),
   };
   const nhanVien = {
     resolveEmployeeFromUser: jest
@@ -80,5 +83,18 @@ describe('QuyGio_Controller', () => {
     const controller = await dungController();
     await controller.soDu('nv3');
     expect(quyGio.soDuKhaDung).toHaveBeenCalledWith('nv3', expect.any(String));
+  });
+
+  // Sổ biến động ghi lại AI đóng quỹ — actor rỗng là lỗ hổng audit trail
+  // (xem comment trong `dongQuy()` ở controller), cùng lớp lỗi mà
+  // `cua-toi/so-du` đã chặn ở trên. Vế "không gọi service" quan trọng ngang
+  // vế "ném lỗi": ném lỗi mà vẫn lỡ gọi service rồi mới ném thì đã kịp ghi sổ
+  // với actor rỗng — đúng cái hố mà bài test này tồn tại để chặn.
+  it('dong-quy: token thiếu id thì ném UnauthorizedException, KHÔNG gọi service', async () => {
+    const controller = await dungController();
+    await expect(
+      controller.dongQuy({ den: '2026-02-01' } as any, { user: {} } as any),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(quyGio.dongQuyGio).not.toHaveBeenCalled();
   });
 });
