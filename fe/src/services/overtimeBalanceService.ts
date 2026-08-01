@@ -19,6 +19,25 @@ export interface SoDuQuyGio {
   theoKy: SoDuQuyGioTheoKy[];
 }
 
+/**
+ * Một dòng `overtime_balances` (quỹ giờ của MỘT kỳ tích) — dùng cho màn HR
+ * `QuyGioPage` liệt kê mọi kỳ của một nhân viên, khác `SoDuQuyGio` (chỉ có số
+ * dư tổng hợp, dùng cho form nộp hộ đơn nghỉ bù).
+ */
+export interface OvertimeBalanceRow {
+  id: string;
+  employeeId: string;
+  employeeName?: string;
+  employeeCode?: string;
+  kyTich: string; // "YYYY-MM"
+  soGioTich: number;
+  soGioDaDung: number;
+  soGioDangChoDuyet: number;
+  soGioConLai: number;
+  hanDung: string; // "YYYY-MM-DD"; '9999-12-31' = không hết hạn
+  trangThai: string; // dang_hieu_luc|da_dong
+}
+
 class OvertimeBalanceService extends ServiceBase {
   constructor() {
     super({ endpoint: '/config/quy-gio' });
@@ -30,6 +49,34 @@ class OvertimeBalanceService extends ServiceBase {
       endpoint: '/cua-toi/so-du',
     });
     return this.transform(res);
+  }
+
+  /**
+   * Danh sách quỹ theo từng kỳ tích của một nhân viên — `GET /quy-gio?employeeId=`.
+   * Đòi quyền `/cham-cong/quy-gio:xem`, dùng cho màn HR `QuyGioPage`.
+   *
+   * BE trả mảng RỖNG khi thiếu `employeeId` (không phải lỗi 400) — cố ý
+   * KHÔNG gọi route này khi chưa chọn nhân viên, để tránh một lượt gọi vô
+   * nghĩa mỗi lần màn hình mở.
+   */
+  async layTheoNhanVien(employeeId: string): Promise<OvertimeBalanceRow[]> {
+    const res = await super.get<Array<Record<string, unknown>>>({
+      params: { employeeId },
+    });
+    return res.map((x) => ({
+      id: (x._id as string) || (x.id as string),
+      employeeId: x.employeeId as string,
+      employeeName: x.employeeName as string | undefined,
+      employeeCode: x.employeeCode as string | undefined,
+      kyTich: x.kyTich as string,
+      // `??` chứ không `||`: 0 giờ là số hợp lệ, không phải "chưa tính".
+      soGioTich: (x.soGioTich as number) ?? 0,
+      soGioDaDung: (x.soGioDaDung as number) ?? 0,
+      soGioDangChoDuyet: (x.soGioDangChoDuyet as number) ?? 0,
+      soGioConLai: (x.soGioConLai as number) ?? 0,
+      hanDung: x.hanDung as string,
+      trangThai: (x.trangThai as string) ?? 'dang_hieu_luc',
+    }));
   }
 
   /**
