@@ -25,6 +25,15 @@ export const BUOI_OPTIONS = [
   { value: "chieu", label: "Buổi chiều" },
 ] as const;
 
+// Chỉ dùng khi loaiDon là nghi_bu — khớp @IsIn của trường kieuNghi ở
+// be/apps/config-service/src/don-cham-cong/dto/create-don-cham-cong.dto.ts.
+// "theo_ngay" đứng trước: đó là hành vi trước P4.2a và là lựa chọn mặc định
+// (xem truongTheoLoaiDon.truongCuaDon()).
+export const KIEU_NGHI_BU_OPTIONS = [
+  { value: "theo_ngay", label: "Nghỉ cả ngày" },
+  { value: "theo_gio", label: "Nghỉ theo giờ" },
+] as const;
+
 export const TRANG_THAI_OPTIONS = [
   { value: "cho_duyet", label: "Chờ duyệt" },
   { value: "da_duyet", label: "Đã duyệt" },

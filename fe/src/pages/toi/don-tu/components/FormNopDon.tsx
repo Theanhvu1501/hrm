@@ -7,10 +7,12 @@ import {
 } from "../DonTuCuaToiHandlerContext";
 import {
   BUOI_OPTIONS,
+  KIEU_NGHI_BU_OPTIONS,
   LOAI_DON_OPTIONS,
   LOAI_NGHI_OPTIONS,
   labelFor,
 } from "@/pages/cham-cong/don-cham-cong/constants";
+import { SoDuQuyGioBanner } from "@/pages/cham-cong/don-cham-cong/components/SoDuQuyGioBanner";
 import { homNayVN } from "@/ultils/thoiGianVN";
 import {
   GIA_TRI_MAC_DINH,
@@ -58,6 +60,15 @@ export function FormNopDon() {
     setV((truoc) => ({ ...truoc, [k]: giaTri }));
 
   const laDonNghi = v.loaiDon === "nghi_phep" || v.loaiDon === "nghi_bu";
+
+  // Số dư quỹ giờ (P4.2a) — chỉ đơn nghi_bu quan tâm. `hetQuyGio` khoá nút
+  // Gửi đơn khi SoDuQuyGioBanner báo hết quỹ; reset khi đổi sang loại đơn
+  // khác để không khoá nhầm một loại đơn không liên quan tới quỹ giờ.
+  const [hetQuyGio, setHetQuyGio] = useState(false);
+  useEffect(() => {
+    if (v.loaiDon !== "nghi_bu") setHetQuyGio(false);
+  }, [v.loaiDon]);
+
   const matHinh = loaiDaChon ? MAT_HINH_LOAI[loaiDaChon] : null;
   const nhanLoai = labelFor(LOAI_DON_OPTIONS, loaiDaChon || undefined);
 
@@ -103,6 +114,8 @@ export function FormNopDon() {
           key="gui"
           type="primary"
           loading={!!dangGui}
+          // Chỉ khoá vì hết quỹ giờ khi đơn ĐANG LÀ nghi_bu.
+          disabled={v.loaiDon === "nghi_bu" && hetQuyGio}
           onClick={() => handler.executeEvent("nopDon", v)}
           style={{ backgroundColor: "var(--emp-accent)", borderColor: "var(--emp-accent)" }}
         >
@@ -122,6 +135,35 @@ export function FormNopDon() {
           onChange={(e) => sua("ngay", e.target.value)}
         />
       </div>
+
+      {v.loaiDon === "nghi_bu" && (
+        <>
+          <div className="mb-3">
+            <label className="don-tu-label" htmlFor="don-kieu-nghi">
+              Kiểu nghỉ
+            </label>
+            <select
+              id="don-kieu-nghi"
+              className="don-tu-field"
+              value={v.kieuNghi}
+              onChange={(e) =>
+                sua("kieuNghi", e.target.value as GiaTriFormDon["kieuNghi"])
+              }
+            >
+              {KIEU_NGHI_BU_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Số dư của CHÍNH người đang đăng nhập — không truyền employeeId
+              để SoDuQuyGioBanner tự gọi cua-toi/so-du. */}
+          <div className="mb-3">
+            <SoDuQuyGioBanner onHetQuy={setHetQuyGio} />
+          </div>
+        </>
+      )}
 
       {hienTruong(v, "denNgay") && (
         <div className="mb-3">

@@ -1,6 +1,7 @@
 import {
   AttendanceRequestType,
   Buoi,
+  KieuNghi,
   LoaiNghi,
   TaoDonCuaToiDto,
 } from "@/services/attendanceRequestService";
@@ -41,6 +42,12 @@ export interface GiaTriFormDon {
   buoi: Buoi;
   /** "" = chưa chọn — Select rỗng, không phải một loại nghỉ hợp lệ nào. */
   loaiNghi: LoaiNghi | "";
+  /**
+   * Chỉ đơn nghi_bu dùng — mặc định "theo_ngay" (hành vi trước P4.2a). KHAI
+   * TƯỜNG MINH qua control riêng, không suy từ gioTu có rỗng hay không (xem
+   * docblock cùng tên ở CreateAttendanceRequestDto).
+   */
+  kieuNghi: KieuNghi;
   lyDo: string;
   gioTu: string;
   gioDen: string;
@@ -52,6 +59,7 @@ export const GIA_TRI_MAC_DINH: GiaTriFormDon = {
   denNgay: "",
   buoi: "ca_ngay",
   loaiNghi: "",
+  kieuNghi: "theo_ngay",
   lyDo: "",
   gioTu: "",
   gioDen: "",
@@ -82,6 +90,18 @@ export function kiemTraDon(v: GiaTriFormDon): string | null {
   // Thiếu là backend ném TypeError chứ không phải 400 có thông điệp.
   if (v.loaiDon === "lam_them_gio" && (!v.gioTu || !v.gioDen)) {
     return "Đơn làm thêm giờ phải có giờ bắt đầu và giờ kết thúc";
+  }
+
+  // nghi_bu theo_gio: thiếu giờ thì backend tính soGioNghiBu = 0 (nhánh
+  // theo_gio của tinhCacTruongSnapshot() return sớm khi gioTu/gioDen rỗng) —
+  // đơn vẫn được tạo nhưng không trừ quỹ giờ nào, người nộp tưởng mình đã
+  // nghỉ bù thành công.
+  if (
+    v.loaiDon === "nghi_bu" &&
+    v.kieuNghi === "theo_gio" &&
+    (!v.gioTu || !v.gioDen)
+  ) {
+    return "Đơn nghỉ bù theo giờ phải có giờ bắt đầu và giờ kết thúc";
   }
 
   if (v.loaiDon === "nghi_phep" && !v.loaiNghi) {
@@ -127,6 +147,10 @@ export function dungDtoNopDon(v: GiaTriFormDon): TaoDonCuaToiDto {
   if (co("loaiNghi") && v.loaiNghi) dto.loaiNghi = v.loaiNghi;
   if (co("gioTu") && v.gioTu) dto.gioTu = v.gioTu;
   if (co("gioDen") && v.gioDen) dto.gioDen = v.gioDen;
+  // kieuNghi không nằm trong TRUONG_THEO_LOAI (nó QUYẾT ĐỊNH truongCuaDon()
+  // cho nghi_bu, không phải một trường bị nó chi phối) nên gửi trực tiếp
+  // theo loaiDon, không qua co().
+  if (v.loaiDon === "nghi_bu") dto.kieuNghi = v.kieuNghi;
 
   const lyDo = v.lyDo.trim();
   if (lyDo) dto.lyDo = lyDo;
