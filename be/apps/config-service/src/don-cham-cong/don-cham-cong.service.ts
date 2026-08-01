@@ -7,11 +7,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AttendanceRequest, Employee, PhanBoQuy } from '@app/entities';
+import { AttendanceRequest, Employee, PhanBoQuy, PhanBoQuyGio } from '@app/entities';
 import { CreateDonChamCongDto, UpdateDonChamCongDto } from './dto';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
+import { QuyGio_Service } from '../quy-gio/quy-gio.service';
 import { suyHeSoOt, tinhSoGioOt, tinhSoNgayNghi } from './luat-don';
 
 // Khoảng nghỉ vượt quá ngần này thì từ chối luôn thay vì âm thầm quét hàng
@@ -91,6 +92,9 @@ export class DonChamCong_Service {
     private readonly ngayLeService: NgayLe_Service,
     private readonly nhanVienService: NhanVien_Service,
     private readonly quyPhep_Service: QuyPhep_Service,
+    // Task 7 (P4.2a): song song với quyPhep_Service — giữ/nhả/chuyển/hoàn quỹ
+    // giờ cho đơn nghỉ bù, và tích/thu hồi quỹ giờ cho đơn OT đã duyệt.
+    private readonly quyGio_Service: QuyGio_Service,
   ) {}
 
   /** Đơn này có trừ quỹ phép năm không. Chỉ `phep_nam` mới đụng quỹ — các
@@ -191,7 +195,10 @@ export class DonChamCong_Service {
     emp: Employee,
   ): Promise<
     Partial<
-      Pick<AttendanceRequest, 'soGioOt' | 'heSoOt' | 'loaiNgayOt' | 'soNgayNghi'>
+      Pick<
+        AttendanceRequest,
+        'soGioOt' | 'heSoOt' | 'loaiNgayOt' | 'soNgayNghi' | 'soGioNghiBu'
+      >
     >
   > {
     if (dto.loaiDon === 'lam_them_gio') {
@@ -216,6 +223,34 @@ export class DonChamCong_Service {
       }
 
       const ngayLeTrongKhoang = await this.layNgayLeTrongKhoang(tuNgay, denNgay);
+
+      // Task 7 (P4.2a): nghi_bu quy đổi sang GIỜ để trừ quỹ giờ, thay vì
+      // trừ NGÀY như phep_nam — hai kiểu, kieuNghi định trước bởi người nộp:
+      if (dto.loaiDon === 'nghi_bu') {
+        const soGioMoiNgay = await this.quyGio_Service.soGioMoiNgay();
+
+        // theo_gio: dùng lại tinhSoGioOt() — nó đã xử lý đúng ca qua đêm
+        // (cộng 24h thay vì ra số âm). Không chép luật thứ hai.
+        if (dto.kieuNghi === 'theo_gio') {
+          const soGioNghiBu =
+            dto.gioTu && dto.gioDen ? tinhSoGioOt(dto.gioTu, dto.gioDen) : 0;
+          return { soGioNghiBu };
+        }
+
+        // theo_ngay: dùng lại tinhSoNgayNghi() — bỏ ngày lễ, bỏ ngày ngoài
+        // lịch làm việc trong tuần, nửa buổi chỉ có nghĩa khi đơn đúng một
+        // ngày. CÙNG bộ lọc với nhánh phep_nam ở dưới — không chép luật lần
+        // hai, chỉ khác ở việc quy thêm ra giờ nhân soGioMoiNgay.
+        const soNgay = tinhSoNgayNghi({
+          tuNgay,
+          denNgay,
+          buoi: dto.buoi,
+          ngayLeTrongKhoang,
+          ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
+        });
+        return { soNgayNghi: soNgay, soGioNghiBu: soNgay * soGioMoiNgay };
+      }
+
       const soNgayNghi = tinhSoNgayNghi({
         tuNgay,
         denNgay,
@@ -317,6 +352,20 @@ export class DonChamCong_Service {
       );
     }
 
+    // Task 7 (P4.2a): đơn nghi_bu giữ chỗ quỹ GIỜ TRƯỚC khi đơn được lưu —
+    // song song hoàn toàn với phanBoQuy ở trên, chỉ khác quỹ (giờ thay vì
+    // ngày) và không có các cửa "chưa lên chính thức" (quỹ giờ không đụng gì
+    // tới thời gian thử việc). `phanBoChoNghiBu` tự ném ConflictException nếu
+    // không đủ số dư — không cần chặn tay ở đây.
+    let phanBoQuyGio: PhanBoQuyGio[] | undefined;
+    if (dto.loaiDon === 'nghi_bu' && (truongTinhToan.soGioNghiBu ?? 0) > 0) {
+      phanBoQuyGio = await this.quyGio_Service.phanBoChoNghiBu(
+        dto.employeeId,
+        truongTinhToan.soGioNghiBu!,
+        dto.ngay,
+      );
+    }
+
     const entity = this.repo.create({
       ...dto,
       employeeName: emp.hoTen,
@@ -337,6 +386,9 @@ export class DonChamCong_Service {
       // phanBoQuy (P3.8): chỉ gán khi đơn thực sự đụng quỹ — đơn OT/giải
       // trình/nghỉ khác không nên có key này trên entity dù là undefined.
       ...(phanBoQuy ? { phanBoQuy } : {}),
+      // phanBoQuyGio (Task 7): cùng lý do — chỉ đơn nghi_bu thực sự trừ quỹ
+      // giờ mới có key này.
+      ...(phanBoQuyGio ? { phanBoQuyGio } : {}),
     } as Partial<AttendanceRequest>);
 
     const daLuu = await this.repo.save(entity);
@@ -391,6 +443,37 @@ export class DonChamCong_Service {
         // xoá để remove()/huyDonCuaToi() (nếu lỡ được gọi trên đơn ma này)
         // không có gì để mà nhả/hoàn lần thứ hai.
         daLuu.phanBoQuy = undefined;
+        await this.repo.save(daLuu);
+        throw e;
+      }
+    }
+
+    // Task 7 (P4.2a): giữ chỗ quỹ giờ — song song hệt khối phanBoQuy ở trên,
+    // cùng khuôn xử lý lỗi. Không bao giờ CÙNG chạy với khối phanBoQuy (một
+    // đơn chỉ là nghi_phep/phep_nam HOẶC nghi_bu, không bao giờ cả hai).
+    if (phanBoQuyGio?.length) {
+      try {
+        await this.quyGio_Service.giuCho(
+          dto.employeeId,
+          phanBoQuyGio,
+          String((daLuu as any)._id),
+          dto.employeeId,
+        );
+      } catch (e) {
+        // Không để đơn sống sót với phanBoQuyGio đã lưu mà quỹ chưa hề giữ:
+        // chuyenSangDaDung() lúc duyệt sẽ chạy trên phân bổ đó như bình
+        // thường và trừ mất giờ chưa từng được giữ — cùng lý do đã ghi ở
+        // khối phanBoQuy phía trên.
+        await this.quyGio_Service
+          .nhaCho(
+            dto.employeeId,
+            phanBoQuyGio,
+            String((daLuu as any)._id),
+            dto.employeeId,
+          )
+          .catch(() => undefined);
+        daLuu.isActive = false;
+        daLuu.phanBoQuyGio = undefined;
         await this.repo.save(daLuu);
         throw e;
       }
@@ -496,9 +579,9 @@ export class DonChamCong_Service {
     // (review round 1, CRITICAL) một số CẶP (cũ → mới) không có lối quỹ hợp
     // lệ trực tiếp — chặn TRƯỚC khi ghi `item.trangThai`, đừng để đơn đổi
     // trạng thái rồi mới báo lỗi (nếu không, phản hồi lỗi vẫn kèm một đơn đã
-    // bị đổi trạng thái oan). Bảng đầy đủ (chỉ áp dụng cho đơn trừ quỹ —
-    // `donTruQuy` bên dưới; giai_trinh/lam_them_gio/nghi_bu/loaiNghi khác
-    // không bị ràng buộc gì, hành vi giữ nguyên như trước Task 8):
+    // bị đổi trạng thái oan). Bảng đầy đủ (áp dụng cho đơn trừ quỹ — `donTruQuy`
+    // (phep_nam) HOẶC `donTruQuyGio` (nghi_bu đã giữ chỗ quỹ giờ, Task 7);
+    // giai_trinh/lam_them_gio/loaiNghi khác không bị ràng buộc gì):
     //
     //   cùng nhau            → không làm gì (idempotent, bấm đúp/retry)
     //   cho_duyet → da_duyet → chuyenSangDaDung
@@ -508,8 +591,13 @@ export class DonChamCong_Service {
     //   da_duyet  → cho_duyet→ CHẶN, 409 (đi qua tu_choi trước)
     //   tu_choi   → da_duyet → CHẶN, 409 (đi qua cho_duyet trước)
     const donTruQuy = this.laDonTruQuy(item) && !!item.phanBoQuy?.length;
+    // Task 7 (P4.2a): đơn nghi_bu đã giữ chỗ quỹ giờ lúc nộp cùng chung hai
+    // lối cấm này — da_duyet→cho_duyet và tu_choi→da_duyet không có hàm nào
+    // trong QuyGio_Service khớp trực tiếp (giống hệt lý do đã chặn donTruQuy).
+    const donTruQuyGio =
+      item.loaiDon === 'nghi_bu' && !!item.phanBoQuyGio?.length;
     if (
-      donTruQuy &&
+      (donTruQuy || donTruQuyGio) &&
       ((trangThaiCu === 'da_duyet' && trangThai === 'cho_duyet') ||
         (trangThaiCu === 'tu_choi' && trangThai === 'da_duyet'))
     ) {
@@ -631,6 +719,72 @@ export class DonChamCong_Service {
         item.thoiDiemDuyet = thoiDiemDuyetCu;
         await this.repo.save(item);
         throw e;
+      }
+    }
+
+    // ── Quỹ giờ làm thêm (Task 7, P4.2a) ───────────────────────────────────
+    // Đơn OT (lam_them_gio): tích quỹ lúc duyệt, thu hồi khi rời khỏi
+    // da_duyet. KHÔNG cần guard `trangThaiCu !== trangThai` như khối quỹ phép
+    // ở trên — tichTuDonOt()/thuHoiTichTuDonOt() đã tự chống trùng qua sổ
+    // ròng theo kỳ tích ở chính QuyGio_Service (xem doc-comment ở đó), nên
+    // thêm một lớp chặn nữa ở đây là chặn kép, che mất chỗ luật thật sự nằm.
+    if (item.loaiDon === 'lam_them_gio') {
+      if (trangThaiCu !== 'da_duyet' && trangThai === 'da_duyet') {
+        await this.quyGio_Service.tichTuDonOt({
+          employeeId: item.employeeId,
+          employeeName: item.employeeName,
+          employeeCode: item.employeeCode,
+          ngay: item.ngay,
+          soGioOt: item.soGioOt ?? 0,
+          loaiNgayOt: item.loaiNgayOt ?? 'ngay_thuong',
+          requestId: String((daLuu as any)._id),
+          nguoiThucHien: String(nguoiThucHien?.id ?? ''),
+        });
+      } else if (trangThaiCu === 'da_duyet' && trangThai !== 'da_duyet') {
+        await this.quyGio_Service.thuHoiTichTuDonOt(
+          String((daLuu as any)._id),
+          item.employeeId,
+          String(nguoiThucHien?.id ?? ''),
+        );
+      }
+    }
+
+    // Đơn nghỉ bù (nghi_bu): cùng bảng chuyển trạng thái đã dùng cho quỹ
+    // phép ở trên — donTruQuyGio (khai ở guard phía trên) đã xác nhận đơn
+    // này thực sự có phanBoQuyGio để mà chuyển.
+    if (donTruQuyGio) {
+      const requestId = String((daLuu as any)._id);
+      const nguoiThucHienId = String(nguoiThucHien?.id ?? '');
+      const p = item.phanBoQuyGio!;
+
+      if (trangThaiCu === 'cho_duyet' && trangThai === 'da_duyet') {
+        await this.quyGio_Service.chuyenSangDaDung(
+          item.employeeId,
+          p,
+          requestId,
+          nguoiThucHienId,
+        );
+      } else if (trangThaiCu === 'cho_duyet' && trangThai === 'tu_choi') {
+        await this.quyGio_Service.nhaCho(
+          item.employeeId,
+          p,
+          requestId,
+          nguoiThucHienId,
+        );
+      } else if (trangThaiCu === 'da_duyet' && trangThai === 'tu_choi') {
+        await this.quyGio_Service.hoanTraDaDung(
+          item.employeeId,
+          p,
+          requestId,
+          nguoiThucHienId,
+        );
+      } else if (trangThaiCu === 'tu_choi' && trangThai === 'cho_duyet') {
+        await this.quyGio_Service.giuCho(
+          item.employeeId,
+          p,
+          requestId,
+          nguoiThucHienId,
+        );
       }
     }
 

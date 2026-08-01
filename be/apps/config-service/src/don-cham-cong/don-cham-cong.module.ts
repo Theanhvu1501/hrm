@@ -4,6 +4,7 @@ import { DatabaseModule } from '@app/database';
 import { NgayLe_Module } from '../ngay-le/ngay-le.module';
 import { NhanVien_Module } from '../nhan-vien/nhan-vien.module';
 import { QuyPhep_Module } from '../quy-phep/quy-phep.module';
+import { QuyGio_Module } from '../quy-gio/quy-gio.module';
 import { DonChamCong_Service } from './don-cham-cong.service';
 import { DonChamCong_Controller } from './don-cham-cong.controller';
 
@@ -20,6 +21,11 @@ import { DonChamCong_Controller } from './don-cham-cong.controller';
     // hoàn quỹ phép năm xuyên vòng đời đơn — xem create()/updateStatus()/
     // huyDonCuaToi()/remove().
     QuyPhep_Module,
+    // Task 7 (P4.2a): song song với QuyPhep_Module — DonChamCong_Service gọi
+    // thẳng QuyGio_Service để tích quỹ giờ khi duyệt đơn OT, và giữ/nhả/
+    // chuyển/hoàn quỹ giờ xuyên vòng đời đơn nghỉ bù. Xem create()/
+    // updateStatus().
+    QuyGio_Module,
   ],
   controllers: [DonChamCong_Controller],
   providers: [DonChamCong_Service],
