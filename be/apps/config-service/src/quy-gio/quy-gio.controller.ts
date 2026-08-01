@@ -26,6 +26,18 @@ import { DongQuyGioDto } from './dto';
  *
  * Task 9 dựng ba route đọc (danh sách HR, số dư của tôi, số dư theo nhân
  * viên). Task 12 bồi thêm xem-trước/đóng quỹ hết hạn và đối soát sổ.
+ *
+ * ⚠️ MỌI handler PHẢI trả `{ success: true, data }` (review nhánh, CRITICAL 1).
+ * Không có interceptor bọc phản hồi nào trong config-service —
+ * `main.ts` chỉ cài `LoggingInterceptor`, một `tap()` không biến đổi gì. Phía
+ * FE, `ServiceBase.parseResponse()` (`fe/src/services/base/service-base.ts`)
+ * kết thúc bằng `return response.data as T`, nên một handler trả object THÔ
+ * sẽ về tới FE thành `undefined` — `soDuCuaToi()` nổ TypeError trong
+ * `transform()` (bị `.catch()` của banner nuốt, số dư không bao giờ hiện,
+ * khoá nút Lưu không bao giờ bật) và `layTheoNhanVien()` gọi `.map` trên
+ * `undefined` (màn HR "Quỹ giờ làm thêm" trắng dữ liệu vĩnh viễn). Mọi
+ * controller anh em trong repo đều bọc — xem `quy-phep.controller.ts`,
+ * `don-cham-cong.controller.ts`, `nhan-vien.controller.ts`.
  */
 @Controller('quy-gio')
 @UseGuards(JwtGuard)
@@ -51,25 +63,32 @@ export class QuyGio_Controller {
     }
 
     const emp = await this.nhanVien_Service.resolveEmployeeFromUser(req.user);
-    return this.quyGio_Service.soDuKhaDung(
+    const data = await this.quyGio_Service.soDuKhaDung(
       String((emp as any)._id),
       this.homNay(),
     );
+    return { success: true, data };
   }
 
   @Get()
   @UseGuards(PermissionGuard)
   @Permissions('/cham-cong/quy-gio:xem')
   async danhSach(@Query('employeeId') employeeId?: string) {
-    if (!employeeId) return [];
-    return this.quyGio_Service.layQuyCuaNhanVien(employeeId);
+    const data = employeeId
+      ? await this.quyGio_Service.layQuyCuaNhanVien(employeeId)
+      : [];
+    return { success: true, data };
   }
 
   @Get(':employeeId/so-du')
   @UseGuards(PermissionGuard)
   @Permissions('/cham-cong/quy-gio:xem')
   async soDu(@Param('employeeId') employeeId: string) {
-    return this.quyGio_Service.soDuKhaDung(employeeId, this.homNay());
+    const data = await this.quyGio_Service.soDuKhaDung(
+      employeeId,
+      this.homNay(),
+    );
+    return { success: true, data };
   }
 
   /** Xem trước quỹ sẽ bị đóng nếu chạy `dong-quy` — không ghi gì. */
@@ -77,7 +96,10 @@ export class QuyGio_Controller {
   @UseGuards(PermissionGuard)
   @Permissions('/cham-cong/quy-gio:sua')
   async xemTruocDongQuy(@Query('den') den?: string) {
-    return this.quyGio_Service.xemTruocDongQuy(den || this.homNay());
+    const data = await this.quyGio_Service.xemTruocDongQuy(
+      den || this.homNay(),
+    );
+    return { success: true, data };
   }
 
   @Post('dong-quy')
@@ -88,13 +110,18 @@ export class QuyGio_Controller {
     // Sổ biến động dựng lên để TRUY VẾT ai làm gì — actor rỗng là lỗ hổng
     // audit trail, không phải giá trị hợp lệ để mặc định vào.
     if (!id) throw new UnauthorizedException('Token thiếu định danh người dùng');
-    return this.quyGio_Service.dongQuyGio(body.den || this.homNay(), String(id));
+    const data = await this.quyGio_Service.dongQuyGio(
+      body.den || this.homNay(),
+      String(id),
+    );
+    return { success: true, data };
   }
 
   @Get(':employeeId/doi-soat')
   @UseGuards(PermissionGuard)
   @Permissions('/cham-cong/quy-gio:xem')
   async doiSoat(@Param('employeeId') employeeId: string) {
-    return this.quyGio_Service.doiSoat(employeeId);
+    const data = await this.quyGio_Service.doiSoat(employeeId);
+    return { success: true, data };
   }
 }
