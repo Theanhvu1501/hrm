@@ -788,6 +788,196 @@ describe('DonChamCong_Service', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
+  // update — Task 7b (gap 2): PUT :id là cửa THỨ HAI vào quỹ GIỜ, cùng lớp
+  // lỗi hệt describe quỹ phép ở trên — mirror trực tiếp exploit (a)/(b)/(c)
+  // nhưng cho nghi_bu (giữ chỗ) và lam_them_gio (đã tích lúc duyệt).
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('update — PUT không được sửa các trường ảnh hưởng quỹ giờ (Task 7b, gap 2)', () => {
+    const DON_ID = '507f1f77bcf86cd799439099';
+
+    it('nghi_bu ĐANG GIỮ CHỖ (phanBoQuyGio) → PUT sửa gioDen → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_bu',
+        kieuNghi: 'theo_gio',
+        ngay: '2027-02-01',
+        gioTu: '15:00',
+        gioDen: '17:00',
+        soGioNghiBu: 2,
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2027-01', soGio: 2 }],
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { gioDen: '19:00' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('nghi_bu ĐANG GIỮ CHỖ → PUT sửa kieuNghi → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_bu',
+        kieuNghi: 'theo_gio',
+        ngay: '2027-02-01',
+        gioTu: '15:00',
+        gioDen: '17:00',
+        soGioNghiBu: 2,
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2027-01', soGio: 2 }],
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { kieuNghi: 'theo_ngay' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    // Mirror exploit (c) của quỹ phép: đổi loaiDon RA KHỎI nghi_bu để né
+    // laDonTruQuyGio() ở mọi đường sau đó (updateStatus/huyDonCuaToi/remove)
+    // — giữ chỗ đã có (phanBoQuyGio) sẽ không bao giờ được nhả nữa.
+    it('nghi_bu ĐANG GIỮ CHỖ → PUT đổi loaiDon sang giai_trinh → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_bu',
+        kieuNghi: 'theo_gio',
+        ngay: '2027-02-01',
+        gioTu: '15:00',
+        gioDen: '17:00',
+        soGioNghiBu: 2,
+        phanBoQuyGio: [{ balanceId: 'b1', kyTich: '2027-01', soGio: 2 }],
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { loaiDon: 'giai_trinh' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('OT ĐÃ DUYỆT (đã tích quỹ) → PUT sửa gioTu → 409, đơn KHÔNG đổi', async () => {
+      const donGoc = {
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'da_duyet',
+        loaiDon: 'lam_them_gio',
+        ngay: '2027-02-01',
+        gioTu: '18:00',
+        gioDen: '20:00',
+        soGioOt: 2,
+        heSoOt: 1.5,
+        loaiNgayOt: 'ngay_thuong',
+      };
+      mockRequestRepo.findOne.mockResolvedValue({ ...donGoc });
+
+      const err = await batMaLoi(() =>
+        service.update(DON_ID, { gioTu: '17:00' } as any),
+      );
+
+      expect(err).toBe(MA_LOI_DON_CHAM_CONG.KHONG_THE_SUA_DON_TRU_QUY);
+      expect(mockRequestRepo.save).not.toHaveBeenCalled();
+    });
+
+    // OT còn cho_duyet chưa từng đụng quỹ (tích lúc DUYỆT, không phải lúc
+    // nộp) — sửa giờ ở đây KHÔNG chạm gì tới quỹ, phải được phép bình
+    // thường. Không bị chặn quá tay là điều kiện sống còn của guard này.
+    it('OT còn CHỜ DUYỆT (chưa tích quỹ) → PUT sửa gioTu vẫn được phép', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'lam_them_gio',
+        ngay: '2027-02-01',
+        gioTu: '18:00',
+        gioDen: '20:00',
+        soGioOt: 2,
+        heSoOt: 1.5,
+        loaiNgayOt: 'ngay_thuong',
+      });
+
+      const result = await service.update(DON_ID, { gioTu: '17:00' } as any);
+
+      expect(result.gioTu).toBe('17:00');
+      expect(mockRequestRepo.save).toHaveBeenCalled();
+    });
+
+    // Không bị chặn quá tay: sửa lyDo (không ảnh hưởng quỹ giờ) trên một đơn
+    // OT ĐÃ DUYỆT vẫn phải đi qua bình thường — cùng tinh thần với test
+    // "sửa lyDo trên đơn phép năm" ở describe quỹ phép phía trên.
+    it('sửa lyDo trên OT ĐÃ DUYỆT (giá trị các trường ảnh hưởng quỹ giữ nguyên) vẫn được phép', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'da_duyet',
+        loaiDon: 'lam_them_gio',
+        ngay: '2027-02-01',
+        gioTu: '18:00',
+        gioDen: '20:00',
+        soGioOt: 2,
+        heSoOt: 1.5,
+        loaiNgayOt: 'ngay_thuong',
+        lyDo: 'Lý do cũ',
+      });
+
+      const result = await service.update(DON_ID, {
+        loaiDon: 'lam_them_gio',
+        ngay: '2027-02-01',
+        gioTu: '18:00',
+        gioDen: '20:00',
+        lyDo: 'Lý do mới',
+      } as any);
+
+      expect(result.lyDo).toBe('Lý do mới');
+      expect(mockRequestRepo.save).toHaveBeenCalled();
+    });
+
+    // Task 7b (gap 2b): phanBoQuyGio gửi kèm trong body PUT không được phép
+    // chạm tới entity dưới bất kỳ hình thức nào — cùng lý do phanBoQuy đã bị
+    // bóc từ P3.8. Đơn ở đây KHÔNG giữ chỗ gì (nghi_bu nhưng phanBoQuyGio
+    // rỗng từ đầu) để cô lập đúng assertion: guard 2a không nhúng vào đây
+    // (không có gì để mà chặn 409), chỉ còn phép bóc-và-bỏ ở đầu update() là
+    // thứ duy nhất có thể ngăn phanBoQuyGio-giả-mạo chạm entity.
+    it('phanBoQuyGio gửi kèm trong body PUT không được ghi vào entity', async () => {
+      mockRequestRepo.findOne.mockResolvedValue({
+        _id: DON_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        loaiDon: 'nghi_bu',
+        kieuNghi: 'theo_gio',
+        ngay: '2027-02-01',
+        gioTu: '15:00',
+        gioDen: '17:00',
+        lyDo: 'cũ',
+        // Không có phanBoQuyGio trên item gốc — đơn này chưa từng giữ chỗ.
+      });
+
+      const result = await service.update(DON_ID, {
+        lyDo: 'mới',
+        phanBoQuyGio: [{ balanceId: 'gia-mao', kyTich: '2099-01', soGio: 999 }],
+      } as any);
+
+      expect(result.phanBoQuyGio).toBeUndefined();
+      expect(mockRequestRepo.save).toHaveBeenCalledWith(
+        expect.not.objectContaining({
+          phanBoQuyGio: [{ balanceId: 'gia-mao', kyTich: '2099-01', soGio: 999 }],
+        }),
+      );
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
   // findAll
   // ──────────────────────────────────────────────────────────────────────────
   describe('findAll', () => {
@@ -2251,6 +2441,106 @@ describe('DonChamCong_Service — nghỉ bù trừ quỹ giờ (Task 7)', () => 
       await service.remove('650000000000000000000404');
       expect(quyGio.nhaCho).toHaveBeenCalledTimes(1);
       expect(quyGio.hoanTraDaDung).not.toHaveBeenCalled();
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Task 7b (gap 1) — remove() trên đơn OT ĐÃ DUYỆT phải THU HỒI giờ đã
+  // tích, mirror hệt cách remove() đã xử lý phanBoQuy/phanBoQuyGio ở trên
+  // — nhưng theo hướng NGƯỢC LẠI (đây là fund đã CẤP, không phải đã GIỮ).
+  //
+  // Quyết định thiết kế (xem lý do đầy đủ ở doc-comment `canThuHoiOt` trong
+  // remove()): nếu `thuHoiTichTuDonOt()` ném DA_TIEU_KHONG_THU_HOI_DUOC
+  // (giờ đã bị TIÊU một phần qua nghỉ bù), remove() PHẢI CHẶN việc xoá —
+  // không soft-delete, không lưu gì cả — chứ không được nuốt lỗi rồi xoá
+  // tiếp. Message của lỗi đó tự nói "xử lý tay TRƯỚC KHI hủy đơn": nếu
+  // remove() nuốt lỗi và xoá đơn như bình thường, HR mất luôn đầu mối duy
+  // nhất (đơn) để mà biết cần xử lý tay ở đâu — một soft-delete "thành
+  // công" trong khi quỹ sai chính là cách cái leak gốc (Critical 2) đã xảy
+  // ra, lặp lại nó ở đây để đổi lấy UX xoá mượt hơn là đánh đổi sai chỗ.
+  // ────────────────────────────────────────────────────────────────────
+  describe('remove() — đơn OT ĐÃ DUYỆT phải thu hồi giờ đã tích (Task 7b, gap 1)', () => {
+    it('xoá đơn OT ĐÃ DUYỆT → thuHoiTichTuDonOt được gọi, đơn bị vô hiệu hoá', async () => {
+      const quyGio = mockQuyGio();
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000501', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'da_duyet',
+          isActive: true,
+        },
+      });
+
+      await service.remove('650000000000000000000501', { id: 'hr-xoa-don' } as any);
+
+      expect(quyGio.thuHoiTichTuDonOt).toHaveBeenCalledWith(
+        '650000000000000000000501',
+        ID_NV1,
+        'hr-xoa-don',
+      );
+      expect(luu.isActive).toBe(false);
+    });
+
+    it('xoá đơn OT còn CHỜ DUYỆT (chưa tích quỹ) → KHÔNG gọi thuHoiTichTuDonOt', async () => {
+      const quyGio = mockQuyGio();
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000502', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'cho_duyet',
+          isActive: true,
+        },
+      });
+
+      await service.remove('650000000000000000000502');
+
+      expect(quyGio.thuHoiTichTuDonOt).not.toHaveBeenCalled();
+      expect(luu.isActive).toBe(false);
+    });
+
+    it('xoá đơn OT ĐÃ BỊ TỪ CHỐI (đã thu hồi từ updateStatus rồi) → KHÔNG gọi thuHoiTichTuDonOt lần hai', async () => {
+      const quyGio = mockQuyGio();
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000503', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'tu_choi',
+          isActive: true,
+        },
+      });
+
+      await service.remove('650000000000000000000503');
+
+      expect(quyGio.thuHoiTichTuDonOt).not.toHaveBeenCalled();
+      expect(luu.isActive).toBe(false);
+    });
+
+    // Quyết định thiết kế chính của gap 1: giờ đã TIÊU một phần (nghỉ bù đã
+    // ăn vào) → thuHoiTichTuDonOt() ném DA_TIEU_KHONG_THU_HOI_DUOC → remove()
+    // PHẢI NÉM LẠI, KHÔNG được soft-delete. `luu` (bản ghi cuối cùng
+    // repo.save() nhận, khởi tạo `{}` trong dungService()) phải vẫn rỗng —
+    // repo.save() chưa từng được gọi, không có gì để mà rollback vì chưa có
+    // gì được ghi xuống DB.
+    it('giờ đã bị tiêu một phần → thuHoiTichTuDonOt ném lỗi → remove() ném lại, KHÔNG soft-delete, KHÔNG gọi repo.save()', async () => {
+      const quyGio = mockQuyGio({
+        thuHoiTichTuDonOt: jest
+          .fn()
+          .mockRejectedValue(new ConflictException({ code: 'QUY_GIO_DA_TIEU' })),
+      });
+      const { service, luu } = await dungService({
+        quyGio,
+        don: {
+          _id: '650000000000000000000504', employeeId: ID_NV1, loaiDon: 'lam_them_gio',
+          ngay: '2026-01-15', soGioOt: 8, loaiNgayOt: 'ngay_thuong', trangThai: 'da_duyet',
+          isActive: true,
+        },
+      });
+
+      await expect(
+        service.remove('650000000000000000000504', { id: 'hr-xoa-don' } as any),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(luu).toEqual({});
     });
   });
 });
