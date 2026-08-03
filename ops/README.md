@@ -404,3 +404,50 @@ nút đầu tiên và nút Chốt khoá cứng không có cách nào gỡ nhanh:
 
 Không cần chạy `ops/grant-quyen-module-moi.ts` cho đợt này — P3.9 không thêm module quyền mới,
 vẫn dùng `/cham-cong/bang-cong:xem|them|sua|xoa|xuat` đã có (xem spec §10).
+
+## Rollout huỷ duyệt/xoá hồ sơ thôi việc — hồ sơ cũ không có snapshot để khôi phục
+
+`Resignation.trangThaiNhanVienTruocKhiDuyet` là cột MỚI: `ThoiViec_Service.updateStatus()` chỉ
+chụp lại `Employee.trangThai` vào cột này đúng lúc hồ sơ **lần đầu** chuyển vào `da_duyet`/
+`hoan_thanh` (KHÔNG chụp lại ở `da_duyet -> hoan_thanh`, xem doc-comment `updateStatus()`). Mọi
+hồ sơ đã được duyệt **trước** khi bản vá này deploy đều thiếu cột này — không có gì để đọc lại.
+
+Khi huỷ duyệt (`updateStatus(..., 'tu_choi'|'cho_duyet')`) hoặc xoá (`remove()`) một hồ sơ như
+vậy, `trangThaiKhoiPhuc()` rơi về mặc định **`dang_lam_viec`**. Với đa số hồ sơ điều đó đúng —
+nhưng nếu nhân viên đó vốn đang **`tam_nghi`** (thai sản, nghỉ không lương) NGAY TRƯỚC KHI hồ
+sơ thôi việc được duyệt, họ sẽ bị hồi sinh SAI thành `dang_lam_viec` thay vì trả lại đúng
+`tam_nghi` — không có cách nào để phần mềm tự biết, vì dữ liệu gốc chưa từng được ghi lại (xem
+lý giải "vì sao không đọc lại từ `employment_histories`" trong `thoi-viec.service.ts`: module đó
+không ghi gì trên đường này).
+
+**Trước khi HR huỷ duyệt hoặc xoá một hồ sơ thôi việc cũ, rà xem nó có nằm trong nhóm rủi ro
+này không** — chạy trong `mongosh` trên DB `nhan_su`:
+
+```js
+// Các hồ sơ đang có hiệu lực (đang giữ NV ở da_nghi) nhưng KHÔNG có snapshot để khôi phục
+// đúng nếu sau này bị huỷ duyệt/xoá — mọi hồ sơ này sẽ rơi về mặc định dang_lam_viec.
+db.resignations.find(
+  {
+    isActive: true,
+    trangThai: { $in: ['da_duyet', 'hoan_thanh'] },
+    trangThaiNhanVienTruocKhiDuyet: { $exists: false },
+  },
+  { employeeId: 1, employeeName: 1, employeeCode: 1, trangThai: 1, ngayNopDon: 1 },
+);
+```
+
+Với mỗi hồ sơ trả về, hỏi HR/đối chiếu hồ sơ giấy xem nhân viên đó có đang `tam_nghi` (thai sản/
+không lương) ngay trước khi hồ sơ được duyệt hay không. Nếu có, backfill tay đúng giá trị trước
+khi huỷ duyệt/xoá:
+
+```js
+db.resignations.updateOne(
+  { _id: ObjectId('<id lấy từ query trên>') },
+  { $set: { trangThaiNhanVienTruocKhiDuyet: 'tam_nghi' } },
+);
+```
+
+Không cần backfill hàng loạt "phòng ngừa" — cột này chỉ có tác dụng cho lần huỷ duyệt/xoá ĐẦU
+TIÊN sau khi bản vá deploy; hồ sơ nào không bao giờ bị huỷ duyệt/xoá thì không bao giờ đọc tới
+cột này. Không cần chạy `ops/grant-quyen-module-moi.ts` cho đợt này — không thêm module quyền
+mới, vẫn dùng `/nhan-su/thoi-viec:xem|them|sua|xoa` đã có.
