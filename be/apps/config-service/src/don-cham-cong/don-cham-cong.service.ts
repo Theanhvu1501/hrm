@@ -13,7 +13,13 @@ import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 import { QuyGio_Service } from '../quy-gio/quy-gio.service';
-import { suyHeSoOt, tinhSoGioOt, tinhSoNgayNghi } from './luat-don';
+import {
+  suyLoaiNgay,
+  tinhSoGioOt,
+  tinhSoNgayNghi,
+  traHeSo,
+  HE_SO_OT_MAC_DINH,
+} from './luat-don';
 import { lamTronGio } from '../quy-gio/luat-quy-gio';
 
 // Khoảng nghỉ vượt quá ngần này thì từ chối luôn thay vì âm thầm quét hàng
@@ -229,11 +235,12 @@ export class DonChamCong_Service {
     if (dto.loaiDon === 'lam_them_gio') {
       const soGioOt = tinhSoGioOt(dto.gioTu!, dto.gioDen!);
       const ngayLe = await this.ngayLeService.timTheoNgay(dto.ngay);
-      const { loaiNgayOt, heSoOt } = suyHeSoOt({
+      const loaiNgayOt = suyLoaiNgay({
         ngay: dto.ngay,
         laNgayLe: ngayLe !== null,
         ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
       });
+      const heSoOt = traHeSo(HE_SO_OT_MAC_DINH, loaiNgayOt);
       return { soGioOt, heSoOt, loaiNgayOt };
     }
 
