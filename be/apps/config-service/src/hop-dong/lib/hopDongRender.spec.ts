@@ -4,6 +4,7 @@ import {
   sanitizeHopDongHtml,
   timTokenLaCuaMauIn,
   DEFAULT_HOP_DONG_HTML,
+  TRUSTED_PRINT_CSS,
   type HopDongRenderInput,
 } from './hopDongRender';
 
@@ -45,18 +46,13 @@ function fullInput(overrides?: Partial<HopDongRenderInput>): HopDongRenderInput 
 }
 
 /**
- * Payload thật do reviewer chạy tay qua bản regex CŨ (`sanitizeMauInHtml`) —
- * TOÀN BỘ 9 payload dưới đây SỐNG SÓT nguyên vẹn qua bản đó (script với
- * khoảng trắng/solidus trong end tag, script không đóng thẻ, "/" làm dấu
- * tách thuộc tính thay vì khoảng trắng, svg/iframe/base không nằm trong tầm
- * ngắm của regex, javascript: không có dấu nháy hoặc encode bằng entity).
- * Sau khi đổi sang `sanitize-html` (allowlist thẻ, KHÔNG allowlist bất kỳ
- * thẻ nào có thể mang href/src — a/img/iframe/svg/object/embed/form/base/
- * link/meta/script đều bị loại khỏi allowedTags), không còn "vá từng mẫu"
- * nữa: toàn bộ nhóm thẻ mang được URL/script đã biến mất khỏi allowlist,
- * nên các biến thể encode/malformed không có "chỗ bám".
+ * Payload thật review VÒNG 1 — 9 payload sống sót qua bản regex CŨ
+ * (`sanitizeMauInHtml`): script với khoảng trắng/solidus trong end tag,
+ * script không đóng thẻ, "/" làm dấu tách thuộc tính thay vì khoảng trắng,
+ * svg/iframe/base ngoài tầm ngắm regex, javascript: không dấu nháy hoặc
+ * encode entity.
  */
-const XSS_PAYLOADS: Array<{ ten: string; payload: string }> = [
+const XSS_PAYLOADS_VONG_1: Array<{ ten: string; payload: string }> = [
   { ten: 'script với khoảng trắng cuối end tag', payload: '<script>alert(1)</script >' },
   { ten: 'script với solidus trong end tag', payload: '<script>alert(1)</script/>' },
   { ten: 'script không đóng thẻ', payload: '<script>alert(1)' },
@@ -66,10 +62,37 @@ const XSS_PAYLOADS: Array<{ ten: string; payload: string }> = [
   { ten: 'href javascript: không có dấu nháy', payload: '<a href=javascript:alert(1)>bấm</a>' },
   { ten: 'href javascript: encode bằng HTML entity', payload: '<a href="javas&#99;ript:alert(1)">bấm</a>' },
   { ten: 'base href đổi gốc tương đối của cả trang', payload: '<base href="https://evil.example/">' },
+  // review vòng 1 — Minor thêm: ảnh beacon lộ dữ liệu ra ngoài, KHÔNG cần alert().
+  { ten: 'img src trỏ ra ngoài (exfiltration qua ảnh, không cần script)', payload: '<img src=https://evil.example/steal.png>' },
 ];
 
-describe('sanitizeHopDongHtml — payload XSS thật (reviewer xác nhận sống sót qua bản regex cũ)', () => {
-  it.each(XSS_PAYLOADS)('$ten → không còn thực thi được (bị loại khỏi output)', ({ payload }) => {
+/**
+ * Payload review VÒNG 2 (Critical 1, "cùng lớp lỗi, chuyển sang thẻ khác"):
+ * bản sanitize-html trước đó cho phép 'style' + allowVulnerableTags. 'style'
+ * (như 'script') là thẻ raw-text: nội dung bên trong trả ra NGUYÊN VĂN,
+ * không escape. htmlparser2 và trình duyệt thật KHÔNG đồng thuận việc
+ * `</style/>` (có "/" thừa) có đóng thẻ style hay không — browser ĐÓNG,
+ * htmlparser2 KHÔNG — nên mọi thứ sau `</style/>`, kể cả 1 chuỗi
+ * `<script>...</script>` hợp lệ, bị coi là text bên trong style và in
+ * nguyên văn ra output. Trình duyệt parse LẠI output đó thì thấy script
+ * SỐNG. Reviewer xác nhận: input
+ * `<style>a{}</style/><script>alert(1)</script>` → output CŨ
+ * `<style>a{}</style/><script>alert(1)</script></style>`.
+ *
+ * Fix: loại 'style' khỏi allowedTags hoàn toàn (không còn thẻ raw-text nào
+ * trong allowlist) — không phải escape kỹ hơn, mà là không allowlist thẻ
+ * loại này nữa. CSS in giờ ở TRUSTED_PRINT_CSS (hằng số, không qua sanitize).
+ */
+const XSS_PAYLOADS_VONG_2: Array<{ ten: string; payload: string }> = [
+  { ten: 'style + script, </style/> (solidus thừa)', payload: '<style>a{}</style/><script>alert(1)</script>' },
+  { ten: 'style + script, </style//> (2 solidus)', payload: '<style>a{}</style//><script>alert(2)</script>' },
+  { ten: 'style + script, </style/ > (solidus + khoảng trắng)', payload: '<style>a{}</style/ ><script>alert(3)</script>' },
+  { ten: 'style + script, hoa toàn bộ </STYLE/>', payload: '<STYLE>a{}</STYLE/><script>alert(4)</script>' },
+  { ten: 'style + script, </style/ /> (solidus, khoảng trắng, solidus)', payload: '<style>a{}</style/ /><script>alert(5)</script>' },
+];
+
+describe('sanitizeHopDongHtml — payload XSS thật (đã xác nhận sống sót qua bản trước đó)', () => {
+  it.each(XSS_PAYLOADS_VONG_1)('[vòng 1] $ten → không còn thực thi được (bị loại khỏi output)', ({ payload }) => {
     const out = sanitizeHopDongHtml(payload);
     expect(out.toLowerCase()).not.toContain('<script');
     expect(out.toLowerCase()).not.toContain('onerror');
@@ -82,6 +105,13 @@ describe('sanitizeHopDongHtml — payload XSS thật (reviewer xác nhận sốn
     expect(out.toLowerCase()).not.toContain('<img');
   });
 
+  it.each(XSS_PAYLOADS_VONG_2)('[vòng 2] $ten → style bị loại hoàn toàn, KHÔNG lộ script bên trong', ({ payload }) => {
+    const out = sanitizeHopDongHtml(payload);
+    // Assert MẠNH: output phải RỖNG — không chỉ "không chứa <script" (output
+    // rỗng chứng minh script KHÔNG bị giữ lại dưới dạng text an toàn nào cả).
+    expect(out).toBe('');
+  });
+
   it('cắt bỏ toàn bộ thẻ <script>...</script> kèm nội dung bên trong', () => {
     const out = sanitizeHopDongHtml('<div>Xin chào</div><script>alert(1)</script>');
     expect(out).not.toContain('<script');
@@ -89,14 +119,20 @@ describe('sanitizeHopDongHtml — payload XSS thật (reviewer xác nhận sốn
     expect(out).toContain('Xin chào');
   });
 
-  it('giữ nguyên nội dung định dạng bình thường (bảng, style, in đậm, token {{...}})', () => {
-    const html =
-      '<style>.x{color:red}</style><table><tr><td><b>Số</b>: {{soHopDong}}</td></tr></table>';
-    const out = sanitizeHopDongHtml(html);
+  it('KHÔNG còn allowlist <style> — cắt bỏ hoàn toàn kể cả khi vô hại (review vòng 2: style là raw-text tag, không an toàn để giữ)', () => {
+    const out = sanitizeHopDongHtml('<style>.x{color:red}</style><table><tr><td><b>Số</b>: {{soHopDong}}</td></tr></table>');
+    expect(out).not.toContain('<style');
+    expect(out).not.toContain('color:red');
+    // Nội dung khác (bảng, in đậm, token) vẫn giữ nguyên — chỉ style bị loại.
     expect(out).toContain('{{soHopDong}}');
     expect(out).toContain('<table>');
     expect(out).toContain('<b>Số</b>');
-    expect(out).toContain('color:red');
+  });
+
+  it('giữ nguyên nội dung định dạng bình thường (bảng, in đậm, token {{...}}) — không có style', () => {
+    const html = '<table><tr><td><b>Số</b>: {{soHopDong}}</td></tr></table>';
+    const out = sanitizeHopDongHtml(html);
+    expect(out).toBe(html);
   });
 
   it('không cho phép bất kỳ thẻ nào mang được href/src (a/img/iframe/object/embed/form/base/link) dù không có payload độc', () => {
@@ -247,12 +283,15 @@ describe('timTokenLaCuaMauIn — validate token lúc lưu mẫu (review Importan
 describe('renderHopDongHtml', () => {
   it('thay token {{...}} bằng giá trị thật', () => {
     const { html } = renderHopDongHtml('<p>{{hoTenNLD}} - {{soHopDong}}</p>', fullInput());
-    expect(html).toBe('<p>Nguyễn Văn A - HD0001</p>');
+    // html luôn có tiền tố <style>TRUSTED_PRINT_CSS</style> (xem describe
+    // TRUSTED_PRINT_CSS bên dưới) — test này chỉ quan tâm phần NỘI DUNG sau đó.
+    expect(html).toContain('<p>Nguyễn Văn A - HD0001</p>');
+    expect(html.endsWith('<p>Nguyễn Văn A - HD0001</p>')).toBe(true);
   });
 
   it('token không xác định → GIỮ NGUYÊN {{...}} (báo lỗi hiện rõ, không âm thầm để trống — review Important #7)', () => {
     const { html } = renderHopDongHtml('<p>{{khongTonTai}}</p>', fullInput());
-    expect(html).toBe('<p>{{khongTonTai}}</p>');
+    expect(html.endsWith('<p>{{khongTonTai}}</p>')).toBe(true);
   });
 
   it('liệt kê cảnh báo khi thiếu dữ liệu công ty', () => {
@@ -339,5 +378,32 @@ describe('renderHopDongHtml', () => {
     expect(html).not.toContain('<script');
     expect(html).not.toContain('alert(');
     expect(html).toContain('Nguyễn Văn A');
+  });
+
+  it('mẫu chứa payload style/script vòng 2 (</style/>) → render ra KHÔNG có script sống, dù đây là template chứ không phải dữ liệu (review Critical 1 vòng 2)', () => {
+    const tenantTemplateBiXam = '<p>{{hoTenNLD}}</p><style>a{}</style/><script>alert(document.cookie)</script>';
+    const { html } = renderHopDongHtml(tenantTemplateBiXam, fullInput());
+    expect(html).not.toContain('<script>alert');
+    expect(html).toContain('Nguyễn Văn A');
+  });
+
+  // review vòng 2: CSS in ấn không còn nằm trong mẫu (tenant không chỉnh
+  // được) — renderHopDongHtml PHẢI tự ghép TRUSTED_PRINT_CSS vào, nếu không
+  // bản in mất hết layout khổ A4/font.
+  describe('TRUSTED_PRINT_CSS — CSS in luôn được ghép, KHÔNG đi qua sanitize/không tenant chỉnh được', () => {
+    it('html trả ra luôn có <style> chứa TRUSTED_PRINT_CSS, kể cả mẫu tenant không có style nào', () => {
+      const { html } = renderHopDongHtml('<p>{{hoTenNLD}}</p>', fullInput());
+      expect(html).toContain(`<style>${TRUSTED_PRINT_CSS}</style>`);
+    });
+
+    it('mẫu tenant tự chèn <style> khác vẫn bị loại — CHỈ TRUSTED_PRINT_CSS xuất hiện trong output', () => {
+      const { html } = renderHopDongHtml('<style>body{color:blue}</style><p>x</p>', fullInput());
+      expect(html).not.toContain('color:blue');
+      expect(html).toContain(TRUSTED_PRINT_CSS);
+    });
+
+    it('DEFAULT_HOP_DONG_HTML (mẫu mặc định) không tự chứa thẻ <style> — CSS chỉ đến từ TRUSTED_PRINT_CSS lúc render', () => {
+      expect(DEFAULT_HOP_DONG_HTML).not.toContain('<style');
+    });
   });
 });

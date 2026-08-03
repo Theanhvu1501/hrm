@@ -62,8 +62,8 @@ export interface HopDongRenderInput {
 // ─────────────────────────────────────────────────────────────────────────
 // Sanitize HTML hợp đồng — dùng `sanitize-html` (parser HTML thật qua
 // htmlparser2, KHÔNG phải regex) vì regex không thể phân tích đúng cú pháp
-// HTML: review (Critical 1) chạy tay 9 payload qua bản regex cũ và TẤT CẢ
-// sống sót — `</script >` (khoảng trắng cuối end tag), `</script/>`
+// HTML: review vòng 1 (Critical 1) chạy tay 9 payload qua bản regex cũ và
+// TẤT CẢ sống sót — `</script >` (khoảng trắng cuối end tag), `</script/>`
 // (solidus), `<script>` không đóng thẻ, `<img src=x/onerror=...>` ("/" là
 // dấu tách thuộc tính hợp lệ, không phải khoảng trắng), `<svg/onload=...>`,
 // `<iframe srcdoc="...">`, `href=javascript:...` không dấu nháy, entity-encode
@@ -75,6 +75,29 @@ export interface HopDongRenderInput {
 // img, iframe, svg, object, embed, form, input, base, link, meta, script đều
 // bị loại khỏi allowedTags). Không có "chỗ bám" thì mọi biến thể encode/
 // malformed ở trên đều vô hại — không cần liệt kê từng dạng.
+//
+// review VÒNG 2: 'style' TỪNG nằm trong allowedTags (kèm allowVulnerableTags)
+// — SAI, vì 'style' (giống 'script') là thẻ "raw text": nội dung bên trong
+// được trả ra NGUYÊN VĂN, không escape (bắt buộc, để CSS hợp lệ). htmlparser2
+// (bộ máy phân tích của sanitize-html) và trình duyệt thật KHÔNG đồng thuận
+// về việc `</style/>` (có "/" thừa trước ">") có đóng thẻ style hay không —
+// browser thật ĐÓNG (parse error nhưng vẫn đóng), htmlparser2 thì KHÔNG,
+// tiếp tục đọc mọi thứ sau đó — kể cả 1 chuỗi `<script>alert(1)</script>`
+// hợp lệ — như thể còn là text bên trong style, rồi in NGUYÊN VĂN ra output
+// (vì đó là raw text, không escape). Kết quả: input
+// `<style>a{}</style/><script>alert(1)</script>` ra output
+// `<style>a{}</style/><script>alert(1)</script></style>` — chuỗi
+// `<script>alert(1)</script>` nằm NGUYÊN trong output, và khi trình duyệt
+// THẬT (đóng style tại `</style/>`) parse lại output này, nó thấy `<script>`
+// là 1 thẻ SỐNG, không phải text — chạy được. Đây là lỗi "parser confusion"
+// (2 bộ máy phân tích bất đồng về ranh giới 1 thẻ raw-text), CÙNG LỚP lỗi
+// với `</script/>` ở vòng 1, chỉ chuyển sang thẻ khác.
+//
+// Fix: KHÔNG allowlist 'style' (hay bất kỳ thẻ raw-text nào khác) — loại
+// hẳn khỏi allowedTags, bỏ allowVulnerableTags. CSS in (@page, font, layout)
+// giờ nằm ở hằng số TRUSTED_PRINT_CSS bên dưới, KHÔNG BAO GIỜ đi qua
+// sanitizer hay lẫn với nội dung tenant có thể chỉnh — `renderHopDongHtml`
+// ghép nó vào SAU KHI sanitize xong, ở khâu build document cuối cùng.
 //
 // Dùng CHUNG cho cả 2 điểm:
 //  1. `hop-dong.service.ts: upsertMauIn` — sanitize lúc LƯU mẫu tenant tự soạn.
@@ -89,7 +112,6 @@ const ALLOWED_TAGS = [
   'h1', 'h2', 'h3', 'h4',
   'ul', 'ol', 'li',
   'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
-  'style',
 ];
 
 const ALLOWED_ATTRIBUTES: Record<string, string[]> = {
@@ -107,15 +129,34 @@ export function sanitizeHopDongHtml(html: string): string {
     // có scheme URL nào có "chỗ bám" — chặn tuyệt đối cho chắc.
     allowedSchemes: [],
     allowProtocolRelative: false,
-    // 'style' nằm trong danh sách "thẻ cần cân nhắc" lịch sử của thư viện
-    // (một số engine CSS rất cũ có expression()/behavior: — trình duyệt hiện
-    // đại không còn hỗ trợ); ta CHỦ ĐỘNG cho phép vì mẫu in cần @page/font
-    // cho khổ A4, không có JS nào chạy được qua CSS trên trình duyệt hiện
-    // đại. Cờ dưới đây là xác nhận tường minh, không phải bật mặc định.
-    allowVulnerableTags: true,
     disallowedTagsMode: 'discard',
   });
 }
+
+/**
+ * CSS in ấn (khổ A4, font, layout) — hằng số TRUSTED, KHÔNG BAO GIỜ đi qua
+ * sanitizer và KHÔNG thể bị tenant ghi đè qua mẫu in (mẫu không còn được
+ * phép chứa thẻ `<style>` — xem giải thích ở trên). `renderHopDongHtml` ghép
+ * hằng số này vào output SAU bước sanitize.
+ */
+export const TRUSTED_PRINT_CSS = `
+  @page { size: A4; margin: 20mm 22mm; }
+  .hd { font-family: "Times New Roman", Times, serif; font-size: 14px; line-height: 1.5; color: #000; }
+  .hd .top { display: flex; justify-content: space-between; }
+  .hd .top .cty { font-weight: bold; text-transform: uppercase; text-align: center; width: 45%; }
+  .hd .top .quochieu { text-align: center; width: 50%; }
+  .hd .top .quochieu .ten { font-weight: bold; }
+  .hd .top .quochieu .tieungu { font-style: italic; border-top: 1px solid #000; display: inline-block; margin-top: 2px; }
+  .hd .ngaylap { text-align: right; font-style: italic; margin: 6px 0 14px; }
+  .hd h1 { text-align: center; font-size: 22px; letter-spacing: 1px; margin: 0 0 2px; }
+  .hd .so { text-align: center; margin-bottom: 12px; }
+  .hd p { margin: 4px 0; text-align: justify; }
+  .hd .bold { font-weight: bold; }
+  .hd h2 { font-size: 15px; margin: 14px 0 4px; }
+  .hd .signs { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; }
+  .hd .signs > div { width: 45%; }
+  .hd .note { font-style: italic; font-size: 12px; }
+`.trim();
 
 // ─────────────────────────────────────────────────────────────────────────
 // Escape giá trị nội suy (dữ liệu nhân viên/công ty) — khác với mẫu (HTML
@@ -332,12 +373,16 @@ export function renderHopDongHtml(
 ): { html: string; canhBao: string[] } {
   const values = buildHopDongPlaceholders(input);
   const html = substitute(template, values);
+  // Sanitize lại HTML ĐÃ GHÉP xong — không coi sanitize lúc lưu là chốt chặn
+  // duy nhất (review Critical 1): dòng dữ liệu cũ lưu trước khi có sanitizer
+  // này, hoặc trước một bản sanitizer sau này lỡ bị bypass, vẫn không bao
+  // giờ phục vụ HTML sống ra khỏi hàm này.
+  const sanitized = sanitizeHopDongHtml(html);
   return {
-    // Sanitize lại HTML ĐÃ GHÉP xong — không coi sanitize lúc lưu là chốt
-    // chặn duy nhất (review Critical 1): dòng dữ liệu cũ lưu trước khi có
-    // sanitizer này, hoặc trước một bản sanitizer sau này lỡ bị bypass, vẫn
-    // không bao giờ phục vụ HTML sống ra khỏi hàm này.
-    html: sanitizeHopDongHtml(html),
+    // TRUSTED_PRINT_CSS ghép vào SAU sanitize, KHÔNG đi qua sanitizer —
+    // hằng số cố định trong code, tenant không chỉnh được (review vòng 2:
+    // 'style' bị loại khỏi allowedTags chính vì lý do này).
+    html: `<style>${TRUSTED_PRINT_CSS}</style>${sanitized}`,
     canhBao: buildCanhBao(input, template),
   };
 }
@@ -348,25 +393,6 @@ export function renderHopDongHtml(
 // ─────────────────────────────────────────────────────────────────────────
 export const DEFAULT_HOP_DONG_HTML = `
 <div class="hd">
-<style>
-  @page { size: A4; margin: 20mm 22mm; }
-  .hd { font-family: "Times New Roman", Times, serif; font-size: 14px; line-height: 1.5; color: #000; }
-  .hd .top { display: flex; justify-content: space-between; }
-  .hd .top .cty { font-weight: bold; text-transform: uppercase; text-align: center; width: 45%; }
-  .hd .top .quochieu { text-align: center; width: 50%; }
-  .hd .top .quochieu .ten { font-weight: bold; }
-  .hd .top .quochieu .tieungu { font-style: italic; border-top: 1px solid #000; display: inline-block; margin-top: 2px; }
-  .hd .ngaylap { text-align: right; font-style: italic; margin: 6px 0 14px; }
-  .hd h1 { text-align: center; font-size: 22px; letter-spacing: 1px; margin: 0 0 2px; }
-  .hd .so { text-align: center; margin-bottom: 12px; }
-  .hd p { margin: 4px 0; text-align: justify; }
-  .hd .bold { font-weight: bold; }
-  .hd h2 { font-size: 15px; margin: 14px 0 4px; }
-  .hd .signs { display: flex; justify-content: space-between; margin-top: 40px; text-align: center; }
-  .hd .signs > div { width: 45%; }
-  .hd .note { font-style: italic; font-size: 12px; }
-</style>
-
 <div class="top">
   <div class="cty">{{tenCongTy}}</div>
   <div class="quochieu">

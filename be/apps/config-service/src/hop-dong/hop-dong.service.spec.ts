@@ -587,7 +587,9 @@ describe('HopDong_Service', () => {
 
       const result = await service.renderHopDong(contractId);
 
-      expect(result.html).toBe('<p>Mẫu riêng — NV: C</p>');
+      // html luôn có tiền tố <style>TRUSTED_PRINT_CSS</style> (review Critical
+      // 1 vòng 2 — CSS in không đi qua sanitize/tenant không chỉnh được).
+      expect(result.html.endsWith('<p>Mẫu riêng — NV: C</p>')).toBe(true);
     });
 
     it('ưu tiên chucDanh SNAPSHOT trên hợp đồng hơn chức danh HIỆN TẠI của nhân viên (review Important #4)', async () => {
@@ -610,7 +612,7 @@ describe('HopDong_Service', () => {
 
       const result = await service.renderHopDong(contractId);
 
-      expect(result.html).toBe('<p>Trưởng phòng (lúc ký)</p>');
+      expect(result.html.endsWith('<p>Trưởng phòng (lúc ký)</p>')).toBe(true);
     });
 
     // review Minor: id/employeeId sai định dạng trước bản vá này ném BSONError
