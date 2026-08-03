@@ -192,12 +192,27 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
             className="w-full"
             value={lamThem.cheDoBu}
             disabled={!canEdit}
-            // Ba chế độ còn lại (chi_tien / nhan_vien_chon / nghi_bu_va_chenh)
-            // bị DTO backend từ chối là "chưa được hỗ trợ" — không bày ra một
-            // lựa chọn chắc chắn 400.
-            options={[{ value: "chi_nghi_bu", label: "Chỉ nghỉ bù" }]}
+            options={[
+              { value: "chi_nghi_bu", label: "Chỉ nghỉ bù" },
+              { value: "chi_tien", label: "Chỉ trả tiền" },
+              { value: "nhan_vien_chon", label: "Nhân viên chọn từng đơn" },
+              { value: "nghi_bu_va_chenh", label: "Nghỉ bù + trả phần chênh" },
+            ]}
             onChange={(cheDoBu) => capNhatLamThem({ cheDoBu })}
           />
+          {lamThem.cheDoBu === "nghi_bu_va_chenh" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Chế độ này bắt buộc hệ số tích quỹ = 1,0 ở mọi loại ngày — bảng
+              lương đã trả phần chênh, tích quỹ cao hơn là trả gấp đôi cho cùng
+              một giờ công.
+            </p>
+          )}
+          {lamThem.cheDoBu !== "chi_nghi_bu" && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              Từ chế độ này, phải chốt màn “Bảng lương thêm giờ” của kỳ TRƯỚC
+              khi tổng hợp Bảng lương — nếu không, tổng hợp sẽ bị chặn.
+            </p>
+          )}
         </Col>
 
         <Col span={8}>

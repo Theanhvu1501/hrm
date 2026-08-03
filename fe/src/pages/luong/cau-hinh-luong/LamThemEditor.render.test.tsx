@@ -302,3 +302,38 @@ describe("Tab Làm thêm & quỹ giờ — thêm/xoá/đổi thứ tự loại n
     expect(screen.getByLabelText("Lên ngay_le").closest("button")!.disabled).toBe(false);
   });
 });
+
+describe("Tab Làm thêm & quỹ giờ — bốn chế độ bù (P4.2c-2)", () => {
+  it("cảnh báo phải chốt bảng thêm giờ khi chọn chế độ có trả tiền", async () => {
+    await moTabLamThem({
+      ...cauHinhCu,
+      soGioMoiNgay: 8,
+      lamThem: { ...LAM_THEM_MAC_DINH, cheDoBu: "chi_tien" },
+    });
+
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+    expect(screen.getByText(/phải chốt màn “Bảng lương thêm giờ”/)).toBeTruthy();
+  });
+
+  it("chế độ chỉ nghỉ bù KHÔNG hiện cảnh báo đó — bảng lương không trả tiền OT", async () => {
+    await moTabLamThem({
+      ...cauHinhCu,
+      soGioMoiNgay: 8,
+      lamThem: { ...LAM_THEM_MAC_DINH, cheDoBu: "chi_nghi_bu" },
+    });
+
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+    expect(screen.queryByText(/phải chốt màn “Bảng lương thêm giờ”/)).toBeNull();
+  });
+
+  it("nghi_bu_va_chenh cảnh báo ràng buộc hệ số tích quỹ = 1,0", async () => {
+    await moTabLamThem({
+      ...cauHinhCu,
+      soGioMoiNgay: 8,
+      lamThem: { ...LAM_THEM_MAC_DINH, cheDoBu: "nghi_bu_va_chenh" },
+    });
+
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+    expect(screen.getByText(/trả gấp đôi cho cùng một giờ công/)).toBeTruthy();
+  });
+});

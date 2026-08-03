@@ -41,23 +41,6 @@ const SAN_HE_SO_CHI_NGHI_BU: Record<string, number> = {
   ngay_le: 3.0,
 };
 
-/** Nhãn tiếng Việt cho từng `cheDoBu` — thông điệp lỗi tới tay admin HR, không
- *  phải lập trình viên, nên phải gọi đúng tên chế độ họ đã chọn trên form,
- *  không phải slug enum thô. */
-const TEN_CHE_DO: Record<string, string> = {
-  chi_nghi_bu: 'chỉ nghỉ bù',
-  chi_tien: 'chỉ trả tiền',
-  nhan_vien_chon: 'nhân viên chọn',
-  nghi_bu_va_chenh: 'nghỉ bù và trả chênh',
-};
-
-/** Case 4 (`nghi_bu_va_chenh` hệ số đã đúng 1.0) và case 5 (`chi_tien`) đều
- *  rớt vì "chế độ chưa hỗ trợ" — cùng LÝ DO, nên cùng dạng câu là đúng. Điểm
- *  cần sửa không phải là ép hai câu khác nhau giả tạo, mà là nêu ĐÚNG chế độ
- *  nào bị từ chối, để hai câu tự nhiên khác nhau vì chúng THẬT SỰ khác nhau. */
-const khongHoTro = (cheDoBu: string): string =>
-  `Chế độ bù "${TEN_CHE_DO[cheDoBu] ?? cheDoBu}" chưa được hỗ trợ ở phiên bản hiện tại (mới hỗ trợ "chỉ nghỉ bù")`;
-
 /**
  * Ba ràng buộc KHÔNG diễn đạt được bằng decorator rời, và cả ba đều sai thành
  * tiền thật nếu để lọt:
@@ -134,9 +117,7 @@ export class CauHinhLamThemHopLe implements ValidatorConstraintInterface {
           return `Chế độ "nghỉ bù và trả chênh" bắt buộc hệ số tích quỹ = 1.0 ở mọi loại ngày (đang sai ở ${truong} = ${h[truong]})`;
         }
       }
-      // Hệ số đúng 1.0 cả ba rồi — vẫn còn vướng ở chỗ chế độ này CHƯA nối
-      // bảng lương ở chặng này, không được lẫn với lỗi hệ số phía trên.
-      return khongHoTro(lt.cheDoBu);
+      return null;
     }
 
     if (lt.cheDoBu === 'chi_nghi_bu') {
@@ -151,8 +132,9 @@ export class CauHinhLamThemHopLe implements ValidatorConstraintInterface {
       return null;
     }
 
-    // chi_tien / nhan_vien_chon: chưa nối bảng lương, không cần xét hệ số.
-    return khongHoTro(lt.cheDoBu);
+    // `chi_tien` / `nhan_vien_chon`: bảng lương trả tiền theo hệ số `heSoTra`,
+    // không đụng hệ số tích quỹ nên không có ràng buộc thêm ở đây.
+    return null;
   }
 }
 

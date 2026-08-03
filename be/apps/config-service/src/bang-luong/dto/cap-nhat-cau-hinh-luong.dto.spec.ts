@@ -103,30 +103,42 @@ describe('CapNhatCauHinhLuongDto — cấu hình làm thêm', () => {
   //    nêu ĐÚNG TÊN chế độ bị từ chối, để hai câu tự khác nhau vì nội dung
   //    thật sự khác nhau (case 4 nêu "nghỉ bù và trả chênh", case 5 nêu
   //    "chỉ trả tiền"), chứ không phải vì bị ép khác nhau.
-  it('4. nghi_bu_va_chenh + {1,1,1} → từ chối vì CHẾ ĐỘ chưa hỗ trợ, nêu đúng tên chế độ', async () => {
-    const loi = await layLoi(
+  it('4. nghi_bu_va_chenh + {1,1,1,1} → ĐƯỢC CHẤP NHẬN (P4.2c-2 mở khoá)', async () => {
+    // Điều kiện tiên quyết đã xong: bảng lương chính đọc được tiền OT từ bảng
+    // 03-LĐTL đã chốt. Mở khoá trước đó là cho công ty chọn một chế độ không
+    // trả tiền cho ai.
+    await expect(
       chay({
         lamThem: { ...lamThemHopLe, cheDoBu: 'nghi_bu_va_chenh', heSoTichQuy: { ngay_thuong: 1, ngay_nghi: 1, ngay_le: 1, ngay_dem: 1 } },
       }),
-    );
-    expect(loi).toBeDefined();
-    const noiDung = loi.getResponse().message.join(' ');
-    expect(noiDung).toMatch(/chưa được hỗ trợ/);
-    expect(noiDung).toMatch(/nghỉ bù và trả chênh/);
-    // Net thật của Critical 2: không được lặp lại thông điệp hệ số khi hệ số
-    // đã đúng — nếu thiếu dòng này, một message chứa cả hai câu vẫn "pass".
-    expect(noiDung).not.toMatch(/1\.0 cả ba/);
+    ).resolves.toBeDefined();
   });
 
   // 5. chi_tien — chưa nối bảng lương ở chặng này, hệ số không liên quan.
-  it('5. chi_tien → từ chối vì chế độ chưa hỗ trợ, nêu đúng tên chế độ', async () => {
-    const loi = await layLoi(
+  it('5. chi_tien → ĐƯỢC CHẤP NHẬN (P4.2c-2 mở khoá)', async () => {
+    await expect(
       chay({ lamThem: { ...lamThemHopLe, cheDoBu: 'chi_tien' } }),
+    ).resolves.toBeDefined();
+  });
+
+  it('6. nhan_vien_chon → ĐƯỢC CHẤP NHẬN', async () => {
+    await expect(
+      chay({ lamThem: { ...lamThemHopLe, cheDoBu: 'nhan_vien_chon' } }),
+    ).resolves.toBeDefined();
+  });
+
+  it('7. nghi_bu_va_chenh VẪN bắt buộc hệ số tích quỹ = 1.0 ở MỌI loại', async () => {
+    // Ràng buộc này KHÔNG được mở cùng: bảng lương đã trả phần chênh, tích
+    // quỹ ở 1.5 nữa là trả gấp đôi cho cùng một giờ công.
+    const loi = await layLoi(
+      chay({
+        lamThem: {
+          ...lamThemHopLe, cheDoBu: 'nghi_bu_va_chenh',
+          heSoTichQuy: { ngay_thuong: 1, ngay_nghi: 1, ngay_le: 1, ngay_dem: 1.5 },
+        },
+      }),
     );
-    expect(loi).toBeDefined();
-    const noiDung = loi.getResponse().message.join(' ');
-    expect(noiDung).toMatch(/chưa được hỗ trợ/);
-    expect(noiDung).toMatch(/chỉ trả tiền/);
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(/ngay_dem/);
   });
 
   it('từ chối soGioMoiNgay <= 0', async () => {
