@@ -21,6 +21,58 @@ describe('ThoiViec_Service', () => {
   const EMP_ID = '507f1f77bcf86cd799439011';
   const RESIGNATION_ID = '507f1f77bcf86cd799439099';
 
+  /**
+   * Nối mock findOne/save của cả hai repo vào một "kho DB giả lập" thật sự
+   * — CHỈ đổi khi `save()` thực sự resolve (không đổi khi bị mock reject).
+   * Mọi test khác trong file này dùng kiểu mock đơn giản hơn (findOne trả
+   * về CÙNG một tham chiếu đối tượng mỗi lần, service mutate thẳng lên đó),
+   * đủ dùng khi chỉ có TỐI ĐA một lần ghi mỗi phía. Nhưng round 3 thêm một
+   * lần ghi hồ sơ thứ hai (pha 1, snapshot-only) TRƯỚC lần ghi NV — nếu
+   * dùng kiểu mock đơn giản đó, `item.trangThai`/`emp.trangThai` bị mutate
+   * trong bộ nhớ NGAY TRƯỚC khi gọi `save()`, kể cả khi `save()` sắp bị từ
+   * chối — che mất chính hành vi cần kiểm: DB THẬT không lưu gì khi save()
+   * ném lỗi. Kho giả lập này mô phỏng đúng ngữ nghĩa đó.
+   *
+   * `loiOLanGhiHoSoThu` (1-indexed, tuỳ chọn): lần gọi `resignationRepo.save()`
+   * đó sẽ reject ĐÚNG MỘT LẦN (không ghi vào kho), mọi lần khác — kể cả lần
+   * gọi lại SAU ĐÓ có cùng thứ tự — ghi bình thường.
+   */
+  function noiKhoGiaLap(
+    banDauResignation: Record<string, any>,
+    banDauEmployee: Record<string, any>,
+    loiOLanGhiHoSoThu?: number,
+  ) {
+    let resignationDb = { ...banDauResignation };
+    let employeeDb = { ...banDauEmployee };
+    let soLanGhiHoSo = 0;
+    let daNemLoi = false;
+
+    mockResignationRepo.findOne.mockImplementation(() =>
+      Promise.resolve({ ...resignationDb }),
+    );
+    mockEmployeeRepo.findOne.mockImplementation(() =>
+      Promise.resolve({ ...employeeDb }),
+    );
+    mockResignationRepo.save.mockImplementation((v: Record<string, any>) => {
+      soLanGhiHoSo++;
+      if (!daNemLoi && soLanGhiHoSo === loiOLanGhiHoSoThu) {
+        daNemLoi = true;
+        return Promise.reject(new Error('mongo down'));
+      }
+      resignationDb = { ...v };
+      return Promise.resolve({ ...resignationDb });
+    });
+    mockEmployeeRepo.save.mockImplementation((v: Record<string, any>) => {
+      employeeDb = { ...v };
+      return Promise.resolve({ ...employeeDb });
+    });
+
+    return {
+      resignationDb: () => resignationDb,
+      employeeDb: () => employeeDb,
+    };
+  }
+
   beforeEach(async () => {
     mockResignationRepo = {
       find: jest.fn().mockResolvedValue([]),
@@ -309,6 +361,87 @@ describe('ThoiViec_Service', () => {
         expect.objectContaining({ trangThai: 'dang_lam_viec' }),
       );
     });
+
+    // ── mirror-image: resignation write fails (review round 3, CRITICAL) ──
+    it('preserves the TRUE original tam_nghi status across a final-write failure on approval — not da_nghi, and not masked by falling back to dang_lam_viec', async () => {
+      const kho = noiKhoGiaLap(
+        { _id: RESIGNATION_ID, employeeId: EMP_ID, trangThai: 'cho_duyet' },
+        {
+          _id: EMP_ID,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          trangThai: 'tam_nghi',
+        },
+        // Pha 1 (snapshot-only, lần ghi hồ sơ THỨ NHẤT) thành công; NV được
+        // ghi 'da_nghi' thành công; rồi lần ghi hồ sơ CUỐI (thứ hai — đổi
+        // trangThai sang da_duyet) mới thất bại — đúng ảnh gương của round 2
+        // (ở đó lần ghi NV thất bại, ở đây lần ghi hồ sơ cuối thất bại SAU
+        // KHI NV đã đổi xong).
+        2,
+      );
+
+      await expect(
+        service.updateStatus(RESIGNATION_ID, 'da_duyet'),
+      ).rejects.toThrow('mongo down');
+
+      // NV đã bị ghi 'da_nghi' thành công ở lần thử đầu — đúng thực tế.
+      expect(kho.employeeDb().trangThai).toBe('da_nghi');
+      // Nhưng snapshot đã được ghi BỀN ở pha 1, TRƯỚC khi đụng NV, nên vẫn
+      // giữ đúng giá trị gốc dù lần ghi cuối thất bại — hồ sơ CHƯA sang
+      // da_duyet (pha cuối chưa từng thành công).
+      expect(kho.resignationDb().trangThaiNhanVienTruocKhiDuyet).toBe(
+        'tam_nghi',
+      );
+      expect(kho.resignationDb().trangThai).toBe('cho_duyet');
+
+      // Retry — toàn bộ thao tác phải hoàn tất, VÀ snapshot cuối cùng phải
+      // là giá trị GỐC THẬT ('tam_nghi'), không phải 'da_nghi' (giá trị NV
+      // đã bị mutate ở lần thử trước) và không rơi về mặc định
+      // 'dang_lam_viec' che mất việc dữ liệu gốc suýt bị mất.
+      const result = await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+
+      expect(result.trangThai).toBe('da_duyet');
+      expect(result.trangThaiNhanVienTruocKhiDuyet).toBe('tam_nghi');
+    });
+
+    // ── exiting direction with the SAME failure-injection (review round 3) ──
+    // Xác nhận claim "exiting branch an toàn": nguồn khôi phục ở đây luôn là
+    // `item.trangThaiNhanVienTruocKhiDuyet` đã có sẵn, không đọc `emp.trangThai`
+    // sống, nên lỗi ở đúng lần ghi hồ sơ (duy nhất, không có pha 1) không làm
+    // hỏng gì — retry chỉ đơn giản thử lại với cùng giá trị đã đúng từ đầu.
+    it('keeps the correct restore value across a resignation-write failure when un-approving (exiting direction)', async () => {
+      const kho = noiKhoGiaLap(
+        {
+          _id: RESIGNATION_ID,
+          employeeId: EMP_ID,
+          trangThai: 'da_duyet',
+          trangThaiNhanVienTruocKhiDuyet: 'tam_nghi',
+        },
+        {
+          _id: EMP_ID,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          trangThai: 'da_nghi',
+        },
+        // Chiều "ra khỏi hiệu lực" chỉ có MỘT lần ghi hồ sơ (không có pha 1)
+        // — lần đó chính là lần đầu tiên.
+        1,
+      );
+
+      await expect(
+        service.updateStatus(RESIGNATION_ID, 'tu_choi'),
+      ).rejects.toThrow('mongo down');
+
+      // NV đã được khôi phục đúng ('tam_nghi') ở lần thử đầu — trước khi
+      // lần ghi hồ sơ (cuối) thất bại.
+      expect(kho.employeeDb().trangThai).toBe('tam_nghi');
+      expect(kho.resignationDb().trangThai).toBe('da_duyet'); // chưa sang tu_choi
+
+      const result = await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+
+      expect(result.trangThai).toBe('tu_choi');
+      expect(kho.employeeDb().trangThai).toBe('tam_nghi');
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -450,6 +583,41 @@ describe('ThoiViec_Service', () => {
       expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ trangThai: 'dang_lam_viec' }),
       );
+    });
+
+    // ── mirror-image on remove(): resignation write fails (round 3) ──
+    // remove() luôn là chiều "ra khỏi hiệu lực" (không có pha 1), nên nguồn
+    // khôi phục luôn là `item.trangThaiNhanVienTruocKhiDuyet` đã có sẵn —
+    // cùng lý do "an toàn" như chiều exiting của updateStatus().
+    it('keeps the correct restore value across a resignation-write failure when deleting an approved resignation', async () => {
+      const kho = noiKhoGiaLap(
+        {
+          _id: RESIGNATION_ID,
+          employeeId: EMP_ID,
+          trangThai: 'hoan_thanh',
+          trangThaiNhanVienTruocKhiDuyet: 'tam_nghi',
+          isActive: true,
+        },
+        {
+          _id: EMP_ID,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          trangThai: 'da_nghi',
+        },
+        1,
+      );
+
+      await expect(service.remove(RESIGNATION_ID)).rejects.toThrow(
+        'mongo down',
+      );
+
+      expect(kho.employeeDb().trangThai).toBe('tam_nghi');
+      expect(kho.resignationDb().isActive).toBe(true); // chưa xoá xong
+
+      await service.remove(RESIGNATION_ID);
+
+      expect(kho.resignationDb().isActive).toBe(false);
+      expect(kho.employeeDb().trangThai).toBe('tam_nghi');
     });
   });
 });

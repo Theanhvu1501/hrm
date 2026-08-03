@@ -116,6 +116,29 @@ export class ThoiViec_Service {
   }
 
   /**
+   * Lọc giá trị hợp lệ để CHỤP làm "trạng thái NV trước khi duyệt".
+   *
+   * 'da_nghi' KHÔNG BAO GIỜ là giá trị chụp hợp lệ — theo định nghĩa, đây là
+   * ảnh chụp thời điểm TRƯỚC KHI hồ sơ có hiệu lực, nên NV không thể đã là
+   * 'da_nghi' ngay lúc đó (trừ phi đang bị một hồ sơ thôi việc KHÁC giữ ở
+   * 'da_nghi' — cũng không phải giá trị đáng chụp lại). Dùng làm lưới an
+   * toàn CUỐI CÙNG cho `updateStatus()` — xem doc-comment ở đó (round 3,
+   * CRITICAL) về cơ chế ghi-hai-pha đã giải quyết phần lớn lỗ hổng; hàm này
+   * chỉ còn xử lý trường hợp hồ sơ cũ/hỏng không có snapshot durable nào để
+   * rơi về, nên vẫn rơi về 'dang_lam_viec' — CÙNG mức suy giảm đã biết và
+   * đã ghi runbook cho hồ sơ cũ không có snapshot (xem ops/README.md).
+   */
+  private giaTriChupHopLe(
+    trangThaiHienTaiCuaEmp: string,
+    snapshotDaCoTrenHoSo: string | undefined,
+  ): string {
+    if (trangThaiHienTaiCuaEmp === 'da_nghi') {
+      return snapshotDaCoTrenHoSo ?? 'dang_lam_viec';
+    }
+    return trangThaiHienTaiCuaEmp;
+  }
+
+  /**
    * Xoá mềm MỘT hồ sơ thôi việc phải huỷ cả hai hiệu ứng đã áp cho nhân
    * viên khi hồ sơ đó đang có hiệu lực — không chỉ tắt `isActive`:
    *   - bảng công: lọc theo `isActive: true` nên mốc cắt ngày công tự biến
@@ -170,7 +193,7 @@ export class ThoiViec_Service {
    * Không đi vào/ra trạng thái có hiệu lực (vd cho_duyet -> tu_choi khi
    * chưa từng được duyệt): không đụng tới hồ sơ nhân viên.
    *
-   * THỨ TỰ GHI — nhân viên TRƯỚC, hồ sơ thôi việc SAU (review round 1,
+   * THỨ TỰ GHI — nhân viên TRƯỚC, hồ sơ thôi việc SAU (review round 2,
    * CRITICAL): bản đầu ghi hồ sơ trước rồi mới ghi NV. Nếu ghi NV lỗi giữa
    * chừng, hồ sơ ĐÃ đổi trạng thái trong DB, còn NV thì chưa — caller nhận
    * 5xx và làm đúng việc "retry cùng request", nhưng lần gọi lại sẽ
@@ -186,6 +209,31 @@ export class ThoiViec_Service {
    * lại đúng `dangHieuLucTruoc`/`seHieuLuc` như lần đầu và thử lại toàn bộ
    * thao tác — không có short-circuit. Lỗi vẫn được propagate (không nuốt),
    * chỉ đổi thứ tự để retry có ý nghĩa.
+   *
+   * NHƯNG đổi thứ tự chỉ DỜI lỗ hổng sang chiều ngược lại, không xoá được
+   * nó — nguồn của snapshot (Employee) chính là thứ mà request này vừa mới
+   * sửa. Nếu ghi NV THÀNH CÔNG ('da_nghi') rồi ghi HỒ SƠ (bước cuối) thất
+   * bại, DB lúc đó có NV='da_nghi' nhưng hồ sơ CHƯA đổi trạng thái; lần gọi
+   * lại vẫn rơi vào đúng nhánh "lần đầu vào hiệu lực" (vì hồ sơ chưa có
+   * hiệu lực trong DB) và đọc lại `emp.trangThai` để chụp — nhưng giá trị
+   * đọc được lúc này LÀ 'da_nghi' (do lần ghi trước đã thành công), không
+   * phải giá trị gốc thật. Không xử lý thì snapshot bị ghi đè vĩnh viễn
+   * thành 'da_nghi' — huỷ duyệt/xoá sau này sẽ luôn trả NV về 'da_nghi',
+   * tức KHÔNG BAO GIỜ mở khoá được — đúng lớp lỗi mà round 1 sinh ra để dập
+   * (Gap 1/2), chỉ đổi hướng kích hoạt (review round 3, CRITICAL).
+   *
+   * KHÔNG có cách sắp thứ tự MỘT lần ghi NV + MỘT lần ghi hồ sơ mà không hở
+   * ở một trong hai chiều — nguồn (Employee) và đích (Resignation) là hai
+   * document độc lập, và repo này không dùng transaction Mongo đa-document
+   * ở bất kỳ đâu khác (không muốn thêm session/replica-set requirement chỉ
+   * cho một luồng). Giải pháp: THÊM MỘT LẦN GHI HỒ SƠ NỮA, TRƯỚC khi đụng
+   * NV — ghi bền chính snapshot đó (trangThai hồ sơ CHƯA đổi, chỉ có
+   * `trangThaiNhanVienTruocKhiDuyet`) trước khi `emp.trangThai` bị mutate.
+   * Vậy nếu bước ghi NV hoặc bước ghi hồ sơ CUỐI thất bại, snapshot đã nằm
+   * bền trong DB rồi — lần gọi lại đọc `item.trangThaiNhanVienTruocKhiDuyet`
+   * đã có sẵn giá trị gốc thật, `giaTriChupHopLe()` không cần rơi về
+   * 'dang_lam_viec' nữa. Guard `!== snapshot` bên dưới giữ pha ghi đầu
+   * idempotent — không ghi lại nếu giá trị đã đúng từ một lần thử trước.
    */
   async updateStatus(id: string, trangThai: string): Promise<Resignation> {
     const item = await this.findOne(id);
@@ -199,18 +247,26 @@ export class ThoiViec_Service {
 
     const emp = await this.findEmployee(item.employeeId);
 
-    // Snapshot cần ghi vào hồ sơ — tính TRƯỚC nhưng CHƯA gán vào `item`,
-    // để nếu bước ghi NV bên dưới ném lỗi thì `item` (và DB) vẫn y nguyên.
-    const trangThaiNhanVienTruocKhiDuyetMoi =
-      seHieuLuc && !dangHieuLucTruoc
-        ? emp.trangThai
-        : item.trangThaiNhanVienTruocKhiDuyet;
+    if (seHieuLuc && !dangHieuLucTruoc) {
+      // Pha 1 — ghi BỀN snapshot TRƯỚC khi đụng NV, trangThai hồ sơ CHƯA
+      // đổi. `giaTriChupHopLe()` vẫn lọc 'da_nghi' cho lần gọi lại sau một
+      // thất bại ở pha này (khi đó live emp.trangThai vẫn là giá trị gốc
+      // thật vì NV chưa hề bị ghi — an toàn), hoặc sau một thất bại ở pha
+      // NV/pha 2 (khi đó dùng lại chính snapshot vừa ghi bền ở đây).
+      const snapshot = this.giaTriChupHopLe(
+        emp.trangThai,
+        item.trangThaiNhanVienTruocKhiDuyet,
+      );
+      if (item.trangThaiNhanVienTruocKhiDuyet !== snapshot) {
+        item.trangThaiNhanVienTruocKhiDuyet = snapshot;
+        await this.repo.save(item);
+      }
+    }
 
     emp.trangThai = seHieuLuc ? 'da_nghi' : this.trangThaiKhoiPhuc(item);
     await this.employeeRepo.save(emp);
 
     item.trangThai = trangThai;
-    item.trangThaiNhanVienTruocKhiDuyet = trangThaiNhanVienTruocKhiDuyetMoi;
     return this.repo.save(item);
   }
 }
