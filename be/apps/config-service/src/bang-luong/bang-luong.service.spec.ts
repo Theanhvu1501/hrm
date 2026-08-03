@@ -1093,4 +1093,93 @@ describe('BangLuong_Service', () => {
       await expect(service.kyCoPhieuLuong(EMP1)).resolves.toEqual(['2026-06']);
     });
   });
+  describe('quyết toán thuế TNCN năm (P4.4)', () => {
+    const dongNam = (thang: string, over: any = {}) => ({
+      _id: `d-${thang}-${over.employeeId ?? EMP1}`,
+      thang, employeeId: over.employeeId ?? EMP1,
+      employeeName: over.employeeName ?? 'A', employeeCode: 'NV0001',
+      soNguoiPhuThuoc: 0, thoiVu: false, camKet: false, hopDongThu2: false,
+      trangThai: 'chot', isActive: true,
+      thucTe: {
+        tongThuNhap: 20_000_000, mienThueKhoan: 0, otMienThue: 0,
+        bhxh: 0, thue: 500_000, thuNhapTinhThue: 0,
+        ...(over.thucTe ?? {}),
+      },
+      ...over,
+    });
+
+    it('gom dòng theo NĂM và theo từng nhân viên', async () => {
+      seedCauHinh();
+      dongLuongStore.push(
+        dongNam('2026-01'),
+        dongNam('2026-02'),
+        dongNam('2026-03', { employeeId: EMP2, employeeName: 'B' }),
+        dongNam('2025-12'), // năm khác — phải bị loại
+      );
+
+      const kq = await service.quyetToanNam(2026);
+
+      expect(kq.ds).toHaveLength(2);
+      expect(kq.ds.find((x) => x.employeeId === EMP1)?.soKyDaChot).toBe(2);
+      expect(kq.ds.find((x) => x.employeeId === EMP2)?.soKyDaChot).toBe(1);
+    });
+
+    it('TÁCH người cam kết / thời vụ ra khỏi bảng lũy tiến', async () => {
+      seedCauHinh();
+      dongLuongStore.push(
+        dongNam('2026-01'),
+        dongNam('2026-02', { employeeId: EMP2, employeeName: 'B', camKet: true }),
+      );
+
+      const kq = await service.quyetToanNam(2026);
+
+      expect(kq.ds.map((x) => x.employeeId)).toEqual([EMP1]);
+      expect(kq.khongLuyTien).toEqual([
+        { employeeId: EMP2, hoTen: 'B', lyDo: 'cam kết 02/CK-TNCN' },
+      ]);
+    });
+
+    it('người thời vụ cũng bị tách, nêu đúng lý do', async () => {
+      seedCauHinh();
+      dongLuongStore.push(
+        dongNam('2026-01', { employeeId: EMP2, employeeName: 'B', thoiVu: true }),
+      );
+
+      const kq = await service.quyetToanNam(2026);
+      expect(kq.khongLuyTien[0].lyDo).toMatch(/thời vụ/);
+    });
+
+    it('BỎ dòng chưa chốt và báo số kỳ đã chốt của cả bảng', async () => {
+      seedCauHinh();
+      dongLuongStore.push(
+        dongNam('2026-01'),
+        dongNam('2026-02', { trangThai: 'nhap' }),
+      );
+
+      const kq = await service.quyetToanNam(2026);
+
+      expect(kq.ds[0].soKyDaChot).toBe(1);
+      expect(kq.soKyDaChotTrongNam).toBe(1);
+    });
+
+    it('không có dòng nào thì trả bảng rỗng, không ném', async () => {
+      seedCauHinh();
+      await expect(service.quyetToanNam(2026)).resolves.toEqual({
+        nam: 2026, ds: [], khongLuyTien: [], soKyDaChotTrongNam: 0,
+      });
+    });
+
+    it('xếp theo tháng GẦN NHẤT khi vừa có tháng thường vừa có tháng thời vụ', async () => {
+      seedCauHinh();
+      dongLuongStore.push(
+        dongNam('2026-01', { thoiVu: true }),
+        dongNam('2026-06'), // tháng gần nhất là tháng thường
+      );
+
+      const kq = await service.quyetToanNam(2026);
+
+      expect(kq.ds).toHaveLength(1);
+      expect(kq.ds[0].ghiChu).toMatch(/thời vụ/);
+    });
+  });
 });

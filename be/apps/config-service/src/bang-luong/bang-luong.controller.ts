@@ -124,6 +124,19 @@ export class BangLuong_Controller {
     return { success: true, data };
   }
 
+  /**
+   * Quyết toán thuế TNCN của một năm. Dùng lại quyền `/luong/bang-luong:xem`:
+   * cùng dữ liệu, cùng nhóm rủi ro với bảng lương, và thêm module quyền là
+   * thêm một bước bắt buộc `ops/grant-quyen-module-moi.ts` lúc deploy.
+   */
+  @Get('quyet-toan-tncn')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:xem')
+  async quyetToanTncn(@Query('nam') nam: string) {
+    const data = await this.bangLuong_Service.quyetToanNam(Number(nam));
+    return { success: true, data };
+  }
+
   @Get()
   @UseGuards(PermissionGuard)
   @Permissions('/luong/bang-luong:xem')

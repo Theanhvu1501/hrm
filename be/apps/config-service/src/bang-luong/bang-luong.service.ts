@@ -15,7 +15,15 @@ import type {
   DauVaoDongLuong,
   PhieuLuong,
 } from '@app/entities';
-import { dungPhieuLuong, ganCauHinhRieng, tinhDongLuong } from '@app/core';
+import {
+  dungPhieuLuong,
+  ganCauHinhRieng,
+  quyetToanMotNguoi,
+  tinhDongLuong,
+} from '@app/core';
+// `QuyetToanNguoi` định nghĩa ở @app/core (nơi có luật thuế), KHÔNG ở
+// @app/entities — core đã import entities, khai ngược lại là vòng phụ thuộc.
+import type { QuyetToanNguoi } from '@app/core';
 import { CapNhatCauHinhLuongDto, CapNhatDongLuongDto } from './dto';
 import { CAU_HINH_LUONG_MAC_DINH } from './cau-hinh-luong.seed';
 
@@ -345,6 +353,65 @@ export class BangLuong_Service {
       .map((r) => r.thang)
       .sort()
       .reverse();
+  }
+
+  /**
+   * Quyết toán thuế TNCN của một NĂM cho toàn công ty.
+   *
+   * Tách người `camKet`/`thoiVu` ra khỏi bảng lũy tiến: hai chế độ thuế đó
+   * khác hẳn (cam kết 02/CK-TNCN không khấu trừ trong năm; thời vụ khấu trừ
+   * 10% toàn phần). Gộp im lặng vào bảng lũy tiến là ra một con số nghĩa vụ
+   * thuế sai cho người thật.
+   *
+   * Xếp theo tháng GẦN NHẤT khi một người vừa có tháng thường vừa có tháng
+   * thời vụ trong năm — và `quyetToanMotNguoi()` ghi chú lại để kế toán biết
+   * mà kiểm tay.
+   */
+  async quyetToanNam(nam: number): Promise<{
+    nam: number;
+    ds: QuyetToanNguoi[];
+    khongLuyTien: { employeeId: string; hoTen: string; lyDo: string }[];
+    soKyDaChotTrongNam: number;
+  }> {
+    const tatCa = await this.dongLuongRepo.find({});
+    const trongNam = tatCa.filter(
+      (d) => (d.thang ?? '').startsWith(`${nam}-`) && d.isActive !== false,
+    );
+
+    const theoNguoi = new Map<string, DongLuong[]>();
+    for (const d of trongNam) {
+      const k = String(d.employeeId);
+      theoNguoi.set(k, [...(theoNguoi.get(k) ?? []), d]);
+    }
+
+    const ch = this.toCauHinhData(await this.layCauHinh());
+    const ds: QuyetToanNguoi[] = [];
+    const khongLuyTien: { employeeId: string; hoTen: string; lyDo: string }[] = [];
+    let soKyDaChotTrongNam = 0;
+
+    for (const [employeeId, dsDong] of theoNguoi) {
+      const daChot = dsDong.filter((d) => d.trangThai === 'chot');
+      soKyDaChotTrongNam += daChot.length;
+      if (daChot.length === 0) continue;
+
+      // Tháng GẦN NHẤT quyết định chế độ thuế của người này trong năm.
+      const moiNhat = [...daChot].sort((a, b) =>
+        (a.thang ?? '').localeCompare(b.thang ?? ''),
+      )[daChot.length - 1];
+
+      if (moiNhat.camKet || moiNhat.thoiVu) {
+        khongLuyTien.push({
+          employeeId,
+          hoTen: moiNhat.employeeName ?? '',
+          lyDo: moiNhat.camKet ? 'cam kết 02/CK-TNCN' : 'thời vụ, khấu trừ 10%',
+        });
+        continue;
+      }
+
+      ds.push(quyetToanMotNguoi(daChot, ch));
+    }
+
+    return { nam, ds, khongLuyTien, soKyDaChotTrongNam };
   }
 
   async danhSachDong(thang: string): Promise<DongLuong[]> {

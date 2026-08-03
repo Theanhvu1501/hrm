@@ -36,6 +36,7 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['tongHop', RequestMethod.POST, '/luong/bang-luong:them'],
   ['chot', RequestMethod.POST, '/luong/bang-luong:sua'],
   ['moLai', RequestMethod.POST, '/luong/bang-luong:sua'],
+  ['quyetToanTncn', RequestMethod.GET, '/luong/bang-luong:xem'],
   ['danhSachDong', RequestMethod.GET, '/luong/bang-luong:xem'],
   ['capNhatDong', RequestMethod.PATCH, '/luong/bang-luong:sua'],
 ];
