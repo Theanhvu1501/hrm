@@ -11,6 +11,7 @@ import { DatabaseModule } from '@app/database';
 import { BangLuong_Service } from './bang-luong.service';
 import { BangLuong_Controller } from './bang-luong.controller';
 import { ThemGio_Service } from './them-gio.service';
+import { ThemGio_Controller } from './them-gio.controller';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { ThemGio_Service } from './them-gio.service';
       AttendanceRequest,
     ]),
   ],
-  controllers: [BangLuong_Controller],
+  controllers: [BangLuong_Controller, ThemGio_Controller],
   providers: [BangLuong_Service, ThemGio_Service],
   exports: [BangLuong_Service, ThemGio_Service],
 })

@@ -1,4 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -8,6 +13,7 @@ import {
   Employee,
 } from '@app/entities';
 import { tinhDongThemGio } from '@app/core';
+import { CapNhatDongThemGioDto } from './dto';
 
 /** Cấu hình làm thêm đã resolve, hoặc `null` khi công ty chưa khai. */
 interface CauHinhThemGio {
@@ -179,5 +185,77 @@ export class ThemGio_Service {
     }
 
     return rows;
+  }
+  async danhSach(thang: string): Promise<DongLuongThemGio[]> {
+    return this.repo.find({ where: { thang, isActive: true } as any });
+  }
+
+  /**
+   * Sửa tay số GIỜ từng loại rồi TÍNH LẠI tiền. Không nhận thành tiền trực
+   * tiếp: một con số tiền không suy ra được từ giờ × đơn giá × hệ số là con số
+   * không ai đối soát được về sau — trên một biểu mẫu có chỗ ký của kế toán
+   * và giám đốc.
+   */
+  async capNhatDong(
+    id: string,
+    dto: CapNhatDongThemGioDto,
+  ): Promise<DongLuongThemGio> {
+    const { ObjectId } = await import('mongodb');
+    const row = await this.repo.findOne({
+      where: { _id: new ObjectId(id) as any },
+    });
+    if (!row) throw new NotFoundException(`Không tìm thấy dòng ${id}`);
+    if (row.trangThai === 'chot') {
+      throw new BadRequestException('Dòng đã chốt — mở lại kỳ trước khi sửa');
+    }
+
+    const ch = await this.layCauHinh();
+    if (!ch) {
+      throw new BadRequestException('Công ty chưa khai cấu hình làm thêm');
+    }
+
+    if (dto.theoLoai) {
+      const kq = tinhDongThemGio({
+        luongThang: row.luongThang,
+        congChuan: row.congChuan,
+        soGioMoiNgay: row.soGioMoiNgay,
+        gioTheoLoai: dto.theoLoai,
+        heSoTra: ch.heSoTra,
+        truMotDonVi: ch.cheDoBu === 'nghi_bu_va_chenh',
+      });
+      row.donGiaNgay = kq.donGiaNgay;
+      row.donGiaGio = kq.donGiaGio;
+      row.theoLoai = kq.theoLoai;
+      row.tongTien = kq.tongTien;
+      row.thucNhan = kq.tongTien - (row.tienNghiBu ?? 0);
+    }
+
+    if (dto.gioNghiBu !== undefined) row.gioNghiBu = dto.gioNghiBu;
+
+    row.suaTay = true;
+    return this.repo.save(row);
+  }
+
+  async chot(thang: string): Promise<{ soDong: number }> {
+    return this.doiTrangThai(thang, 'nhap', 'chot');
+  }
+
+  async moLai(thang: string): Promise<{ soDong: number }> {
+    return this.doiTrangThai(thang, 'chot', 'nhap');
+  }
+
+  private async doiTrangThai(
+    thang: string,
+    tu: string,
+    den: string,
+  ): Promise<{ soDong: number }> {
+    const rows = await this.repo.find({
+      where: { thang, trangThai: tu, isActive: true } as any,
+    });
+    for (const r of rows) {
+      r.trangThai = den;
+      await this.repo.save(r);
+    }
+    return { soDong: rows.length };
   }
 }

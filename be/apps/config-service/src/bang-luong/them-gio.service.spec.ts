@@ -280,3 +280,110 @@ describe('ThemGio_Service.tongHop', () => {
     expect(dongRepo.rows).toHaveLength(1);
   });
 });
+
+// ID phải là hex 24 ký tự: `capNhatDong()` dựng `new ObjectId(id)` trước khi
+// chạm repo, và `ObjectId('x1')` ném BSONError chứ không trả null.
+const ID_D1 = '650000000000000000000201';
+const ID_D2 = '650000000000000000000202';
+
+describe('ThemGio_Service — sửa tay và chốt kỳ', () => {
+  const dongMau = (over: any = {}) => ({
+    _id: ID_D1,
+    thang: '2026-06',
+    employeeId: NV._id,
+    luongThang: 5_500_000,
+    congChuan: 24,
+    soGioMoiNgay: 8,
+    donGiaNgay: 229_166.6667,
+    donGiaGio: 28_645.8333,
+    theoLoai: { ngay_thuong: { soGio: 35, heSo: 1.5, thanhTien: 1_503_906.25 } },
+    tongTien: 1_503_906.25,
+    gioNghiBu: 0,
+    tienNghiBu: 0,
+    thucNhan: 1_503_906.25,
+    gioOtHetHan: 0,
+    suaTay: false,
+    trangThai: 'nhap',
+    isActive: true,
+    ...over,
+  });
+
+  it('sửa số giờ một loại → tính lại thành tiền, tổng và thực nhận', async () => {
+    const { service } = await dungService({ dong: [dongMau()] });
+
+    const kq = await service.capNhatDong(ID_D1, {
+      theoLoai: { ngay_thuong: 10 },
+    } as any);
+
+    const g = 5_500_000 / 24 / 8;
+    expect(kq.theoLoai.ngay_thuong.soGio).toBe(10);
+    expect(kq.theoLoai.ngay_thuong.thanhTien).toBeCloseTo(10 * g * 1.5, 6);
+    expect(kq.tongTien).toBeCloseTo(10 * g * 1.5, 6);
+    expect(kq.thucNhan).toBeCloseTo(10 * g * 1.5, 6);
+  });
+
+  it('sửa tay bật cờ suaTay để tổng hợp lại không ghi đè', async () => {
+    const { service } = await dungService({ dong: [dongMau()] });
+
+    const kq = await service.capNhatDong(ID_D1, {
+      theoLoai: { ngay_thuong: 10 },
+    } as any);
+
+    expect(kq.suaTay).toBe(true);
+  });
+
+  it('KHÔNG cho sửa dòng đã chốt', async () => {
+    const { service } = await dungService({
+      dong: [dongMau({ trangThai: 'chot' })],
+    });
+
+    await expect(
+      service.capNhatDong(ID_D1, { theoLoai: { ngay_thuong: 10 } } as any),
+    ).rejects.toThrow(/đã chốt/);
+  });
+
+  it('không tìm thấy dòng thì ném NotFound', async () => {
+    const { service } = await dungService({ dong: [] });
+
+    await expect(
+      service.capNhatDong(ID_D1, { theoLoai: {} } as any),
+    ).rejects.toThrow(/Không tìm thấy/);
+  });
+
+  it('chốt kỳ đổi mọi dòng nhap sang chot', async () => {
+    const { service, dongRepo } = await dungService({
+      dong: [dongMau({ _id: ID_D1 }), dongMau({ _id: ID_D2, employeeId: 'nv2' })],
+    });
+
+    await expect(service.chot('2026-06')).resolves.toEqual({ soDong: 2 });
+    expect(dongRepo.rows.every((r: any) => r.trangThai === 'chot')).toBe(true);
+  });
+
+  it('mở lại kỳ đổi chot về nhap', async () => {
+    const { service, dongRepo } = await dungService({
+      dong: [dongMau({ trangThai: 'chot' })],
+    });
+
+    await expect(service.moLai('2026-06')).resolves.toEqual({ soDong: 1 });
+    expect(dongRepo.rows[0].trangThai).toBe('nhap');
+  });
+
+  it('chốt kỳ KHÔNG đụng kỳ khác', async () => {
+    const { service, dongRepo } = await dungService({
+      dong: [dongMau({ _id: ID_D1 }), dongMau({ _id: ID_D2, thang: '2026-07' })],
+    });
+
+    await service.chot('2026-06');
+
+    expect(dongRepo.rows.find((r: any) => r._id === ID_D2).trangThai).toBe('nhap');
+  });
+
+  it('danhSach trả đúng kỳ được hỏi', async () => {
+    const { service } = await dungService({
+      dong: [dongMau({ _id: ID_D1 }), dongMau({ _id: ID_D2, thang: '2026-07' })],
+    });
+
+    const ds = await service.danhSach('2026-06');
+    expect(ds.map((d: any) => d._id)).toEqual([ID_D1]);
+  });
+});
