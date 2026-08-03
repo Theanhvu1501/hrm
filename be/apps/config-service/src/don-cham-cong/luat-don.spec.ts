@@ -1,5 +1,11 @@
 import { describe, it, expect } from '@jest/globals';
-import { suyHeSoOt, tinhSoGioOt, tinhSoNgayNghi, HE_SO_OT } from './luat-don';
+import {
+  suyHeSoOt,
+  tinhSoGioOt,
+  tinhSoNgayNghi,
+  traHeSo,
+  HE_SO_OT_MAC_DINH,
+} from './luat-don';
 
 const T2_DEN_T6 = [1, 2, 3, 4, 5];
 
@@ -42,8 +48,32 @@ describe('suyHeSoOt', () => {
       .toEqual({ loaiNgayOt: 'ngay_thuong', heSoOt: 1.5 });
   });
 
-  it('HE_SO_OT là nguồn sự thật duy nhất của ba con số', () => {
-    expect(HE_SO_OT).toEqual({ ngay_thuong: 1.5, ngay_nghi: 2.0, ngay_le: 3.0 });
+  it('HE_SO_OT_MAC_DINH là nguồn sự thật duy nhất của bốn con số SEED', () => {
+    expect(HE_SO_OT_MAC_DINH).toEqual({
+      ngay_thuong: 1.5,
+      ngay_nghi: 2.0,
+      ngay_le: 3.0,
+      ngay_dem: 1.5,
+    });
+  });
+});
+
+describe('traHeSo', () => {
+  const bang = { ngay_thuong: 1.5, ngay_nghi: 2.0, ngay_le: 3.0, ngay_dem: 1.5 };
+
+  it('tra đúng hệ số của loại có trong bảng', () => {
+    expect(traHeSo(bang, 'ngay_le')).toBe(3.0);
+    expect(traHeSo(bang, 'ngay_dem')).toBe(1.5);
+  });
+
+  it('loại lạ rơi về ngày thường — hệ số THẤP nhất, không tự tặng tiền', () => {
+    expect(traHeSo(bang, 'ngay_gi_do_moi')).toBe(1.5);
+  });
+
+  it('bảng rỗng rơi về 1.0 chứ không NaN', () => {
+    // NaN đi qua lamTronGio()/lamTronTheo() vẫn là NaN rồi nằm im trong DB.
+    expect(traHeSo({}, 'ngay_le')).toBe(1);
+    expect(traHeSo(undefined as any, 'ngay_le')).toBe(1);
   });
 });
 

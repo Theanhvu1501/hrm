@@ -879,7 +879,7 @@ describe('giữ chỗ nguyên tử (P4.2b Task 1)', () => {
     // lần findOneAndUpdate đầu trượt, và khi ta đọc lại thì số dư đã bị ăn.
     const that = quyRepo.findOneAndUpdate;
     let lanDau = true;
-    quyRepo.manager.getMongoRepository = () => ({
+    (quyRepo.manager as any).getMongoRepository = () => ({
       findOneAndUpdate: async (filter: any, update: any, opts: any) => {
         if (lanDau) {
           lanDau = false;
@@ -904,7 +904,7 @@ describe('giữ chỗ nguyên tử (P4.2b Task 1)', () => {
   it('CAS trượt mãi thì bỏ cuộc bằng mã lỗi riêng, không treo vòng lặp', async () => {
     const { service, quyRepo } = await dungService({ quy: quyDay() });
 
-    quyRepo.manager.getMongoRepository = () => ({
+    (quyRepo.manager as any).getMongoRepository = () => ({
       findOneAndUpdate: async () => null, // luôn trượt
     });
 

@@ -1,5 +1,11 @@
 import { CauHinhLuongData } from '@app/entities';
 import { HE_SO_TICH_MAC_DINH } from '../quy-gio/luat-quy-gio';
+import {
+  HE_SO_OT_MAC_DINH,
+  KHUNG_GIO_DEM_MAC_DINH,
+  MIEN_THUE_CHENH_MAC_DINH,
+  UU_TIEN_LOAI_MAC_DINH,
+} from '../don-cham-cong/luat-don';
 
 export const CAU_HINH_LUONG_MAC_DINH: CauHinhLuongData = {
   mucKhaiBaoMacDinh: 5_500_000,
@@ -29,10 +35,19 @@ export const CAU_HINH_LUONG_MAC_DINH: CauHinhLuongData = {
   quyTacCamKet: { mienThue: true },
   lamTron: 1000,
   soGioMoiNgay: 8,
-  // Chỉ hỗ trợ "chỉ nghỉ bù" ở chặng P4.2a — xem CauHinhLamThemHopLe.
+  // Chỉ hỗ trợ "chỉ nghỉ bù" ở chặng này — xem CauHinhLamThemHopLe. Bảng hệ
+  // số / khung giờ đêm là SEED, công ty sửa được ở màn Cấu hình lương.
+  //
+  // Sao chép NÔNG chứ không dùng thẳng hằng số: seed đi vào một document rồi
+  // được sửa tại chỗ, dùng chung tham chiếu là để một tenant sửa cấu hình làm
+  // bẩn hằng số của cả tiến trình.
   lamThem: {
     cheDoBu: 'chi_nghi_bu',
-    heSoTichQuy: HE_SO_TICH_MAC_DINH,
+    heSoTra: { ...HE_SO_OT_MAC_DINH },
+    heSoTichQuy: { ...HE_SO_TICH_MAC_DINH },
+    khungGioDem: { ...KHUNG_GIO_DEM_MAC_DINH },
+    uuTienLoai: [...UU_TIEN_LOAI_MAC_DINH],
+    mienThueChenh: [...MIEN_THUE_CHENH_MAC_DINH],
     soThangHanDung: null,
     khiHetHan: 'quy_ra_tien',
   },

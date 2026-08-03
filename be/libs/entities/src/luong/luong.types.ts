@@ -43,7 +43,20 @@ export type CheDoBuLamThem =
 
 export interface CauHinhLamThem {
   cheDoBu: CheDoBuLamThem;
-  heSoTichQuy: { ngay_thuong: number; ngay_nghi: number; ngay_le: number };
+  /**
+   * Hệ số TRẢ TIỀN từng loại ngày. Tách khỏi `heSoTichQuy` vì hai con số không
+   * nhất thiết bằng nhau: công ty có thể trả tiền theo 1.5 nhưng chỉ cho nghỉ
+   * bù ở 1.0.
+   */
+  heSoTra: Record<string, number>;
+  /** Hệ số quy đổi vào quỹ nghỉ bù. */
+  heSoTichQuy: Record<string, number>;
+  /** Khung giờ tính là ban đêm; `null` = công ty không có ca đêm. */
+  khungGioDem: { tu: string; den: string } | null;
+  /** Giờ thuộc nhiều loại thì loại đứng TRƯỚC trong mảng này thắng. */
+  uuTienLoai: string[];
+  /** Loại nào được tách phần chênh miễn thuế TNCN — P4.2c đọc. */
+  mienThueChenh: string[];
   /** null = quỹ không bao giờ hết hạn. */
   soThangHanDung: number | null;
   khiHetHan: 'quy_ra_tien' | 'huy_bo';

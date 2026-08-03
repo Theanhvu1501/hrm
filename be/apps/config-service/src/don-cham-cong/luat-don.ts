@@ -10,9 +10,60 @@
  */
 import { hhmmSangPhut } from '../ban-ghi-cham-cong/thoi-gian.util';
 
-/** Nguồn sự thật duy nhất cho ba hệ số OT — không nơi nào khác được định nghĩa lại. */
-export const HE_SO_OT = { ngay_thuong: 1.5, ngay_nghi: 2.0, ngay_le: 3.0 } as const;
-export type LoaiNgayOt = keyof typeof HE_SO_OT;
+/**
+ * Giá trị SEED cho `CauHinhLuong.lamThem.heSoTra`. KHÔNG phải nguồn sự thật
+ * lúc chạy — nguồn sự thật là cấu hình của từng công ty (nền tảng đa tenant,
+ * mỗi công ty một mức thoả thuận). Đọc hằng số này lúc tính là quay lại đúng
+ * cái hardcode mà P4.2b tồn tại để gỡ.
+ *
+ * `ngay_dem: 1.5` theo mẫu 03-LĐTL chủ sản phẩm cung cấp. Thấp hơn sàn
+ * NĐ 145/2020 Đ57.2 (ngày thường đêm ≥ 200%) — xem spec P4.2b §8.1.
+ */
+export const HE_SO_OT_MAC_DINH: Record<string, number> = {
+  ngay_thuong: 1.5,
+  ngay_nghi: 2.0,
+  ngay_le: 3.0,
+  ngay_dem: 1.5,
+};
+
+/** BLLĐ 2019 Đ106 định nghĩa ban đêm là 22:00–06:00. */
+export const KHUNG_GIO_DEM_MAC_DINH = { tu: '22:00', den: '06:00' };
+
+/**
+ * Giờ thuộc nhiều loại thì loại đứng TRƯỚC thắng. Lễ > nghỉ > đêm > thường
+ * nghĩa là làm đêm ngày lễ vẫn ăn hệ số lễ — không bao giờ trả thấp hơn làm
+ * ban ngày cùng ngày đó.
+ */
+export const UU_TIEN_LOAI_MAC_DINH = [
+  'ngay_le',
+  'ngay_nghi',
+  'ngay_dem',
+  'ngay_thuong',
+];
+
+/** Loại nào được tách phần chênh miễn thuế TNCN (P4.2c đọc). Mặc định chỉ ca
+ *  đêm, theo sheet `Tính thuế TNCN` — hẹp hơn TT 111/2013 Đ3.1.i, xem spec §8.2. */
+export const MIEN_THUE_CHENH_MAC_DINH = ['ngay_dem'];
+
+/**
+ * Chuỗi mở, KHÔNG phải union suy từ hằng số: thêm một loại ngày phải là thêm
+ * một dòng cấu hình, không phải một lần sửa kiểu rồi deploy.
+ */
+export type LoaiNgayOt = string;
+
+/**
+ * Tra hệ số của một loại ngày. MỌI nơi đọc hệ số phải đi qua đây — `if/else`
+ * ba nhánh (khuôn cũ ở `luat-quy-gio.ts`) là thứ khoá cứng danh sách loại vào
+ * mã nguồn.
+ *
+ * Loại lạ rơi về `ngay_thuong` — hệ số THẤP nhất. Rơi về hệ số cao là tự tặng
+ * tiền/giờ cho người nộp đơn khi ai đó thêm loại mới mà quên cấu hình. Bảng
+ * rỗng rơi về 1.0 thay vì `undefined`: `undefined` nhân ra `NaN`, mà `NaN` đi
+ * qua `lamTronGio()`/`lamTronTheo()` vẫn là `NaN` rồi nằm im trong DB.
+ */
+export function traHeSo(bang: Record<string, number>, loai: string): number {
+  return bang?.[loai] ?? bang?.ngay_thuong ?? 1;
+}
 
 /** 0=CN … 6=T7 của một chuỗi "YYYY-MM-DD", đọc trên trục UTC thuần. */
 function thuTrongTuan(ngay: string): number {
@@ -34,7 +85,10 @@ export function suyHeSoOt(input: {
   ngayLamViecTrongTuan?: number[];
 }): { loaiNgayOt: LoaiNgayOt; heSoOt: number } {
   if (input.laNgayLe) {
-    return { loaiNgayOt: 'ngay_le', heSoOt: HE_SO_OT.ngay_le };
+    return {
+      loaiNgayOt: 'ngay_le',
+      heSoOt: traHeSo(HE_SO_OT_MAC_DINH, 'ngay_le'),
+    };
   }
 
   // Rỗng/undefined = CHƯA CẤU HÌNH, không phải "nghỉ tất cả các ngày" — cùng
@@ -45,11 +99,17 @@ export function suyHeSoOt(input: {
     const thu = thuTrongTuan(input.ngay);
     const laNgayLamViec = input.ngayLamViecTrongTuan!.includes(thu);
     if (!laNgayLamViec) {
-      return { loaiNgayOt: 'ngay_nghi', heSoOt: HE_SO_OT.ngay_nghi };
+      return {
+        loaiNgayOt: 'ngay_nghi',
+        heSoOt: traHeSo(HE_SO_OT_MAC_DINH, 'ngay_nghi'),
+      };
     }
   }
 
-  return { loaiNgayOt: 'ngay_thuong', heSoOt: HE_SO_OT.ngay_thuong };
+  return {
+    loaiNgayOt: 'ngay_thuong',
+    heSoOt: traHeSo(HE_SO_OT_MAC_DINH, 'ngay_thuong'),
+  };
 }
 
 /**

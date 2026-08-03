@@ -10,17 +10,16 @@
  * `luat-don.ts`: `new Date("YYYY-MM-DD").getDay()` đọc theo múi giờ tiến trình.
  */
 
-export interface HeSoTichQuy {
-  ngay_thuong: number;
-  ngay_nghi: number;
-  ngay_le: number;
-}
+/** Bảng tra MỞ — thêm loại ngày là thêm một khoá cấu hình, không phải sửa kiểu. */
+export type HeSoTichQuy = Record<string, number>;
 
-/** Mặc định bằng đúng sàn BLLĐ 2019 Đ98.1 — công ty khai cao hơn thì sửa config. */
+/** Mặc định bằng đúng sàn BLLĐ 2019 Đ98.1 cho ba loại ngày; `ngay_dem` theo
+ *  mẫu 03-LĐTL (xem spec P4.2b §8.1). Công ty khai khác thì sửa config. */
 export const HE_SO_TICH_MAC_DINH: HeSoTichQuy = {
   ngay_thuong: 1.5,
   ngay_nghi: 2.0,
   ngay_le: 3.0,
+  ngay_dem: 1.5,
 };
 
 /** Mốc "không bao giờ hết hạn". Ngày THẬT chứ không phải null — xem docblock hàm. */
