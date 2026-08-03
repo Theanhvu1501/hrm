@@ -11,10 +11,13 @@ import { DatabaseModule } from '@app/database';
 import { BangLuong_Service } from './bang-luong.service';
 import { BangLuong_Controller } from './bang-luong.controller';
 import { ThemGio_Service } from './them-gio.service';
+import { QuyGio_Module } from '../quy-gio/quy-gio.module';
 import { ThemGio_Controller } from './them-gio.controller';
 
 @Module({
   imports: [
+    // ThemGio_Service đọc quỹ hết hạn để quy ra tiền.
+    QuyGio_Module,
     DatabaseModule.forFeature([
       CauHinhLuong,
       DongLuong,

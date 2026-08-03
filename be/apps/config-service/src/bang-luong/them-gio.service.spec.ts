@@ -7,6 +7,7 @@ import {
   Employee,
 } from '@app/entities';
 import { ThemGio_Service } from './them-gio.service';
+import { QuyGio_Service } from '../quy-gio/quy-gio.service';
 
 function repoGia(khoiTao: any[] = []) {
   const rows: any[] = [...khoiTao];
@@ -82,16 +83,26 @@ const donOt = (over: any = {}) => ({
 });
 
 async function dungService(
-  opts: { don?: any[]; dong?: any[]; cauHinh?: any } = {},
+  opts: { don?: any[]; dong?: any[]; cauHinh?: any; quyHetHan?: any } = {},
 ) {
   const donRepo = repoGia(opts.don);
   const dongRepo = repoGia(opts.dong);
   const nvRepo = repoGia([NV]);
   const chRepo = repoGia([opts.cauHinh ?? CAU_HINH]);
 
+  // Quỹ giờ bị mock: đường tích/tiêu quỹ THẬT đã có suite riêng
+  // (`quy-gio.service.spec.ts`), ở đây chỉ cần đúng hình dạng trả về.
+  const quyGio = {
+    quyChoTraTien: jest.fn().mockResolvedValue(
+      opts.quyHetHan ?? { soGio: 0, balanceIds: [] },
+    ),
+    danhDauDaTraTien: jest.fn().mockResolvedValue(undefined),
+  };
+
   const mod = await Test.createTestingModule({
     providers: [
       ThemGio_Service,
+      { provide: QuyGio_Service, useValue: quyGio },
       { provide: getRepositoryToken(DongLuongThemGio), useValue: dongRepo },
       { provide: getRepositoryToken(AttendanceRequest), useValue: donRepo },
       { provide: getRepositoryToken(Employee), useValue: nvRepo },
@@ -99,7 +110,7 @@ async function dungService(
     ],
   }).compile();
 
-  return { service: mod.get(ThemGio_Service), donRepo, dongRepo };
+  return { service: mod.get(ThemGio_Service), donRepo, dongRepo, quyGio };
 }
 
 describe('ThemGio_Service.tongHop', () => {
@@ -385,5 +396,74 @@ describe('ThemGio_Service — sửa tay và chốt kỳ', () => {
 
     const ds = await service.danhSach('2026-06');
     expect(ds.map((d: any) => d._id)).toEqual([ID_D1]);
+  });
+});
+
+describe('ThemGio_Service — quỹ hết hạn và phần miễn thuế (P4.2c-2)', () => {
+  it('cộng tiền quỹ hết hạn vào tổng, hệ số 1.0', async () => {
+    const { service, dongRepo } = await dungService({
+      don: [donOt()],
+      quyHetHan: { soGio: 4, balanceIds: ['b1'] },
+    });
+
+    await service.tongHop('2026-06');
+
+    const g = 5_500_000 / 24 / 8;
+    const d = dongRepo.rows[0];
+    expect(d.gioOtHetHan).toBe(4);
+    expect(d.tienOtHetHan).toBeCloseTo(4 * g, 4);
+    // 35 giờ × 1,5 + 4 giờ × 1,0
+    expect(d.tongTien).toBeCloseTo(1_503_906.25 + 4 * g, 2);
+    expect(d.thucNhan).toBeCloseTo(d.tongTien, 6);
+  });
+
+  it('đánh dấu kyLuongTra NGAY khi tổng hợp — chặn trả tiền hai lần', async () => {
+    const { service, quyGio } = await dungService({
+      don: [donOt()],
+      quyHetHan: { soGio: 4, balanceIds: ['b1', 'b2'] },
+    });
+
+    await service.tongHop('2026-06');
+
+    expect(quyGio.danhDauDaTraTien).toHaveBeenCalledWith(['b1', 'b2'], '2026-06');
+  });
+
+  it('otMienThue tách phần chênh của loại nằm trong mienThueChenh', async () => {
+    const { service, dongRepo } = await dungService({
+      don: [
+        donOt({
+          phanBoOt: [
+            { loaiNgayOt: 'ngay_dem', soGio: 10, heSoTra: 1.5, heSoTichQuy: 1.5 },
+          ],
+        }),
+      ],
+    });
+
+    await service.tongHop('2026-06');
+
+    const g = 5_500_000 / 24 / 8;
+    // Mặc định mienThueChenh = ['ngay_dem'] ⇒ 10 × g × (1,5 − 1).
+    expect(dongRepo.rows[0].otMienThue).toBeCloseTo(10 * g * 0.5, 4);
+  });
+
+  it('loại NGOÀI mienThueChenh không được miễn — OT ban ngày chịu thuế toàn bộ', async () => {
+    const { service, dongRepo } = await dungService({ don: [donOt()] });
+
+    await service.tongHop('2026-06');
+
+    // 35 giờ ngày thường, mienThueChenh mặc định chỉ có ngay_dem.
+    expect(dongRepo.rows[0].otMienThue).toBe(0);
+  });
+
+  it('tiền quỹ hết hạn KHÔNG được tính vào otMienThue', async () => {
+    // Sổ quỹ không giữ loại ngày gốc nên không tách được phần chênh.
+    const { service, dongRepo } = await dungService({
+      don: [donOt()],
+      quyHetHan: { soGio: 4, balanceIds: ['b1'] },
+    });
+
+    await service.tongHop('2026-06');
+
+    expect(dongRepo.rows[0].otMienThue).toBe(0);
   });
 });

@@ -12,7 +12,8 @@ import {
   DongLuongThemGio,
   Employee,
 } from '@app/entities';
-import { tinhDongThemGio } from '@app/core';
+import { tinhDongThemGio, tinhOtMienThue } from '@app/core';
+import { QuyGio_Service } from '../quy-gio/quy-gio.service';
 import { CapNhatDongThemGioDto } from './dto';
 
 /** Cấu hình làm thêm đã resolve, hoặc `null` khi công ty chưa khai. */
@@ -22,6 +23,7 @@ interface CauHinhThemGio {
   cheDoBu: string;
   heSoTra: Record<string, number>;
   uuTienLoai: string[];
+  mienThueChenh: string[];
 }
 
 /**
@@ -44,6 +46,7 @@ export class ThemGio_Service {
     private readonly nvRepo: Repository<Employee>,
     @InjectRepository(CauHinhLuong)
     private readonly cauHinhRepo: Repository<CauHinhLuong>,
+    private readonly quyGio_Service: QuyGio_Service,
   ) {}
 
   /**
@@ -62,6 +65,7 @@ export class ThemGio_Service {
       cheDoBu: ch.lamThem.cheDoBu,
       heSoTra: ch.lamThem.heSoTra ?? {},
       uuTienLoai: ch.lamThem.uuTienLoai ?? [],
+      mienThueChenh: ch.lamThem.mienThueChenh ?? [],
     };
   }
 
@@ -167,8 +171,6 @@ export class ThemGio_Service {
       row.donGiaNgay = kq.donGiaNgay;
       row.donGiaGio = kq.donGiaGio;
       row.theoLoai = kq.theoLoai;
-      row.tongTien = kq.tongTien;
-
       // Cột "Số ngày nghỉ bù" của mẫu 03-LĐTL là THÔNG TIN. Biểu mẫu gốc trừ
       // nó vào Thực nhận vì giả định công ty trả tiền OT rồi lấy lại phần đã
       // nghỉ bù. Trong cả bốn chế độ của ta, một giờ công KHÔNG BAO GIỜ vừa
@@ -176,10 +178,27 @@ export class ThemGio_Service {
       // không chồng nhau), nên trừ thêm là trừ hai lần của người lao động.
       row.gioNghiBu = row.gioNghiBu ?? 0;
       row.tienNghiBu = 0;
-      row.thucNhan = kq.tongTien;
 
-      // P4.2c-2 mới đọc quỹ hết hạn và trả tiền cho nó.
-      row.gioOtHetHan = row.gioOtHetHan ?? 0;
+      // Quỹ hết hạn quy ra tiền: nhân hệ số 1.0 vì giờ trong quỹ ĐÃ được nhân
+      // `heSoTichQuy` lúc tích. Cũng vì vậy sổ quỹ không còn giữ loại ngày gốc
+      // nên không tách được phần chênh — khoản này chịu thuế toàn bộ.
+      const hetHan = await this.quyGio_Service.quyChoTraTien(employeeId, thang);
+      row.gioOtHetHan = hetHan.soGio;
+      row.tienOtHetHan = hetHan.soGio * kq.donGiaGio;
+      row.tongTien = kq.tongTien + row.tienOtHetHan;
+      row.thucNhan = row.tongTien;
+
+      row.otMienThue = tinhOtMienThue({
+        theoLoai: kq.theoLoai,
+        donGiaGio: kq.donGiaGio,
+        mienThueChenh: ch.mienThueChenh,
+        truMotDonVi: ch.cheDoBu === 'nghi_bu_va_chenh',
+      });
+
+      // Gán kỳ NGAY, không đợi chốt: `quyChoTraTien()` lấy cả quỹ đã gán đúng
+      // kỳ này nên tổng hợp lại vẫn ra đúng số, mà một kỳ SAU thì không lấy
+      // lại được nữa — đó là cái chặn trả tiền hai lần.
+      await this.quyGio_Service.danhDauDaTraTien(hetHan.balanceIds, thang);
 
       rows.push(await this.repo.save(row));
     }

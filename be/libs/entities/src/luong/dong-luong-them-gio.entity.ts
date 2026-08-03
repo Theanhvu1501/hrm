@@ -46,8 +46,16 @@ export class DongLuongThemGio extends BaseEntity {
   @Column({ default: 0 }) tienNghiBu: number;
   @Column({ default: 0 }) thucNhan: number;
 
-  /** Giờ quy đổi từ quỹ hết hạn `quy_ra_tien` — P4.2c-2 mới trả tiền cho nó. */
+  /** Giờ quy đổi từ quỹ hết hạn `quy_ra_tien`. */
   @Column({ default: 0 }) gioOtHetHan: number;
+  /**
+   * Tiền của `gioOtHetHan`, nhân hệ số 1.0 — giờ trong quỹ ĐÃ được nhân
+   * `heSoTichQuy` lúc tích. Cũng vì vậy sổ quỹ không còn giữ loại ngày gốc nên
+   * KHÔNG tách được phần chênh: khoản này chịu thuế TOÀN BỘ (spec P4.2c §2.2).
+   */
+  @Column({ default: 0 }) tienOtHetHan: number;
+  /** Phần chênh được miễn thuế TNCN — bảng lương chính đọc thẳng số này. */
+  @Column({ default: 0 }) otMienThue: number;
 
   /**
    * Kế toán đã sửa tay dòng này. `tongHop()` chạy lại KHÔNG ghi đè dòng đã

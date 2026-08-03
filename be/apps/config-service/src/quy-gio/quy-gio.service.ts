@@ -999,4 +999,37 @@ export class QuyGio_Service {
       };
     });
   }
+  /**
+   * Giờ từ quỹ ĐÃ ĐÓNG ở chế độ `quy_ra_tien`, đang chờ được trả tiền.
+   *
+   * Lấy CẢ quỹ đã gán đúng `thang` đang hỏi, không chỉ quỹ chưa gán: tổng hợp
+   * lại cùng một kỳ là thao tác thường ngày của kế toán, và nếu chỉ lọc "chưa
+   * gán" thì lần tổng hợp thứ hai làm dòng lương MẤT khoản tiền này.
+   *
+   * `soGioConLai` cố ý được `dongQuyGio()` giữ nguyên sau khi đóng (xem
+   * doc-comment `doiSoat()`), nên đây đúng là số giờ cần quy ra tiền.
+   */
+  async quyChoTraTien(
+    employeeId: string,
+    thang: string,
+  ): Promise<{ soGio: number; balanceIds: string[] }> {
+    const ds = await this.repo.find({
+      where: { employeeId, trangThai: 'da_dong', isActive: true } as any,
+    });
+    const chon = ds.filter((q) => !q.kyLuongTra || q.kyLuongTra === thang);
+    return {
+      soGio: lamTronGio(chon.reduce((s, q) => s + (q.soGioConLai ?? 0), 0)),
+      balanceIds: chon.map((q) => String((q as any)._id)),
+    };
+  }
+
+  /** Gán kỳ lương đã trả tiền cho các quỹ hết hạn — chống trả lần hai. */
+  async danhDauDaTraTien(balanceIds: string[], thang: string): Promise<void> {
+    for (const id of balanceIds) {
+      const q = await this.repo.findOne({ where: { _id: id } as any });
+      if (!q) continue;
+      q.kyLuongTra = thang;
+      await this.repo.save(q);
+    }
+  }
 }

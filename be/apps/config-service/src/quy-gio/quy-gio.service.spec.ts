@@ -919,3 +919,63 @@ describe('giữ chỗ nguyên tử (P4.2b Task 1)', () => {
     expect(quyRepo.rows[0].soGioDangChoDuyet).toBe(0);
   });
 });
+
+describe('quỹ hết hạn chờ trả tiền (P4.2c-2)', () => {
+  const quyDaDong = (over: any = {}) => ({
+    _id: 'b1', employeeId: 'nv1', kyTich: '2026-01',
+    soGioTich: 10, soGioDaDung: 0, soGioDangChoDuyet: 0, soGioConLai: 6,
+    hanDung: '2026-07-31', trangThai: 'da_dong', isActive: true, ...over,
+  });
+
+  it('lấy quỹ đã đóng CHƯA gán kỳ trả', async () => {
+    const { service } = await dungService({ quy: [quyDaDong()] });
+    await expect(service.quyChoTraTien('nv1', '2026-08')).resolves.toEqual({
+      soGio: 6, balanceIds: ['b1'],
+    });
+  });
+
+  it('lấy CẢ quỹ đã gán ĐÚNG kỳ đang hỏi — tổng hợp lại không mất tiền', async () => {
+    const { service } = await dungService({
+      quy: [quyDaDong({ kyLuongTra: '2026-08' })],
+    });
+    await expect(service.quyChoTraTien('nv1', '2026-08')).resolves.toEqual({
+      soGio: 6, balanceIds: ['b1'],
+    });
+  });
+
+  it('BỎ quỹ đã gán kỳ KHÁC — không trả tiền hai lần', async () => {
+    const { service } = await dungService({
+      quy: [quyDaDong({ kyLuongTra: '2026-07' })],
+    });
+    await expect(service.quyChoTraTien('nv1', '2026-08')).resolves.toEqual({
+      soGio: 0, balanceIds: [],
+    });
+  });
+
+  it('BỎ quỹ còn hiệu lực — chưa hết hạn thì chưa quy ra tiền', async () => {
+    const { service } = await dungService({
+      quy: [quyDaDong({ trangThai: 'dang_hieu_luc' })],
+    });
+    await expect(service.quyChoTraTien('nv1', '2026-08')).resolves.toEqual({
+      soGio: 0, balanceIds: [],
+    });
+  });
+
+  it('cộng nhiều quỹ của cùng nhân viên', async () => {
+    const { service } = await dungService({
+      quy: [
+        quyDaDong({ _id: 'b1', kyTich: '2026-01', soGioConLai: 6 }),
+        quyDaDong({ _id: 'b2', kyTich: '2026-02', soGioConLai: 2.5 }),
+      ],
+    });
+    await expect(service.quyChoTraTien('nv1', '2026-08')).resolves.toEqual({
+      soGio: 8.5, balanceIds: ['b1', 'b2'],
+    });
+  });
+
+  it('danhDauDaTraTien ghi kyLuongTra', async () => {
+    const { service, quyRepo } = await dungService({ quy: [quyDaDong()] });
+    await service.danhDauDaTraTien(['b1'], '2026-08');
+    expect(quyRepo.rows[0].kyLuongTra).toBe('2026-08');
+  });
+});
