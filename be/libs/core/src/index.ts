@@ -12,4 +12,5 @@ export * from './luong/tinh-luong';
 export * from './luong/tinh-them-gio';
 export * from './luong/tinh-ot-mien-thue';
 export * from './luong/dung-phieu-luong';
+export * from './luong/quyet-toan-tncn';
 export * from './luong/gan-cau-hinh-rieng';
