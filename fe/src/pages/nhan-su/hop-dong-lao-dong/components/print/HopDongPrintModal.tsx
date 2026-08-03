@@ -109,6 +109,12 @@ export function HopDongPrintModal({ open, contractId, contractLabel, onClose }: 
             srcDoc={html}
             className="w-full rounded-md border bg-white"
             style={{ height: "60vh" }}
+            // Khung xem trước chỉ để ĐỌC — không cần parent script gì truy
+            // cập lại nội dung của nó, nên sandbox rỗng (chặt nhất): không
+            // allow-scripts, không allow-same-origin. Đây là lớp phòng thủ
+            // Ở TẦNG TRÌNH DUYỆT, độc lập với sanitize-html ở BE (review
+            // Critical 1 — "add sandbox to the preview iframe").
+            sandbox=""
           />
         </div>
       )}

@@ -8,14 +8,35 @@
  * `hop-dong.service.ts`) vì cần dữ liệu từ nhiều nguồn (hợp đồng + nhân viên
  * + thông tin công ty) — FE ở đây chỉ còn khâu hiển thị/in, không lặp lại
  * logic ghép token.
+ *
+ * `html` đã qua `sanitizeHopDongHtml` (parser HTML thật) ở BE trước khi tới
+ * đây — NHƯNG iframe này vẫn được sandbox (review Critical 1: "add sandbox
+ * to the preview iframe"), không tin tưởng mù quáng 1 lớp sanitize duy nhất.
+ * `sandbox="allow-same-origin"` (KHÔNG có `allow-scripts`) chặn TUYỆT ĐỐI
+ * mọi script, thuộc tính on-nào-đó, và scheme javascript: chạy được bên
+ * trong iframe này ở tầng trình duyệt — kể cả nếu có payload nào đó lọt qua sanitize-html trong tương lai
+ * — trong khi vẫn giữ được `allow-same-origin` để parent (trang này) còn
+ * gọi được `iframeDoc.write()`/`win.print()` (thiếu allow-same-origin thì
+ * iframe có origin "null" đối lập, parent bị chặn truy cập contentDocument).
  */
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 /** Bọc đoạn HTML (đã ghép dữ liệu) thành 1 document HTML hoàn chỉnh, có tiêu đề. */
 export function buildPrintableDocument(html: string, title = "Hợp đồng lao động"): string {
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title></head><body>${html}</body></html>`;
+  // `title` hiện tại luôn do BE sinh ra (contractNo) nên rủi ro thấp, nhưng
+  // escape vẫn rẻ và đúng nguyên tắc "không nội suy chuỗi chưa escape vào HTML".
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title)}</title></head><body>${html}</body></html>`;
 }
 
-/** Mở iframe ẩn, nạp HTML hợp đồng rồi gọi in (trình duyệt cho In hoặc Lưu PDF). */
+/** Mở iframe ẩn (đã sandbox), nạp HTML hợp đồng rồi gọi in (trình duyệt cho In hoặc Lưu PDF). */
 export function printHopDong(html: string, title?: string): void {
   const doc = buildPrintableDocument(html, title);
 
@@ -26,6 +47,7 @@ export function printHopDong(html: string, title?: string): void {
   iframe.style.width = "0";
   iframe.style.height = "0";
   iframe.style.border = "0";
+  iframe.setAttribute("sandbox", "allow-same-origin");
   document.body.appendChild(iframe);
 
   const iframeDoc = iframe.contentWindow?.document;

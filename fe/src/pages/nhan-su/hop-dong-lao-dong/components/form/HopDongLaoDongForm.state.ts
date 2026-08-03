@@ -5,6 +5,8 @@ export interface HopDongLaoDongFormValues {
   employeeId: string;
   employeeName?: string;
   employeeCode?: string;
+  /** Chức danh nhân viên TẠI THỜI ĐIỂM chọn — denormalize giống employeeName/employeeCode, xem handleEmployeeChange. */
+  chucDanh?: string;
   loaiHopDong: string;
   ngayBatDau?: string;
   ngayKetThuc?: string;

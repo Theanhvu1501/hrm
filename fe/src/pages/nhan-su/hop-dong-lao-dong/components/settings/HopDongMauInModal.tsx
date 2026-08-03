@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Modal, Button, Input, Tabs, Form, Popconfirm, Tag, Typography } from "antd";
+import { Modal, Button, Input, Tabs, Form, Popconfirm, Tag, Typography, Collapse, Space } from "antd";
 import { message } from "antd";
 import { apiErrorMessage } from "@/config/api";
 import {
   hopDongTemplateService,
   type ThongTinCongTy,
 } from "@/services/hopDongTemplateService";
+import { HOP_DONG_TOKEN_DOCS } from "../../lib/hopDongTokens";
 
 const { Text } = Typography;
 
@@ -138,6 +139,25 @@ export function HopDongMauInModal({ open, onClose }: Props) {
                   disabled={loadingMauIn}
                   style={{ fontFamily: "monospace", fontSize: 12 }}
                 />
+                <Collapse
+                  ghost
+                  size="small"
+                  items={[
+                    {
+                      key: "token",
+                      label: "Token hỗ trợ (lưu sẽ bị từ chối nếu dùng token ngoài danh sách này)",
+                      children: (
+                        <Space direction="vertical" size={2}>
+                          {HOP_DONG_TOKEN_DOCS.map((t) => (
+                            <Text key={t.token} className="text-xs">
+                              <code>{t.token}</code> — {t.moTa}
+                            </Text>
+                          ))}
+                        </Space>
+                      ),
+                    },
+                  ]}
+                />
                 <div className="flex justify-end gap-2">
                   <Popconfirm
                     title="Khôi phục mẫu mặc định?"
@@ -181,6 +201,20 @@ export function HopDongMauInModal({ open, onClose }: Props) {
                 </Form.Item>
                 <Form.Item name="chucVuNguoiDaiDien" label="Chức vụ người đại diện">
                   <Input placeholder="Giám đốc" />
+                </Form.Item>
+                <Form.Item
+                  name="thanhPhoKy"
+                  label="Thành phố ký hợp đồng"
+                  extra='Dòng "..., ngày ... tháng ... năm ..." đầu văn bản. Để trống → bản in để trống, KHÔNG mặc định "Hà Nội".'
+                >
+                  <Input placeholder="Hà Nội" />
+                </Form.Item>
+                <Form.Item
+                  name="maHopDongMau"
+                  label="Hậu tố số hợp đồng"
+                  extra='Nối vào sau số hợp đồng, vd "/HĐLĐ-MC.1" → "Số: HD0001/HĐLĐ-MC.1". Để trống nếu công ty không dùng ký hiệu riêng.'
+                >
+                  <Input placeholder="/HĐLĐ-MC.1" />
                 </Form.Item>
                 <div className="flex justify-end">
                   <Button type="primary" loading={savingCongTy} onClick={handleSaveCongTy}>

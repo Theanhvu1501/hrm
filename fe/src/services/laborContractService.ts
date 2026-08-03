@@ -6,6 +6,8 @@ export interface LaborContract {
   employeeId: string;
   employeeName?: string;
   employeeCode?: string;
+  /** Chức danh TẠI THỜI ĐIỂM KÝ — snapshot, không đổi theo hồ sơ nhân viên sau này (xem BE labor-contract.entity.ts). */
+  chucDanh?: string;
   loaiHopDong: string;
   ngayBatDau?: string;
   ngayKetThuc?: string;
@@ -29,6 +31,7 @@ export interface CreateLaborContractDto {
   employeeId: string;
   employeeName?: string;
   employeeCode?: string;
+  chucDanh?: string;
   loaiHopDong: string;
   ngayBatDau?: string;
   ngayKetThuc?: string;
@@ -88,6 +91,7 @@ class LaborContractService extends ServiceBase {
       employeeId: x.employeeId as string,
       employeeName: x.employeeName as string | undefined,
       employeeCode: x.employeeCode as string | undefined,
+      chucDanh: x.chucDanh as string | undefined,
       loaiHopDong: x.loaiHopDong as string,
       ngayBatDau: x.ngayBatDau as string | undefined,
       ngayKetThuc: x.ngayKetThuc as string | undefined,

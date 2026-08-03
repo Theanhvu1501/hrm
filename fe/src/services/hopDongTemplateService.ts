@@ -7,6 +7,10 @@ export interface ThongTinCongTy {
   maSoThue: string | null;
   nguoiDaiDien: string | null;
   chucVuNguoiDaiDien: string | null;
+  /** Thành phố ký hợp đồng (dòng quốc hiệu đầu văn bản) — trước bản vá hard-code "Hà Nội" cho mọi tenant. */
+  thanhPhoKy: string | null;
+  /** Hậu tố số hợp đồng mẫu (vd "/HĐLĐ-MC.1") — trước bản vá hard-code cho mọi tenant. */
+  maHopDongMau: string | null;
 }
 
 export type UpdateThongTinCongTyDto = Partial<Omit<ThongTinCongTy, never>>;

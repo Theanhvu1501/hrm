@@ -19,6 +19,7 @@ const DEFAULT_VALUES: HopDongLaoDongFormValues = {
   employeeId: "",
   employeeName: "",
   employeeCode: "",
+  chucDanh: "",
   loaiHopDong: "thu_viec",
   ngayBatDau: "",
   ngayKetThuc: "",
@@ -36,6 +37,7 @@ function toFormValues(contract: LaborContract | null): HopDongLaoDongFormValues 
     employeeId: contract.employeeId || "",
     employeeName: contract.employeeName || "",
     employeeCode: contract.employeeCode || "",
+    chucDanh: contract.chucDanh || "",
     loaiHopDong: contract.loaiHopDong || "thu_viec",
     ngayBatDau: contract.ngayBatDau || "",
     ngayKetThuc: contract.ngayKetThuc || "",
@@ -115,10 +117,14 @@ export function HopDongLaoDongForm() {
   const handleEmployeeChange = (employeeId: string) => {
     const employee = employeeList.find((e) => e.id === employeeId);
     setValue("employeeId", employeeId);
-    // Denormalize employeeName/employeeCode ngay khi chọn nhân viên, để BE
-    // lưu kèm hợp đồng (phục vụ hiển thị danh sách mà không cần join).
+    // Denormalize employeeName/employeeCode/chucDanh ngay khi chọn nhân
+    // viên, để BE lưu kèm hợp đồng. chucDanh đặc biệt quan trọng: đây là
+    // SNAPSHOT tại thời điểm ký — in lại hợp đồng cũ sau này phải ra đúng
+    // chức danh lúc ký, không phải chức danh hiện tại (nhân viên có thể đã
+    // được thăng chức) — xem hop-dong.service.ts renderHopDong().
     setValue("employeeName", employee?.hoTen || "");
     setValue("employeeCode", employee?.employeeId || "");
+    setValue("chucDanh", employee?.chucDanh || "");
   };
 
   const onSubmit = (values: HopDongLaoDongFormValues) => {
@@ -126,6 +132,7 @@ export function HopDongLaoDongForm() {
       employeeId: values.employeeId,
       employeeName: values.employeeName || undefined,
       employeeCode: values.employeeCode || undefined,
+      chucDanh: values.chucDanh || undefined,
       loaiHopDong: values.loaiHopDong,
       ngayBatDau: values.ngayBatDau || undefined,
       ngayKetThuc:
