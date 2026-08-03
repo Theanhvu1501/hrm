@@ -127,7 +127,7 @@ describe('ThoiViec_Service', () => {
       );
     });
 
-    it('does NOT touch the employee record when the new status is tu_choi', async () => {
+    it('does NOT touch the employee record when the new status is tu_choi and it was never approved (cho_duyet -> tu_choi)', async () => {
       const resignation = {
         _id: RESIGNATION_ID,
         employeeId: EMP_ID,
@@ -140,6 +140,104 @@ describe('ThoiViec_Service', () => {
       expect(result.trangThai).toBe('tu_choi');
       expect(mockEmployeeRepo.findOne).not.toHaveBeenCalled();
       expect(mockEmployeeRepo.save).not.toHaveBeenCalled();
+    });
+
+    // ── Gap 1: huỷ duyệt phải trả lại trạng thái làm việc cho nhân viên ──
+    it('restores the employee to dang_lam_viec when an approved resignation is moved back to tu_choi', async () => {
+      const resignation = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'da_duyet',
+        trangThaiNhanVienTruocKhiDuyet: 'dang_lam_viec',
+      };
+      const employee = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        trangThai: 'da_nghi',
+      };
+      mockResignationRepo.findOne.mockResolvedValue(resignation);
+      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+
+      const result = await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+
+      expect(result.trangThai).toBe('tu_choi');
+      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'dang_lam_viec' }),
+      );
+    });
+
+    it('restores the employee to tam_nghi (not dang_lam_viec) when they were on tam_nghi before the resignation was approved', async () => {
+      const resignation = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'da_duyet',
+        // Chụp lại từ lúc duyệt: NV đang tạm nghỉ (thai sản/không lương) khi
+        // hồ sơ thôi việc được duyệt.
+        trangThaiNhanVienTruocKhiDuyet: 'tam_nghi',
+      };
+      const employee = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        trangThai: 'da_nghi',
+      };
+      mockResignationRepo.findOne.mockResolvedValue(resignation);
+      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+
+      const result = await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+
+      expect(result.trangThai).toBe('tu_choi');
+      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'tam_nghi' }),
+      );
+    });
+
+    it('captures the employee trangThai at the moment of first entering da_duyet, for later restore', async () => {
+      const resignation = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+      };
+      const employee = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        trangThai: 'tam_nghi',
+      };
+      mockResignationRepo.findOne.mockResolvedValue(resignation);
+      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+
+      const result = await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+
+      expect(result.trangThaiNhanVienTruocKhiDuyet).toBe('tam_nghi');
+      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'da_nghi' }),
+      );
+    });
+
+    it('does not re-capture (and does not lose) the prior status when moving da_duyet -> hoan_thanh', async () => {
+      const resignation = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'da_duyet',
+        trangThaiNhanVienTruocKhiDuyet: 'tam_nghi',
+      };
+      const employee = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        trangThai: 'da_nghi',
+      };
+      mockResignationRepo.findOne.mockResolvedValue(resignation);
+      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+
+      const result = await service.updateStatus(RESIGNATION_ID, 'hoan_thanh');
+
+      expect(result.trangThaiNhanVienTruocKhiDuyet).toBe('tam_nghi');
+      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'da_nghi' }),
+      );
     });
   });
 
@@ -172,6 +270,7 @@ describe('ThoiViec_Service', () => {
       const existing = {
         _id: RESIGNATION_ID,
         employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
         isActive: true,
       };
       mockResignationRepo.findOne.mockResolvedValue(existing);
@@ -181,6 +280,65 @@ describe('ThoiViec_Service', () => {
       expect(mockResignationRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ isActive: false }),
       );
+    });
+
+    it('does not touch the employee record when deleting a resignation that was never approved', async () => {
+      const existing = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'cho_duyet',
+        isActive: true,
+      };
+      mockResignationRepo.findOne.mockResolvedValue(existing);
+
+      await service.remove(RESIGNATION_ID);
+
+      expect(mockEmployeeRepo.findOne).not.toHaveBeenCalled();
+      expect(mockEmployeeRepo.save).not.toHaveBeenCalled();
+    });
+
+    // ── Gap 2: xoá một hồ sơ ĐÃ DUYỆT phải trả lại trạng thái làm việc ──
+    it('restores the employee to working (undoes chanNeuDaNghiViec block) when deleting an approved resignation', async () => {
+      const existing = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'hoan_thanh',
+        trangThaiNhanVienTruocKhiDuyet: 'dang_lam_viec',
+        isActive: true,
+      };
+      const employee = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        trangThai: 'da_nghi',
+      };
+      mockResignationRepo.findOne.mockResolvedValue(existing);
+      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+
+      await service.remove(RESIGNATION_ID);
+
+      expect(mockResignationRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isActive: false }),
+      );
+      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'dang_lam_viec' }),
+      );
+    });
+
+    it('is a no-op on the employee when called again on an already-inactive resignation', async () => {
+      const existing = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'hoan_thanh',
+        trangThaiNhanVienTruocKhiDuyet: 'dang_lam_viec',
+        isActive: false,
+      };
+      mockResignationRepo.findOne.mockResolvedValue(existing);
+
+      await service.remove(RESIGNATION_ID);
+
+      expect(mockEmployeeRepo.findOne).not.toHaveBeenCalled();
+      expect(mockEmployeeRepo.save).not.toHaveBeenCalled();
     });
   });
 });

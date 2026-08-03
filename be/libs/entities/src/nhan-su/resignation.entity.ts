@@ -21,6 +21,12 @@ export class Resignation extends BaseEntity {
   @Column({ nullable: true }) soQuyetDinh?: string;
   @Column({ nullable: true }) ghiChu?: string;
   @Column({ default: true }) isActive: boolean;
+  // Chụp lại Employee.trangThai NGAY TRƯỚC LÚC hồ sơ này lần đầu đẩy nhân
+  // viên sang 'da_nghi' (tức lúc trangThai chuyển vào da_duyet/hoan_thanh).
+  // Dùng để khôi phục đúng giá trị gốc (vd 'tam_nghi' — thai sản, nghỉ không
+  // lương) khi hồ sơ bị huỷ duyệt hoặc xoá, thay vì ghi cứng 'dang_lam_viec'
+  // và hồi sinh nhầm người vốn đã tạm nghỉ từ trước khi nộp đơn thôi việc.
+  @Column({ nullable: true }) trangThaiNhanVienTruocKhiDuyet?: string;
 }
 
 export interface ResignationEntities { Resignation: typeof Resignation; }
