@@ -21,7 +21,14 @@ import {
 export const MA_LOI_QUY_GIO = {
   KHONG_DU_SO_DU: 'QUY_GIO_KHONG_DU_SO_DU',
   DA_TIEU_KHONG_THU_HOI_DUOC: 'QUY_GIO_DA_TIEU',
+  /** CAS trượt liên tiếp — quỹ đang bị nhiều request sửa cùng lúc. */
+  DANG_SUA_DONG_THOI: 'QUY_GIO_DANG_SUA_DONG_THOI',
 } as const;
+
+/** Số lần đọc-lại-tính-lại trước khi bỏ cuộc. 5 là quá đủ cho tranh chấp thật
+ *  (hai người bấm nộp cùng giây); vượt 5 nghĩa là có gì đó sai hệ thống chứ
+ *  không phải tranh chấp bình thường, và thử mãi chỉ kéo dài request. */
+const SO_LAN_THU_LAI_CAS = 5;
 
 interface CauHinhLamThemApDung {
   soGioMoiNgay: number;
@@ -487,35 +494,107 @@ export class QuyGio_Service {
     boQuaKhiKhongDoi = false,
   ): Promise<void> {
     for (const p of phanBo) {
-      const quy = await this.repo.findOne({
-        where: { employeeId, kyTich: p.kyTich } as any,
-      });
-      if (!quy) continue;
+      let daXong = false;
 
-      const loi = kiem?.(quy, p.soGio);
-      if (loi) {
-        throw new ConflictException({
-          code: MA_LOI_QUY_GIO.KHONG_DU_SO_DU,
-          message: loi,
+      for (let lan = 0; lan < SO_LAN_THU_LAI_CAS && !daXong; lan++) {
+        const quy = await this.repo.findOne({
+          where: { employeeId, kyTich: p.kyTich } as any,
         });
+        if (!quy) {
+          daXong = true;
+          break;
+        }
+
+        const loi = kiem?.(quy, p.soGio);
+        if (loi) {
+          throw new ConflictException({
+            code: MA_LOI_QUY_GIO.KHONG_DU_SO_DU,
+            message: loi,
+          });
+        }
+
+        const truoc = {
+          soGioTich: quy.soGioTich,
+          soGioDaDung: quy.soGioDaDung,
+          soGioDangChoDuyet: quy.soGioDangChoDuyet,
+        };
+
+        // `doi()` sửa TẠI CHỖ, nên phải cho nó một BẢN SAO: `truoc` là vế so
+        // sánh của CAS, và nếu `doi()` sửa thẳng vào chính object mà repo
+        // đang giữ thì đến lúc so sánh, giá trị dưới DB đã là giá trị MỚI —
+        // filter không bao giờ khớp và vòng lặp quay đủ 5 lần rồi ném. Bản
+        // sao cũng làm hàm này độc lập với chuyện repo trả về tham chiếu
+        // dùng chung hay object mới mỗi lần đọc.
+        const ban = { ...quy } as OvertimeBalance;
+
+        const thucTe = doi(ban, p.soGio);
+        if (boQuaKhiKhongDoi && thucTe === 0) {
+          daXong = true; // đã bị kẹp từ trước — không có gì để ghi
+          break;
+        }
+
+        this.tinhLaiConLai(ban);
+
+        if (!(await this.capNhatCas((quy as any)._id, truoc, ban))) {
+          continue; // ai đó vừa đổi số dư — đọc lại, `kiem()` chạy trên số MỚI
+        }
+
+        await this.ghiSo({
+          balanceId: String((quy as any)._id),
+          employeeId,
+          kyTich: p.kyTich,
+          soGio: dauSo(thucTe),
+          lyDo,
+          requestId,
+          nguoiThucHien,
+        });
+        daXong = true;
       }
 
-      const thucTe = doi(quy, p.soGio);
-      if (boQuaKhiKhongDoi && thucTe === 0) continue; // đã bị kẹp từ trước — không có gì để ghi
-
-      this.tinhLaiConLai(quy);
-      await this.repo.save(quy);
-
-      await this.ghiSo({
-        balanceId: String((quy as any)._id),
-        employeeId,
-        kyTich: p.kyTich,
-        soGio: dauSo(thucTe),
-        lyDo,
-        requestId,
-        nguoiThucHien,
-      });
+      if (!daXong) {
+        throw new ConflictException({
+          code: MA_LOI_QUY_GIO.DANG_SUA_DONG_THOI,
+          message: `Quỹ kỳ ${p.kyTich} đang được sửa đồng thời, vui lòng thử lại`,
+        });
+      }
     }
+  }
+
+  /**
+   * Ghi số dư bằng compare-and-swap: filter chứa ĐÚNG ba con số đã đọc, nên
+   * bất kỳ ai chen vào giữa lúc đọc và lúc ghi cũng làm filter trượt.
+   *
+   * Đi thẳng qua `getMongoRepository()` (proxy tenant của @app/database KHÔNG
+   * chặn `findOneAndUpdate`), nên filter phải tự đủ chặt. `_id` là khoá toàn
+   * cục duy nhất nên không cần thêm `tenantId` — cùng lập luận đã ghi ở
+   * `nhan-vien.service.ts` cho `generateEmployeeId()`.
+   */
+  private async capNhatCas(
+    id: unknown,
+    truoc: {
+      soGioTich: number;
+      soGioDaDung: number;
+      soGioDangChoDuyet: number;
+    },
+    sau: OvertimeBalance,
+  ): Promise<boolean> {
+    const mongoRepo = this.repo.manager.getMongoRepository(
+      OvertimeBalance,
+    ) as unknown as import('typeorm').MongoRepository<OvertimeBalance>;
+
+    const kq = await (mongoRepo as any).findOneAndUpdate(
+      { _id: id, ...truoc },
+      {
+        $set: {
+          soGioTich: sau.soGioTich,
+          soGioDaDung: sau.soGioDaDung,
+          soGioDangChoDuyet: sau.soGioDangChoDuyet,
+          soGioConLai: sau.soGioConLai,
+        },
+      },
+      { returnDocument: 'after' },
+    );
+    return kq != null;
   }
 
   /**
@@ -526,19 +605,14 @@ export class QuyGio_Service {
    * cho đúng `requestId` (bấm hai lần, retry) không được giữ thêm chỗ đè lên
    * chỗ đã giữ. Xem lý do đầy đủ ở doc-comment `demRongTheoLyDo()`.
    *
-   * GIỚI HẠN CÒN LẠI (review round, cố ý ghi nhận chứ không sửa ở đây): đây
-   * là read-then-write thường (`findOne` → sửa trong bộ nhớ → `save`), KHÔNG
-   * có điều kiện nguyên tử ở tầng DB. Guard trên chỉ đóng cửa sổ hở của việc
-   * GỌI LẠI cùng một `requestId` (retry/bấm hai lần) — nó KHÔNG đóng được
-   * cửa sổ hở của HAI ĐƠN KHÁC NHAU nộp gần như đồng thời: cả hai có thể
-   * cùng đọc một `soGioConLai` trước khi bên nào kịp `save()`, cùng thấy đủ
-   * chỗ, và cùng giữ chỗ thành công — tổng hai lần giữ có thể vượt số dư
-   * thật. Đây đúng là giới hạn mà `quy-phep.service.ts` đã ghi nhận cho
-   * `giuCho()` của nó (xem doc-comment ở đó) — quỹ giờ này CỐ Ý giữ nguyên
-   * y hệt hình dạng với quỹ phép, không siết chặt hơn một mình nó ở đây.
-   * Cửa sổ hở nhỏ (chỉ mở giữa lúc đọc và lúc ghi của MỘT request), và việc
-   * đóng nó hẳn cần transaction hoặc `$inc` nguyên tử ở tầng DB — được theo
-   * dõi như việc riêng (đồng thời cho cả hai quỹ), không làm ở Task 5.
+   * NGUYÊN TỬ (P4.2b): `apDung()` ghi bằng compare-and-swap — filter chứa
+   * đúng ba số dư đã đọc, nên hai đơn nộp gần như đồng thời không thể cùng
+   * giữ chỗ trên một số dư. Bên trượt đọc lại và chạy `kiem()` trên số dư
+   * MỚI, nên nó rớt đúng chỗ đáng rớt thay vì đẩy số dư xuống âm.
+   *
+   * Guard `demRongTheoLyDo()` phía trên vẫn cần và vẫn giữ: nó chặn một lớp
+   * lỗi KHÁC (gọi lại cùng `requestId`), thứ mà CAS không nhìn thấy — hai
+   * lần gọi đó thật sự đọc hai số dư khác nhau và cả hai đều hợp lệ.
    */
   async giuCho(
     employeeId: string,

@@ -42,8 +42,21 @@ const T2_DEN_T6 = [1, 2, 3, 4, 5];
 function repoGia(khoiTao: any[] = []) {
   const rows: any[] = [...khoiTao];
   let seq = 0;
+  // CAS (P4.2b Task 1): `apDung()` của quỹ giờ ghi qua cửa này thay vì save().
+  const findOneAndUpdate = jest.fn(
+    async (filter: any, update: any, _opts?: any) => {
+      const i = rows.findIndex((r) =>
+        Object.entries(filter).every(([k, v]) => String(r[k]) === String(v)),
+      );
+      if (i < 0) return null;
+      rows[i] = { ...rows[i], ...(update.$set ?? {}) };
+      return rows[i];
+    },
+  );
   return {
     rows,
+    findOneAndUpdate,
+    manager: { getMongoRepository: () => ({ findOneAndUpdate }) },
     find: jest.fn(async ({ where }: any = {}) =>
       rows.filter((r) =>
         Object.entries(where ?? {}).every(([k, v]) => String(r[k]) === String(v)),

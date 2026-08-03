@@ -6,8 +6,29 @@ import { QuyGio_Service } from './quy-gio.service';
 // Repo giả tối thiểu: giữ mảng trong bộ nhớ, đủ để kiểm luật cộng trừ và sổ.
 function repoGia(khoiTao: any[] = []) {
   const rows = [...khoiTao];
+  // CAS (P4.2b Task 1): filter chứa đúng các giá trị đã đọc, nên khớp = chưa
+  // ai chen vào giữa đọc và ghi.
+  const findOneAndUpdate = jest.fn(
+    async (filter: any, update: any, _opts?: any) => {
+      // Bắt lỗi fixture thiếu `_id` cho ồn ào, thay vì để `undefined ===
+      // undefined` khớp nhầm hàng đầu tiên và làm test xanh giả.
+      if (!('_id' in filter) || filter._id === undefined) {
+        throw new Error(
+          'repoGia.findOneAndUpdate: filter thiếu _id — fixture phải khai _id',
+        );
+      }
+      const i = rows.findIndex((r) =>
+        Object.entries(filter).every(([k, v]) => r[k] === v),
+      );
+      if (i < 0) return null;
+      rows[i] = { ...rows[i], ...(update.$set ?? {}) };
+      return rows[i];
+    },
+  );
   return {
     rows,
+    findOneAndUpdate,
+    manager: { getMongoRepository: () => ({ findOneAndUpdate }) },
     find: jest.fn(async ({ where }: any = {}) =>
       rows.filter((r) =>
         Object.entries(where ?? {}).every(([k, v]) => r[k] === v),
@@ -826,5 +847,75 @@ describe('QuyGio_Service.nhaCho — chiPhanDaGiuCuaDon', () => {
     // BÙ phải bật cờ, còn các đường nghiệp vụ bình thường (từ chối/tự
     // huỷ/xoá đơn) thì KHÔNG, vì ở đó ta biết chắc đơn này đã giữ đủ.
     expect(quyRepo.rows[1].soGioDangChoDuyet).toBe(1);
+  });
+});
+
+describe('giữ chỗ nguyên tử (P4.2b Task 1)', () => {
+  const quyDay = () => [
+    {
+      _id: 'b1', employeeId: 'nv1', kyTich: '2026-01', soGioTich: 10,
+      soGioDaDung: 0, soGioDangChoDuyet: 0, soGioConLai: 10,
+      hanDung: '2026-07-31', trangThai: 'dang_hieu_luc',
+    },
+  ];
+
+  it('ghi qua findOneAndUpdate chứ không qua save()', async () => {
+    const { service, quyRepo } = await dungService({ quy: quyDay() });
+
+    await service.giuCho(
+      'nv1', [{ balanceId: 'b1', kyTich: '2026-01', soGio: 4 }], 'don1', 'nv1',
+    );
+
+    expect(quyRepo.findOneAndUpdate).toHaveBeenCalled();
+    expect(quyRepo.save).not.toHaveBeenCalled();
+    expect(quyRepo.rows[0].soGioDangChoDuyet).toBe(4);
+    expect(quyRepo.rows[0].soGioConLai).toBe(6);
+  });
+
+  it('CAS trượt thì đọc lại và tính lại trên số dư MỚI', async () => {
+    const { service, quyRepo } = await dungService({ quy: quyDay() });
+
+    // Mô phỏng một đơn KHÁC vừa giữ 8 giờ ngay giữa lúc ta đọc và lúc ta ghi:
+    // lần findOneAndUpdate đầu trượt, và khi ta đọc lại thì số dư đã bị ăn.
+    const that = quyRepo.findOneAndUpdate;
+    let lanDau = true;
+    quyRepo.manager.getMongoRepository = () => ({
+      findOneAndUpdate: async (filter: any, update: any, opts: any) => {
+        if (lanDau) {
+          lanDau = false;
+          quyRepo.rows[0].soGioDangChoDuyet = 8;
+          quyRepo.rows[0].soGioConLai = 2;
+          return null; // filter không còn khớp
+        }
+        return that(filter, update, opts);
+      },
+    });
+
+    await expect(
+      service.giuCho(
+        'nv1', [{ balanceId: 'b1', kyTich: '2026-01', soGio: 4 }], 'don1', 'nv1',
+      ),
+    ).rejects.toMatchObject({ response: { code: 'QUY_GIO_KHONG_DU_SO_DU' } });
+
+    // Không có 12/10 giờ nào bị giữ — đúng phần đơn kia đã giữ và không hơn.
+    expect(quyRepo.rows[0].soGioDangChoDuyet).toBe(8);
+  });
+
+  it('CAS trượt mãi thì bỏ cuộc bằng mã lỗi riêng, không treo vòng lặp', async () => {
+    const { service, quyRepo } = await dungService({ quy: quyDay() });
+
+    quyRepo.manager.getMongoRepository = () => ({
+      findOneAndUpdate: async () => null, // luôn trượt
+    });
+
+    await expect(
+      service.giuCho(
+        'nv1', [{ balanceId: 'b1', kyTich: '2026-01', soGio: 4 }], 'don1', 'nv1',
+      ),
+    ).rejects.toMatchObject({
+      response: { code: 'QUY_GIO_DANG_SUA_DONG_THOI' },
+    });
+
+    expect(quyRepo.rows[0].soGioDangChoDuyet).toBe(0);
   });
 });
