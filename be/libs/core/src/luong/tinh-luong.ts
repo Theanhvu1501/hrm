@@ -60,6 +60,12 @@ function tinhKhoan(
     case 'NHAP_THEO_KY':
       x = dv.nhapTheoKy[khoan.ma] ?? 0;
       break;
+    case 'TIEN_OT':
+      // Lấy THẲNG, không nhân lại: bảng 03-LĐTL là nguồn sự thật duy nhất của
+      // tiền làm thêm. Dựng lại công thức ở đây là tạo nguồn thứ hai, và hai
+      // bên lệch nhau ngay lần đầu kế toán sửa tay một dòng trên bảng đó.
+      x = dv.tienOt ?? 0;
+      break;
   }
   return lamTronTheo(x, ch.lamTron);
 }
@@ -79,7 +85,7 @@ export function tinhDongLuong(
 
   // Chỉ xét khoản CÓ trong Tổng thu nhập: khoản không vào thu nhập thì không được
   // trừ khỏi thu nhập tính thuế (nếu không sẽ âm thầm giảm thuế sai).
-  const thuNhapMienThue = khoanSap
+  const mienThueKhoan = khoanSap
     .filter((k) => k.vaoTongThuNhap)
     .reduce((s, k) => {
       const v = giaTriTungKhoan[k.ma];
@@ -87,6 +93,14 @@ export function tinhDongLuong(
       if (k.tranMienThue != null) return s + Math.min(v, k.tranMienThue); // phần ≤ trần miễn
       return s;
     }, 0);
+
+  // Kẹp hai đầu, KHÔNG tin nơi gọi. Vượt `tienOt` làm cột gộp phồng lên, thu
+  // nhập tính thuế tụt xuống — trả THIẾU thuế mà bảng vẫn trông hợp lý. Số âm
+  // làm cột gộp tụt — thu THỪA thuế của người lao động.
+  const otMienThue = Math.min(
+    Math.max(0, dv.otMienThue ?? 0),
+    Math.max(0, dv.tienOt ?? 0),
+  );
 
   // Cơ sở đóng BHXH hiện là lựa chọn `canCu` cố định (MUC_KHAI_BAO | base);
   // KhoanLuong.vaoBHXH chưa được cộng dồn ở đây — dành cho một task sau.
@@ -118,7 +132,11 @@ export function tinhDongLuong(
   if (dv.camKet && ch.quyTacCamKet.mienThue) {
     thue = 0;
   } else if (dv.thoiVu) {
-    const tnCT = Math.max(0, tongThuNhap - thuNhapMienThue);
+    // Đọc HAI thành phần gốc, KHÔNG đọc cột gộp: cột gộp có giảm trừ gia cảnh
+    // bên trong, mà lao động thời vụ KHÔNG được giảm trừ. Hôm nay `giamTru`
+    // trong nhánh này luôn 0 nên đọc nhầm vẫn ra đúng — chính vì vô hại nên
+    // nó sẽ không được ai để ý cho tới khi có người cho thời vụ giảm trừ.
+    const tnCT = Math.max(0, tongThuNhap - mienThueKhoan - otMienThue);
     thue =
       tnCT >= ch.quyTacThoiVu.nguong
         ? lamTronTheo(ch.quyTacThoiVu.tyLe * tnCT, ch.lamTron)
@@ -131,7 +149,7 @@ export function tinhDongLuong(
       : ch.giamTruBanThan + dv.soNguoiPhuThuoc * ch.giamTruNPT;
     thuNhapTinhThue = Math.max(
       0,
-      tongThuNhap - thuNhapMienThue - bhxh - giamTru,
+      tongThuNhap - bhxh - (giamTru + mienThueKhoan + otMienThue),
     );
     thue = lamTronTheo(thueLuyTien(thuNhapTinhThue, ch.bacThue), ch.lamTron);
   }
@@ -156,7 +174,11 @@ export function tinhDongLuong(
   return {
     giaTriTungKhoan,
     tongThuNhap,
-    thuNhapMienThue,
+    // Cột GỘP để kế toán đọc; hai thành phần gốc trả kèm bên dưới vì tờ khai
+    // 05/KK-TNCN cần chúng ở hai dòng khác nhau.
+    thuNhapMienThue: giamTru + mienThueKhoan + otMienThue,
+    mienThueKhoan,
+    otMienThue,
     bhxh,
     giamTru,
     thuNhapTinhThue,

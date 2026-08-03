@@ -29,6 +29,18 @@ function cauHinh(over: Partial<CauHinhLuongData> = {}): CauHinhLuongData {
     // Mặc định 0 để mọi bài test cũ giữ nguyên con số; bài nào cần thì override.
     phiCongDoan: { tyLe: 0 },
     lamTron: 1000,
+    // `tinhDongLuong()` không đọc hai trường này, khai cho đủ kiểu.
+    soGioMoiNgay: 8,
+    lamThem: {
+      cheDoBu: 'chi_nghi_bu',
+      heSoTra: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3, ngay_dem: 1.5 },
+      heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3, ngay_dem: 1.5 },
+      khungGioDem: { tu: '22:00', den: '06:00' },
+      uuTienLoai: ['ngay_le', 'ngay_nghi', 'ngay_dem', 'ngay_thuong'],
+      mienThueChenh: ['ngay_dem'],
+      soThangHanDung: null,
+      khiHetHan: 'quy_ra_tien',
+    },
     ...over,
   };
 }
@@ -39,7 +51,10 @@ function dauVao(over: Partial<DauVaoDongLuong> = {}): DauVaoDongLuong {
     congThuong: 24, congThuViec: 0, congKhac: 0,
     phuCapCoDinh: 0, soNguoiPhuThuoc: 0, tamUng: 0, khauTruKhac: 0,
     dongBH: false, thoiVu: false, camKet: false, hopDongThu2: false,
-    nhapTheoKy: {}, ...over,
+    nhapTheoKy: {},
+    // P4.2c-2: mặc định 0 để mọi bài cũ giữ nguyên số; bài nào cần thì override.
+    tienOt: 0, otMienThue: 0,
+    ...over,
   };
 }
 
@@ -85,7 +100,7 @@ describe('tinhDongLuong', () => {
     const r = tinhDongLuong(dauVao({ base: 15_000_000 }), ch);
     // ăn ca = 50k×24 = 1.2tr = đúng trần → miễn toàn bộ
     expect(r.giaTriTungKhoan.AN_CA).toBe(1_200_000);
-    expect(r.thuNhapMienThue).toBe(1_200_000); // (không đóng BH nên chỉ ăn ca miễn)
+    expect(r.mienThueKhoan).toBe(1_200_000); // (không đóng BH nên chỉ ăn ca miễn)
   });
 
   it('BHXH theo MỨC KHAI BÁO ở cả 2 mức (dongBH)', () => {
@@ -100,7 +115,7 @@ describe('tinhDongLuong', () => {
 
   it('thời vụ → 10% nếu ≥ ngưỡng, dưới ngưỡng → 0', () => {
     const r = tinhDongLuong(dauVao({ base: 10_000_000, thoiVu: true }), cauHinh());
-    const tnCT = r.tongThuNhap - r.thuNhapMienThue;
+    const tnCT = r.tongThuNhap - r.mienThueKhoan - r.otMienThue;
     expect(r.thue).toBe(lamTronTheo(0.1 * tnCT, 1000));
     // Đối chiếu bằng số tính tay độc lập, không lấy lại từ r.tongThuNhap/r.thuNhapMienThue:
     // LUONG_CONG = (10tr/24)*24 = 10tr; AN_CA = 50k×24 = 1.2tr (= trần → miễn hết);
@@ -129,14 +144,14 @@ describe('tinhDongLuong', () => {
     const r = tinhDongLuong(dauVao({ congThuong: 30 }), cauHinh());
     expect(r.giaTriTungKhoan.AN_CA).toBe(1_500_000); // giá trị thực của khoản, KHÔNG bị cắt
     // base thấp, không đóng BH → chỉ ăn ca đóng góp vào thuNhapMienThue, và bị chặn ở trần
-    expect(r.thuNhapMienThue).toBe(1_200_000); // phần vượt 300.000 KHÔNG được miễn
+    expect(r.mienThueKhoan).toBe(1_200_000); // phần vượt 300.000 KHÔNG được miễn
   });
 
   it('tắt chiuThue của ăn ca → không cộng vào thu nhập miễn kiểu "trần" mà miễn cả khoản', () => {
     const ch = cauHinh();
     ch.khoanLuong[1].chiuThue = false; // ăn ca không chịu thuế
     const r = tinhDongLuong(dauVao({ base: 15_000_000 }), ch);
-    expect(r.thuNhapMienThue).toBe(1_200_000); // cả khoản ăn ca (=1.2tr) miễn
+    expect(r.mienThueKhoan).toBe(1_200_000); // cả khoản ăn ca (=1.2tr) miễn
   });
 });
 
@@ -206,7 +221,7 @@ describe('HĐLĐ thứ 2', () => {
     const r = tinhDongLuong(dv, cauHinh());
 
     expect(r.giamTru).toBe(0);
-    expect(r.thuNhapTinhThue).toBe(r.tongThuNhap - r.thuNhapMienThue);
+    expect(r.thuNhapTinhThue).toBe(r.tongThuNhap - r.mienThueKhoan - r.otMienThue);
     expect(r.thue).toBe(lamTronTheo(thueLuyTien(r.thuNhapTinhThue, BAC_MAC_DINH), 1000));
     expect(r.thue).toBeGreaterThan(0);
   });
@@ -224,7 +239,7 @@ describe('HĐLĐ thứ 2', () => {
       dauVao({ base: 30_000_000, hopDongThu2: true, thoiVu: true }),
       cauHinh(),
     );
-    const tnCT = r.tongThuNhap - r.thuNhapMienThue;
+    const tnCT = r.tongThuNhap - r.mienThueKhoan - r.otMienThue;
     expect(r.thue).toBe(lamTronTheo(0.1 * tnCT, 1000));
     expect(r.giamTru).toBe(0);
   });
@@ -292,5 +307,120 @@ describe('phí công đoàn (P4.2c-2)', () => {
     const r = tinhDongLuong(dauVao(), ch);
     expect(r.phiCongDoan).toBe(0);
     expect(Number.isNaN(r.thucLinh)).toBe(false);
+  });
+});
+
+describe('TIEN_OT và TN miễn thuế gộp (P4.2c-2)', () => {
+  const chOt = (over: Partial<CauHinhLuongData> = {}) =>
+    cauHinh({
+      khoanLuong: [
+        ...cauHinh().khoanLuong,
+        {
+          ma: 'TIEN_OT', ten: 'Tiền làm thêm', loaiCongThuc: 'TIEN_OT',
+          thamSo: {}, chiuThue: true, tranMienThue: null,
+          vaoTongThuNhap: true, vaoBHXH: false, thuTu: 9,
+        },
+      ],
+      ...over,
+    });
+
+  it('HỒI QUY: tienOt = 0 thì thu nhập tính thuế vẫn theo đúng công thức cũ', () => {
+    // Bài quan trọng nhất: đổi NGHĨA cột không được đổi SỐ THUẾ của ai.
+    const r = tinhDongLuong(dauVao({ tienOt: 0, otMienThue: 0 }), cauHinh());
+
+    expect(r.thuNhapTinhThue).toBe(
+      Math.max(0, r.tongThuNhap - r.mienThueKhoan - r.bhxh - r.giamTru),
+    );
+  });
+
+  it('thuNhapMienThue là cột GỘP = giảm trừ + khoản miễn + chênh OT', () => {
+    const r = tinhDongLuong(
+      dauVao({ tienOt: 1_000_000, otMienThue: 300_000 }),
+      chOt(),
+    );
+
+    expect(r.thuNhapMienThue).toBe(r.giamTru + r.mienThueKhoan + r.otMienThue);
+    expect(r.otMienThue).toBe(300_000);
+  });
+
+  it('TN tính thuế = Tổng TN − BHXH − TN miễn thuế (gộp)', () => {
+    const r = tinhDongLuong(
+      dauVao({ tienOt: 1_000_000, otMienThue: 300_000 }),
+      chOt(),
+    );
+
+    expect(r.thuNhapTinhThue).toBe(
+      Math.max(0, r.tongThuNhap - r.bhxh - r.thuNhapMienThue),
+    );
+  });
+
+  it('khoản TIEN_OT lấy thẳng dv.tienOt, có làm tròn theo cấu hình', () => {
+    const r = tinhDongLuong(
+      dauVao({ tienOt: 1_503_906.25, otMienThue: 0 }),
+      chOt({ lamTron: 1000 }),
+    );
+
+    // Bảng 03-LĐTL giữ phần thập phân; bảng lương chính làm tròn theo `lamTron`.
+    expect(r.giaTriTungKhoan.TIEN_OT).toBe(1_504_000);
+  });
+
+  it('BẪY THỜI VỤ: lao động thời vụ KHÔNG được giảm trừ gia cảnh chui', () => {
+    // Nhánh thời vụ tính trên `tongThuNhap − mienThueKhoan − otMienThue`. Nếu
+    // nó đọc trúng cột GỘP (có giảm trừ gia cảnh bên trong) thì thuế 10% tính
+    // thiếu — và hôm nay bug đó VÔ HẠI vì giamTru trong nhánh này luôn 0, nên
+    // sẽ không ai để ý.
+    const ch = chOt();
+    const r = tinhDongLuong(
+      dauVao({ thoiVu: true, tienOt: 0, otMienThue: 0 }),
+      ch,
+    );
+
+    const tnCT = Math.max(0, r.tongThuNhap - r.mienThueKhoan - r.otMienThue);
+    expect(r.thue).toBe(
+      tnCT >= ch.quyTacThoiVu.nguong
+        ? lamTronTheo(ch.quyTacThoiVu.tyLe * tnCT, ch.lamTron)
+        : 0,
+    );
+    expect(r.giamTru).toBe(0);
+  });
+
+  it('HĐLĐ thứ 2: giảm trừ = 0 nên cột gộp chỉ còn khoản miễn + chênh OT', () => {
+    const r = tinhDongLuong(
+      dauVao({ hopDongThu2: true, tienOt: 500_000, otMienThue: 200_000 }),
+      chOt(),
+    );
+
+    expect(r.giamTru).toBe(0);
+    expect(r.thuNhapMienThue).toBe(r.mienThueKhoan + 200_000);
+  });
+
+  it('otMienThue KHÔNG vượt quá tienOt — cột gộp không phồng quá thực tế', () => {
+    // Chặn ở engine chứ không tin nơi gọi: cột gộp phồng lên làm thu nhập tính
+    // thuế tụt xuống, tức trả THIẾU thuế mà bảng vẫn trông hợp lý.
+    const r = tinhDongLuong(
+      dauVao({ tienOt: 100_000, otMienThue: 500_000 }),
+      chOt(),
+    );
+
+    expect(r.otMienThue).toBe(100_000);
+  });
+
+  it('otMienThue âm bị kẹp về 0 — không thu THỪA thuế', () => {
+    const r = tinhDongLuong(
+      dauVao({ tienOt: 100_000, otMienThue: -50_000 }),
+      chOt(),
+    );
+
+    expect(r.otMienThue).toBe(0);
+  });
+
+  it('dv thiếu tienOt/otMienThue (nơi gọi cũ) rơi về 0, KHÔNG NaN', () => {
+    const dv = dauVao() as any;
+    delete dv.tienOt;
+    delete dv.otMienThue;
+
+    const r = tinhDongLuong(dv, cauHinh());
+    expect(r.otMienThue).toBe(0);
+    expect(Number.isNaN(r.thuNhapTinhThue)).toBe(false);
   });
 });

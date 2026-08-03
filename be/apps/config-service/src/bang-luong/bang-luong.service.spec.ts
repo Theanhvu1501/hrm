@@ -219,6 +219,8 @@ describe('BangLuong_Service', () => {
         camKet: false,
         hopDongThu2: false,
         nhapTheoKy: {},
+        tienOt: 0,
+        otMienThue: 0,
       };
 
       const expectedKhaiBao = tinhDongLuong(
@@ -352,6 +354,8 @@ describe('BangLuong_Service', () => {
           khaiBao: chotKhaiBao,
           thucTe: chotThucTe,
           nhapTheoKy: { HIEU_SUAT: 2_000_000 },
+          tienOt: 0,
+          otMienThue: 0,
         },
       ];
 
@@ -438,6 +442,8 @@ describe('BangLuong_Service', () => {
         tamUng: 0,
         khauTruKhac: 0,
         nhapTheoKy: {},
+        tienOt: 0,
+        otMienThue: 0,
         trangThai: 'nhap',
         isActive: true,
       };
@@ -463,6 +469,8 @@ describe('BangLuong_Service', () => {
         camKet: false,
         hopDongThu2: false,
         nhapTheoKy: { HIEU_SUAT: 2_000_000 },
+        tienOt: 0,
+        otMienThue: 0,
       };
       const expectedKhaiBao = tinhDongLuong(
         { base: 5_500_000, mucKhaiBao: 5_500_000, ...congChung },
@@ -497,6 +505,8 @@ describe('BangLuong_Service', () => {
         tamUng: 0,
         khauTruKhac: 0,
         nhapTheoKy: { HIEU_SUAT: 2_000_000 },
+        tienOt: 0,
+        otMienThue: 0,
         trangThai: 'nhap',
         isActive: true,
       };
@@ -525,6 +535,8 @@ describe('BangLuong_Service', () => {
         camKet: false,
         hopDongThu2: false,
         nhapTheoKy: { HIEU_SUAT: 2_000_000, THUONG: 500_000 },
+        tienOt: 0,
+        otMienThue: 0,
       };
       const expectedKhaiBao = tinhDongLuong(
         { base: 5_500_000, mucKhaiBao: 5_500_000, ...congChung },
@@ -621,6 +633,8 @@ describe('BangLuong_Service', () => {
       thoiVu: false,
       camKet: false,
       nhapTheoKy: {},
+      tienOt: 0,
+      otMienThue: 0,
     };
 
     it('áp override của NV vào cả hai mức khai báo/thực tế', async () => {
@@ -777,6 +791,8 @@ describe('BangLuong_Service', () => {
         tamUng: 0,
         khauTruKhac: 0,
         nhapTheoKy: {},
+        tienOt: 0,
+        otMienThue: 0,
         trangThai: 'nhap',
         isActive: true,
       });

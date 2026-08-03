@@ -4,7 +4,8 @@ export type LoaiCongThuc =
   | 'DINH_MUC_x_CONG' // thamSo.dinhMuc × congThuong (vd ăn ca 50k×công)
   | 'CO_DINH_THANG' // (thamSo.soTien | phụ cấp từ hồ sơ)/congChuan × (congThuong + congThuViec×thuViec.tyLe)
   | 'PHAN_TRAM_BASE' // thamSo.tyLe × base
-  | 'NHAP_THEO_KY'; // số nhập/import theo kỳ, khoá theo `ma`
+  | 'NHAP_THEO_KY' // số nhập/import theo kỳ, khoá theo `ma`
+  | 'TIEN_OT'; // lấy thẳng `dv.tienOt` — bảng 03-LĐTL đã tính, engine chỉ tiêu thụ
 
 export interface ThamSoKhoan {
   dinhMuc?: number;
@@ -113,6 +114,17 @@ export interface DauVaoDongLuong {
   hopDongThu2: boolean;
   /** số nhập theo kỳ, khoá theo `ma` khoản (vd { HIEU_SUAT: 2000000, THUONG: 0 }). */
   nhapTheoKy: Record<string, number>;
+  /**
+   * Tổng tiền làm thêm của kỳ, lấy từ bảng 03-LĐTL ĐÃ CHỐT.
+   *
+   * Là con số ĐÃ TÍNH chứ không phải giờ theo loại: để engine tự nhân đơn giá
+   * × hệ số là dựng lại y nguyên công thức `tinhDongThemGio()` đã có, tạo HAI
+   * nguồn sự thật cho cùng một con số — chúng lệch nhau ngay lần đầu kế toán
+   * sửa tay một dòng trên bảng 03-LĐTL.
+   */
+  tienOt: number;
+  /** Phần chênh của `tienOt` được miễn thuế TNCN (TT 111/2013 Đ3.1.i). */
+  otMienThue: number;
 }
 
 /**
@@ -136,7 +148,18 @@ export type CauHinhLuongApDung = Required<CauHinhLuongRieng>;
 export interface KetQuaLuong {
   giaTriTungKhoan: Record<string, number>;
   tongThuNhap: number;
+  /**
+   * GỘP để kế toán đọc: `giamTru + mienThueKhoan + otMienThue`.
+   *
+   * Hai thành phần gốc vẫn lưu riêng bên dưới vì tờ khai 05/KK-TNCN cần "thu
+   * nhập miễn thuế" và "các khoản giảm trừ" ở HAI dòng khác nhau — cột gộp
+   * mất khả năng điền tờ khai.
+   */
   thuNhapMienThue: number;
+  /** Phần miễn thuế đến từ KHOẢN LƯƠNG (ăn ca ≤ trần…). */
+  mienThueKhoan: number;
+  /** Phần chênh tiền làm thêm được miễn. */
+  otMienThue: number;
   bhxh: number;
   giamTru: number;
   thuNhapTinhThue: number;

@@ -166,6 +166,9 @@ export class BangLuong_Service {
       camKet: sn.camKet,
       hopDongThu2: sn.hopDongThu2,
       nhapTheoKy: sn.nhapTheoKy,
+      // Task 4 thay bằng số từ bảng 03-LĐTL đã chốt của kỳ.
+      tienOt: 0,
+      otMienThue: 0,
     };
   }
 
