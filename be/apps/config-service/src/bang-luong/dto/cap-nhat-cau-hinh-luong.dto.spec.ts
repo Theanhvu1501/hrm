@@ -29,7 +29,11 @@ const layLoi = async (promise: Promise<unknown>): Promise<any> => {
 
 const lamThemHopLe = {
   cheDoBu: 'chi_nghi_bu',
-  heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 },
+  heSoTra: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3, ngay_dem: 1.5 },
+  heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3, ngay_dem: 1.5 },
+  khungGioDem: { tu: '22:00', den: '06:00' },
+  uuTienLoai: ['ngay_le', 'ngay_nghi', 'ngay_dem', 'ngay_thuong'],
+  mienThueChenh: ['ngay_dem'],
   soThangHanDung: 6,
   khiHetHan: 'quy_ra_tien',
 };
@@ -58,7 +62,7 @@ describe('CapNhatCauHinhLuongDto — cấu hình làm thêm', () => {
   it('1. chi_nghi_bu + {1.5,2,3} → được chấp nhận', async () => {
     await expect(
       chay({
-        lamThem: { ...lamThemHopLe, cheDoBu: 'chi_nghi_bu', heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 } },
+        lamThem: { ...lamThemHopLe, cheDoBu: 'chi_nghi_bu', heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3, ngay_dem: 1.5 } },
       }),
     ).resolves.toBeDefined();
   });
@@ -69,7 +73,7 @@ describe('CapNhatCauHinhLuongDto — cấu hình làm thêm', () => {
   it('2. chi_nghi_bu + {1.5,2,1.0} → từ chối, nêu đúng ngay_le và sàn 3.0', async () => {
     const loi = await layLoi(
       chay({
-        lamThem: { ...lamThemHopLe, cheDoBu: 'chi_nghi_bu', heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 1.0 } },
+        lamThem: { ...lamThemHopLe, cheDoBu: 'chi_nghi_bu', heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 1.0, ngay_dem: 1.5 } },
       }),
     );
     expect(loi).toBeDefined();
@@ -84,7 +88,7 @@ describe('CapNhatCauHinhLuongDto — cấu hình làm thêm', () => {
   it('3. nghi_bu_va_chenh + {1.5,2,3} → từ chối vì hệ số phải đúng 1.0', async () => {
     const loi = await layLoi(
       chay({
-        lamThem: { ...lamThemHopLe, cheDoBu: 'nghi_bu_va_chenh', heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 } },
+        lamThem: { ...lamThemHopLe, cheDoBu: 'nghi_bu_va_chenh', heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3, ngay_dem: 1.5 } },
       }),
     );
     expect(loi).toBeDefined();
@@ -102,7 +106,7 @@ describe('CapNhatCauHinhLuongDto — cấu hình làm thêm', () => {
   it('4. nghi_bu_va_chenh + {1,1,1} → từ chối vì CHẾ ĐỘ chưa hỗ trợ, nêu đúng tên chế độ', async () => {
     const loi = await layLoi(
       chay({
-        lamThem: { ...lamThemHopLe, cheDoBu: 'nghi_bu_va_chenh', heSoTichQuy: { ngay_thuong: 1, ngay_nghi: 1, ngay_le: 1 } },
+        lamThem: { ...lamThemHopLe, cheDoBu: 'nghi_bu_va_chenh', heSoTichQuy: { ngay_thuong: 1, ngay_nghi: 1, ngay_le: 1, ngay_dem: 1 } },
       }),
     );
     expect(loi).toBeDefined();
@@ -131,5 +135,124 @@ describe('CapNhatCauHinhLuongDto — cấu hình làm thêm', () => {
 
   it('từ chối khoá lạ', async () => {
     await expect(chay({ soGioMoiNgayy: 8 })).rejects.toThrow();
+  });
+});
+
+describe('CauHinhLamThemDto — bảng hệ số mở (P4.2b)', () => {
+  it('nhận cấu hình đầy đủ bốn loại, có ca đêm', async () => {
+    await expect(chay({ lamThem: lamThemHopLe })).resolves.toBeDefined();
+  });
+
+  it('từ chối khi uuTienLoai có khoá thiếu trong heSoTra', async () => {
+    // Thiếu khoá → hệ số undefined → NaN, mà NaN đi qua lamTronGio() vẫn là
+    // NaN rồi nằm im trong DB, chỉ lộ ra khi kế toán nhìn bảng lương.
+    const loi = await layLoi(
+      chay({
+        lamThem: {
+          ...lamThemHopLe,
+          heSoTra: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 },
+        },
+      }),
+    );
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(/heSoTra.*ngay_dem/i);
+  });
+
+  it('từ chối khi uuTienLoai có khoá thiếu trong heSoTichQuy', async () => {
+    const loi = await layLoi(
+      chay({
+        lamThem: {
+          ...lamThemHopLe,
+          // CỐ Ý thiếu `ngay_dem` — đừng "sửa" thành đủ bốn khoá.
+          heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 },
+        },
+      }),
+    );
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(
+      /heSoTichQuy.*ngay_dem/i,
+    );
+  });
+
+  it('từ chối uuTienLoai rỗng', async () => {
+    const loi = await layLoi(chay({ lamThem: { ...lamThemHopLe, uuTienLoai: [] } }));
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(/uuTienLoai/i);
+  });
+
+  it('từ chối uuTienLoai có khoá trùng', async () => {
+    const loi = await layLoi(
+      chay({
+        lamThem: {
+          ...lamThemHopLe,
+          uuTienLoai: ['ngay_dem', 'ngay_dem', 'ngay_thuong'],
+        },
+      }),
+    );
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(/trùng/i);
+  });
+
+  it('từ chối hệ số ≤ 0 — hệ số 0 làm dòng lương bằng 0, âm làm nó âm', async () => {
+    const loi = await layLoi(
+      chay({
+        lamThem: {
+          ...lamThemHopLe,
+          heSoTra: { ...lamThemHopLe.heSoTra, ngay_dem: 0 },
+        },
+      }),
+    );
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(/> 0/);
+  });
+
+  it('từ chối mienThueChenh có khoá ngoài uuTienLoai', async () => {
+    const loi = await layLoi(
+      chay({
+        lamThem: { ...lamThemHopLe, mienThueChenh: ['ngay_dem', 'ngay_go_nham'] },
+      }),
+    );
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(/mienThueChenh/i);
+  });
+
+  it('khungGioDem null hợp lệ — công ty không có ca đêm', async () => {
+    await expect(
+      chay({ lamThem: { ...lamThemHopLe, khungGioDem: null } }),
+    ).resolves.toBeDefined();
+  });
+
+  it('từ chối khungGioDem sai dạng HH:mm', async () => {
+    await expect(
+      chay({ lamThem: { ...lamThemHopLe, khungGioDem: { tu: '25:00', den: '06:00' } } }),
+    ).rejects.toThrow();
+  });
+
+  it('từ chối khungGioDem hai mốc bằng nhau', async () => {
+    const loi = await layLoi(
+      chay({ lamThem: { ...lamThemHopLe, khungGioDem: { tu: '22:00', den: '22:00' } } }),
+    );
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(/khác nhau/i);
+  });
+
+  it('vẫn giữ sàn BLLĐ Đ98.1 cho chi_nghi_bu', async () => {
+    const loi = await layLoi(
+      chay({
+        lamThem: {
+          ...lamThemHopLe,
+          heSoTichQuy: { ...lamThemHopLe.heSoTichQuy, ngay_le: 2 },
+        },
+      }),
+    );
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(/3\.0/);
+  });
+
+  it('nghi_bu_va_chenh phải có hệ số tích 1.0 ở MỌI loại, kể cả ngay_dem', async () => {
+    const loi = await layLoi(
+      chay({
+        lamThem: {
+          ...lamThemHopLe,
+          cheDoBu: 'nghi_bu_va_chenh',
+          heSoTichQuy: { ngay_thuong: 1, ngay_nghi: 1, ngay_le: 1, ngay_dem: 1.5 },
+        },
+      }),
+    );
+    // Không được lọt vì "chưa hỗ trợ" trước khi kịp bắt hệ số sai — đó chính
+    // là lỗ hổng trả gấp đôi mà ràng buộc này tồn tại để chặn.
+    expect(JSON.stringify(loi.getResponse().message)).toMatch(/ngay_dem/);
   });
 });
