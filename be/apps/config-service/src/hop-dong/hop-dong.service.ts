@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
   ConflictException,
@@ -11,7 +12,8 @@ import { CreateHopDongDto, UpdateHopDongDto, UpdateThongTinCongTyDto } from './d
 import {
   DEFAULT_HOP_DONG_HTML,
   renderHopDongHtml,
-  sanitizeMauInHtml,
+  sanitizeHopDongHtml,
+  timTokenLaCuaMauIn,
 } from './lib/hopDongRender';
 
 const LOAI_MAU_IN_HOP_DONG = 'HOP_DONG_LAO_DONG' as const;
@@ -22,6 +24,21 @@ export interface ThongTinCongTy {
   maSoThue: string | null;
   nguoiDaiDien: string | null;
   chucVuNguoiDaiDien: string | null;
+  thanhPhoKy: string | null;
+  maHopDongMau: string | null;
+}
+
+/**
+ * Parse chuỗi ObjectId, ném `NotFoundException` (không phải BSONError 500
+ * thô) nếu sai định dạng — review Minor: `id`/`employeeId` sai định dạng
+ * trước bản vá này làm `GET /:id/in` sập 500 thay vì 404 sạch sẽ.
+ */
+async function parseObjectIdOrNotFound(id: string, nhan: string) {
+  const { ObjectId } = await import('mongodb');
+  if (!ObjectId.isValid(id)) {
+    throw new NotFoundException(`${nhan} không hợp lệ: ${id}`);
+  }
+  return new ObjectId(id);
 }
 
 export interface HopDongFilter {
@@ -161,9 +178,9 @@ export class HopDong_Service {
   }
 
   async findOne(id: string): Promise<LaborContract> {
-    const { ObjectId } = await import('mongodb');
+    const objectId = await parseObjectIdOrNotFound(id, 'ID hợp đồng');
     const item = await this.repo.findOne({
-      where: { _id: new ObjectId(id) as any },
+      where: { _id: objectId as any },
     });
 
     if (!item) {
@@ -221,13 +238,26 @@ export class HopDong_Service {
   }
 
   /**
-   * Lưu mẫu riêng của tenant. `sanitizeMauInHtml` cắt thẻ script, thuộc tính
-   * on-nào-đó và scheme javascript: trước khi lưu — phòng khi admin dán nhầm
-   * HTML có script; đây là điểm ghi duy nhất nên đặt sanitize ở đây, không
-   * cần chạy lại mỗi lần in.
+   * Lưu mẫu riêng của tenant.
+   *
+   * 2 bước bảo vệ trước khi ghi:
+   *  1. `timTokenLaCuaMauIn` — từ chối lưu nếu mẫu dùng token KHÔNG tồn tại
+   *     (vd lỗi gõ `{{mucLuongg}}`) — review Important #7: âm thầm in trống
+   *     do lỗi gõ tệ hơn báo lỗi ngay lúc lưu.
+   *  2. `sanitizeHopDongHtml` (parser HTML thật, xem lib/hopDongRender.ts) —
+   *     cắt thẻ có thể mang script/URL độc trước khi lưu. Đây là lớp phòng
+   *     thủ ĐẦU (lúc ghi); `renderHopDongHtml` ở lib sanitize LẦN NỮA lúc
+   *     đọc/ghép — không coi lớp nào là chốt chặn duy nhất (review Critical 1).
    */
   async upsertMauIn(html: string): Promise<{ html: string }> {
-    const sanitized = sanitizeMauInHtml(html);
+    const tokenLa = timTokenLaCuaMauIn(html);
+    if (tokenLa.length > 0) {
+      throw new BadRequestException(
+        `Mẫu dùng token không tồn tại: ${tokenLa.map((t) => `{{${t}}}`).join(', ')}`,
+      );
+    }
+
+    const sanitized = sanitizeHopDongHtml(html);
     let tpl = await this.mauInRepo.findOne({
       where: { loai: LOAI_MAU_IN_HOP_DONG },
     });
@@ -251,34 +281,46 @@ export class HopDong_Service {
   // ──────────────────────────────────────────────────────────────────────────
   // Thông tin công ty (letterhead in hợp đồng) — TenantAppConfig, xem chú
   // thích tại entity vì sao KHÔNG lấy từ identity Tenant.
+  //
+  // `TenantAppConfig` nằm trong `TENANT_EXEMPT_ENTITIES`
+  // (be/libs/database/src/tenant.subscriber.ts) — proxy tenant-aware KHÔNG
+  // tự thêm `tenantId` vào where như các entity khác trong service này
+  // (LaborContract, PhieuTemplate). Trước bản vá này `findOne({ where: {} })`
+  // lấy ĐẠI document đầu tiên Mongo trả về — CỦA BẤT KỲ TENANT NÀO — nên
+  // renderHopDong() có thể in tên/địa chỉ/MST/người đại diện của MỘT CÔNG TY
+  // KHÁC, và upsertThongTinCongTy() ghi đè lên đúng document đó (review
+  // Critical 3). MỌI query ở đây PHẢI tự lọc `tenantId`, giống hệt cách
+  // `tenant.service.ts`/`provisioning.service.ts` đã làm cho entity này.
   // ──────────────────────────────────────────────────────────────────────────
 
-  async getThongTinCongTy(): Promise<ThongTinCongTy> {
-    const cfg = await this.congTyRepo.findOne({ where: {} });
+  private toThongTinCongTy(cfg: TenantAppConfig | null): ThongTinCongTy {
     return {
       tenCongTy: cfg?.tenCongTy ?? null,
       diaChiCongTy: cfg?.diaChiCongTy ?? null,
       maSoThue: cfg?.maSoThue ?? null,
       nguoiDaiDien: cfg?.nguoiDaiDien ?? null,
       chucVuNguoiDaiDien: cfg?.chucVuNguoiDaiDien ?? null,
+      thanhPhoKy: cfg?.thanhPhoKy ?? null,
+      maHopDongMau: cfg?.maHopDongMau ?? null,
     };
   }
 
+  async getThongTinCongTy(): Promise<ThongTinCongTy> {
+    const tenantId = this.tenantContext.getCurrentTenantId();
+    const cfg = await this.congTyRepo.findOne({ where: { tenantId } as any });
+    return this.toThongTinCongTy(cfg);
+  }
+
   async upsertThongTinCongTy(dto: UpdateThongTinCongTyDto): Promise<ThongTinCongTy> {
-    let cfg = await this.congTyRepo.findOne({ where: {} });
+    const tenantId = this.tenantContext.getCurrentTenantId();
+    let cfg = await this.congTyRepo.findOne({ where: { tenantId } as any });
     if (!cfg) {
-      cfg = this.congTyRepo.create({ ...dto } as Partial<TenantAppConfig>);
+      cfg = this.congTyRepo.create({ ...dto, tenantId } as Partial<TenantAppConfig>);
     } else {
       Object.assign(cfg, dto);
     }
     const saved = await this.congTyRepo.save(cfg);
-    return {
-      tenCongTy: saved.tenCongTy ?? null,
-      diaChiCongTy: saved.diaChiCongTy ?? null,
-      maSoThue: saved.maSoThue ?? null,
-      nguoiDaiDien: saved.nguoiDaiDien ?? null,
-      chucVuNguoiDaiDien: saved.chucVuNguoiDaiDien ?? null,
-    };
+    return this.toThongTinCongTy(saved);
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -289,9 +331,12 @@ export class HopDong_Service {
   async renderHopDong(id: string): Promise<{ html: string; canhBao: string[] }> {
     const contract = await this.findOne(id);
 
-    const { ObjectId } = await import('mongodb');
+    const employeeObjectId = await parseObjectIdOrNotFound(
+      contract.employeeId,
+      `employeeId của hợp đồng ${id}`,
+    );
     const employee = await this.employeeRepo.findOne({
-      where: { _id: new ObjectId(contract.employeeId) as any },
+      where: { _id: employeeObjectId as any },
     });
     if (!employee) {
       throw new NotFoundException(
@@ -310,6 +355,9 @@ export class HopDong_Service {
         mucLuong: contract.mucLuong,
         phuCap: contract.phuCap,
         createdAt: (contract as any).createdAt?.toISOString?.() ?? (contract as any).createdAt,
+        // Snapshot lúc ký (nếu hợp đồng có) — ưu tiên hơn chức danh HIỆN TẠI
+        // của nhân viên bên dưới (review Important #4).
+        chucDanh: contract.chucDanh,
       },
       employee: {
         hoTen: employee.hoTen,

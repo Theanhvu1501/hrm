@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { HopDong_Service } from './hop-dong.service';
 import { LaborContract, ContractCounter, PhieuTemplate, TenantAppConfig, Employee } from '@app/entities';
 import { TenantContextService } from '@app/core';
@@ -402,6 +402,22 @@ describe('HopDong_Service', () => {
         expect.objectContaining({ html: expect.not.stringContaining('<script') }),
       );
     });
+
+    it('lọc payload XSS thật (onerror qua "/", không phải khoảng trắng) — regex cũ để lọt, sanitize-html thì không', async () => {
+      await service.upsertMauIn('<img src=x/onerror=alert(1)>');
+
+      expect(mockMauInRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ html: expect.not.stringContaining('onerror') }),
+      );
+    });
+
+    it('ném BadRequestException khi mẫu dùng token không tồn tại (lỗi gõ), KHÔNG lưu gì (review Important #7)', async () => {
+      await expect(service.upsertMauIn('<p>Lương: {{mucLuongg}}</p>')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockMauInRepo.findOne).not.toHaveBeenCalled();
+      expect(mockMauInRepo.save).not.toHaveBeenCalled();
+    });
   });
 
   describe('removeMauIn', () => {
@@ -433,6 +449,8 @@ describe('HopDong_Service', () => {
         maSoThue: null,
         nguoiDaiDien: null,
         chucVuNguoiDaiDien: null,
+        thanhPhoKy: null,
+        maHopDongMau: null,
       });
     });
 
@@ -449,6 +467,21 @@ describe('HopDong_Service', () => {
 
       expect(result.tenCongTy).toBe('CÔNG TY CỔ PHẦN MASTER CEO');
       expect(result.maSoThue).toBe('0110595215');
+    });
+
+    // review Critical 3: TenantAppConfig nằm trong TENANT_EXEMPT_ENTITIES —
+    // proxy KHÔNG tự lọc tenantId. Trước bản vá `findOne({ where: {} })` lấy
+    // ĐẠI document đầu tiên Mongo trả, bất kể tenant nào — có thể đọc/in tên
+    // công ty của TENANT KHÁC. Test này assert ĐÚNG filter được gửi xuống
+    // repo, không chỉ assert kết quả (mock luôn trả giá trị đã set sẵn nên
+    // assert riêng kết quả sẽ KHÔNG bắt được lỗi thiếu filter — đây chính là
+    // lý do 1374 test trước đó không phát hiện ra).
+    it('LUÔN lọc theo tenantId hiện tại — không được lấy đại document đầu tiên', async () => {
+      await service.getThongTinCongTy();
+
+      expect(mockCongTyRepo.findOne).toHaveBeenCalledWith({
+        where: { tenantId: TENANT_ID },
+      });
     });
   });
 
@@ -470,6 +503,22 @@ describe('HopDong_Service', () => {
 
       expect(result.tenCongTy).toBe('MỚI');
       expect(result.diaChiCongTy).toBe('Địa chỉ cũ');
+    });
+
+    it('LUÔN lọc theo tenantId hiện tại lúc TÌM bản ghi cũ (review Critical 3)', async () => {
+      await service.upsertThongTinCongTy({ tenCongTy: 'ABC' });
+
+      expect(mockCongTyRepo.findOne).toHaveBeenCalledWith({
+        where: { tenantId: TENANT_ID },
+      });
+    });
+
+    it('gắn tenantId khi TẠO MỚI — không được để trống (review Critical 3: tránh ghi document không tenant, dễ bị đọc nhầm sau này)', async () => {
+      await service.upsertThongTinCongTy({ tenCongTy: 'ABC' });
+
+      expect(mockCongTyRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ tenantId: TENANT_ID }),
+      );
     });
   });
 
@@ -539,6 +588,48 @@ describe('HopDong_Service', () => {
       const result = await service.renderHopDong(contractId);
 
       expect(result.html).toBe('<p>Mẫu riêng — NV: C</p>');
+    });
+
+    it('ưu tiên chucDanh SNAPSHOT trên hợp đồng hơn chức danh HIỆN TẠI của nhân viên (review Important #4)', async () => {
+      mockContractRepo.findOne.mockResolvedValueOnce({
+        _id: contractId,
+        contractNo: 'HD0001',
+        employeeId,
+        loaiHopDong: 'thu_viec',
+        chucDanh: 'Trưởng phòng (lúc ký)',
+      });
+      mockEmployeeRepo.findOne.mockResolvedValueOnce({
+        _id: employeeId,
+        hoTen: 'C',
+        chucDanh: 'Giám đốc (hiện tại)',
+      });
+      mockMauInRepo.findOne.mockResolvedValueOnce({
+        loai: 'HOP_DONG_LAO_DONG',
+        html: '<p>{{chucDanh}}</p>',
+      });
+
+      const result = await service.renderHopDong(contractId);
+
+      expect(result.html).toBe('<p>Trưởng phòng (lúc ký)</p>');
+    });
+
+    // review Minor: id/employeeId sai định dạng trước bản vá này ném BSONError
+    // (500 thô) thay vì NotFoundException (404 sạch).
+    it('id hợp đồng sai định dạng ObjectId → NotFoundException, không phải lỗi 500 thô', async () => {
+      await expect(service.renderHopDong('khong-phai-object-id')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('employeeId lưu trên hợp đồng sai định dạng ObjectId → NotFoundException, không phải lỗi 500 thô', async () => {
+      mockContractRepo.findOne.mockResolvedValueOnce({
+        _id: contractId,
+        contractNo: 'HD0001',
+        employeeId: 'khong-phai-object-id',
+        loaiHopDong: 'thu_viec',
+      });
+
+      await expect(service.renderHopDong(contractId)).rejects.toThrow(NotFoundException);
     });
   });
 });
