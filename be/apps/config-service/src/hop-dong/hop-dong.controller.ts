@@ -12,7 +12,12 @@ import {
 } from '@nestjs/common';
 import { HopDong_Service } from './hop-dong.service';
 import type { HopDongFilter } from './hop-dong.service';
-import { CreateHopDongDto, UpdateHopDongDto } from './dto';
+import {
+  CreateHopDongDto,
+  UpdateHopDongDto,
+  UpsertMauInHopDongDto,
+  UpdateThongTinCongTyDto,
+} from './dto';
 import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 
 /**
@@ -42,11 +47,63 @@ export class HopDong_Controller {
     return { success: true, data };
   }
 
+  // ── Mẫu in hợp đồng (`mau-in`) và thông tin công ty (`cong-ty`) — route
+  // TĨNH, phải khai TRƯỚC `:id` bên dưới, nếu không Nest khớp "mau-in"/
+  // "cong-ty" vào tham số `:id` (cùng 1 đoạn URL, cùng phương thức GET).
+
+  @Get('mau-in')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/hop-dong-lao-dong:xem')
+  async getMauIn() {
+    const data = await this.hopDong_Service.getMauIn();
+    return { success: true, data };
+  }
+
+  @Put('mau-in')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/hop-dong-lao-dong:sua')
+  async upsertMauIn(@Body() dto: UpsertMauInHopDongDto) {
+    const data = await this.hopDong_Service.upsertMauIn(dto.html);
+    return { success: true, data };
+  }
+
+  @Delete('mau-in')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/hop-dong-lao-dong:sua')
+  async removeMauIn() {
+    await this.hopDong_Service.removeMauIn();
+    return { success: true, message: 'Đã khôi phục mẫu in mặc định' };
+  }
+
+  @Get('cong-ty')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/hop-dong-lao-dong:xem')
+  async getThongTinCongTy() {
+    const data = await this.hopDong_Service.getThongTinCongTy();
+    return { success: true, data };
+  }
+
+  @Put('cong-ty')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/hop-dong-lao-dong:sua')
+  async upsertThongTinCongTy(@Body() dto: UpdateThongTinCongTyDto) {
+    const data = await this.hopDong_Service.upsertThongTinCongTy(dto);
+    return { success: true, data };
+  }
+
   @Get(':id')
   @UseGuards(PermissionGuard)
   @Permissions('/nhan-su/hop-dong-lao-dong:xem')
   async findOne(@Param('id') id: string) {
     const data = await this.hopDong_Service.findOne(id);
+    return { success: true, data };
+  }
+
+  @Get(':id/in')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/hop-dong-lao-dong:xuat')
+  async renderHopDong(@Param('id') id: string) {
+    const data = await this.hopDong_Service.renderHopDong(id);
     return { success: true, data };
   }
 

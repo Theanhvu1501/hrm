@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { HopDong_Service } from './hop-dong.service';
-import { LaborContract, ContractCounter } from '@app/entities';
+import { LaborContract, ContractCounter, PhieuTemplate, TenantAppConfig, Employee } from '@app/entities';
 import { TenantContextService } from '@app/core';
+import { DEFAULT_HOP_DONG_HTML } from './lib/hopDongRender';
 
 const TENANT_ID = 'test-tenant-id';
 
@@ -24,6 +25,18 @@ describe('HopDong_Service', () => {
   };
   let mockMongoCounterRepo: { findOneAndUpdate: jest.Mock };
   let mockTenantContext: { getCurrentTenantId: jest.Mock };
+  let mockMauInRepo: {
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    remove: jest.Mock;
+  };
+  let mockCongTyRepo: {
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+  };
+  let mockEmployeeRepo: { findOne: jest.Mock };
 
   // In-memory per-tenant counter store to genuinely exercise sequential,
   // atomic increments across calls (keyed by tenantId, like the real
@@ -72,11 +85,31 @@ describe('HopDong_Service', () => {
       getCurrentTenantId: jest.fn().mockReturnValue(TENANT_ID),
     };
 
+    mockMauInRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((v) => v),
+      save: jest.fn((v) => Promise.resolve({ ...v, _id: v._id ?? 'tpl-id' })),
+      remove: jest.fn().mockResolvedValue(undefined),
+    };
+
+    mockCongTyRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((v) => v),
+      save: jest.fn((v) => Promise.resolve({ ...v, _id: v._id ?? 'cfg-id' })),
+    };
+
+    mockEmployeeRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         HopDong_Service,
         { provide: getRepositoryToken(LaborContract), useValue: mockContractRepo },
         { provide: getRepositoryToken(ContractCounter), useValue: mockCounterRepo },
+        { provide: getRepositoryToken(PhieuTemplate), useValue: mockMauInRepo },
+        { provide: getRepositoryToken(TenantAppConfig), useValue: mockCongTyRepo },
+        { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
         { provide: TenantContextService, useValue: mockTenantContext },
       ],
     }).compile();
@@ -311,6 +344,201 @@ describe('HopDong_Service', () => {
       expect(mockContractRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ trangThai: 'dang_hieu_luc' }),
       );
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // getMauIn / upsertMauIn / removeMauIn — mẫu in HĐLĐ (tái dùng PhieuTemplate)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('getMauIn', () => {
+    it('chưa cấu hình (repo trả null) → trả mẫu mặc định, isCustom=false', async () => {
+      const result = await service.getMauIn();
+
+      expect(result.isCustom).toBe(false);
+      expect(result.html).toBe(DEFAULT_HOP_DONG_HTML);
+      expect(mockMauInRepo.findOne).toHaveBeenCalledWith({
+        where: { loai: 'HOP_DONG_LAO_DONG' },
+      });
+    });
+
+    it('đã cấu hình → trả mẫu riêng của tenant, isCustom=true', async () => {
+      mockMauInRepo.findOne.mockResolvedValueOnce({ loai: 'HOP_DONG_LAO_DONG', html: '<p>Mẫu riêng</p>' });
+
+      const result = await service.getMauIn();
+
+      expect(result.isCustom).toBe(true);
+      expect(result.html).toBe('<p>Mẫu riêng</p>');
+    });
+  });
+
+  describe('upsertMauIn', () => {
+    it('tạo mới khi chưa có bản ghi', async () => {
+      const result = await service.upsertMauIn('<p>Mẫu mới</p>');
+
+      expect(result.html).toBe('<p>Mẫu mới</p>');
+      expect(mockMauInRepo.create).toHaveBeenCalledWith({
+        loai: 'HOP_DONG_LAO_DONG',
+        html: '<p>Mẫu mới</p>',
+      });
+      expect(mockMauInRepo.save).toHaveBeenCalled();
+    });
+
+    it('cập nhật bản ghi cũ khi đã tồn tại', async () => {
+      const existing = { loai: 'HOP_DONG_LAO_DONG', html: '<p>Cũ</p>' };
+      mockMauInRepo.findOne.mockResolvedValueOnce(existing);
+
+      await service.upsertMauIn('<p>Mới</p>');
+
+      expect(mockMauInRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ html: '<p>Mới</p>' }),
+      );
+      expect(mockMauInRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('lọc bỏ thẻ <script> khỏi HTML trước khi lưu (chặn XSS từ mẫu tenant tự soạn)', async () => {
+      await service.upsertMauIn('<p>ok</p><script>alert(1)</script>');
+
+      expect(mockMauInRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ html: expect.not.stringContaining('<script') }),
+      );
+    });
+  });
+
+  describe('removeMauIn', () => {
+    it('xoá bản ghi khi tồn tại (khôi phục mặc định)', async () => {
+      const existing = { loai: 'HOP_DONG_LAO_DONG', html: '<p>Cũ</p>' };
+      mockMauInRepo.findOne.mockResolvedValueOnce(existing);
+
+      await service.removeMauIn();
+
+      expect(mockMauInRepo.remove).toHaveBeenCalledWith(existing);
+    });
+
+    it('không lỗi khi chưa có bản ghi để xoá', async () => {
+      await expect(service.removeMauIn()).resolves.toBeUndefined();
+      expect(mockMauInRepo.remove).not.toHaveBeenCalled();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // getThongTinCongTy / upsertThongTinCongTy — letterhead công ty (TenantAppConfig)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('getThongTinCongTy', () => {
+    it('chưa cấu hình → mọi trường null (KHÔNG bịa giá trị)', async () => {
+      const result = await service.getThongTinCongTy();
+
+      expect(result).toEqual({
+        tenCongTy: null,
+        diaChiCongTy: null,
+        maSoThue: null,
+        nguoiDaiDien: null,
+        chucVuNguoiDaiDien: null,
+      });
+    });
+
+    it('đã cấu hình → trả đúng giá trị đã lưu', async () => {
+      mockCongTyRepo.findOne.mockResolvedValueOnce({
+        tenCongTy: 'CÔNG TY CỔ PHẦN MASTER CEO',
+        diaChiCongTy: 'Hà Nội',
+        maSoThue: '0110595215',
+        nguoiDaiDien: 'Nguyễn Thị Mai Phương',
+        chucVuNguoiDaiDien: 'Giám đốc',
+      });
+
+      const result = await service.getThongTinCongTy();
+
+      expect(result.tenCongTy).toBe('CÔNG TY CỔ PHẦN MASTER CEO');
+      expect(result.maSoThue).toBe('0110595215');
+    });
+  });
+
+  describe('upsertThongTinCongTy', () => {
+    it('tạo mới khi tenant chưa có TenantAppConfig cho thông tin này', async () => {
+      const result = await service.upsertThongTinCongTy({ tenCongTy: 'ABC', maSoThue: '123' });
+
+      expect(result.tenCongTy).toBe('ABC');
+      expect(mockCongTyRepo.save).toHaveBeenCalled();
+    });
+
+    it('cập nhật (giữ nguyên trường không truyền) khi đã có bản ghi', async () => {
+      mockCongTyRepo.findOne.mockResolvedValueOnce({
+        tenCongTy: 'CŨ',
+        diaChiCongTy: 'Địa chỉ cũ',
+      });
+
+      const result = await service.upsertThongTinCongTy({ tenCongTy: 'MỚI' });
+
+      expect(result.tenCongTy).toBe('MỚI');
+      expect(result.diaChiCongTy).toBe('Địa chỉ cũ');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // renderHopDong — ghép template + hợp đồng + nhân viên + công ty
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('renderHopDong', () => {
+    const contractId = '507f1f77bcf86cd799439011';
+    const employeeId = '507f1f77bcf86cd799439022';
+
+    it('ném NotFoundException khi hợp đồng không tồn tại', async () => {
+      mockContractRepo.findOne.mockResolvedValueOnce(null);
+
+      await expect(service.renderHopDong(contractId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('ném NotFoundException khi nhân viên của hợp đồng không còn tồn tại', async () => {
+      mockContractRepo.findOne.mockResolvedValueOnce({
+        _id: contractId,
+        contractNo: 'HD0001',
+        employeeId,
+        loaiHopDong: 'thu_viec',
+      });
+      mockEmployeeRepo.findOne.mockResolvedValueOnce(null);
+
+      await expect(service.renderHopDong(contractId)).rejects.toThrow(NotFoundException);
+    });
+
+    it('ghép đủ dữ liệu hợp đồng + nhân viên + công ty ra HTML, kèm danh sách cảnh báo', async () => {
+      mockContractRepo.findOne.mockResolvedValueOnce({
+        _id: contractId,
+        contractNo: 'HD0001',
+        employeeId,
+        loaiHopDong: 'thu_viec',
+        ngayBatDau: '2026-08-01',
+        mucLuong: 5000000,
+      });
+      mockEmployeeRepo.findOne.mockResolvedValueOnce({
+        _id: employeeId,
+        hoTen: 'Trần Thị B',
+        cccd: '001199001122',
+      });
+      mockCongTyRepo.findOne.mockResolvedValueOnce({ tenCongTy: 'CÔNG TY ABC' });
+
+      const result = await service.renderHopDong(contractId);
+
+      expect(result.html).toContain('Trần Thị B');
+      expect(result.html).toContain('HD0001');
+      expect(result.html).toContain('CÔNG TY ABC');
+      expect(Array.isArray(result.canhBao)).toBe(true);
+      expect(result.canhBao.length).toBeGreaterThan(0);
+    });
+
+    it('dùng mẫu riêng của tenant nếu đã cấu hình thay vì mẫu mặc định', async () => {
+      mockContractRepo.findOne.mockResolvedValueOnce({
+        _id: contractId,
+        contractNo: 'HD0001',
+        employeeId,
+        loaiHopDong: 'thu_viec',
+      });
+      mockEmployeeRepo.findOne.mockResolvedValueOnce({ _id: employeeId, hoTen: 'C' });
+      mockMauInRepo.findOne.mockResolvedValueOnce({
+        loai: 'HOP_DONG_LAO_DONG',
+        html: '<p>Mẫu riêng — NV: {{hoTenNLD}}</p>',
+      });
+
+      const result = await service.renderHopDong(contractId);
+
+      expect(result.html).toBe('<p>Mẫu riêng — NV: C</p>');
     });
   });
 });

@@ -29,6 +29,15 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   // Đổi trạng thái hợp đồng (hiệu lực/hết hạn/thanh lý) là SỬA hợp đồng đã
   // có, không phải xoá.
   ['updateStatus', RequestMethod.PATCH, '/nhan-su/hop-dong-lao-dong:sua'],
+  // Mẫu in HĐLĐ (xem P nhân sự — in HĐLĐ): xem = đọc mẫu, sửa = lưu/khôi phục.
+  ['getMauIn', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xem'],
+  ['upsertMauIn', RequestMethod.PUT, '/nhan-su/hop-dong-lao-dong:sua'],
+  ['removeMauIn', RequestMethod.DELETE, '/nhan-su/hop-dong-lao-dong:sua'],
+  ['getThongTinCongTy', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xem'],
+  ['upsertThongTinCongTy', RequestMethod.PUT, '/nhan-su/hop-dong-lao-dong:sua'],
+  // In hợp đồng (render) = hành động xuất tài liệu → quyền "xuat", giống
+  // canExport ở FE (usePagePermission).
+  ['renderHopDong', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xuat'],
 ];
 
 describe('HopDong_Controller — phân quyền', () => {

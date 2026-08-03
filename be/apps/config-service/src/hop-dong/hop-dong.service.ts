@@ -5,9 +5,24 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { LaborContract, ContractCounter } from '@app/entities';
+import { LaborContract, ContractCounter, PhieuTemplate, TenantAppConfig, Employee } from '@app/entities';
 import { TenantContextService } from '@app/core';
-import { CreateHopDongDto, UpdateHopDongDto } from './dto';
+import { CreateHopDongDto, UpdateHopDongDto, UpdateThongTinCongTyDto } from './dto';
+import {
+  DEFAULT_HOP_DONG_HTML,
+  renderHopDongHtml,
+  sanitizeMauInHtml,
+} from './lib/hopDongRender';
+
+const LOAI_MAU_IN_HOP_DONG = 'HOP_DONG_LAO_DONG' as const;
+
+export interface ThongTinCongTy {
+  tenCongTy: string | null;
+  diaChiCongTy: string | null;
+  maSoThue: string | null;
+  nguoiDaiDien: string | null;
+  chucVuNguoiDaiDien: string | null;
+}
 
 export interface HopDongFilter {
   employeeId?: string;
@@ -25,6 +40,12 @@ export class HopDong_Service {
     private readonly repo: Repository<LaborContract>,
     @InjectRepository(ContractCounter)
     private readonly counterRepo: Repository<ContractCounter>,
+    @InjectRepository(PhieuTemplate)
+    private readonly mauInRepo: Repository<PhieuTemplate>,
+    @InjectRepository(TenantAppConfig)
+    private readonly congTyRepo: Repository<TenantAppConfig>,
+    @InjectRepository(Employee)
+    private readonly employeeRepo: Repository<Employee>,
     private readonly tenantContext: TenantContextService,
   ) {}
 
@@ -181,5 +202,125 @@ export class HopDong_Service {
     const item = await this.findOne(id);
     item.trangThai = trangThai;
     return this.repo.save(item);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Mẫu in hợp đồng lao động — tái dùng entity/collection `PhieuTemplate`
+  // (xem chú thích tại `LoaiPhieuTemplate`): 1 dòng/tenant/loại, cột html.
+  // KHÔNG dùng lại `PhieuTemplate_Controller` (route đó gác bằng `AdminGuard`,
+  // lệch khuôn phân quyền hiện tại) — route ở đây gác bằng
+  // `/nhan-su/hop-dong-lao-dong:xem|sua` giống hệt CRUD hợp đồng.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /** Mẫu hiện dùng (riêng của tenant nếu đã cấu hình, không thì mặc định) + cờ đã tuỳ biến hay chưa. */
+  async getMauIn(): Promise<{ html: string; isCustom: boolean }> {
+    const tpl = await this.mauInRepo.findOne({
+      where: { loai: LOAI_MAU_IN_HOP_DONG },
+    });
+    return tpl ? { html: tpl.html, isCustom: true } : { html: DEFAULT_HOP_DONG_HTML, isCustom: false };
+  }
+
+  /**
+   * Lưu mẫu riêng của tenant. `sanitizeMauInHtml` cắt thẻ script, thuộc tính
+   * on-nào-đó và scheme javascript: trước khi lưu — phòng khi admin dán nhầm
+   * HTML có script; đây là điểm ghi duy nhất nên đặt sanitize ở đây, không
+   * cần chạy lại mỗi lần in.
+   */
+  async upsertMauIn(html: string): Promise<{ html: string }> {
+    const sanitized = sanitizeMauInHtml(html);
+    let tpl = await this.mauInRepo.findOne({
+      where: { loai: LOAI_MAU_IN_HOP_DONG },
+    });
+    if (tpl) {
+      tpl.html = sanitized;
+    } else {
+      tpl = this.mauInRepo.create({ loai: LOAI_MAU_IN_HOP_DONG, html: sanitized });
+    }
+    const saved = await this.mauInRepo.save(tpl);
+    return { html: saved.html };
+  }
+
+  /** Xoá mẫu riêng — về mặc định. */
+  async removeMauIn(): Promise<void> {
+    const tpl = await this.mauInRepo.findOne({
+      where: { loai: LOAI_MAU_IN_HOP_DONG },
+    });
+    if (tpl) await this.mauInRepo.remove(tpl);
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Thông tin công ty (letterhead in hợp đồng) — TenantAppConfig, xem chú
+  // thích tại entity vì sao KHÔNG lấy từ identity Tenant.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async getThongTinCongTy(): Promise<ThongTinCongTy> {
+    const cfg = await this.congTyRepo.findOne({ where: {} });
+    return {
+      tenCongTy: cfg?.tenCongTy ?? null,
+      diaChiCongTy: cfg?.diaChiCongTy ?? null,
+      maSoThue: cfg?.maSoThue ?? null,
+      nguoiDaiDien: cfg?.nguoiDaiDien ?? null,
+      chucVuNguoiDaiDien: cfg?.chucVuNguoiDaiDien ?? null,
+    };
+  }
+
+  async upsertThongTinCongTy(dto: UpdateThongTinCongTyDto): Promise<ThongTinCongTy> {
+    let cfg = await this.congTyRepo.findOne({ where: {} });
+    if (!cfg) {
+      cfg = this.congTyRepo.create({ ...dto } as Partial<TenantAppConfig>);
+    } else {
+      Object.assign(cfg, dto);
+    }
+    const saved = await this.congTyRepo.save(cfg);
+    return {
+      tenCongTy: saved.tenCongTy ?? null,
+      diaChiCongTy: saved.diaChiCongTy ?? null,
+      maSoThue: saved.maSoThue ?? null,
+      nguoiDaiDien: saved.nguoiDaiDien ?? null,
+      chucVuNguoiDaiDien: saved.chucVuNguoiDaiDien ?? null,
+    };
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // renderHopDong — ghép mẫu (riêng hoặc mặc định) + hợp đồng + nhân viên +
+  // thông tin công ty ra HTML sẵn sàng in. Việc thay token nằm hết trong
+  // `renderHopDongHtml` (hàm thuần, có unit test riêng ở lib/hopDongRender).
+  // ──────────────────────────────────────────────────────────────────────────
+  async renderHopDong(id: string): Promise<{ html: string; canhBao: string[] }> {
+    const contract = await this.findOne(id);
+
+    const { ObjectId } = await import('mongodb');
+    const employee = await this.employeeRepo.findOne({
+      where: { _id: new ObjectId(contract.employeeId) as any },
+    });
+    if (!employee) {
+      throw new NotFoundException(
+        `Không tìm thấy nhân viên (employeeId=${contract.employeeId}) của hợp đồng này`,
+      );
+    }
+
+    const [congTy, mauIn] = await Promise.all([this.getThongTinCongTy(), this.getMauIn()]);
+
+    return renderHopDongHtml(mauIn.html, {
+      contract: {
+        contractNo: contract.contractNo,
+        loaiHopDong: contract.loaiHopDong,
+        ngayBatDau: contract.ngayBatDau,
+        ngayKetThuc: contract.ngayKetThuc,
+        mucLuong: contract.mucLuong,
+        phuCap: contract.phuCap,
+        createdAt: (contract as any).createdAt?.toISOString?.() ?? (contract as any).createdAt,
+      },
+      employee: {
+        hoTen: employee.hoTen,
+        ngaySinh: employee.ngaySinh,
+        gioiTinh: employee.gioiTinh,
+        cccd: employee.cccd,
+        diaChi: employee.diaChi,
+        soDienThoai: employee.soDienThoai,
+        chucDanh: employee.chucDanh,
+      },
+      congTy,
+    });
   }
 }
