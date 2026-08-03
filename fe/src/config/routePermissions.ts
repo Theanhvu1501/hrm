@@ -6,6 +6,10 @@ export const routePermissions: Record<string, string> = {
   '/cau-hinh/thanh-vien': '/cau-hinh/thanh-vien:xem',
   '/cau-hinh/cau-hinh-luong': '/luong/cau-hinh:xem',
   '/luong/bang-luong': '/luong/bang-luong:xem',
+  // Bảng lương thêm giờ dùng chung quyền với bảng lương chính — cùng nhóm rủi
+  // ro (thu nhập thật), và không mở module quyền mới thì không phải chạy
+  // ops/grant-quyen-module-moi.ts lúc deploy.
+  '/luong/bang-luong-them-gio': '/luong/bang-luong:xem',
   '/nhan-su/ho-so-nhan-vien': '/nhan-su/ho-so-nhan-vien:xem',
   '/nhan-su/hop-dong-lao-dong': '/nhan-su/hop-dong-lao-dong:xem',
   '/nhan-su/qua-trinh-cong-tac': '/nhan-su/qua-trinh-cong-tac:xem',

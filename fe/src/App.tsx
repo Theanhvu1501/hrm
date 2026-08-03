@@ -25,6 +25,7 @@ import {
   ThanhVienPage,
   CauHinhLuongPage,
   BangLuongPage,
+  BangThemGioPage,
   HoSoNhanVienPage,
   HopDongLaoDongPage,
   QuaTrinhCongTacPage,
@@ -141,6 +142,17 @@ const App = () => (
 
                 {/* Lương */}
                 <Route path="luong">
+                  {/* Bảng lương thêm giờ khai TRƯỚC bảng lương chính: đúng
+                      thứ tự quy trình (chốt bảng thêm giờ rồi mới tổng hợp
+                      bảng lương), và cùng thứ tự với sidebar. */}
+                  <Route
+                    path="bang-luong-them-gio"
+                    element={
+                      <ProtectedRoute requiredPermission="/luong/bang-luong:xem">
+                        <BangThemGioPage />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route
                     path="bang-luong"
                     element={

@@ -285,6 +285,11 @@ const MainLayout: React.FC = () => {
       label: "LƯƠNG",
       children: [
         {
+          key: "/luong/bang-luong-them-gio",
+          icon: <DollarOutlined />,
+          label: "Bảng lương thêm giờ",
+        },
+        {
           key: "/luong/bang-luong",
           icon: <DollarOutlined />,
           label: "Bảng lương",
