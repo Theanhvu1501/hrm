@@ -9,4 +9,5 @@ export * from './utils/dto.utils';
 export * from './permissions/all-permissions';
 export * from './utils/soft-delete-batch';
 export * from './luong/tinh-luong';
+export * from './luong/tinh-them-gio';
 export * from './luong/gan-cau-hinh-rieng';
