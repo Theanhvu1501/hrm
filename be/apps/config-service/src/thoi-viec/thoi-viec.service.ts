@@ -139,28 +139,43 @@ export class ThoiViec_Service {
   }
 
   /**
-   * Phát hiện & vá một CHUYỂN TIẾP DANG DỞ: hồ sơ đang ở trạng thái KHÔNG
-   * hiệu lực (`cho_duyet`/`tu_choi`) nhưng vẫn mang snapshot durable
-   * (`trangThaiNhanVienTruocKhiDuyet != null`) — dấu hiệu duy nhất còn lại
-   * cho biết lần ghi HỒ SƠ cuối (W3) của một lần duyệt trước đó đã thất bại
-   * SAU KHI lần ghi NV đã thành công (xem doc-comment `updateStatus()`,
-   * round 3). Nếu không vá, NV kẹt 'da_nghi' vĩnh viễn ngay khi hồ sơ bị
-   * từ chối hoặc xoá thay vì được thử duyệt lại — chính hai đường "thoát"
-   * tự nhiên nhất mà HR sẽ bấm khi thấy hồ sơ hiện "chờ duyệt" bất thường
+   * Phát hiện & vá một CHUYỂN TIẾP DANG DỞ: hồ sơ mang dấu `coChuyenTiepDangDo
+   * === true` — nghĩa là pha 1 đã ghi bền snapshot (và bật cờ này) TRƯỚC khi
+   * đụng NV, nhưng lần ghi HỒ SƠ CUỐI của quy trình duyệt/huỷ-duyệt đó (nơi
+   * DUY NHẤT tắt cờ này) chưa từng thành công (xem doc-comment `updateStatus()`,
+   * round 3). Nếu không vá, NV kẹt 'da_nghi' vĩnh viễn ngay khi hồ sơ bị từ
+   * chối hoặc xoá thay vì được thử duyệt lại — chính hai đường "thoát" tự
+   * nhiên nhất mà HR sẽ bấm khi thấy hồ sơ hiện "chờ duyệt" bất thường
    * (review round 4, CRITICAL).
    *
-   * `emp.trangThai === 'da_nghi'` là điều kiện BẮT BUỘC để giữ hàm này TRƠ
-   * sau một chu kỳ duyệt → huỷ duyệt BÌNH THƯỜNG (không dang dở): snapshot
-   * CỐ Ý không bị xoá khỏi hồ sơ sau khi khôi phục (xem nhánh "đi ra" của
-   * `updateStatus()` — không có dòng nào xoá `trangThaiNhanVienTruocKhiDuyet`),
-   * nên nó vẫn còn đó dù NV lúc này đã đúng rồi (vd 'dang_lam_viec') — nếu
-   * thiếu điều kiện này, MỌI hồ sơ đã từng qua một lần duyệt/huỷ duyệt sẽ bị
-   * "vá" lại mỗi lần đổi trạng thái hoặc bị xoá sau đó, kể cả khi không có
-   * gì dang dở. Chỉ khi NV THỰC SỰ còn kẹt ở 'da_nghi' — nghĩa là không có
-   * hồ sơ thôi việc nào khác đang hợp lệ giữ họ ở đó — hàm mới ghi.
+   * Review round 5, IMPORTANT — vì sao dùng CỜ RIÊNG thay vì suy ra dang dở
+   * từ `trangThaiNhanVienTruocKhiDuyet != null`: snapshot đó KHÔNG BAO GIỜ
+   * bị xoá khỏi hồ sơ sau khi khôi phục (mãi mãi là dấu vết lịch sử vô hại
+   * của LẦN DUYỆT ĐÃ HOÀN TẤT), nên "snapshot khác null" đúng với MỌI hồ sơ
+   * từng qua một lần duyệt/huỷ-duyệt bình thường — không chỉ hồ sơ dang dở.
+   * Kết hợp thêm `emp.trangThai === 'da_nghi'` (bản round 4) làm giảm rủi ro
+   * nhưng KHÔNG loại trừ: nếu hồ sơ R1 đó (đã huỷ duyệt sạch từ lâu, snapshot
+   * chỉ còn là tàn dư) rồi NV sau đó THỰC SỰ nghỉ việc — qua một hồ sơ R2
+   * KHÁC được duyệt hợp lệ, hoặc bị đặt `da_nghi` thẳng trên hồ sơ NV — thì
+   * `emp.trangThai === 'da_nghi'` cũng đúng, và bản round 4 sẽ NHẦM coi R1
+   * là dang dở rồi "vá" — tức ghi đè NV về lại snapshot cũ của R1, ÂM THẦM
+   * MỞ KHOÁ một người đã thực sự nghỉ việc. Cờ `coChuyenTiepDangDo` loại trừ
+   * đúng trường hợp này bằng cấu trúc: nó chỉ true khi CHÍNH quy trình
+   * duyệt/huỷ-duyệt hiện tại của CHÍNH hồ sơ này chưa ghi xong lần cuối —
+   * không suy luận gián tiếp từ hai điều kiện có thể trùng hợp.
+   *
+   * VẪN giữ `emp.trangThai === 'da_nghi'` làm điều kiện thứ hai (không chỉ
+   * dựa vào cờ): nếu chuyển tiếp dang dở xảy ra ở PHA GHI NV (không phải pha
+   * ghi hồ sơ cuối — round 2's W2, ghi NV thất bại), cờ vẫn true (đã bật ở
+   * pha 1) nhưng `emp.trangThai` CHƯA từng đổi — `trangThaiKhoiPhuc(item)`
+   * lúc đó trùng giá trị hiện tại của NV nên vá cũng vô hại, NHƯNG nếu giữa
+   * lúc đó và lúc HR từ chối/xoá, NV lại bị đổi trạng thái hợp lệ vì lý do
+   * khác (vd tạm nghỉ) mà cờ của R1 vẫn treo true — chỉ vá khi NV THỰC SỰ
+   * đang kẹt 'da_nghi' mới tránh ghi đè nhầm một thay đổi hợp lệ không liên
+   * quan xảy ra sau đó.
    */
   private async vaChuyenTiepDangDoNeuCo(item: Resignation): Promise<void> {
-    if (item.trangThaiNhanVienTruocKhiDuyet == null) return;
+    if (!item.coChuyenTiepDangDo) return;
 
     const emp = await this.findEmployee(item.employeeId);
     if (emp.trangThai !== 'da_nghi') return;
@@ -214,6 +229,11 @@ export class ThoiViec_Service {
       await this.vaChuyenTiepDangDoNeuCo(item);
     }
 
+    // Dọn cờ dang dở (nếu có) khi hồ sơ bị xoá — từ đây record vĩnh viễn
+    // isActive=false, cờ còn treo hay không không còn ý nghĩa gì (guard
+    // đầu hàm chặn mọi lần gọi lại), dọn cho sạch để không gây khó hiểu nếu
+    // có ai tra thẳng vào DB sau này.
+    item.coChuyenTiepDangDo = false;
     item.isActive = false;
     await this.repo.save(item);
   }
@@ -290,11 +310,22 @@ export class ThoiViec_Service {
    * không hiệu lực sau ⇒ bỏ qua NV) hoặc `remove()`'s `else` cũ (không xoá
    * mềm gì cho hồ sơ chưa hiệu lực) và both đều ÂM THẦM để NV kẹt 'da_nghi'
    * — cùng lớp lỗi round 1 sinh ra để dập, chỉ đổi đường kích hoạt lần nữa.
-   * `vaChuyenTiepDangDoNeuCo()` đóng nốt hai đường đó: một snapshot durable
-   * còn sót trên một hồ sơ KHÔNG hiệu lực, cộng với NV thực sự đang
-   * 'da_nghi', chỉ có thể là dấu vết của một chuyển tiếp dang dở — không
-   * phải trạng thái hợp lệ nào khác — nên được coi là tín hiệu để vá,
-   * không phải điều kiện chuyển trạng thái thông thường.
+   * `vaChuyenTiepDangDoNeuCo()` đóng nốt hai đường đó.
+   *
+   * SỬA LẠI (review round 5, IMPORTANT) — bản round 4 dùng
+   * "`trangThaiNhanVienTruocKhiDuyet != null` + `emp.trangThai === 'da_nghi'`"
+   * làm tín hiệu duy nhất để suy ra dang dở. SAI: snapshot không bao giờ bị
+   * xoá sau khi khôi phục, nên nó khác null trên MỌI hồ sơ từng qua một lần
+   * duyệt/huỷ-duyệt BÌNH THƯỜNG — không chỉ hồ sơ dang dở. Ghép với
+   * `emp.trangThai === 'da_nghi'` làm giảm khả năng trùng nhưng KHÔNG loại
+   * trừ: nếu R1 (đã huỷ duyệt sạch) rồi NV sau đó THỰC SỰ nghỉ việc qua một
+   * hồ sơ R2 khác, cả hai điều kiện lại đúng cùng lúc trên R1 — HR xoá/mở
+   * lại R1 sẽ khiến hệ thống NHẦM "vá" nó, ghi đè NV về lại snapshot cũ của
+   * R1, ÂM THẦM MỞ KHOÁ một người đã thực sự nghỉ việc (đi từ chiều "stuck"
+   * mà round 1-4 chặn, sang chiều "over-restore" mới). Sửa bằng cờ tường
+   * minh `Resignation.coChuyenTiepDangDo` (đặt true ở pha 1, tắt ở lần ghi
+   * hồ sơ CUỐI) thay vì suy luận gián tiếp — xem doc-comment
+   * `vaChuyenTiepDangDoNeuCo()` cho lý giải đầy đủ.
    */
   async updateStatus(id: string, trangThai: string): Promise<Resignation> {
     const item = await this.findOne(id);
@@ -303,6 +334,10 @@ export class ThoiViec_Service {
 
     if (!dangHieuLucTruoc && !seHieuLuc) {
       await this.vaChuyenTiepDangDoNeuCo(item);
+      // Dù có vá hay không, chuyển trạng thái này (vd cho_duyet -> tu_choi
+      // KHÔNG qua hiệu lực) tự thân không mở ra một chuyển tiếp dang dở mới
+      // — dọn cờ cho sạch nếu nó còn treo true từ một vòng trước.
+      item.coChuyenTiepDangDo = false;
       item.trangThai = trangThai;
       return this.repo.save(item);
     }
@@ -310,17 +345,24 @@ export class ThoiViec_Service {
     const emp = await this.findEmployee(item.employeeId);
 
     if (seHieuLuc && !dangHieuLucTruoc) {
-      // Pha 1 — ghi BỀN snapshot TRƯỚC khi đụng NV, trangThai hồ sơ CHƯA
-      // đổi. `giaTriChupHopLe()` vẫn lọc 'da_nghi' cho lần gọi lại sau một
-      // thất bại ở pha này (khi đó live emp.trangThai vẫn là giá trị gốc
-      // thật vì NV chưa hề bị ghi — an toàn), hoặc sau một thất bại ở pha
-      // NV/pha 2 (khi đó dùng lại chính snapshot vừa ghi bền ở đây).
+      // Pha 1 — ghi BỀN snapshot + BẬT cờ `coChuyenTiepDangDo` TRƯỚC khi
+      // đụng NV, trangThai hồ sơ CHƯA đổi. `giaTriChupHopLe()` vẫn lọc
+      // 'da_nghi' cho lần gọi lại sau một thất bại ở pha này (khi đó live
+      // emp.trangThai vẫn là giá trị gốc thật vì NV chưa hề bị ghi — an
+      // toàn), hoặc sau một thất bại ở pha NV/pha 2 (khi đó dùng lại chính
+      // snapshot vừa ghi bền ở đây). Ghi lại (dù snapshot không đổi) MIỄN LÀ
+      // cờ chưa bật — nếu chỉ xét riêng snapshot, một lần gọi lại có
+      // snapshot trùng khớp NHƯNG cờ chưa từng được ghi bền (hiếm, nhưng có
+      // thể xảy ra nếu hồ sơ được tạo thủ công/migrate với snapshot có sẵn)
+      // sẽ bỏ qua pha 1 và để cờ mãi mãi false — vô hiệu hoá toàn bộ cơ chế
+      // vá của round 4/5 cho riêng hồ sơ đó.
       const snapshot = this.giaTriChupHopLe(
         emp.trangThai,
         item.trangThaiNhanVienTruocKhiDuyet,
       );
-      if (item.trangThaiNhanVienTruocKhiDuyet !== snapshot) {
+      if (item.trangThaiNhanVienTruocKhiDuyet !== snapshot || !item.coChuyenTiepDangDo) {
         item.trangThaiNhanVienTruocKhiDuyet = snapshot;
+        item.coChuyenTiepDangDo = true;
         await this.repo.save(item);
       }
     }
@@ -329,6 +371,11 @@ export class ThoiViec_Service {
     await this.employeeRepo.save(emp);
 
     item.trangThai = trangThai;
+    // Lần ghi hồ sơ CUỐI của quy trình duyệt/huỷ-duyệt này — tắt cờ dang dở
+    // (nếu có) NGAY TRONG CÙNG lần lưu này: đây chính là điểm mà round 3 mô
+    // tả là "hoàn tất". Áp dụng chung cho cả chiều vào lẫn ra hiệu lực —
+    // vô hại nếu cờ vốn đã false.
+    item.coChuyenTiepDangDo = false;
     return this.repo.save(item);
   }
 }

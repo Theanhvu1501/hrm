@@ -27,6 +27,15 @@ export class Resignation extends BaseEntity {
   // lương) khi hồ sơ bị huỷ duyệt hoặc xoá, thay vì ghi cứng 'dang_lam_viec'
   // và hồi sinh nhầm người vốn đã tạm nghỉ từ trước khi nộp đơn thôi việc.
   @Column({ nullable: true }) trangThaiNhanVienTruocKhiDuyet?: string;
+  // Đánh dấu một CHUYỂN TIẾP DANG DỞ: đặt true trong pha 1 (ghi bền
+  // snapshot ở trên, TRƯỚC khi đụng Employee), đặt false ngay khi lần ghi
+  // hồ sơ CUỐI của quy trình duyệt/huỷ-duyệt đó hoàn tất. true nghĩa là NV
+  // có thể đã bị ghi 'da_nghi' mà hồ sơ CHƯA kịp phản ánh — dấu hiệu DUY
+  // NHẤT phân biệt "chuyển tiếp dang dở, cần vá" với "hồ sơ từng duyệt rồi
+  // huỷ duyệt bình thường, snapshot chỉ còn là dấu vết lịch sử vô hại"
+  // (round 5 — snapshot khác null KHÔNG đủ để suy ra dang dở, vì nó không
+  // bao giờ bị xoá sau khi khôi phục).
+  @Column({ nullable: true }) coChuyenTiepDangDo?: boolean;
 }
 
 export interface ResignationEntities { Resignation: typeof Resignation; }

@@ -20,6 +20,11 @@ describe('ThoiViec_Service', () => {
 
   const EMP_ID = '507f1f77bcf86cd799439011';
   const RESIGNATION_ID = '507f1f77bcf86cd799439099';
+  // Hồ sơ thôi việc THỨ HAI cho cùng một NV — dùng để dựng kịch bản round 5:
+  // R1 là hồ sơ cũ đã huỷ duyệt sạch, R2 là hồ sơ MỚI thực sự giữ NV ở
+  // 'da_nghi'. Cả hai id đều phải là chuỗi hex 24 ký tự hợp lệ vì service
+  // đưa thẳng qua `new ObjectId(id)`.
+  const RESIGNATION_ID_2 = '507f1f77bcf86cd799439098';
 
   /**
    * Nối mock findOne/save của cả hai repo vào một "kho DB giả lập" thật sự
@@ -69,6 +74,46 @@ describe('ThoiViec_Service', () => {
 
     return {
       resignationDb: () => resignationDb,
+      employeeDb: () => employeeDb,
+    };
+  }
+
+  /**
+   * Biến thể NHIỀU hồ sơ của `noiKhoGiaLap()` — cần cho các kịch bản round 5
+   * (Important): một NV có HAI hồ sơ thôi việc độc lập (R1 cũ đã huỷ duyệt,
+   * R2 mới thực sự giữ họ ở 'da_nghi'). `findOne()` tra đúng hồ sơ theo
+   * `where._id` thay vì luôn trả về một tham chiếu cố định.
+   */
+  function noiKhoGiaLapNhieuHoSo(
+    banDauCacHoSo: Record<string, any>[],
+    banDauEmployee: Record<string, any>,
+  ) {
+    const hoSoDb = new Map<string, Record<string, any>>(
+      banDauCacHoSo.map((hs) => [String(hs._id), { ...hs }]),
+    );
+    let employeeDb = { ...banDauEmployee };
+
+    mockResignationRepo.findOne.mockImplementation(
+      (query: { where: { _id: unknown } }) => {
+        const id = String(query.where._id);
+        const hs = hoSoDb.get(id);
+        return Promise.resolve(hs ? { ...hs } : null);
+      },
+    );
+    mockEmployeeRepo.findOne.mockImplementation(() =>
+      Promise.resolve({ ...employeeDb }),
+    );
+    mockResignationRepo.save.mockImplementation((v: Record<string, any>) => {
+      hoSoDb.set(String(v._id), { ...v });
+      return Promise.resolve({ ...v });
+    });
+    mockEmployeeRepo.save.mockImplementation((v: Record<string, any>) => {
+      employeeDb = { ...v };
+      return Promise.resolve({ ...employeeDb });
+    });
+
+    return {
+      hoSo: (id: string) => hoSoDb.get(id),
       employeeDb: () => employeeDb,
     };
   }
@@ -751,24 +796,210 @@ describe('ThoiViec_Service', () => {
       await service.updateStatus(RESIGNATION_ID, 'tu_choi');
       expect(kho.employeeDb().trangThai).toBe('tam_nghi');
       // Snapshot CỐ Ý còn sót lại trên hồ sơ sau khi khôi phục (round 2/3
-      // không xoá nó) — đây chính là điều kiện khiến vaChuyenTiepDangDoNeuCo()
-      // phải kiểm tra thêm `emp.trangThai === 'da_nghi'` mới được ghi.
+      // không xoá nó) — dấu vết lịch sử vô hại. Cờ `coChuyenTiepDangDo` thì
+      // đã được tắt ngay trong lần ghi cuối của chu kỳ huỷ duyệt vừa rồi
+      // (round 5) — đây mới là điều kiện thật khiến vaChuyenTiepDangDoNeuCo()
+      // không làm gì ở bước xoá dưới đây.
       expect(kho.resignationDb().trangThaiNhanVienTruocKhiDuyet).toBe(
         'tam_nghi',
       );
+      expect(kho.resignationDb().coChuyenTiepDangDo).toBe(false);
 
       const soLanGhiNvTruocKhiXoa = mockEmployeeRepo.save.mock.calls.length;
 
       await service.remove(RESIGNATION_ID);
 
-      // Không có lần ghi NV nào thêm — vaChuyenTiepDangDoNeuCo() thấy
-      // emp.trangThai đã đúng ('tam_nghi', không phải 'da_nghi') nên không
-      // làm gì, đúng như thiết kế "trơ" của nó.
+      // Không có lần ghi NV nào thêm — vaChuyenTiepDangDoNeuCo() thấy cờ đã
+      // false nên không làm gì, đúng như thiết kế "trơ" của nó.
       expect(mockEmployeeRepo.save.mock.calls.length).toBe(
         soLanGhiNvTruocKhiXoa,
       );
       expect(kho.employeeDb().trangThai).toBe('tam_nghi');
       expect(kho.resignationDb().isActive).toBe(false);
+    });
+
+    // ── marker cleared on the successful path (review round 5) ──
+    it('leaves no stale coChuyenTiepDangDo marker behind after a normal, fault-free approve', async () => {
+      const kho = noiKhoGiaLap(
+        { _id: RESIGNATION_ID, employeeId: EMP_ID, trangThai: 'cho_duyet' },
+        {
+          _id: EMP_ID,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          trangThai: 'dang_lam_viec',
+        },
+      );
+
+      await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+
+      expect(kho.resignationDb().coChuyenTiepDangDo).toBe(false);
+      expect(kho.resignationDb().trangThaiNhanVienTruocKhiDuyet).toBe(
+        'dang_lam_viec',
+      );
+    });
+
+    // ── over-restore: stale marker-free R1 must NOT be "healed" once the
+    // employee genuinely left through something else (review round 5,
+    // IMPORTANT — this is the misfire the marker exists to rule out) ──
+    describe('không mở khoá nhầm một NV đã thực sự nghỉ việc qua đường khác', () => {
+      it('deleting a stale rejected R1 does not touch the employee once a SEPARATE resignation R2 legitimately holds them at da_nghi', async () => {
+        const kho = noiKhoGiaLapNhieuHoSo(
+          [
+            {
+              _id: RESIGNATION_ID,
+              employeeId: EMP_ID,
+              trangThai: 'cho_duyet',
+              isActive: true,
+            },
+            {
+              _id: RESIGNATION_ID_2,
+              employeeId: EMP_ID,
+              trangThai: 'cho_duyet',
+              isActive: true,
+            },
+          ],
+          {
+            _id: EMP_ID,
+            employeeId: 'NV0001',
+            hoTen: 'Nguyen Van A',
+            trangThai: 'dang_lam_viec',
+          },
+        );
+
+        // R1: duyệt nhầm rồi từ chối lại (đúng kịch bản Gap 1 gốc) — kết
+        // thúc SẠCH, không dang dở.
+        await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+        await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+        expect(kho.employeeDb().trangThai).toBe('dang_lam_viec');
+        expect(kho.hoSo(RESIGNATION_ID)?.coChuyenTiepDangDo).toBe(false);
+
+        // NV sau đó THỰC SỰ nghỉ việc — qua một hồ sơ KHÁC, R2.
+        await service.updateStatus(RESIGNATION_ID_2, 'da_duyet');
+        expect(kho.employeeDb().trangThai).toBe('da_nghi');
+
+        const soLanGhiNvTruoc = mockEmployeeRepo.save.mock.calls.length;
+
+        // HR dọn hồ sơ R1 cũ (đã từ chối từ lâu) — xoá.
+        await service.remove(RESIGNATION_ID);
+
+        expect(mockEmployeeRepo.save.mock.calls.length).toBe(soLanGhiNvTruoc);
+        expect(kho.employeeDb().trangThai).toBe('da_nghi');
+      });
+
+      it('reopening a stale rejected R1 (tu_choi -> cho_duyet) does not touch the employee once a SEPARATE resignation R2 legitimately holds them at da_nghi', async () => {
+        const kho = noiKhoGiaLapNhieuHoSo(
+          [
+            {
+              _id: RESIGNATION_ID,
+              employeeId: EMP_ID,
+              trangThai: 'cho_duyet',
+              isActive: true,
+            },
+            {
+              _id: RESIGNATION_ID_2,
+              employeeId: EMP_ID,
+              trangThai: 'cho_duyet',
+              isActive: true,
+            },
+          ],
+          {
+            _id: EMP_ID,
+            employeeId: 'NV0001',
+            hoTen: 'Nguyen Van A',
+            trangThai: 'dang_lam_viec',
+          },
+        );
+
+        await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+        await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+        await service.updateStatus(RESIGNATION_ID_2, 'da_duyet');
+        expect(kho.employeeDb().trangThai).toBe('da_nghi');
+
+        const soLanGhiNvTruoc = mockEmployeeRepo.save.mock.calls.length;
+
+        // HR mở lại R1 (đưa về chờ duyệt) thay vì xoá.
+        const result = await service.updateStatus(RESIGNATION_ID, 'cho_duyet');
+
+        expect(result.trangThai).toBe('cho_duyet');
+        expect(mockEmployeeRepo.save.mock.calls.length).toBe(soLanGhiNvTruoc);
+        expect(kho.employeeDb().trangThai).toBe('da_nghi');
+      });
+
+      it('deleting a stale rejected R1 does not touch the employee once trangThai was set to da_nghi DIRECTLY on the employee record (not through any resignation)', async () => {
+        const kho = noiKhoGiaLapNhieuHoSo(
+          [
+            {
+              _id: RESIGNATION_ID,
+              employeeId: EMP_ID,
+              trangThai: 'cho_duyet',
+              isActive: true,
+            },
+          ],
+          {
+            _id: EMP_ID,
+            employeeId: 'NV0001',
+            hoTen: 'Nguyen Van A',
+            trangThai: 'dang_lam_viec',
+          },
+        );
+
+        await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+        await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+        expect(kho.employeeDb().trangThai).toBe('dang_lam_viec');
+        expect(kho.hoSo(RESIGNATION_ID)?.coChuyenTiepDangDo).toBe(false);
+
+        // Một actor KHÁC (vd nhan-vien.service.ts, không qua thôi việc) đặt
+        // NV sang da_nghi trực tiếp — mô phỏng bằng cách gọi thẳng
+        // employeeRepo.save(), như một request khác vừa ghi vào CÙNG một
+        // collection.
+        await mockEmployeeRepo.save({
+          ...kho.employeeDb(),
+          trangThai: 'da_nghi',
+        });
+        expect(kho.employeeDb().trangThai).toBe('da_nghi');
+
+        const soLanGhiNvTruoc = mockEmployeeRepo.save.mock.calls.length;
+
+        await service.remove(RESIGNATION_ID);
+
+        expect(mockEmployeeRepo.save.mock.calls.length).toBe(soLanGhiNvTruoc);
+        expect(kho.employeeDb().trangThai).toBe('da_nghi');
+      });
+
+      it('reopening a stale rejected R1 does not touch the employee once trangThai was set to da_nghi DIRECTLY on the employee record', async () => {
+        const kho = noiKhoGiaLapNhieuHoSo(
+          [
+            {
+              _id: RESIGNATION_ID,
+              employeeId: EMP_ID,
+              trangThai: 'cho_duyet',
+              isActive: true,
+            },
+          ],
+          {
+            _id: EMP_ID,
+            employeeId: 'NV0001',
+            hoTen: 'Nguyen Van A',
+            trangThai: 'dang_lam_viec',
+          },
+        );
+
+        await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+        await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+
+        await mockEmployeeRepo.save({
+          ...kho.employeeDb(),
+          trangThai: 'da_nghi',
+        });
+
+        const soLanGhiNvTruoc = mockEmployeeRepo.save.mock.calls.length;
+
+        const result = await service.updateStatus(RESIGNATION_ID, 'cho_duyet');
+
+        expect(result.trangThai).toBe('cho_duyet');
+        expect(mockEmployeeRepo.save.mock.calls.length).toBe(soLanGhiNvTruoc);
+        expect(kho.employeeDb().trangThai).toBe('da_nghi');
+      });
     });
   });
 });
