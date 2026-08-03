@@ -404,6 +404,40 @@ describe('ThoiViec_Service', () => {
       expect(result.trangThaiNhanVienTruocKhiDuyet).toBe('tam_nghi');
     });
 
+    // ── phase-1 write itself fails (review round 3, Minor) ──
+    // Chưa đụng gì tới NV ở thời điểm này — trivially an toàn — nhưng chưa
+    // có test nào ghim hành vi đó trước round 4.
+    it('is trivially safe when the phase-1 (snapshot-only) write itself fails — nothing persisted yet, retry completes cleanly', async () => {
+      const kho = noiKhoGiaLap(
+        { _id: RESIGNATION_ID, employeeId: EMP_ID, trangThai: 'cho_duyet' },
+        {
+          _id: EMP_ID,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          trangThai: 'tam_nghi',
+        },
+        // Lần ghi hồ sơ ĐẦU TIÊN (chính pha 1) thất bại — trước khi NV bị
+        // đụng tới.
+        1,
+      );
+
+      await expect(
+        service.updateStatus(RESIGNATION_ID, 'da_duyet'),
+      ).rejects.toThrow('mongo down');
+
+      // Không có gì được ghi bền — cả hồ sơ lẫn NV vẫn y nguyên trạng thái
+      // ban đầu.
+      expect(kho.resignationDb().trangThai).toBe('cho_duyet');
+      expect(kho.resignationDb().trangThaiNhanVienTruocKhiDuyet).toBeUndefined();
+      expect(kho.employeeDb().trangThai).toBe('tam_nghi');
+
+      const result = await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+
+      expect(result.trangThai).toBe('da_duyet');
+      expect(result.trangThaiNhanVienTruocKhiDuyet).toBe('tam_nghi');
+      expect(kho.employeeDb().trangThai).toBe('da_nghi');
+    });
+
     // ── exiting direction with the SAME failure-injection (review round 3) ──
     // Xác nhận claim "exiting branch an toàn": nguồn khôi phục ở đây luôn là
     // `item.trangThaiNhanVienTruocKhiDuyet` đã có sẵn, không đọc `emp.trangThai`
@@ -618,6 +652,123 @@ describe('ThoiViec_Service', () => {
 
       expect(kho.resignationDb().isActive).toBe(false);
       expect(kho.employeeDb().trangThai).toBe('tam_nghi');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Torn-transition healing (review round 4, CRITICAL)
+  //
+  // Sau một lần duyệt mà lần ghi hồ sơ CUỐI (W3) thất bại SAU KHI lần ghi NV
+  // đã thành công, DB bị xé rách: hồ sơ vẫn `cho_duyet` (chưa hiệu lực) với
+  // snapshot durable, NV thực sự đã `da_nghi`. Duyệt lại tự lành (đã có test
+  // ở round 3). Nhưng HR thấy hồ sơ "chờ duyệt" bất thường nhiều khả năng sẽ
+  // TỪ CHỐI hoặc XOÁ thay vì bấm duyệt lại — cả hai đường đó phải lành tương
+  // đương, xem `vaChuyenTiepDangDoNeuCo()`.
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('vaChuyenTiepDangDoNeuCo — chuyển tiếp dang dở', () => {
+    it('unblocks the employee when the resignation is rejected instead of retried after a torn W3 failure', async () => {
+      const kho = noiKhoGiaLap(
+        { _id: RESIGNATION_ID, employeeId: EMP_ID, trangThai: 'cho_duyet' },
+        {
+          _id: EMP_ID,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          trangThai: 'tam_nghi',
+        },
+        // Xé rách đúng như test round 3: pha 1 + ghi NV thành công, lần ghi
+        // hồ sơ CUỐI (thứ hai) mới thất bại.
+        2,
+      );
+
+      await expect(
+        service.updateStatus(RESIGNATION_ID, 'da_duyet'),
+      ).rejects.toThrow('mongo down');
+
+      // DB xé rách: hồ sơ chưa hiệu lực (cho_duyet), NV đã thực sự da_nghi.
+      expect(kho.resignationDb().trangThai).toBe('cho_duyet');
+      expect(kho.employeeDb().trangThai).toBe('da_nghi');
+
+      // HR không duyệt lại — từ chối luôn. Trước round 4, đây là nhánh
+      // no-op (!dangHieuLucTruoc && !seHieuLuc) và bỏ qua NV vĩnh viễn.
+      const result = await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+
+      expect(result.trangThai).toBe('tu_choi');
+      expect(kho.employeeDb().trangThai).toBe('tam_nghi');
+    });
+
+    it('unblocks the employee when the resignation is deleted instead of retried after a torn W3 failure', async () => {
+      const kho = noiKhoGiaLap(
+        {
+          _id: RESIGNATION_ID,
+          employeeId: EMP_ID,
+          trangThai: 'cho_duyet',
+          isActive: true,
+        },
+        {
+          _id: EMP_ID,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          trangThai: 'tam_nghi',
+        },
+        2,
+      );
+
+      await expect(
+        service.updateStatus(RESIGNATION_ID, 'da_duyet'),
+      ).rejects.toThrow('mongo down');
+
+      expect(kho.resignationDb().trangThai).toBe('cho_duyet');
+      expect(kho.employeeDb().trangThai).toBe('da_nghi');
+
+      // HR xoá thẳng hồ sơ "chờ duyệt" bất thường thay vì duyệt lại. Trước
+      // round 4, isActive=false xoá luôn dấu vết mà không chạm tới NV.
+      await service.remove(RESIGNATION_ID);
+
+      expect(kho.resignationDb().isActive).toBe(false);
+      expect(kho.employeeDb().trangThai).toBe('tam_nghi');
+    });
+
+    it('stays inert through a normal approve -> reject -> delete cycle — no double-restore, no misfire', async () => {
+      const kho = noiKhoGiaLap(
+        {
+          _id: RESIGNATION_ID,
+          employeeId: EMP_ID,
+          trangThai: 'cho_duyet',
+          isActive: true,
+        },
+        {
+          _id: EMP_ID,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          trangThai: 'tam_nghi',
+        },
+        // Không mock lỗi nào — cả chu kỳ đi trót lọt bình thường.
+      );
+
+      await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+      expect(kho.employeeDb().trangThai).toBe('da_nghi');
+
+      await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+      expect(kho.employeeDb().trangThai).toBe('tam_nghi');
+      // Snapshot CỐ Ý còn sót lại trên hồ sơ sau khi khôi phục (round 2/3
+      // không xoá nó) — đây chính là điều kiện khiến vaChuyenTiepDangDoNeuCo()
+      // phải kiểm tra thêm `emp.trangThai === 'da_nghi'` mới được ghi.
+      expect(kho.resignationDb().trangThaiNhanVienTruocKhiDuyet).toBe(
+        'tam_nghi',
+      );
+
+      const soLanGhiNvTruocKhiXoa = mockEmployeeRepo.save.mock.calls.length;
+
+      await service.remove(RESIGNATION_ID);
+
+      // Không có lần ghi NV nào thêm — vaChuyenTiepDangDoNeuCo() thấy
+      // emp.trangThai đã đúng ('tam_nghi', không phải 'da_nghi') nên không
+      // làm gì, đúng như thiết kế "trơ" của nó.
+      expect(mockEmployeeRepo.save.mock.calls.length).toBe(
+        soLanGhiNvTruocKhiXoa,
+      );
+      expect(kho.employeeDb().trangThai).toBe('tam_nghi');
+      expect(kho.resignationDb().isActive).toBe(false);
     });
   });
 });

@@ -139,6 +139,39 @@ export class ThoiViec_Service {
   }
 
   /**
+   * Phát hiện & vá một CHUYỂN TIẾP DANG DỞ: hồ sơ đang ở trạng thái KHÔNG
+   * hiệu lực (`cho_duyet`/`tu_choi`) nhưng vẫn mang snapshot durable
+   * (`trangThaiNhanVienTruocKhiDuyet != null`) — dấu hiệu duy nhất còn lại
+   * cho biết lần ghi HỒ SƠ cuối (W3) của một lần duyệt trước đó đã thất bại
+   * SAU KHI lần ghi NV đã thành công (xem doc-comment `updateStatus()`,
+   * round 3). Nếu không vá, NV kẹt 'da_nghi' vĩnh viễn ngay khi hồ sơ bị
+   * từ chối hoặc xoá thay vì được thử duyệt lại — chính hai đường "thoát"
+   * tự nhiên nhất mà HR sẽ bấm khi thấy hồ sơ hiện "chờ duyệt" bất thường
+   * (review round 4, CRITICAL).
+   *
+   * `emp.trangThai === 'da_nghi'` là điều kiện BẮT BUỘC để giữ hàm này TRƠ
+   * sau một chu kỳ duyệt → huỷ duyệt BÌNH THƯỜNG (không dang dở): snapshot
+   * CỐ Ý không bị xoá khỏi hồ sơ sau khi khôi phục (xem nhánh "đi ra" của
+   * `updateStatus()` — không có dòng nào xoá `trangThaiNhanVienTruocKhiDuyet`),
+   * nên nó vẫn còn đó dù NV lúc này đã đúng rồi (vd 'dang_lam_viec') — nếu
+   * thiếu điều kiện này, MỌI hồ sơ đã từng qua một lần duyệt/huỷ duyệt sẽ bị
+   * "vá" lại mỗi lần đổi trạng thái hoặc bị xoá sau đó, kể cả khi không có
+   * gì dang dở. Chỉ khi NV THỰC SỰ còn kẹt ở 'da_nghi' — nghĩa là không có
+   * hồ sơ thôi việc nào khác đang hợp lệ giữ họ ở đó — hàm mới ghi.
+   */
+  private async vaChuyenTiepDangDoNeuCo(item: Resignation): Promise<void> {
+    if (item.trangThaiNhanVienTruocKhiDuyet == null) return;
+
+    const emp = await this.findEmployee(item.employeeId);
+    if (emp.trangThai !== 'da_nghi') return;
+
+    emp.trangThai = this.trangThaiKhoiPhuc(item);
+    // Xem lý giải "không nuốt lỗi" ở doc-comment updateStatus() — áp dụng
+    // như nhau: một lần vá thất bại phải báo lỗi, không được coi là xong.
+    await this.employeeRepo.save(emp);
+  }
+
+  /**
    * Xoá mềm MỘT hồ sơ thôi việc phải huỷ cả hai hiệu ứng đã áp cho nhân
    * viên khi hồ sơ đó đang có hiệu lực — không chỉ tắt `isActive`:
    *   - bảng công: lọc theo `isActive: true` nên mốc cắt ngày công tự biến
@@ -160,6 +193,13 @@ export class ThoiViec_Service {
    * click, retry sau khi đã thành công) sẽ ghi ĐÈ trangThai hiện tại của NV
    * bằng giá trị chụp cũ, kể cả khi NV đã được HR chỉnh tay sang trạng thái
    * khác từ sau lần xoá đầu tiên.
+   *
+   * Nhánh `else` (review round 4, CRITICAL): xoá một hồ sơ KHÔNG ở trạng
+   * thái hiệu lực (vd `cho_duyet`) trông vô hại, nhưng nếu đó là một
+   * CHUYỂN TIẾP DANG DỞ (xem `vaChuyenTiepDangDoNeuCo()`) thì `isActive =
+   * false` xoá luôn hồ sơ khỏi `findAll()` — tức xoá luôn DẤU VẾT duy nhất
+   * còn lại giải thích vì sao NV đang bị `chanNeuDaNghiViec()` chặn, không
+   * còn cách nào truy lại từ giao diện HR sau đó.
    */
   async remove(id: string): Promise<void> {
     const item = await this.findOne(id);
@@ -170,6 +210,8 @@ export class ThoiViec_Service {
       emp.trangThai = this.trangThaiKhoiPhuc(item);
       // Xem lý giải "không nuốt lỗi" ở updateStatus() — áp dụng như nhau.
       await this.employeeRepo.save(emp);
+    } else {
+      await this.vaChuyenTiepDangDoNeuCo(item);
     }
 
     item.isActive = false;
@@ -191,7 +233,9 @@ export class ThoiViec_Service {
    * duyệt nhầm rồi từ chối lại vẫn phải mở lại được chấm công cho NV).
    *
    * Không đi vào/ra trạng thái có hiệu lực (vd cho_duyet -> tu_choi khi
-   * chưa từng được duyệt): không đụng tới hồ sơ nhân viên.
+   * chưa từng được duyệt): KHÔNG đụng tới hồ sơ nhân viên — TRỪ KHI hồ sơ
+   * đang mang dấu vết một chuyển tiếp dang dở, xem `vaChuyenTiepDangDoNeuCo()`
+   * (round 4) ngay dưới đây.
    *
    * THỨ TỰ GHI — nhân viên TRƯỚC, hồ sơ thôi việc SAU (review round 2,
    * CRITICAL): bản đầu ghi hồ sơ trước rồi mới ghi NV. Nếu ghi NV lỗi giữa
@@ -234,6 +278,23 @@ export class ThoiViec_Service {
    * đã có sẵn giá trị gốc thật, `giaTriChupHopLe()` không cần rơi về
    * 'dang_lam_viec' nữa. Guard `!== snapshot` bên dưới giữ pha ghi đầu
    * idempotent — không ghi lại nếu giá trị đã đúng từ một lần thử trước.
+   *
+   * QUAN TRỌNG — pha 1 chỉ đóng lỗ hổng CHO ĐƯỜNG RETRY-DUYỆT-LẠI, không
+   * đóng lỗ hổng nói chung (review round 4, CRITICAL): nếu lần ghi hồ sơ
+   * CUỐI (W3) thất bại SAU KHI lần ghi NV đã thành công, DB bị XÉ RÁCH ở
+   * giữa hai lần thử — hồ sơ vẫn `cho_duyet` (chưa hiệu lực) nhưng NV đã
+   * thực sự là 'da_nghi'. Duyệt lại (gọi lại đúng request cũ) thì tự lành,
+   * đúng như đoạn trên mô tả — NHƯNG hai phản ứng tự nhiên khác mà HR nhìn
+   * thấy hồ sơ "chờ duyệt" bất thường rồi bấm — TỪ CHỐI hoặc XOÁ — trước
+   * bản vá round 4 đều đi qua nhánh no-op phía trên (không hiệu lực trước,
+   * không hiệu lực sau ⇒ bỏ qua NV) hoặc `remove()`'s `else` cũ (không xoá
+   * mềm gì cho hồ sơ chưa hiệu lực) và both đều ÂM THẦM để NV kẹt 'da_nghi'
+   * — cùng lớp lỗi round 1 sinh ra để dập, chỉ đổi đường kích hoạt lần nữa.
+   * `vaChuyenTiepDangDoNeuCo()` đóng nốt hai đường đó: một snapshot durable
+   * còn sót trên một hồ sơ KHÔNG hiệu lực, cộng với NV thực sự đang
+   * 'da_nghi', chỉ có thể là dấu vết của một chuyển tiếp dang dở — không
+   * phải trạng thái hợp lệ nào khác — nên được coi là tín hiệu để vá,
+   * không phải điều kiện chuyển trạng thái thông thường.
    */
   async updateStatus(id: string, trangThai: string): Promise<Resignation> {
     const item = await this.findOne(id);
@@ -241,6 +302,7 @@ export class ThoiViec_Service {
     const seHieuLuc = this.coHieuLucNghiViec(trangThai);
 
     if (!dangHieuLucTruoc && !seHieuLuc) {
+      await this.vaChuyenTiepDangDoNeuCo(item);
       item.trangThai = trangThai;
       return this.repo.save(item);
     }
