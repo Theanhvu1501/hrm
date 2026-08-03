@@ -1,3 +1,5 @@
+import sanitizeHtmlLib from 'sanitize-html';
+
 /**
  * In hợp đồng lao động — thay token {{...}} trong mẫu (mặc định hoặc tenant
  * tự soạn) bằng dữ liệu thật của 1 hợp đồng. Hàm THUẦN (không phụ thuộc
@@ -24,6 +26,8 @@ export interface HopDongRenderContract {
   phuCap?: number;
   /** Hợp đồng chưa có cột "ngày ký" riêng — dùng làm điểm neo cho ngày lập ở đầu văn bản khi ngayBatDau trống. */
   createdAt?: string;
+  /** Snapshot chức danh TẠI THỜI ĐIỂM KÝ — ưu tiên hơn employee.chucDanh khi render (xem buildHopDongPlaceholders). */
+  chucDanh?: string;
 }
 
 export interface HopDongRenderEmployee {
@@ -33,6 +37,7 @@ export interface HopDongRenderEmployee {
   cccd?: string;
   diaChi?: string;
   soDienThoai?: string;
+  /** Chức danh HIỆN TẠI của nhân viên — chỉ dùng làm fallback khi hợp đồng chưa có contract.chucDanh (hợp đồng tạo trước khi có cột này). */
   chucDanh?: string;
 }
 
@@ -42,6 +47,10 @@ export interface HopDongRenderCongTy {
   maSoThue?: string | null;
   nguoiDaiDien?: string | null;
   chucVuNguoiDaiDien?: string | null;
+  /** Thành phố ký hợp đồng (dòng quốc hiệu) — xem chú thích tại entity. */
+  thanhPhoKy?: string | null;
+  /** Hậu tố số hợp đồng mẫu (vd "/HĐLĐ-MC.1") — xem chú thích tại entity. */
+  maHopDongMau?: string | null;
 }
 
 export interface HopDongRenderInput {
@@ -51,17 +60,61 @@ export interface HopDongRenderInput {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Sanitize mẫu in (HTML do tenant admin tự soạn) — phòng thủ khi mẫu bị dán
-// nhầm/cố ý chèn script. KHÔNG phải sanitizer đầy đủ (không kéo thêm thư
-// viện DOM cho be/); chặn đúng 3 vector cụ thể hay gặp: <script>, thuộc tính
-// on*, và javascript: trong href/src. Áp dụng 1 lần lúc LƯU mẫu (upsertMauIn),
-// không chạy lại mỗi lần in — rào chắn chính vẫn là quyền `:sua` để lưu mẫu.
+// Sanitize HTML hợp đồng — dùng `sanitize-html` (parser HTML thật qua
+// htmlparser2, KHÔNG phải regex) vì regex không thể phân tích đúng cú pháp
+// HTML: review (Critical 1) chạy tay 9 payload qua bản regex cũ và TẤT CẢ
+// sống sót — `</script >` (khoảng trắng cuối end tag), `</script/>`
+// (solidus), `<script>` không đóng thẻ, `<img src=x/onerror=...>` ("/" là
+// dấu tách thuộc tính hợp lệ, không phải khoảng trắng), `<svg/onload=...>`,
+// `<iframe srcdoc="...">`, `href=javascript:...` không dấu nháy, entity-encode
+// (`javas&#99;ript:`), và `<base href="...">` đổi gốc tương đối cả trang.
+//
+// Chiến lược: KHÔNG cố lọc từng thuộc tính nguy hiểm trên từng thẻ (đó là
+// cách tiếp cận blocklist, luôn thiếu) — allowlist THẲNG các thẻ được phép,
+// và KHÔNG thẻ nào trong allowlist có thể mang href/src/srcdoc/onXxx (a,
+// img, iframe, svg, object, embed, form, input, base, link, meta, script đều
+// bị loại khỏi allowedTags). Không có "chỗ bám" thì mọi biến thể encode/
+// malformed ở trên đều vô hại — không cần liệt kê từng dạng.
+//
+// Dùng CHUNG cho cả 2 điểm:
+//  1. `hop-dong.service.ts: upsertMauIn` — sanitize lúc LƯU mẫu tenant tự soạn.
+//  2. `renderHopDongHtml` bên dưới — sanitize lại HTML ĐÃ GHÉP xong ngay
+//     trước khi trả ra, để dù 1 dòng cũ trong DB (lưu trước khi có sanitizer
+//     này, hoặc trước một bản sanitizer bị bypass sau này) vẫn không bao giờ
+//     phục vụ HTML sống cho trình duyệt. Không coi "sanitize lúc lưu" là đủ.
 // ─────────────────────────────────────────────────────────────────────────
-export function sanitizeMauInHtml(html: string): string {
-  return html
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/\s+on[a-z]+\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, '')
-    .replace(/(href|src)(\s*=\s*)(["'])\s*javascript:/gi, '$1$2$3blocked:');
+const ALLOWED_TAGS = [
+  'div', 'p', 'span', 'br', 'hr',
+  'b', 'strong', 'i', 'em', 'u', 'small', 'sup', 'sub',
+  'h1', 'h2', 'h3', 'h4',
+  'ul', 'ol', 'li',
+  'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
+  'style',
+];
+
+const ALLOWED_ATTRIBUTES: Record<string, string[]> = {
+  '*': ['style', 'class'],
+  table: ['border', 'cellpadding', 'cellspacing'],
+  td: ['colspan', 'rowspan'],
+  th: ['colspan', 'rowspan'],
+};
+
+export function sanitizeHopDongHtml(html: string): string {
+  return sanitizeHtmlLib(html, {
+    allowedTags: ALLOWED_TAGS,
+    allowedAttributes: ALLOWED_ATTRIBUTES,
+    // Không allowlist thẻ nào có href/src (xem giải thích ở trên) nên không
+    // có scheme URL nào có "chỗ bám" — chặn tuyệt đối cho chắc.
+    allowedSchemes: [],
+    allowProtocolRelative: false,
+    // 'style' nằm trong danh sách "thẻ cần cân nhắc" lịch sử của thư viện
+    // (một số engine CSS rất cũ có expression()/behavior: — trình duyệt hiện
+    // đại không còn hỗ trợ); ta CHỦ ĐỘNG cho phép vì mẫu in cần @page/font
+    // cho khổ A4, không có JS nào chạy được qua CSS trên trình duyệt hiện
+    // đại. Cờ dưới đây là xác nhận tường minh, không phải bật mặc định.
+    allowVulnerableTags: true,
+    disallowedTagsMode: 'discard',
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -152,6 +205,10 @@ export function buildHopDongPlaceholders(input: HopDongRenderInput): Record<stri
   const { contract, employee, congTy } = input;
   const ngayLap = fmtDateParts(contract.ngayBatDau || contract.createdAt);
   const phuCapText = contract.phuCap ? fmtTien(contract.phuCap) : 'Theo quy định của công ty';
+  // Ưu tiên snapshot tại thời điểm ký; hợp đồng cũ (chưa có contract.chucDanh)
+  // fallback về chức danh HIỆN TẠI của nhân viên — buildCanhBao cảnh báo khi
+  // rơi vào nhánh fallback này.
+  const chucDanh = contract.chucDanh || employee.chucDanh || '';
 
   return {
     soHopDong: v(contract.contractNo),
@@ -164,6 +221,8 @@ export function buildHopDongPlaceholders(input: HopDongRenderInput): Record<stri
     maSoThueCongTy: v(congTy.maSoThue),
     nguoiDaiDien: v(congTy.nguoiDaiDien),
     chucVuNguoiDaiDien: v(congTy.chucVuNguoiDaiDien),
+    thanhPhoKy: v(congTy.thanhPhoKy),
+    maHopDongMau: v(congTy.maHopDongMau),
 
     hoTenNLD: v(employee.hoTen),
     ngaySinh: v(fmtDate(employee.ngaySinh)),
@@ -171,7 +230,7 @@ export function buildHopDongPlaceholders(input: HopDongRenderInput): Record<stri
     soCCCD: v(employee.cccd),
     diaChiNLD: v(employee.diaChi),
     soDienThoaiNLD: v(employee.soDienThoai),
-    chucDanh: v(employee.chucDanh),
+    chucDanh: v(chucDanh),
 
     dieu1_1: v(LOAI_HOP_DONG_LABEL[contract.loaiHopDong] ?? contract.loaiHopDong),
     dieu1_2: v(buildDieu1_2(contract)),
@@ -181,31 +240,89 @@ export function buildHopDongPlaceholders(input: HopDongRenderInput): Record<stri
 }
 
 /**
- * Những khoảng trống KHÔNG do người dùng cố ý bỏ trống mà do hồ sơ chưa có
- * trường tương ứng (CCCD ngày cấp/nơi cấp) hoặc do tenant chưa cấu hình
- * (thông tin công ty) — liệt kê để FE hiện cảnh báo, KHÔNG âm thầm in thiếu.
+ * Danh sách token HỢP LỆ — nguồn sự thật duy nhất cho cả (a) validate lúc
+ * LƯU mẫu (`timTokenLaCuaMauIn`, review Important #7: từ chối token lạ thay
+ * vì âm thầm để trống) và (b) khoá `values` mà `buildHopDongPlaceholders`
+ * trả ra. Thêm token mới PHẢI thêm vào đây, nếu không `upsertMauIn` sẽ từ
+ * chối lưu mẫu dùng token đó.
  */
-function buildCanhBao(input: HopDongRenderInput): string[] {
+export const HOP_DONG_TOKENS = [
+  'soHopDong', 'ngayLapNgay', 'ngayLapThang', 'ngayLapNam',
+  'tenCongTy', 'diaChiCongTy', 'maSoThueCongTy', 'nguoiDaiDien', 'chucVuNguoiDaiDien',
+  'thanhPhoKy', 'maHopDongMau',
+  'hoTenNLD', 'ngaySinh', 'gioiTinh', 'soCCCD', 'diaChiNLD', 'soDienThoaiNLD', 'chucDanh',
+  'dieu1_1', 'dieu1_2', 'mucLuong', 'phuCapText',
+] as const;
+
+/** Tìm các token {{...}} trong mẫu KHÔNG nằm trong HOP_DONG_TOKENS — vd lỗi gõ như {{mucLuongg}}. */
+export function timTokenLaCuaMauIn(template: string): string[] {
+  const found = new Set<string>();
+  const re = /\{\{\s*(\w+)\s*\}\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(template))) {
+    if (!(HOP_DONG_TOKENS as readonly string[]).includes(m[1])) found.add(m[1]);
+  }
+  return [...found];
+}
+
+/**
+ * Những khoảng trống KHÔNG do người dùng cố ý bỏ trống mà do hồ sơ chưa có
+ * trường tương ứng (CCCD ngày cấp/nơi cấp), do tenant chưa cấu hình (thông
+ * tin công ty), hoặc do dữ liệu hợp đồng thiếu thứ PHÁP LUẬT đòi phải có
+ * (mức lương, ngày kết thúc hợp đồng xác định thời hạn) — liệt kê để FE hiện
+ * cảnh báo, KHÔNG âm thầm in thiếu/in sai.
+ *
+ * `template` được truyền vào để cảnh báo CCCD chỉ bắn khi mẫu ĐANG DÙNG thật
+ * sự còn nhắc tới CCCD — tenant tự soạn mẫu bỏ hẳn đoạn đó thì không còn gì
+ * để cảnh báo (review Minor: cảnh báo luôn bắn kể cả khi mẫu không còn nhắc).
+ */
+function buildCanhBao(input: HopDongRenderInput, template: string): string[] {
   const canhBao: string[] = [];
-  const { employee, congTy } = input;
+  const { contract, employee, congTy } = input;
 
-  // Luôn cảnh báo — Employee entity hiện chưa có cột ngày cấp/nơi cấp CCCD.
-  canhBao.push('Chưa có trường "Ngày cấp / Nơi cấp CCCD" trong hồ sơ nhân viên — điền tay trên bản in.');
+  // Employee entity chưa có cột ngày cấp/nơi cấp CCCD — chỉ cảnh báo nếu mẫu
+  // đang dùng còn thật sự in đoạn CCCD (heuristic tìm chữ "CCCD" trong mẫu).
+  if (template.includes('CCCD')) {
+    canhBao.push('Chưa có trường "Ngày cấp / Nơi cấp CCCD" trong hồ sơ nhân viên — điền tay trên bản in.');
+  }
 
-  if (!congTy.tenCongTy || !congTy.diaChiCongTy || !congTy.maSoThue || !congTy.nguoiDaiDien) {
-    canhBao.push('Chưa cấu hình đủ thông tin công ty (tên/địa chỉ/MST/người đại diện) — vào "Mẫu in hợp đồng" để điền.');
+  if (
+    !congTy.tenCongTy ||
+    !congTy.diaChiCongTy ||
+    !congTy.maSoThue ||
+    !congTy.nguoiDaiDien
+  ) {
+    canhBao.push(
+      'Chưa cấu hình đủ thông tin công ty (tên/địa chỉ/MST/người đại diện) — vào "Mẫu in hợp đồng" để điền. In khi thiếu có thể in NHẦM công ty khác nếu tenant khác đã cấu hình.',
+    );
   }
   if (!employee.hoTen) canhBao.push('Nhân viên chưa có họ tên.');
   if (!employee.diaChi) canhBao.push('Nhân viên chưa có địa chỉ thường trú.');
   if (!employee.ngaySinh) canhBao.push('Nhân viên chưa có ngày sinh.');
 
+  if (!contract.chucDanh && employee.chucDanh) {
+    canhBao.push(
+      'Hợp đồng này chưa lưu snapshot chức danh lúc ký — bản in đang dùng chức danh HIỆN TẠI của nhân viên, có thể khác chức danh tại thời điểm ký.',
+    );
+  }
+
+  if (!contract.mucLuong) {
+    canhBao.push('Hợp đồng chưa có mức lương — Điều 3.1 sẽ in trống.');
+  }
+
+  if (contract.loaiHopDong === 'xac_dinh_thoi_han' && !contract.ngayKetThuc) {
+    canhBao.push(
+      'Hợp đồng xác định thời hạn nhưng chưa có ngày kết thúc — BLLĐ Điều 20 yêu cầu hợp đồng xác định thời hạn phải ghi rõ thời hạn.',
+    );
+  }
+
   return canhBao;
 }
 
-/** Thay {{token}} bằng giá trị đã escape; token lạ → chuỗi rỗng (không giữ nguyên {{...}} trên bản in). */
+/** Thay {{token}} bằng giá trị đã escape; token lạ → GIỮ NGUYÊN {{token}} (báo lỗi hiện rõ trên bản in, không âm thầm để trống). */
 function substitute(template: string, values: Record<string, string>): string {
-  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) =>
-    Object.prototype.hasOwnProperty.call(values, key) ? values[key] : '',
+  return template.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key: string) =>
+    Object.prototype.hasOwnProperty.call(values, key) ? values[key] : match,
   );
 }
 
@@ -214,9 +331,14 @@ export function renderHopDongHtml(
   input: HopDongRenderInput,
 ): { html: string; canhBao: string[] } {
   const values = buildHopDongPlaceholders(input);
+  const html = substitute(template, values);
   return {
-    html: substitute(template, values),
-    canhBao: buildCanhBao(input),
+    // Sanitize lại HTML ĐÃ GHÉP xong — không coi sanitize lúc lưu là chốt
+    // chặn duy nhất (review Critical 1): dòng dữ liệu cũ lưu trước khi có
+    // sanitizer này, hoặc trước một bản sanitizer sau này lỡ bị bypass, vẫn
+    // không bao giờ phục vụ HTML sống ra khỏi hàm này.
+    html: sanitizeHopDongHtml(html),
+    canhBao: buildCanhBao(input, template),
   };
 }
 
@@ -252,10 +374,10 @@ export const DEFAULT_HOP_DONG_HTML = `
     <div class="tieungu">Độc lập – Tự do – Hạnh phúc</div>
   </div>
 </div>
-<div class="ngaylap">Hà Nội, ngày {{ngayLapNgay}} tháng {{ngayLapThang}} năm {{ngayLapNam}}</div>
+<div class="ngaylap">{{thanhPhoKy}}, ngày {{ngayLapNgay}} tháng {{ngayLapThang}} năm {{ngayLapNam}}</div>
 
 <h1>HỢP ĐỒNG LAO ĐỘNG</h1>
-<div class="so">Số: {{soHopDong}}/HĐLĐ-MC.1</div>
+<div class="so">Số: {{soHopDong}}{{maHopDongMau}}</div>
 
 <p>- Căn cứ Bộ luật Lao động số 45/2019/QH14 ngày 20 tháng 11 năm 2019 và các văn bản hướng dẫn thi hành;</p>
 <p>- Căn cứ nhu cầu và năng lực của hai Bên;</p>

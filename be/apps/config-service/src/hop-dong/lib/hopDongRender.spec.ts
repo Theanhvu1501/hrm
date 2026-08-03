@@ -1,7 +1,8 @@
 import {
   buildHopDongPlaceholders,
   renderHopDongHtml,
-  sanitizeMauInHtml,
+  sanitizeHopDongHtml,
+  timTokenLaCuaMauIn,
   DEFAULT_HOP_DONG_HTML,
   type HopDongRenderInput,
 } from './hopDongRender';
@@ -36,32 +37,76 @@ function fullInput(overrides?: Partial<HopDongRenderInput>): HopDongRenderInput 
       maSoThue: '0110595215',
       nguoiDaiDien: 'Nguyễn Thị Mai Phương',
       chucVuNguoiDaiDien: 'Giám đốc',
+      thanhPhoKy: 'Hà Nội',
+      maHopDongMau: '/HĐLĐ-MC.1',
     },
     ...overrides,
   };
 }
 
-describe('sanitizeMauInHtml — chặn script trong mẫu in do tenant tự soạn', () => {
-  it('cắt bỏ toàn bộ thẻ <script>...</script>', () => {
-    const out = sanitizeMauInHtml('<div>Xin chào</div><script>alert(1)</script>');
+/**
+ * Payload thật do reviewer chạy tay qua bản regex CŨ (`sanitizeMauInHtml`) —
+ * TOÀN BỘ 9 payload dưới đây SỐNG SÓT nguyên vẹn qua bản đó (script với
+ * khoảng trắng/solidus trong end tag, script không đóng thẻ, "/" làm dấu
+ * tách thuộc tính thay vì khoảng trắng, svg/iframe/base không nằm trong tầm
+ * ngắm của regex, javascript: không có dấu nháy hoặc encode bằng entity).
+ * Sau khi đổi sang `sanitize-html` (allowlist thẻ, KHÔNG allowlist bất kỳ
+ * thẻ nào có thể mang href/src — a/img/iframe/svg/object/embed/form/base/
+ * link/meta/script đều bị loại khỏi allowedTags), không còn "vá từng mẫu"
+ * nữa: toàn bộ nhóm thẻ mang được URL/script đã biến mất khỏi allowlist,
+ * nên các biến thể encode/malformed không có "chỗ bám".
+ */
+const XSS_PAYLOADS: Array<{ ten: string; payload: string }> = [
+  { ten: 'script với khoảng trắng cuối end tag', payload: '<script>alert(1)</script >' },
+  { ten: 'script với solidus trong end tag', payload: '<script>alert(1)</script/>' },
+  { ten: 'script không đóng thẻ', payload: '<script>alert(1)' },
+  { ten: 'onerror ngăn cách bằng "/" thay vì khoảng trắng', payload: '<img src=x/onerror=alert(1)>' },
+  { ten: 'svg onload', payload: '<svg/onload=alert(1)>' },
+  { ten: 'iframe srcdoc chứa script', payload: '<iframe srcdoc="&lt;script&gt;alert(1)&lt;/script&gt;"></iframe>' },
+  { ten: 'href javascript: không có dấu nháy', payload: '<a href=javascript:alert(1)>bấm</a>' },
+  { ten: 'href javascript: encode bằng HTML entity', payload: '<a href="javas&#99;ript:alert(1)">bấm</a>' },
+  { ten: 'base href đổi gốc tương đối của cả trang', payload: '<base href="https://evil.example/">' },
+];
+
+describe('sanitizeHopDongHtml — payload XSS thật (reviewer xác nhận sống sót qua bản regex cũ)', () => {
+  it.each(XSS_PAYLOADS)('$ten → không còn thực thi được (bị loại khỏi output)', ({ payload }) => {
+    const out = sanitizeHopDongHtml(payload);
+    expect(out.toLowerCase()).not.toContain('<script');
+    expect(out.toLowerCase()).not.toContain('onerror');
+    expect(out.toLowerCase()).not.toContain('onload');
+    expect(out.toLowerCase()).not.toMatch(/javascript\s*:/);
+    expect(out.toLowerCase()).not.toContain('<base');
+    expect(out.toLowerCase()).not.toContain('<iframe');
+    expect(out.toLowerCase()).not.toContain('<svg');
+    expect(out.toLowerCase()).not.toContain('<a ');
+    expect(out.toLowerCase()).not.toContain('<img');
+  });
+
+  it('cắt bỏ toàn bộ thẻ <script>...</script> kèm nội dung bên trong', () => {
+    const out = sanitizeHopDongHtml('<div>Xin chào</div><script>alert(1)</script>');
     expect(out).not.toContain('<script');
     expect(out).not.toContain('alert(1)');
-    expect(out).toContain('<div>Xin chào</div>');
+    expect(out).toContain('Xin chào');
   });
 
-  it('cắt bỏ thuộc tính on* (onerror, onclick, ...)', () => {
-    const out = sanitizeMauInHtml('<img src="x" onerror="alert(1)" />');
-    expect(out).not.toMatch(/onerror/i);
+  it('giữ nguyên nội dung định dạng bình thường (bảng, style, in đậm, token {{...}})', () => {
+    const html =
+      '<style>.x{color:red}</style><table><tr><td><b>Số</b>: {{soHopDong}}</td></tr></table>';
+    const out = sanitizeHopDongHtml(html);
+    expect(out).toContain('{{soHopDong}}');
+    expect(out).toContain('<table>');
+    expect(out).toContain('<b>Số</b>');
+    expect(out).toContain('color:red');
   });
 
-  it('vô hiệu hoá javascript: trong href/src', () => {
-    const out = sanitizeMauInHtml('<a href="javascript:alert(1)">bấm</a>');
-    expect(out).not.toMatch(/javascript:/i);
-  });
-
-  it('giữ nguyên HTML định dạng bình thường (bảng, style, in đậm)', () => {
-    const html = '<style>.x{color:red}</style><table><tr><td><b>Số</b>: {{soHopDong}}</td></tr></table>';
-    expect(sanitizeMauInHtml(html)).toBe(html);
+  it('không cho phép bất kỳ thẻ nào mang được href/src (a/img/iframe/object/embed/form/base/link) dù không có payload độc', () => {
+    const out = sanitizeHopDongHtml(
+      '<a href="/noi-bo">link</a><img src="/logo.png"><form action="/x"><input></form>',
+    );
+    expect(out).not.toContain('<a ');
+    expect(out).not.toContain('<img');
+    expect(out).not.toContain('<form');
+    expect(out).not.toContain('<input');
   });
 });
 
@@ -138,6 +183,64 @@ describe('buildHopDongPlaceholders', () => {
     const values = buildHopDongPlaceholders(fullInput({ congTy: {} }));
     expect(values.tenCongTy).toBe('');
     expect(values.maSoThueCongTy).toBe('');
+    expect(values.thanhPhoKy).toBe('');
+    expect(values.maHopDongMau).toBe('');
+  });
+
+  it('thanhPhoKy/maHopDongMau lấy từ cấu hình tenant, KHÔNG hard-code "Hà Nội"/"HĐLĐ-MC.1" (review Important #6)', () => {
+    const values = buildHopDongPlaceholders(
+      fullInput({
+        congTy: { ...fullInput().congTy, thanhPhoKy: 'Đà Nẵng', maHopDongMau: '/HĐLĐ-DN.2' },
+      }),
+    );
+    expect(values.thanhPhoKy).toBe('Đà Nẵng');
+    expect(values.maHopDongMau).toBe('/HĐLĐ-DN.2');
+  });
+
+  describe('chucDanh — snapshot lúc ký ưu tiên hơn chức danh hiện tại (review Important #4)', () => {
+    it('dùng contract.chucDanh khi hợp đồng đã có snapshot', () => {
+      const values = buildHopDongPlaceholders(
+        fullInput({
+          contract: { ...fullInput().contract, chucDanh: 'Trưởng phòng (lúc ký)' },
+          employee: { ...fullInput().employee, chucDanh: 'Giám đốc (hiện tại)' },
+        }),
+      );
+      expect(values.chucDanh).toBe('Trưởng phòng (lúc ký)');
+    });
+
+    it('hợp đồng cũ chưa có snapshot → fallback về chức danh hiện tại của nhân viên', () => {
+      const values = buildHopDongPlaceholders(
+        fullInput({
+          contract: { ...fullInput().contract, chucDanh: undefined },
+          employee: { ...fullInput().employee, chucDanh: 'Giám đốc (hiện tại)' },
+        }),
+      );
+      expect(values.chucDanh).toBe('Giám đốc (hiện tại)');
+    });
+  });
+});
+
+describe('timTokenLaCuaMauIn — validate token lúc lưu mẫu (review Important #7)', () => {
+  it('không báo gì khi mẫu chỉ dùng token hợp lệ', () => {
+    expect(timTokenLaCuaMauIn('<p>{{hoTenNLD}} - {{soHopDong}}</p>')).toEqual([]);
+  });
+
+  it('phát hiện lỗi gõ token (vd {{mucLuongg}}) thay vì âm thầm in trống', () => {
+    expect(timTokenLaCuaMauIn('<p>Lương: {{mucLuongg}}</p>')).toEqual(['mucLuongg']);
+  });
+
+  it('gom đủ nhiều token lạ khác nhau, không trùng lặp', () => {
+    expect(
+      timTokenLaCuaMauIn('{{xxx}} {{yyy}} {{xxx}} {{soHopDong}}'),
+    ).toEqual(['xxx', 'yyy']);
+  });
+
+  // Bảo vệ chống lệch giữa HOP_DONG_TOKENS và DEFAULT_HOP_DONG_HTML — nếu ai
+  // đó thêm token mới vào mẫu mặc định mà quên khai vào HOP_DONG_TOKENS,
+  // upsertMauIn() sẽ (sai) từ chối chính mẫu mặc định nếu tenant copy nó làm
+  // điểm bắt đầu chỉnh sửa.
+  it('mẫu mặc định KHÔNG dùng token nào ngoài HOP_DONG_TOKENS', () => {
+    expect(timTokenLaCuaMauIn(DEFAULT_HOP_DONG_HTML)).toEqual([]);
   });
 });
 
@@ -147,9 +250,9 @@ describe('renderHopDongHtml', () => {
     expect(html).toBe('<p>Nguyễn Văn A - HD0001</p>');
   });
 
-  it('token không xác định → thay bằng chuỗi rỗng, không giữ nguyên {{...}}', () => {
+  it('token không xác định → GIỮ NGUYÊN {{...}} (báo lỗi hiện rõ, không âm thầm để trống — review Important #7)', () => {
     const { html } = renderHopDongHtml('<p>{{khongTonTai}}</p>', fullInput());
-    expect(html).toBe('<p></p>');
+    expect(html).toBe('<p>{{khongTonTai}}</p>');
   });
 
   it('liệt kê cảnh báo khi thiếu dữ liệu công ty', () => {
@@ -157,9 +260,58 @@ describe('renderHopDongHtml', () => {
     expect(canhBao.some((c) => c.toLowerCase().includes('công ty'))).toBe(true);
   });
 
-  it('luôn cảnh báo thiếu ngày cấp/nơi cấp CCCD — trường này chưa có trong hồ sơ nhân viên', () => {
+  it('cảnh báo thiếu ngày cấp/nơi cấp CCCD khi mẫu đang dùng còn nhắc tới CCCD (mẫu mặc định có)', () => {
     const { canhBao } = renderHopDongHtml(DEFAULT_HOP_DONG_HTML, fullInput());
     expect(canhBao.some((c) => c.includes('CCCD'))).toBe(true);
+  });
+
+  it('KHÔNG cảnh báo CCCD nếu mẫu riêng của tenant đã bỏ hẳn đoạn CCCD (review Minor)', () => {
+    const { canhBao } = renderHopDongHtml('<p>{{hoTenNLD}}</p>', fullInput());
+    expect(canhBao.some((c) => c.includes('CCCD'))).toBe(false);
+  });
+
+  it('cảnh báo khi hợp đồng chưa có mức lương (review Important #5)', () => {
+    const { canhBao } = renderHopDongHtml(
+      '<p>{{mucLuong}}</p>',
+      fullInput({ contract: { ...fullInput().contract, mucLuong: undefined } }),
+    );
+    expect(canhBao.some((c) => c.includes('mức lương'))).toBe(true);
+  });
+
+  it('cảnh báo hợp đồng xác định thời hạn nhưng thiếu ngày kết thúc (review Important #5, BLLĐ Điều 20)', () => {
+    const { canhBao } = renderHopDongHtml(
+      '<p>x</p>',
+      fullInput({
+        contract: {
+          ...fullInput().contract,
+          loaiHopDong: 'xac_dinh_thoi_han',
+          ngayKetThuc: undefined,
+        },
+      }),
+    );
+    expect(canhBao.some((c) => c.includes('Điều 20'))).toBe(true);
+  });
+
+  it('KHÔNG cảnh báo thiếu ngày kết thúc cho hợp đồng không xác định thời hạn (đúng bản chất)', () => {
+    const { canhBao } = renderHopDongHtml(
+      '<p>x</p>',
+      fullInput({
+        contract: {
+          ...fullInput().contract,
+          loaiHopDong: 'khong_xac_dinh_thoi_han',
+          ngayKetThuc: undefined,
+        },
+      }),
+    );
+    expect(canhBao.some((c) => c.includes('Điều 20'))).toBe(false);
+  });
+
+  it('cảnh báo khi hợp đồng dùng chức danh fallback (chưa có snapshot lúc ký)', () => {
+    const { canhBao } = renderHopDongHtml(
+      '<p>{{chucDanh}}</p>',
+      fullInput({ contract: { ...fullInput().contract, chucDanh: undefined } }),
+    );
+    expect(canhBao.some((c) => c.toLowerCase().includes('chức danh'))).toBe(true);
   });
 
   it('mẫu mặc định giữ nguyên toàn bộ 9 Điều của văn bản gốc', () => {
@@ -176,5 +328,16 @@ describe('renderHopDongHtml', () => {
       fullInput({ employee: { ...fullInput().employee, hoTen: '<img src=x onerror=alert(1)>' } }),
     );
     expect(html).not.toContain('<img');
+  });
+
+  it('sanitize lại HTML ĐÃ GHÉP ngay cả khi script nằm trong TEMPLATE (không phải dữ liệu) — layer phòng thủ độc lập với sanitize lúc lưu (review Critical 1)', () => {
+    // Giả lập 1 dòng phieu_template CŨ (lưu trước khi có sanitizer, hoặc lỡ
+    // bypass 1 bản sanitizer sau này) — renderHopDongHtml vẫn phải tự sanitize
+    // lại output, không tin tưởng mù quáng dữ liệu đã lưu trong DB.
+    const tenantTemplateBiXam = '<p>{{hoTenNLD}}</p><script>alert(document.cookie)</script >';
+    const { html } = renderHopDongHtml(tenantTemplateBiXam, fullInput());
+    expect(html).not.toContain('<script');
+    expect(html).not.toContain('alert(');
+    expect(html).toContain('Nguyễn Văn A');
   });
 });
