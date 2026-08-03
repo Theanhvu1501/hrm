@@ -463,22 +463,42 @@ cuối kể cả khi chưa chạy script này — nhưng dữ liệu LƯU vẫn 
 `phieu_template.html` sau này (export, backup, tool khác) mà không qua `renderHopDongHtml` sẽ lộ
 lại chuỗi HTML gốc.
 
-**Chỉ chạy được TRONG container `nhan-su-be`** — script import thẳng `sanitizeHopDongHtml` từ
+**KHÔNG chạy được trong container `nhan-su-be`** — ba lý do độc lập, mỗi lý do đủ để chặn:
+
+1. `ops/` không bao giờ lên tới server: lệnh deploy chỉ rsync `be/` và `fe/`, còn `Dockerfile.all`
+   không `COPY ops/`.
+2. Tầng runner của image chỉ chép `dist/`, `node_modules` production, `package.json`,
+   `ecosystem.config.js` — **không có mã TypeScript nguồn**, nên `import … from
+   '../be/apps/config-service/src/hop-dong/lib/hopDongRender'` không có gì để resolve tới.
+3. `ts-node` là `devDependency`, mà image cài `--production` → `npx ts-node` cũng không có.
+
+Chạy **từ máy có mã nguồn**, qua SSH tunnel tới Mongo production — đúng khuôn đã dùng cho
+`grant-quyen-module-moi.ts`. Script import thẳng `sanitizeHopDongHtml` từ
 `be/apps/config-service/src/hop-dong/lib/hopDongRender.ts` (không lặp lại cấu hình allowlist,
 tránh lệch nhau về sau — xem comment đầu file), nên `mongodb` VÀ `sanitize-html` đều phải resolve
-qua `be/node_modules`; chạy `ts-node` từ bên ngoài `be/` (vd thẳng từ `ops/`) sẽ báo
-`Cannot find module 'mongodb'` — đây là hạn chế chung của mọi script trong `ops/`, không riêng
-script này (đã xác nhận cùng lỗi xảy ra với `grant-quyen-module-moi.ts` khi thử chạy sai chỗ).
+qua `be/node_modules`. Vì vậy phải **chép script vào `be/`** rồi chạy từ đó; chạy thẳng từ `ops/`
+sẽ báo `Cannot find module 'mongodb'`.
 
 ```bash
-# 1. Xem trước, không ghi gì (chạy từ bên trong container nhan-su-be)
-MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
-  npx ts-node ops/re-sanitize-hop-dong-mau-in.ts --dry-run
+# 0. Mở tunnel tới Mongo production ở một terminal khác
+ssh -L 27018:localhost:27017 kt
 
-# 2. Ghi thật
-MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
-  npx ts-node ops/re-sanitize-hop-dong-mau-in.ts
+# 1. Chép script vào be/ để resolve được node_modules
+cp ops/re-sanitize-hop-dong-mau-in.ts be/_tmp-resanitize.ts
+
+# 2. Xem trước, không ghi gì
+cd be && MONGODB_URI="mongodb://dbadmin:...@localhost:27018/?authSource=admin" \
+  MONGODB_DATABASE=nhan_su \
+  ./node_modules/.bin/ts-node --compiler-options '{"module":"commonjs"}' \
+  _tmp-resanitize.ts --dry-run
+
+# 3. Ghi thật (bỏ --dry-run), rồi dọn
+./node_modules/.bin/ts-node --compiler-options '{"module":"commonjs"}' _tmp-resanitize.ts
+rm _tmp-resanitize.ts
 ```
+
+Đường dẫn import tương đối `../be/apps/…` vẫn đúng khi script nằm ở `be/_tmp-resanitize.ts`
+(`/repo/be/` + `../be/apps/…` → `/repo/be/apps/…`) — đã kiểm chứng.
 
 Idempotent — dòng đã sạch thì `sanitizeHopDongHtml()` trả về y nguyên, script bỏ qua không ghi
 (báo "SẠCH"). Không cần chạy `ops/grant-quyen-module-moi.ts` cho đợt này — P4.2a không thêm
