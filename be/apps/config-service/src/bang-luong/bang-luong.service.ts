@@ -5,6 +5,7 @@ import {
   AttendanceRequest,
   CauHinhLuong,
   DongLuong,
+  DongLuongThemGio,
   Employee,
   Timesheet,
 } from '@app/entities';
@@ -39,6 +40,8 @@ interface SnapshotChung {
   hopDongThu2: boolean;
   cauHinhApDung: CauHinhLuongApDung;
   nhapTheoKy: Record<string, number>;
+  tienOt: number;
+  otMienThue: number;
 }
 
 @Injectable()
@@ -54,6 +57,8 @@ export class BangLuong_Service {
     private readonly timesheetRepo: Repository<Timesheet>,
     @InjectRepository(AttendanceRequest)
     private readonly donRepo: Repository<AttendanceRequest>,
+    @InjectRepository(DongLuongThemGio)
+    private readonly themGioRepo: Repository<DongLuongThemGio>,
   ) {}
 
   /**
@@ -166,9 +171,8 @@ export class BangLuong_Service {
       camKet: sn.camKet,
       hopDongThu2: sn.hopDongThu2,
       nhapTheoKy: sn.nhapTheoKy,
-      // Task 4 thay bằng số từ bảng 03-LĐTL đã chốt của kỳ.
-      tienOt: 0,
-      otMienThue: 0,
+      tienOt: sn.tienOt,
+      otMienThue: sn.otMienThue,
     };
   }
 
@@ -196,6 +200,8 @@ export class BangLuong_Service {
     const chEntity = await this.layCauHinh();
     const ch = this.toCauHinhData(chEntity);
     const employees = await this.employeeRepo.find({ where: { isActive: true } });
+
+    const themGioTheoNV = await this.layTienOtDaChot(thang, chEntity);
 
     const rows: DongLuong[] = [];
 
@@ -233,6 +239,9 @@ export class BangLuong_Service {
         hopDongThu2: !!emp.hopDongThu2,
         cauHinhApDung: this.toCauHinhApDung(chNV),
         nhapTheoKy: existing?.nhapTheoKy ?? {},
+        // Nhân viên không có dòng trên bảng 03-LĐTL = không làm thêm giờ.
+        tienOt: themGioTheoNV.get(employeeId)?.tongTien ?? 0,
+        otMienThue: themGioTheoNV.get(employeeId)?.otMienThue ?? 0,
       };
 
       const khaiBao = tinhDongLuong(this.buildDauVao(mucKhaiBao, mucKhaiBao, snapshot), chNV);
@@ -272,6 +281,35 @@ export class BangLuong_Service {
     }
 
     return rows;
+  }
+
+  /**
+   * Bảng 03-LĐTL đã chốt của kỳ, tra theo `employeeId`.
+   *
+   * CHẶN nếu chưa chốt thay vì âm thầm lấy 0: một dòng lương thiếu tiền OT
+   * trông y hệt dòng lương của người không làm thêm giờ, và không ai đối soát
+   * ra. Bản đồ là biến CỤC BỘ trả về chứ không phải thuộc tính instance —
+   * service là singleton, thuộc tính instance là trạng thái dùng chung giữa
+   * các request và một kỳ đang tổng hợp có thể đọc bản đồ của kỳ khác.
+   */
+  private async layTienOtDaChot(
+    thang: string,
+    chEntity: CauHinhLuong,
+  ): Promise<Map<string, DongLuongThemGio>> {
+    const lamThem = (chEntity as any)?.lamThem;
+    // Chưa khai `lamThem` hoặc chỉ nghỉ bù ⇒ bảng lương không trả tiền OT,
+    // không có bảng nào phải chờ chốt.
+    if (!lamThem || lamThem.cheDoBu === 'chi_nghi_bu') return new Map();
+
+    const ds = await this.themGioRepo.find({
+      where: { thang, isActive: true } as any,
+    });
+    if (ds.length === 0 || ds.some((d) => d.trangThai !== 'chot')) {
+      throw new BadRequestException(
+        `Bảng lương thêm giờ kỳ ${thang} chưa chốt — chốt bảng đó trước khi tổng hợp bảng lương.`,
+      );
+    }
+    return new Map(ds.map((d) => [String(d.employeeId), d]));
   }
 
   async danhSachDong(thang: string): Promise<DongLuong[]> {
@@ -334,6 +372,13 @@ export class BangLuong_Service {
       hopDongThu2: item.hopDongThu2,
       cauHinhApDung: item.cauHinhApDung,
       nhapTheoKy: item.nhapTheoKy ?? {},
+      // Giữ nguyên số OT đã tính cho dòng này, KHÔNG đọc lại bảng 03-LĐTL —
+      // cùng lập luận với `cauHinhApDung` ngay trên: sửa một khoản biến động
+      // không được kéo theo thay đổi mà kế toán vừa làm ở bảng khác. Lấy từ
+      // `thucTe` vì `tienOt` là khoản đi thẳng, hai mức khai báo/thực tế đều
+      // mang cùng một con số.
+      tienOt: item.thucTe?.giaTriTungKhoan?.TIEN_OT ?? 0,
+      otMienThue: item.thucTe?.otMienThue ?? 0,
     };
 
     item.khaiBao = tinhDongLuong(

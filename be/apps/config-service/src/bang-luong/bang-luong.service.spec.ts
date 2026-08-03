@@ -6,6 +6,7 @@ import {
   AttendanceRequest,
   CauHinhLuong,
   DongLuong,
+  DongLuongThemGio,
   Employee,
   Timesheet,
 } from '@app/entities';
@@ -36,6 +37,9 @@ describe('BangLuong_Service', () => {
   let mockDonRepo: {
     find: jest.Mock;
   };
+  let mockThemGioRepo: {
+    find: jest.Mock;
+  };
 
   // In-memory stores backing the mocked `find` calls — a `where` filter is
   // applied against these arrays so tests can assert on genuine filtering
@@ -44,6 +48,7 @@ describe('BangLuong_Service', () => {
   let dongLuongStore: Partial<DongLuong>[];
   let timesheetStore: Partial<Timesheet>[];
   let donStore: any[];
+  let themGioStore: any[];
 
   const EMP1 = '507f1f77bcf86cd799439011';
   const EMP2 = '507f1f77bcf86cd799439022';
@@ -57,6 +62,7 @@ describe('BangLuong_Service', () => {
     dongLuongStore = [];
     timesheetStore = [];
     donStore = [];
+    themGioStore = [];
 
     mockCauHinhRepo = {
       find: jest.fn(({ where }: any) =>
@@ -97,6 +103,12 @@ describe('BangLuong_Service', () => {
       ),
     };
 
+    mockThemGioRepo = {
+      find: jest.fn(({ where }: any = {}) =>
+        Promise.resolve(themGioStore.filter((d) => matchesWhere(d, where ?? {}))),
+      ),
+    };
+
     mockTimesheetRepo = {
       find: jest.fn(({ where }: any) =>
         Promise.resolve(timesheetStore.filter((t) => matchesWhere(t, where ?? {}))),
@@ -111,6 +123,7 @@ describe('BangLuong_Service', () => {
         { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
         { provide: getRepositoryToken(Timesheet), useValue: mockTimesheetRepo },
         { provide: getRepositoryToken(AttendanceRequest), useValue: mockDonRepo },
+        { provide: getRepositoryToken(DongLuongThemGio), useValue: mockThemGioRepo },
       ],
     }).compile();
 
@@ -905,6 +918,98 @@ describe('BangLuong_Service', () => {
 
     it('không có đơn nào thì trả object rỗng, không phải null', async () => {
       await expect(service.demDonTheoLoaiOt()).resolves.toEqual({});
+    });
+  });
+  /**
+   * Bảng lương chính đọc tiền OT từ bảng 03-LĐTL ĐÃ CHỐT (P4.2c-2 §5).
+   * Hai nguồn cùng cộng từ đơn OT sẽ lệch nhau ngay lần đầu kế toán sửa tay,
+   * nên bảng lương KHÔNG tự cộng — nó chờ số đã chốt.
+   */
+  describe('tiền OT từ bảng 03-LĐTL (P4.2c-2)', () => {
+    function batLamThem(cheDoBu = 'chi_tien') {
+      // `cauHinhStore` rỗng ở đầu mỗi bài; `seedCauHinh()` là helper sẵn có.
+      if (cauHinhStore.length === 0) seedCauHinh();
+      (cauHinhStore[0] as any).lamThem = {
+        cheDoBu,
+        heSoTra: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3, ngay_dem: 1.5 },
+        heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3, ngay_dem: 1.5 },
+        khungGioDem: { tu: '22:00', den: '06:00' },
+        uuTienLoai: ['ngay_le', 'ngay_nghi', 'ngay_dem', 'ngay_thuong'],
+        mienThueChenh: ['ngay_dem'],
+        soThangHanDung: null,
+        khiHetHan: 'quy_ra_tien',
+      };
+    }
+
+    it('CHẶN tổng hợp khi bảng 03-LĐTL kỳ đó chưa chốt', async () => {
+      batLamThem();
+      themGioStore.push({
+        _id: 'g1', thang: '2026-06', employeeId: EMP1,
+        tongTien: 1_503_906.25, otMienThue: 0, trangThai: 'nhap', isActive: true,
+      });
+
+      await expect(service.tongHop('2026-06')).rejects.toThrow(/chưa chốt/);
+    });
+
+    it('CHẶN cả khi kỳ đó chưa có dòng nào — không âm thầm lấy 0', async () => {
+      batLamThem();
+      await expect(service.tongHop('2026-06')).rejects.toThrow(/chưa chốt/);
+    });
+
+    it('KHÔNG chặn khi cheDoBu = chi_nghi_bu (bảng lương không trả tiền OT)', async () => {
+      batLamThem('chi_nghi_bu');
+      await expect(service.tongHop('2026-06')).resolves.toBeDefined();
+    });
+
+    it('KHÔNG chặn khi công ty chưa khai lamThem', async () => {
+      seedCauHinh();
+      delete (cauHinhStore[0] as any).lamThem;
+      await expect(service.tongHop('2026-06')).resolves.toBeDefined();
+    });
+
+    it('đổ tienOt và otMienThue từ dòng đã chốt vào engine', async () => {
+      batLamThem();
+      // Khoản TIEN_OT khai tường minh ở đây thay vì dựa vào seed của Task 7 —
+      // bài test không nên phụ thuộc thứ tự triển khai.
+      (cauHinhStore[0] as any).khoanLuong = [
+        ...(cauHinhStore[0] as any).khoanLuong,
+        {
+          ma: 'TIEN_OT', ten: 'Tiền làm thêm', loaiCongThuc: 'TIEN_OT',
+          thamSo: {}, chiuThue: true, tranMienThue: null,
+          vaoTongThuNhap: true, vaoBHXH: false, thuTu: 9,
+        },
+      ];
+      mockEmployeeRepo.find.mockResolvedValue([
+        { _id: EMP1, employeeId: 'NV0001', hoTen: 'A', luongThoaThuan: 15_000_000, mucKhaiBao: 5_500_000, isActive: true },
+      ]);
+      themGioStore.push({
+        _id: 'g1', thang: '2026-06', employeeId: EMP1,
+        tongTien: 1_503_906.25, otMienThue: 300_000,
+        trangThai: 'chot', isActive: true,
+      });
+
+      const rows = await service.tongHop('2026-06');
+      const r = rows.find((x) => x.employeeId === EMP1)!;
+
+      expect(r.thucTe.giaTriTungKhoan.TIEN_OT ?? 0).toBeGreaterThan(0);
+      expect(r.thucTe.otMienThue).toBe(300_000);
+    });
+
+    it('nhân viên KHÔNG có dòng 03-LĐTL thì tienOt = 0, không ném', async () => {
+      batLamThem();
+      mockEmployeeRepo.find.mockResolvedValue([
+        { _id: EMP1, employeeId: 'NV0001', hoTen: 'A', luongThoaThuan: 15_000_000, mucKhaiBao: 5_500_000, isActive: true },
+        { _id: EMP2, employeeId: 'NV0002', hoTen: 'B', luongThoaThuan: 12_000_000, mucKhaiBao: 5_500_000, isActive: true },
+      ]);
+      themGioStore.push({
+        _id: 'g1', thang: '2026-06', employeeId: EMP1,
+        tongTien: 100_000, otMienThue: 0, trangThai: 'chot', isActive: true,
+      });
+
+      const rows = await service.tongHop('2026-06');
+      const r = rows.find((x) => x.employeeId === EMP2);
+
+      expect(r?.thucTe.otMienThue ?? 0).toBe(0);
     });
   });
 });
