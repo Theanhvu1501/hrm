@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import { Table, Tag, Button, Space, Popconfirm, Select } from "antd";
-import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  PrinterOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
   useHopDongLaoDongHandler,
@@ -15,6 +21,8 @@ import {
   TRANG_THAI_TAG_COLOR,
   labelFor,
 } from "../../constants";
+import { HopDongPrintModal } from "../print/HopDongPrintModal";
+import { HopDongMauInModal } from "../settings/HopDongMauInModal";
 import "./HopDongLaoDongTable.state";
 
 function formatCurrency(value?: number): string {
@@ -27,12 +35,14 @@ export function HopDongLaoDongTable() {
   const [contractList] = useHopDongLaoDongState("contractList", [] as LaborContract[]);
   const [employeeList] = useHopDongLaoDongState("employeeList", [] as Employee[]);
   const [loading] = useHopDongLaoDongState("loading", false);
-  const { canCreate, canEdit, canDelete } = usePagePermission(
+  const { canCreate, canEdit, canDelete, canExport } = usePagePermission(
     "/nhan-su/hop-dong-lao-dong"
   );
 
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [employeeFilter, setEmployeeFilter] = useState<string | undefined>(undefined);
+  const [mauInOpen, setMauInOpen] = useState(false);
+  const [printTarget, setPrintTarget] = useState<LaborContract | null>(null);
 
   const handleAdd = () => {
     handler.executeEvent("openForm", {});
@@ -153,6 +163,14 @@ export function HopDongLaoDongTable() {
       align: "center",
       render: (_: unknown, record: LaborContract) => (
         <Space>
+          {canExport && (
+            <Button
+              type="text"
+              icon={<PrinterOutlined />}
+              title="In hợp đồng"
+              onClick={() => setPrintTarget(record)}
+            />
+          )}
           {canEdit && (
             <Button
               type="text"
@@ -184,11 +202,18 @@ export function HopDongLaoDongTable() {
             Quản lý hợp đồng lao động của nhân viên
           </p>
         </div>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            Thêm hợp đồng
-          </Button>
-        )}
+        <Space>
+          {canEdit && (
+            <Button icon={<SettingOutlined />} onClick={() => setMauInOpen(true)}>
+              Mẫu in hợp đồng
+            </Button>
+          )}
+          {canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              Thêm hợp đồng
+            </Button>
+          )}
+        </Space>
       </div>
 
       <Space wrap>
@@ -220,6 +245,14 @@ export function HopDongLaoDongTable() {
         pagination={{ pageSize: 10 }}
         bordered
         scroll={{ x: "max-content" }}
+      />
+
+      <HopDongMauInModal open={mauInOpen} onClose={() => setMauInOpen(false)} />
+      <HopDongPrintModal
+        open={!!printTarget}
+        contractId={printTarget?.id}
+        contractLabel={printTarget?.contractNo}
+        onClose={() => setPrintTarget(null)}
       />
     </div>
   );
