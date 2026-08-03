@@ -1012,4 +1012,85 @@ describe('BangLuong_Service', () => {
       expect(r?.thucTe.otMienThue ?? 0).toBe(0);
     });
   });
+  describe('phiếu lương tự phục vụ (P4.3)', () => {
+    const dongChot = (over: any = {}) => ({
+      _id: 'd1', thang: '2026-07', employeeId: EMP1,
+      employeeName: 'A', employeeCode: 'NV0001',
+      congThuong: 24, congThuViec: 0, congKhac: 0,
+      // Số khai báo cố ý không là chuỗi con của số nào trong `thucTe` — phép
+      // kiểm rò rỉ ở dưới so chuỗi thô trên JSON.
+      mucKhaiBao: 7_654_321, luongThoaThuan: 9_876_543,
+      tamUng: 0, khauTruKhac: 0,
+      khaiBao: { tongThuNhap: 7_654_321, thucLinh: 6_543_210 },
+      thucTe: {
+        giaTriTungKhoan: { LUONG_CONG: 12_000_000 },
+        tongThuNhap: 12_000_000, thuNhapMienThue: 15_500_000,
+        mienThueKhoan: 0, otMienThue: 0, bhxh: 0, giamTru: 15_500_000,
+        thuNhapTinhThue: 0, thue: 0, phiCongDoan: 110_000,
+        thucLinh: 11_890_000, chiPhiBHCongTy: 0, tongChiPhiCongTy: 12_000_000,
+      },
+      trangThai: 'chot', isActive: true, ...over,
+    });
+
+    it('trả phiếu của kỳ ĐÃ CHỐT', async () => {
+      seedCauHinh();
+      dongLuongStore.push(dongChot());
+
+      const p = await service.phieuLuongCuaToi(EMP1, '2026-07');
+      expect(p?.thucLinh).toBe(11_890_000);
+    });
+
+    it('kỳ còn NHÁP trả null — con số ở đó còn thay đổi được', async () => {
+      seedCauHinh();
+      dongLuongStore.push(dongChot({ trangThai: 'nhap' }));
+
+      await expect(service.phieuLuongCuaToi(EMP1, '2026-07')).resolves.toBeNull();
+    });
+
+    it('không có dòng thì trả null, không ném', async () => {
+      seedCauHinh();
+      await expect(service.phieuLuongCuaToi(EMP1, '2026-07')).resolves.toBeNull();
+    });
+
+    it('KHÔNG trả phiếu của người khác dù truyền đúng tháng', async () => {
+      seedCauHinh();
+      dongLuongStore.push(dongChot({ employeeId: EMP2 }));
+
+      await expect(service.phieuLuongCuaToi(EMP1, '2026-07')).resolves.toBeNull();
+    });
+
+    it('payload không mang mức khai báo', async () => {
+      seedCauHinh();
+      dongLuongStore.push(dongChot());
+
+      const chuoi = JSON.stringify(await service.phieuLuongCuaToi(EMP1, '2026-07'));
+      expect(chuoi).not.toContain('7654321');
+      expect(chuoi).not.toContain('9876543');
+      expect(chuoi).not.toContain('6543210');
+    });
+
+    it('kyCoPhieuLuong chỉ liệt kê kỳ đã chốt, mới nhất trước', async () => {
+      seedCauHinh();
+      dongLuongStore.push(
+        dongChot({ _id: 'd1', thang: '2026-06' }),
+        dongChot({ _id: 'd2', thang: '2026-07' }),
+        dongChot({ _id: 'd3', thang: '2026-08', trangThai: 'nhap' }),
+      );
+
+      await expect(service.kyCoPhieuLuong(EMP1)).resolves.toEqual([
+        '2026-07',
+        '2026-06',
+      ]);
+    });
+
+    it('kyCoPhieuLuong KHÔNG lẫn kỳ của người khác', async () => {
+      seedCauHinh();
+      dongLuongStore.push(
+        dongChot({ _id: 'd1', thang: '2026-06' }),
+        dongChot({ _id: 'd2', thang: '2026-07', employeeId: EMP2 }),
+      );
+
+      await expect(service.kyCoPhieuLuong(EMP1)).resolves.toEqual(['2026-06']);
+    });
+  });
 });

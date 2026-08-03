@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { BangLuong_Service } from './bang-luong.service';
 import { CapNhatCauHinhLuongDto, CapNhatDongLuongDto, TongHopKyDto } from './dto';
 import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
+import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 
 /**
  * Bảng lương đọc/ghi thu nhập thật của toàn bộ nhân viên — nhạy cảm hơn cả
@@ -26,7 +27,39 @@ import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 @Controller('bang-luong')
 @UseGuards(JwtGuard)
 export class BangLuong_Controller {
-  constructor(private readonly bangLuong_Service: BangLuong_Service) {}
+  constructor(
+    private readonly bangLuong_Service: BangLuong_Service,
+    private readonly nhanVien_Service: NhanVien_Service,
+  ) {}
+
+  // ── Tự phục vụ — PHẢI khai TRƯỚC route ':id' bên dưới. Nếu không, NestJS
+  // khớp chuỗi "cua-toi" thành :id, và vì route đó đòi quyền nên nhân viên
+  // nhận nhầm 403 (cùng bẫy đã ghi ở `don-cham-cong.controller.ts`).
+  //
+  // CỐ Ý không có `@Permissions`: bắt HR gán quyền cho từng người thì người
+  // mới không xem được lương tháng đầu. Phạm vi khoá bằng `employeeId` suy từ
+  // TOKEN — chặt hơn quyền, và `quetPhanQuyenRoute()` ép đúng luật này.
+
+  @Get('cua-toi/ky')
+  async kyCoPhieuLuongCuaToi(@Req() req: any) {
+    const emp = await this.nhanVien_Service.resolveEmployeeFromUser(req.user);
+    const data = await this.bangLuong_Service.kyCoPhieuLuong(
+      String((emp as any)._id),
+    );
+    return { success: true, data };
+  }
+
+  @Get('cua-toi')
+  async phieuLuongCuaToi(@Query('thang') thang: string, @Req() req: any) {
+    const emp = await this.nhanVien_Service.resolveEmployeeFromUser(req.user);
+    // `thang` là tham số duy nhất nhận từ client; `employeeId` KHÔNG BAO GIỜ
+    // đọc từ query — đó là toàn bộ ranh giới ngăn xem lương đồng nghiệp.
+    const data = await this.bangLuong_Service.phieuLuongCuaToi(
+      String((emp as any)._id),
+      thang,
+    );
+    return { success: true, data };
+  }
 
   // Route có đoạn đường dẫn cố định (`cau-hinh`, `tong-hop`, `chot`,
   // `mo-lai`) PHẢI khai TRƯỚC route `:id` bên dưới — nếu không NestJS khớp

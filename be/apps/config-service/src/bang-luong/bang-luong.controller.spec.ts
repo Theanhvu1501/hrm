@@ -18,6 +18,14 @@ import { BangLuong_Controller } from './bang-luong.controller';
 const proto = BangLuong_Controller.prototype as any;
 
 /** Toàn bộ route của controller kèm động từ HTTP và quyền BẮT BUỘC. */
+/**
+ * Route TỰ PHỤC VỤ (P4.3): nhân viên xem phiếu lương của CHÍNH mình. Cố ý
+ * không có `@Permissions` — bắt HR gán quyền cho từng người thì người mới
+ * không xem được lương tháng đầu. Phạm vi khoá bằng `employeeId` suy từ token
+ * trong controller, chặt hơn quyền.
+ */
+const ROUTE_TU_PHUC_VU = ['kyCoPhieuLuongCuaToi', 'phieuLuongCuaToi'];
+
 const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['layCauHinh', RequestMethod.GET, '/luong/cau-hinh:xem'],
   // Dùng lại quyền của màn Cấu hình lương thay vì mở module quyền mới — thêm
@@ -50,20 +58,19 @@ describe('BangLuong_Controller — phân quyền', () => {
     expect(quetPhanQuyenRoute(BangLuong_Controller)).toEqual([]);
   });
 
-  it('bảng quyền ở trên phủ đúng toàn bộ route của controller', () => {
+  it('route tự phục vụ KHÔNG khai @Permissions', () => {
+    for (const ten of ROUTE_TU_PHUC_VU) {
+      expect(permissionsOf(proto[ten])).toBeUndefined();
+    }
+  });
+
+  it('bảng quyền ở trên phủ đúng toàn bộ route KHÔNG tự phục vụ', () => {
     const routeThucTe = Object.getOwnPropertyNames(proto).filter(
-      (ten) => httpMethodOf(proto[ten]) !== undefined,
+      (ten) =>
+        httpMethodOf(proto[ten]) !== undefined &&
+        !ROUTE_TU_PHUC_VU.includes(ten),
     );
     expect(routeThucTe.sort()).toEqual(BANG_QUYEN.map(([t]) => t).sort());
   });
 
-  /**
-   * Module này không có route tự phục vụ (không màn hình "lương của tôi" ở
-   * phase này) — khoá lại tường minh: nếu ai đó thêm route như vậy sau này,
-   * cách đúng là khoá phạm vi bằng `employeeId` suy từ token, không phải gỡ
-   * quyền của các route hiện có.
-   */
-  it('không route nào được miễn trừ theo diện tự phục vụ', () => {
-    expect(quetPhanQuyenRoute(BangLuong_Controller, [])).toEqual([]);
-  });
 });

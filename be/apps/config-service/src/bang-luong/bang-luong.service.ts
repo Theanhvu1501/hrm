@@ -13,8 +13,9 @@ import type {
   CauHinhLuongApDung,
   CauHinhLuongData,
   DauVaoDongLuong,
+  PhieuLuong,
 } from '@app/entities';
-import { ganCauHinhRieng, tinhDongLuong } from '@app/core';
+import { dungPhieuLuong, ganCauHinhRieng, tinhDongLuong } from '@app/core';
 import { CapNhatCauHinhLuongDto, CapNhatDongLuongDto } from './dto';
 import { CAU_HINH_LUONG_MAC_DINH } from './cau-hinh-luong.seed';
 
@@ -310,6 +311,40 @@ export class BangLuong_Service {
       );
     }
     return new Map(ds.map((d) => [String(d.employeeId), d]));
+  }
+
+  /**
+   * Phiếu lương của CHÍNH nhân viên đó cho một kỳ. `null` khi chưa có dòng
+   * hoặc kỳ còn `nhap` — con số ở kỳ nháp còn thay đổi được, và một nhân viên
+   * đã nhìn thấy một số rồi hôm sau thấy số khác là tranh cãi không đáng có.
+   *
+   * `employeeId` do controller suy từ TOKEN truyền xuống; service không nhận
+   * nó từ client ở bất kỳ đường nào khác.
+   */
+  async phieuLuongCuaToi(
+    employeeId: string,
+    thang: string,
+  ): Promise<PhieuLuong | null> {
+    const rows = await this.dongLuongRepo.find({
+      where: { thang, employeeId } as any,
+    });
+    const dong = rows[0];
+    if (!dong || dong.trangThai !== 'chot') return null;
+
+    const ch = this.toCauHinhData(await this.layCauHinh());
+    return dungPhieuLuong(dong, ch.khoanLuong ?? []);
+  }
+
+  /** Các kỳ nhân viên này CÓ phiếu (đã chốt), mới nhất trước. */
+  async kyCoPhieuLuong(employeeId: string): Promise<string[]> {
+    const rows = await this.dongLuongRepo.find({
+      where: { employeeId } as any,
+    });
+    return rows
+      .filter((r) => r.trangThai === 'chot')
+      .map((r) => r.thang)
+      .sort()
+      .reverse();
   }
 
   async danhSachDong(thang: string): Promise<DongLuong[]> {
