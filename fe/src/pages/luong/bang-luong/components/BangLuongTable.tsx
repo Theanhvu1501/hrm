@@ -235,18 +235,27 @@ export function BangLuongTable() {
         render: (_: unknown, record: DongLuong) => renderTien(record[tabDangXem]?.bhxh),
       },
       {
-        title: "TN miễn thuế",
-        key: "thuNhapMienThue",
-        width: 130,
-        align: "right",
-        render: (_: unknown, record: DongLuong) => renderTien(record[tabDangXem]?.thuNhapMienThue),
-      },
-      {
         title: "Giảm trừ",
         key: "giamTru",
         width: 110,
         align: "right",
         render: (_: unknown, record: DongLuong) => renderTien(record[tabDangXem]?.giamTru),
+      },
+      {
+        // Cột GỘP (P4.2c-2): giảm trừ gia cảnh + phần khoản lương được miễn
+        // (ăn ca dưới trần) + phần chênh tiền làm thêm ca đêm. Đứng SAU cột
+        // Giảm trừ nên giảm trừ hiện hai lần — một mình và trong tổng gộp;
+        // cố ý, vì cột Giảm trừ là số đối chiếu với hồ sơ người phụ thuộc còn
+        // cột gộp là số dùng để kiểm phép trừ.
+        title: (
+          <Tooltip title="Gồm giảm trừ gia cảnh + phần ăn ca dưới trần + phần chênh tiền làm thêm ca đêm">
+            <span>TN miễn thuế</span>
+          </Tooltip>
+        ),
+        key: "thuNhapMienThue",
+        width: 130,
+        align: "right",
+        render: (_: unknown, record: DongLuong) => renderTien(record[tabDangXem]?.thuNhapMienThue),
       },
       {
         title: "TN tính thuế",
@@ -263,6 +272,17 @@ export function BangLuongTable() {
         render: (_: unknown, record: DongLuong) => (
           <strong>{renderTien(record[tabDangXem]?.thue)}</strong>
         ),
+      },
+      {
+        title: "Phí công đoàn",
+        key: "phiCongDoan",
+        width: 130,
+        align: "right",
+        // Đứng SAU Thuế vì đó đúng thứ tự phép tính: tính thuế xong mới trừ
+        // phí. `?? 0`: dòng chốt trước P4.2c-2 không có trường này, và 0 ở đây
+        // nghĩa là "chưa ghi nhận", KHÔNG phải "công ty không thu".
+        render: (_: unknown, record: DongLuong) =>
+          renderTien(record[tabDangXem]?.phiCongDoan ?? 0),
       },
       {
         title: "CP BH công ty",

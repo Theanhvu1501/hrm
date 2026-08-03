@@ -200,3 +200,42 @@ describe("Màn Bảng lương", () => {
     expect(screen.queryByText("riêng")).toBeNull();
   });
 });
+
+describe("Bảng lương — cột TN miễn thuế gộp và phí công đoàn (P4.2c-2)", () => {
+  const tieuDe = () =>
+    screen.getAllByRole("columnheader").map((th) => th.textContent ?? "");
+
+  it("TN miễn thuế đứng SAU Giảm trừ", async () => {
+    moMan();
+    await screen.findByText("8.500.000");
+
+    const ds = tieuDe();
+    expect(ds.findIndex((t) => t.includes("TN miễn thuế"))).toBeGreaterThan(
+      ds.findIndex((t) => t.includes("Giảm trừ")),
+    );
+  });
+
+  it("có cột Phí công đoàn, đứng SAU Thuế", async () => {
+    moMan();
+    await screen.findByText("8.500.000");
+
+    const ds = tieuDe();
+    // Sau Thuế vì đó đúng thứ tự phép tính: tính thuế xong mới trừ phí.
+    expect(ds.findIndex((t) => t.includes("Phí công đoàn"))).toBeGreaterThan(
+      ds.findIndex((t) => t === "Thuế"),
+    );
+  });
+
+  it("dòng chốt trước P4.2c-2 (không có phiCongDoan) vẫn render, không vỡ", async () => {
+    vi.spyOn(bangLuongService, "danhSach").mockResolvedValue([
+      {
+        ...seedDong,
+        khaiBao: { ...seedDong.khaiBao, phiCongDoan: undefined },
+        thucTe: { ...seedDong.thucTe, phiCongDoan: undefined },
+      } as never,
+    ]);
+    render(<BangLuongPage />);
+
+    expect(await screen.findByText("8.500.000")).toBeTruthy();
+  });
+});
