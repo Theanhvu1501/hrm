@@ -175,3 +175,39 @@ export interface KetQuaLuong {
   /** Tổng chi phí công ty bỏ ra cho NV này = `tongThuNhap + chiPhiBHCongTy`. */
   tongChiPhiCongTy: number;
 }
+
+/** Một dòng khoản cộng trên phiếu lương — đã ghép nhãn, FE không phải tra. */
+export interface KhoanPhieuLuong {
+  ma: string;
+  ten: string;
+  soTien: number;
+}
+
+/**
+ * Phiếu lương giao cho NGƯỜI LAO ĐỘNG.
+ *
+ * CỐ Ý không có `khaiBao`/`mucKhaiBao`/`luongThoaThuan`: hiện mức khai báo là
+ * phơi bày chiến lược khai báo BHXH của công ty cho toàn bộ nhân viên — một
+ * quyết định kinh doanh, không phải lựa chọn giao diện (spec P4.3 §2.1). Mở ra
+ * là một dòng; lỡ mở rồi thì không rút lại được.
+ */
+export interface PhieuLuong {
+  thang: string;
+  hoTen: string;
+  maNhanVien: string;
+  congThuong: number;
+  congThuViec: number;
+  congKhac: number;
+  khoan: KhoanPhieuLuong[];
+  tongThuNhap: number;
+  bhxh: number;
+  thue: number;
+  phiCongDoan: number;
+  tamUng: number;
+  khauTruKhac: number;
+  thucLinh: number;
+  /** Ba số giải thích cách ra thuế — không phải để đối chiếu tờ khai. */
+  thuNhapMienThue: number;
+  giamTru: number;
+  thuNhapTinhThue: number;
+}
