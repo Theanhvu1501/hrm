@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { ForbiddenException } from '@nestjs/common';
 import { PhieuTemplate_Service } from './phieu-template.service';
 import { PhieuTemplate } from '@app/entities';
 
@@ -65,5 +66,41 @@ describe('PhieuTemplate_Service', () => {
     mockRepo.findOne.mockResolvedValue(existing);
     await service.remove('PHIEU_THU');
     expect(mockRepo.remove).toHaveBeenCalledWith(existing);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Chặn 'HOP_DONG_LAO_DONG' — route/guard của controller này (AdminGuard,
+  // theo VAI TRÒ, KHÔNG theo quyền chi tiết) không được trở thành đường
+  // ghi/đọc thứ hai, không qua sanitize, vào bản ghi mà hop-dong.controller.ts
+  // quản lý (xem chú thích tại entity + review Critical 2).
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('chặn loai=HOP_DONG_LAO_DONG (thuộc về hop-dong module)', () => {
+    it('findByLoai ném ForbiddenException, KHÔNG đụng repo', async () => {
+      await expect(service.findByLoai('HOP_DONG_LAO_DONG')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it('upsert ném ForbiddenException, KHÔNG ghi gì (đây là bản vá chính — vốn là đường ghi không sanitize)', async () => {
+      await expect(
+        service.upsert('HOP_DONG_LAO_DONG', '<script>alert(1)</script>'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockRepo.findOne).not.toHaveBeenCalled();
+      expect(mockRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('remove ném ForbiddenException, KHÔNG xoá gì', async () => {
+      await expect(service.remove('HOP_DONG_LAO_DONG')).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(mockRepo.remove).not.toHaveBeenCalled();
+    });
+
+    it('PHIEU_THU/PHIEU_CHI vẫn hoạt động bình thường (không bị chặn nhầm)', async () => {
+      mockRepo.findOne.mockResolvedValue(null);
+      await expect(service.findByLoai('PHIEU_THU')).resolves.toBeNull();
+      await expect(service.findByLoai('PHIEU_CHI')).resolves.toBeNull();
+    });
   });
 });
