@@ -3,25 +3,28 @@ import {
   AttendanceRequest,
   CauHinhLuong,
   DongLuong,
+  DongLuongThemGio,
   Employee,
   Timesheet,
 } from '@app/entities';
 import { DatabaseModule } from '@app/database';
 import { BangLuong_Service } from './bang-luong.service';
 import { BangLuong_Controller } from './bang-luong.controller';
+import { ThemGio_Service } from './them-gio.service';
 
 @Module({
   imports: [
     DatabaseModule.forFeature([
       CauHinhLuong,
       DongLuong,
+      DongLuongThemGio,
       Employee,
       Timesheet,
       AttendanceRequest,
     ]),
   ],
   controllers: [BangLuong_Controller],
-  providers: [BangLuong_Service],
-  exports: [BangLuong_Service],
+  providers: [BangLuong_Service, ThemGio_Service],
+  exports: [BangLuong_Service, ThemGio_Service],
 })
 export class BangLuong_Module {}
