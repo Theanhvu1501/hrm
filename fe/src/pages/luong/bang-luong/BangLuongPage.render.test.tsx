@@ -239,3 +239,26 @@ describe("Bảng lương — cột TN miễn thuế gộp và phí công đoàn 
     expect(await screen.findByText("8.500.000")).toBeTruthy();
   });
 });
+
+describe("Bảng lương — nút In phiếu lương (P4.3)", () => {
+  it("khoá nút In khi dòng chưa chốt", async () => {
+    vi.spyOn(bangLuongService, "danhSach").mockResolvedValue([
+      { ...seedDong, trangThai: "nhap" },
+    ]);
+    render(<BangLuongPage />);
+    await screen.findByText("8.500.000");
+
+    // In một phiếu mà số còn đổi được là phát ra ngoài một con số sẽ sai.
+    expect((screen.getByRole("button", { name: "In" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("mở nút In khi dòng đã chốt", async () => {
+    vi.spyOn(bangLuongService, "danhSach").mockResolvedValue([
+      { ...seedDong, trangThai: "chot" },
+    ]);
+    render(<BangLuongPage />);
+    await screen.findByText("8.500.000");
+
+    expect((screen.getByRole("button", { name: "In" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});

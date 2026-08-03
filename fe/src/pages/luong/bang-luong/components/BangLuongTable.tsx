@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Empty, Table, Tag, Tooltip } from "antd";
+import { Button, Empty, Table, Tag, Tooltip } from "antd";
 import { WarningOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -10,6 +10,9 @@ import { usePagePermission } from "@/hooks/usePagePermission";
 import type { CapNhatDongLuongDto, DongLuong, KetQuaLuong } from "@/services/bangLuongService";
 import type { CauHinhLuong, KhoanLuong } from "@/services/cauHinhLuongService";
 import { OSuaBienDong } from "./OSuaBienDong";
+import { printHtml } from "@/utils/printHtml";
+import { dungPhieuLuongHtml } from "../lib/phieuLuongHtml";
+import { useAuth } from "@/contexts/AuthContext";
 import "../BangLuongPage.state";
 
 function formatTien(value?: number): string {
@@ -38,6 +41,7 @@ export function BangLuongTable() {
     null as CauHinhLuong | null
   );
   const { canEdit } = usePagePermission("/luong/bang-luong");
+  const { currentTenant } = useAuth();
 
   const chiSuaDuoc = canEdit && !daChot;
 
@@ -302,6 +306,38 @@ export function BangLuongTable() {
         render: (_: unknown, record: DongLuong) => (
           <strong>{renderTien(record[tabDangXem]?.thucLinh)}</strong>
         ),
+      },
+      {
+        title: "Phiếu lương",
+        key: "inPhieu",
+        width: 110,
+        align: "center",
+        render: (_: unknown, record: DongLuong) => {
+          const daChot = record.trangThai === "chot";
+          return (
+            <Tooltip title={daChot ? undefined : "Chốt kỳ trước khi in"}>
+              {/* `span` bọc ngoài: antd Tooltip không hiện trên nút disabled. */}
+              <span>
+                <Button
+                  size="small"
+                  disabled={!daChot}
+                  onClick={() =>
+                    printHtml(
+                      dungPhieuLuongHtml(
+                        record,
+                        khoanLuong,
+                        currentTenant?.tenantName ?? "",
+                      ),
+                      `Phiếu lương ${record.employeeCode ?? ""} ${record.thang}`,
+                    )
+                  }
+                >
+                  In
+                </Button>
+              </span>
+            </Tooltip>
+          );
+        },
       },
     ];
 
