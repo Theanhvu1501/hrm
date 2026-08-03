@@ -511,3 +511,48 @@ Critical 1) — tenant **không thể** chèn logo công ty hay đường link v
 sót — nếu sau này cần logo, phải thiết kế riêng (vd 1 field ảnh base64 cấu hình sẵn ở tenant, ghép
 vào template lúc render giống `TRUSTED_PRINT_CSS`, KHÔNG mở lại thẻ `<img>` cho tenant tự chèn URL
 bất kỳ).
+
+## Backfill `phanBoOt` cho đơn làm thêm cũ (`backfill-phan-bo-ot.ts`, P4.2b)
+
+**Chạy ngay sau khi deploy P4.2b, và BẮT BUỘC trước khi bật P4.2c.**
+
+Từ P4.2b, `attendance_requests.phanBoOt` là nguồn sự thật của cả tích quỹ giờ lẫn tiền làm thêm.
+Đơn nộp trước đợt này không có trường đó. Quỹ giờ vẫn chạy đúng (`gioTichTuDonOt()` có đường lùi
+theo `soGioOt`/`loaiNgayOt`), nên **không chạy script cũng không hỏng gì ở P4.2b** — nhưng biểu
+mẫu 03-LĐTL của P4.2c đọc thẳng `phanBoOt`, nên đơn cũ sẽ biến mất khỏi bảng thanh toán tiền làm
+thêm.
+
+**Script CỐ Ý không chẻ lại đơn cũ theo khung giờ đêm**, dù đơn cũ có đủ `gioTu`/`gioDen` để làm
+được. Chẻ lại là đổi hệ số của đơn đã duyệt và đã tích quỹ — số dư quỹ sẽ lệch với sổ append-only
+và `doiSoat()` báo đỏ hàng loạt. **Ca đêm chỉ áp cho đơn nộp từ ngày deploy trở đi.** Đây là
+quyết định trong spec P4.2b §4.3, không phải thiếu sót.
+
+Cùng ràng buộc chạy như `re-sanitize-hop-dong-mau-in.ts`: **không chạy được trong container
+`nhan-su-be`** (`ops/` không được rsync lên server, image không có `ts-node`). Chạy từ máy có mã
+nguồn qua SSH tunnel, và phải ở trong `be/` để resolve `mongodb`.
+
+```bash
+# 0. Mở tunnel tới Mongo production ở một terminal khác
+ssh -L 27018:localhost:27017 kt
+
+# 1. Chép script vào be/ để resolve được node_modules
+cp ops/backfill-phan-bo-ot.ts be/_tmp-backfill.ts
+
+# 2. Xem trước, không ghi gì
+cd be && MONGODB_URI="mongodb://dbadmin:...@localhost:27018/?authSource=admin" \
+  MONGODB_DATABASE=nhan_su \
+  ./node_modules/.bin/ts-node --compiler-options '{"module":"commonjs"}' \
+  _tmp-backfill.ts --dry-run
+
+# 3. Ghi thật (bỏ --dry-run), rồi dọn
+./node_modules/.bin/ts-node --compiler-options '{"module":"commonjs"}' _tmp-backfill.ts
+rm _tmp-backfill.ts
+```
+
+Idempotent — chỉ đụng đơn chưa có `phanBoOt`, chạy lại lần hai báo 0 đơn.
+
+Đơn của tenant chưa khai cấu hình lương bị **bỏ qua** (in ra "BỎ QUA"), không đoán hệ số. Nếu
+danh sách bỏ qua dài, kiểm lại xem tenant đó có thật sự chưa bật quỹ giờ làm thêm không.
+
+Không cần chạy `grant-quyen-module-moi.ts` cho đợt này — P4.2b không thêm module quyền mới, màn
+Cấu hình lương dùng lại quyền `/luong/cau-hinh` đã có.
