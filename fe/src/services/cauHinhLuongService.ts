@@ -129,6 +129,42 @@ export interface CauHinhLuong {
 }
 
 /**
+ * Bồi các trường P4.2b còn thiếu vào `lamThem` đọc từ server.
+ *
+ * Công ty đã bật quỹ giờ từ P4.2a có `lamThem` KHÔNG có `heSoTra`,
+ * `khungGioDem`, `uuTienLoai`, `mienThueChenh` — server không tự vá bản ghi
+ * đã lưu (`bang-luong.service.layCauHinh()` chỉ seed khi CHƯA có hàng nào).
+ * Thiếu chúng thì `LamThemEditor` gọi `lamThem.uuTienLoai.map(...)` trên
+ * `undefined` và ném ngay lúc render — repo không có ErrorBoundary nên đó là
+ * **trắng TOÀN trang Cấu hình lương**, không phải một khối hỏng.
+ *
+ * Bồi ở tầng service chứ không ở component: giá trị bồi vào cũng chính là
+ * giá trị được PUT lên khi HR bấm Lưu, nên DTO backend (bốn trường này là
+ * BẮT BUỘC) nhận đủ. Vá ở component thì form hiện đủ nhưng payload gửi lên
+ * vẫn thiếu và trả 400 cho cả form.
+ *
+ * `undefined` giữ nguyên `undefined` — đó là "công ty CHƯA bật quỹ giờ", một
+ * trạng thái thật mà màn hình có nhánh riêng để xử lý.
+ */
+export function chuanHoaLamThem(
+  lamThem: CauHinhLamThem | undefined,
+): CauHinhLamThem | undefined {
+  if (!lamThem) return undefined;
+  return {
+    ...lamThem,
+    heSoTra: lamThem.heSoTra ?? { ...LAM_THEM_MAC_DINH.heSoTra },
+    heSoTichQuy: lamThem.heSoTichQuy ?? { ...LAM_THEM_MAC_DINH.heSoTichQuy },
+    // `null` là lựa chọn hợp lệ ("không có ca đêm") nên chỉ bồi khi vắng hẳn.
+    khungGioDem:
+      lamThem.khungGioDem === undefined
+        ? { ...LAM_THEM_MAC_DINH.khungGioDem! }
+        : lamThem.khungGioDem,
+    uuTienLoai: lamThem.uuTienLoai ?? [...LAM_THEM_MAC_DINH.uuTienLoai],
+    mienThueChenh: lamThem.mienThueChenh ?? [...LAM_THEM_MAC_DINH.mienThueChenh],
+  };
+}
+
+/**
  * BE `bang-luong.controller.ts` gộp cấu hình lương vào chung controller
  * `@Controller('bang-luong')` (route `GET/PUT cau-hinh`), KHÔNG có controller
  * `/config/cau-hinh-luong` riêng — nên endpoint gốc ở đây PHẢI là
@@ -140,7 +176,8 @@ class CauHinhLuongService extends ServiceBase {
   }
 
   async get(): Promise<CauHinhLuong> {
-    return super.get<CauHinhLuong>({ endpoint: '/cau-hinh' });
+    const ch = await super.get<CauHinhLuong>({ endpoint: '/cau-hinh' });
+    return { ...ch, lamThem: chuanHoaLamThem(ch.lamThem) };
   }
 
   /**

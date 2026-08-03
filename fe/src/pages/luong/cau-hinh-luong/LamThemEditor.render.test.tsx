@@ -194,3 +194,31 @@ describe("Tab Làm thêm & quỹ giờ — bảng hệ số (P4.2b)", () => {
     expect(screen.queryByText("Khung giờ ban đêm")).toBeNull();
   });
 });
+
+/**
+ * Ca suýt làm trắng trang lúc deploy P4.2b: tenant đã bật quỹ giờ từ P4.2a có
+ * `lamThem` KHÔNG có `uuTienLoai`/`heSoTra`/`khungGioDem`/`mienThueChenh`
+ * (server chỉ seed khi chưa có hàng nào, không vá bản ghi đã lưu). Bảng hệ số
+ * gọi `lamThem.uuTienLoai.map(...)` → ném lúc render → repo không có
+ * ErrorBoundary nên trắng TOÀN trang Cấu hình lương.
+ */
+describe("Tab Làm thêm & quỹ giờ — lamThem hình dạng P4.2a (thiếu trường P4.2b)", () => {
+  const lamThemP42a = {
+    cheDoBu: "chi_nghi_bu",
+    heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 },
+    soThangHanDung: 6,
+    khiHetHan: "quy_ra_tien",
+  } as never;
+
+  it("KHÔNG trắng trang — bồi mặc định và vẫn hiện đủ bảng hệ số", async () => {
+    await moTabLamThem({ ...cauHinhCu, soGioMoiNgay: 8, lamThem: lamThemP42a });
+
+    expect(await screen.findByText(/Quỹ giờ làm thêm đang bật/)).toBeTruthy();
+    expect(screen.getByText("Ngày lễ / Tết")).toBeTruthy();
+    // `ngay_dem` không có trong heSoTichQuy đã lưu → bồi từ mặc định, không
+    // được biến mất khỏi bảng.
+    expect(screen.getByText("Buổi đêm")).toBeTruthy();
+    // Giá trị công ty ĐÃ lưu phải giữ nguyên, không bị mặc định đè.
+    expect(screen.getByDisplayValue("6")).toBeTruthy(); // soThangHanDung
+  });
+});
