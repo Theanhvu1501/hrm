@@ -10,6 +10,9 @@ import {
 import { ThanhKyThemGio } from "./components/ThanhKyThemGio";
 import { BangThemGioTable } from "./components/BangThemGioTable";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { useAuth } from "@/contexts/AuthContext";
+import { exportReportExcel } from "@/utils/exportReportExcel";
+import { dung03LDTL } from "./xuat03LDTL";
 import type { DongLuongThemGio } from "@/services/bangLuongThemGioService";
 import "./BangThemGioPage.state";
 
@@ -20,13 +23,19 @@ function BangThemGioPageInner() {
   const [dangTongHop] = useBangThemGioState("dangTongHop", false);
   const [thang] = useBangThemGioState("thang", dayjs().format("YYYY-MM"));
   const { canEdit } = usePagePermission("/luong/bang-luong");
+  const { currentTenant } = useAuth();
 
   useEffect(() => {
     handler.executeEvent("init", {});
   }, [handler]);
 
   const xuat = () => {
-    // Task 6 nối hàm dựng biểu mẫu vào đây.
+    // Tên công ty in trên đầu biểu mẫu pháp định. Chưa chọn tenant thì để
+    // trống — in mẫu thiếu tên còn sửa tay được, còn in SAI tên công ty lên
+    // một tờ có chỗ ký của giám đốc thì không.
+    void exportReportExcel(`03-LDTL-${thang}`, [
+      dung03LDTL(thang, danhSach, currentTenant?.tenantName ?? ""),
+    ]);
   };
 
   return (
