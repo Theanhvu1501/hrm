@@ -239,6 +239,76 @@ describe('ThoiViec_Service', () => {
         expect.objectContaining({ trangThai: 'da_nghi' }),
       );
     });
+
+    // ── legacy rows with no captured snapshot (review round 2, Important) ──
+    it('falls back to dang_lam_viec when an approved resignation has no captured snapshot (legacy row predating this fix)', async () => {
+      const resignation = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'da_duyet',
+        // Hồ sơ được duyệt TRƯỚC khi cột này tồn tại — không có gì để đọc
+        // lại. Xem ops/README.md để biết cách rà các hồ sơ có nguy cơ này
+        // trước khi thao tác — trường hợp NV vốn tam_nghi trước khi hồ sơ
+        // được duyệt sẽ bị hồi sinh SAI thành dang_lam_viec.
+      };
+      const employee = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        trangThai: 'da_nghi',
+      };
+      mockResignationRepo.findOne.mockResolvedValue(resignation);
+      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+
+      const result = await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+
+      expect(result.trangThai).toBe('tu_choi');
+      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'dang_lam_viec' }),
+      );
+    });
+
+    // ── write-employee-first ordering (review round 2, CRITICAL) ──
+    it('leaves the resignation untouched in the DB when the employee write fails, so a retry re-attempts the whole operation instead of short-circuiting', async () => {
+      const resignation = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'da_duyet',
+        trangThaiNhanVienTruocKhiDuyet: 'dang_lam_viec',
+      };
+      const employee = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        trangThai: 'da_nghi',
+      };
+      mockResignationRepo.findOne.mockResolvedValue(resignation);
+      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+      mockEmployeeRepo.save.mockRejectedValueOnce(new Error('mongo down'));
+
+      await expect(
+        service.updateStatus(RESIGNATION_ID, 'tu_choi'),
+      ).rejects.toThrow('mongo down');
+
+      // Nếu hồ sơ đã bị lưu với trangThai='tu_choi' trước khi ghi NV thất
+      // bại, lần gọi lại sẽ đọc ra hồ sơ đã ở đích, coi đó là "không có
+      // chuyển tiếp hiệu lực" và bỏ qua NV vĩnh viễn — đúng lỗi CRITICAL đã
+      // bị review bắt.
+      expect(mockResignationRepo.save).not.toHaveBeenCalled();
+      expect(resignation.trangThai).toBe('da_duyet');
+
+      // Retry: lần này ghi NV thành công, toàn bộ thao tác phải hoàn tất.
+      mockEmployeeRepo.save.mockResolvedValue(employee);
+      const result = await service.updateStatus(RESIGNATION_ID, 'tu_choi');
+
+      expect(result.trangThai).toBe('tu_choi');
+      expect(mockResignationRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'tu_choi' }),
+      );
+      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'dang_lam_viec' }),
+      );
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -339,6 +409,47 @@ describe('ThoiViec_Service', () => {
 
       expect(mockEmployeeRepo.findOne).not.toHaveBeenCalled();
       expect(mockEmployeeRepo.save).not.toHaveBeenCalled();
+    });
+
+    // ── write-employee-first ordering (review round 2, CRITICAL) ──
+    it('leaves isActive=true when the employee write fails, so a retry re-attempts the restore instead of no-op-ing on the isActive guard', async () => {
+      const existing = {
+        _id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        trangThai: 'hoan_thanh',
+        trangThaiNhanVienTruocKhiDuyet: 'dang_lam_viec',
+        isActive: true,
+      };
+      const employee = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        trangThai: 'da_nghi',
+      };
+      mockResignationRepo.findOne.mockResolvedValue(existing);
+      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+      mockEmployeeRepo.save.mockRejectedValueOnce(new Error('mongo down'));
+
+      await expect(service.remove(RESIGNATION_ID)).rejects.toThrow(
+        'mongo down',
+      );
+
+      // Nếu isActive đã bị lưu false trước khi ghi NV thất bại, lần gọi lại
+      // sẽ chạm guard `!item.isActive` ngay từ đầu và trả về im lặng — NV
+      // kẹt vĩnh viễn ở da_nghi, đúng lỗi CRITICAL đã bị review bắt.
+      expect(mockResignationRepo.save).not.toHaveBeenCalled();
+      expect(existing.isActive).toBe(true);
+
+      // Retry: lần này ghi NV thành công, toàn bộ thao tác phải hoàn tất.
+      mockEmployeeRepo.save.mockResolvedValue(employee);
+      await service.remove(RESIGNATION_ID);
+
+      expect(mockResignationRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isActive: false }),
+      );
+      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'dang_lam_viec' }),
+      );
     });
   });
 });

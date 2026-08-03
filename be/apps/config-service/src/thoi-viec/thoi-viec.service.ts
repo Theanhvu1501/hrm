@@ -110,6 +110,11 @@ export class ThoiViec_Service {
     return trangThai === 'da_duyet' || trangThai === 'hoan_thanh';
   }
 
+  /** Giá trị khôi phục cho NV khi hồ sơ thôi việc rời khỏi trạng thái hiệu lực. */
+  private trangThaiKhoiPhuc(item: Resignation): string {
+    return item.trangThaiNhanVienTruocKhiDuyet ?? 'dang_lam_viec';
+  }
+
   /**
    * Xoá mềm MỘT hồ sơ thôi việc phải huỷ cả hai hiệu ứng đã áp cho nhân
    * viên khi hồ sơ đó đang có hiệu lực — không chỉ tắt `isActive`:
@@ -120,51 +125,43 @@ export class ThoiViec_Service {
    *     việc thì NV vẫn bị chặn chấm công dù bảng công đã tính công lại
    *     bình thường cho họ — hai hệ thống lệch pha nhau.
    *
+   * THỨ TỰ GHI: nhân viên TRƯỚC, `isActive=false` SAU (xem lý giải dài ở
+   * `updateStatus()` — cùng một lỗi thiết kế, cùng một cách sửa). Nếu ghi
+   * NV lỗi, hồ sơ vẫn còn `isActive=true` trong DB nên lần gọi lại sẽ đi
+   * qua guard bên dưới và thử lại đúng phần đã lỗi — không bị coi là "đã
+   * xoá rồi" và bỏ qua NV vĩnh viễn.
+   *
    * Guard `!item.isActive` chặn xử lý lại khi remove() bị gọi lần hai trên
-   * cùng một hồ sơ đã xoá: không phải vì tốn kém (save Mongo là idempotent)
-   * mà vì nếu không guard, một lần gọi lại vô tình (double-click, retry) sẽ
-   * ghi ĐÈ trangThai hiện tại của NV bằng giá trị chụp cũ, kể cả khi NV đã
-   * được HR chỉnh tay sang trạng thái khác từ sau lần xoá đầu tiên.
+   * cùng một hồ sơ ĐÃ xoá THÀNH CÔNG: không phải vì tốn kém (save Mongo là
+   * idempotent) mà vì nếu không guard, một lần gọi lại vô tình (double-
+   * click, retry sau khi đã thành công) sẽ ghi ĐÈ trangThai hiện tại của NV
+   * bằng giá trị chụp cũ, kể cả khi NV đã được HR chỉnh tay sang trạng thái
+   * khác từ sau lần xoá đầu tiên.
    */
   async remove(id: string): Promise<void> {
     const item = await this.findOne(id);
     if (!item.isActive) return;
 
-    const dangHieuLuc = this.coHieuLucNghiViec(item.trangThai);
+    if (this.coHieuLucNghiViec(item.trangThai)) {
+      const emp = await this.findEmployee(item.employeeId);
+      emp.trangThai = this.trangThaiKhoiPhuc(item);
+      // Xem lý giải "không nuốt lỗi" ở updateStatus() — áp dụng như nhau.
+      await this.employeeRepo.save(emp);
+    }
+
     item.isActive = false;
     await this.repo.save(item);
-
-    if (dangHieuLuc) {
-      await this.khoiPhucTrangThaiNhanVien(item);
-    }
-  }
-
-  /**
-   * Trả nhân viên về trạng thái làm việc trước khi hồ sơ thôi việc này được
-   * duyệt. Cố ý KHÔNG bắt lỗi rồi chỉ log như `moKhoaQuyNeuCanThiet()` bên
-   * NhanVien_Service: quỹ phép ở đó là một quyền lợi PHỤ, có màn hình riêng
-   * để HR cấp bù tay nếu lỡ trôi qua — còn `Employee.trangThai` ở đây là
-   * cổng THẬT chặn chấm công (`chanNeuDaNghiViec`). Nếu lỗi bị nuốt và báo
-   * "xoá/huỷ duyệt thành công" trong khi NV vẫn còn 'da_nghi', hệ thống rơi
-   * lại đúng Gap 2 mà bản vá này đang sửa — chỉ là không ai biết để mà sửa
-   * tay, vì log lỗi im lặng dễ bị bỏ qua hơn một request báo lỗi rõ ràng.
-   * Nên: để lỗi bay lên, người gọi (HTTP 4xx/5xx) biết ngay là chưa xong.
-   */
-  private async khoiPhucTrangThaiNhanVien(item: Resignation): Promise<void> {
-    const emp = await this.findEmployee(item.employeeId);
-    emp.trangThai = item.trangThaiNhanVienTruocKhiDuyet ?? 'dang_lam_viec';
-    await this.employeeRepo.save(emp);
   }
 
   /**
    * Updates the resignation's status.
    *
    * Đi VÀO trạng thái có hiệu lực ('da_duyet'/'hoan_thanh') từ trạng thái
-   * chưa có hiệu lực: chụp lại Employee.trangThai NGAY LÚC ĐÓ vào
-   * `trangThaiNhanVienTruocKhiDuyet` (để còn khôi phục đúng — vd 'tam_nghi'
-   * — nếu sau này huỷ duyệt), rồi đẩy nhân viên sang 'da_nghi'. Chuyển giữa
-   * hai trạng thái CÙNG có hiệu lực (da_duyet -> hoan_thanh) không chụp lại
-   * — chụp lúc đó sẽ đè mất giá trị gốc bằng chính 'da_nghi'.
+   * chưa có hiệu lực: chụp lại Employee.trangThai NGAY LÚC ĐÓ (để còn khôi
+   * phục đúng — vd 'tam_nghi' — nếu sau này huỷ duyệt), rồi đẩy nhân viên
+   * sang 'da_nghi'. Chuyển giữa hai trạng thái CÙNG có hiệu lực (da_duyet ->
+   * hoan_thanh) không chụp lại — chụp lúc đó sẽ đè mất giá trị gốc bằng
+   * chính 'da_nghi'.
    *
    * Đi RA khỏi trạng thái có hiệu lực (về 'tu_choi'/'cho_duyet'): khôi phục
    * Employee.trangThai về đúng giá trị đã chụp — đây là điểm sửa Gap 1 (HR
@@ -172,32 +169,48 @@ export class ThoiViec_Service {
    *
    * Không đi vào/ra trạng thái có hiệu lực (vd cho_duyet -> tu_choi khi
    * chưa từng được duyệt): không đụng tới hồ sơ nhân viên.
+   *
+   * THỨ TỰ GHI — nhân viên TRƯỚC, hồ sơ thôi việc SAU (review round 1,
+   * CRITICAL): bản đầu ghi hồ sơ trước rồi mới ghi NV. Nếu ghi NV lỗi giữa
+   * chừng, hồ sơ ĐÃ đổi trạng thái trong DB, còn NV thì chưa — caller nhận
+   * 5xx và làm đúng việc "retry cùng request", nhưng lần gọi lại sẽ
+   * `findOne()` ra hồ sơ đã ở trạng thái ĐÍCH, khiến `dangHieuLucTruoc` và
+   * `seHieuLuc` tính ra BẰNG NHAU và rơi vào nhánh no-op phía trên — không
+   * còn fetch/ghi NV, không còn báo lỗi, trả 200 "thành công" trong khi NV
+   * vẫn kẹt nguyên trạng thái cũ. Guard chống double-processing (nãy dùng
+   * để tránh ghi đè quỹ phép/luồng khác) vô tình biến CHÍNH retry — con
+   * đường phục hồi duy nhất — thành no-op vĩnh viễn.
+   *
+   * Ghi NV trước khắc phục: nếu bước NV lỗi, hồ sơ (biến `item` local) CHƯA
+   * hề bị `save()`, nên DB vẫn giữ nguyên trạng thái cũ; lần gọi lại tính
+   * lại đúng `dangHieuLucTruoc`/`seHieuLuc` như lần đầu và thử lại toàn bộ
+   * thao tác — không có short-circuit. Lỗi vẫn được propagate (không nuốt),
+   * chỉ đổi thứ tự để retry có ý nghĩa.
    */
   async updateStatus(id: string, trangThai: string): Promise<Resignation> {
     const item = await this.findOne(id);
     const dangHieuLucTruoc = this.coHieuLucNghiViec(item.trangThai);
     const seHieuLuc = this.coHieuLucNghiViec(trangThai);
-    item.trangThai = trangThai;
 
     if (!dangHieuLucTruoc && !seHieuLuc) {
+      item.trangThai = trangThai;
       return this.repo.save(item);
     }
 
     const emp = await this.findEmployee(item.employeeId);
 
-    if (seHieuLuc && !dangHieuLucTruoc) {
-      item.trangThaiNhanVienTruocKhiDuyet = emp.trangThai;
-    }
+    // Snapshot cần ghi vào hồ sơ — tính TRƯỚC nhưng CHƯA gán vào `item`,
+    // để nếu bước ghi NV bên dưới ném lỗi thì `item` (và DB) vẫn y nguyên.
+    const trangThaiNhanVienTruocKhiDuyetMoi =
+      seHieuLuc && !dangHieuLucTruoc
+        ? emp.trangThai
+        : item.trangThaiNhanVienTruocKhiDuyet;
 
-    const saved = await this.repo.save(item);
-
-    emp.trangThai = seHieuLuc
-      ? 'da_nghi'
-      : (item.trangThaiNhanVienTruocKhiDuyet ?? 'dang_lam_viec');
-    // Xem lý giải "không nuốt lỗi" ở khoiPhucTrangThaiNhanVien() — áp dụng
-    // như nhau cho cả chiều đẩy sang da_nghi lẫn chiều khôi phục.
+    emp.trangThai = seHieuLuc ? 'da_nghi' : this.trangThaiKhoiPhuc(item);
     await this.employeeRepo.save(emp);
 
-    return saved;
+    item.trangThai = trangThai;
+    item.trangThaiNhanVienTruocKhiDuyet = trangThaiNhanVienTruocKhiDuyetMoi;
+    return this.repo.save(item);
   }
 }
