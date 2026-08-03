@@ -16,7 +16,12 @@ export const MA_LOI_QUY_PHEP = {
   CHUA_LEN_CHINH_THUC: 'CHUA_LEN_CHINH_THUC',
   /** Tổng ngày nghỉ vượt số dư khả dụng tại đúng những ngày xin nghỉ. */
   KHONG_DU_SO_DU: 'KHONG_DU_SO_DU',
+  /** CAS trượt liên tiếp — quỹ đang bị nhiều request sửa cùng lúc. */
+  DANG_SUA_DONG_THOI: 'QUY_PHEP_DANG_SUA_DONG_THOI',
 } as const;
+
+/** Xem lập luận ở `quy-gio.service.ts` — hai quỹ cố ý giữ cùng con số. */
+const SO_LAN_THU_LAI_CAS = 5;
 
 export const LOAI_QUY_PHEP_NAM = 'phep_nam';
 
@@ -538,13 +543,15 @@ export class QuyPhep_Service {
    * hết hạn), còn giữ chỗ là trạng thái tạm. `doiSoat()` vì vậy chỉ đối chiếu
    * `soNgayDuocCap` và `soNgayDaDung`.
    *
-   * GIỚI HẠN CÒN LẠI: repo này không dùng transaction ở bất kỳ service nào,
-   * và read-modify-write trên `soNgayDangChoDuyet` không nguyên tử — hai đơn
-   * nộp GẦN NHƯ ĐỒNG THỜI vẫn có thể cùng đọc một số dư rồi cùng giữ chỗ
-   * thành công, vượt quỹ thật. Guard dưới đây chỉ thu hẹp cửa sổ hở (chặn
-   * được trường hợp tuần tự — đơn sau thấy đúng số dư đơn trước đã giữ), chứ
-   * không đóng hẳn race thật sự đồng thời; muốn đóng hẳn phải có transaction
-   * hoặc `$inc` nguyên tử ở tầng DB. Việc đó được park lại, không làm ở đây.
+   * NGUYÊN TỬ (P4.2b Task 2): ghi bằng compare-and-swap — filter chứa đúng ba
+   * con số đã đọc, nên hai đơn nộp gần như đồng thời không thể cùng giữ chỗ
+   * trên một số dư. Bên trượt đọc lại và kiểm lại trên số dư MỚI, nên nó rớt
+   * đúng chỗ đáng rớt thay vì đẩy quỹ xuống âm.
+   *
+   * Trước đây đây là read-modify-write thường, và giới hạn đó được ghi nhận
+   * rồi park lại; P4.2c cho bảng lương đọc số dư nên không park được nữa —
+   * số dư âm sẽ thành dòng lương âm. Sửa đồng thời cho cả `quy-gio`
+   * (`apDung()` ở đó dùng cùng khuôn).
    */
   async giuCho(
     employeeId: string,
@@ -553,21 +560,83 @@ export class QuyPhep_Service {
     _nguoiThucHien: string,
   ): Promise<void> {
     for (const p of phanBo) {
-      const quy = await this.layQuyTheoId(employeeId, p.balanceId);
-      if (
-        quy.soNgayDangChoDuyet + p.soNgay >
-        quy.soNgayDuocCap - quy.soNgayDaDung
-      ) {
+      let daXong = false;
+
+      for (let lan = 0; lan < SO_LAN_THU_LAI_CAS && !daXong; lan++) {
+        const quy = await this.layQuyTheoId(employeeId, p.balanceId);
+
+        if (
+          quy.soNgayDangChoDuyet + p.soNgay >
+          quy.soNgayDuocCap - quy.soNgayDaDung
+        ) {
+          throw new ConflictException({
+            code: MA_LOI_QUY_PHEP.KHONG_DU_SO_DU,
+            message: `Quỹ ${quy.nam} không còn đủ để giữ chỗ`,
+          });
+        }
+
+        const truoc = {
+          soNgayDuocCap: quy.soNgayDuocCap,
+          soNgayDaDung: quy.soNgayDaDung,
+          soNgayDangChoDuyet: quy.soNgayDangChoDuyet,
+        };
+
+        // Tính trên BẢN SAO: `truoc` là vế so sánh của CAS, nên nếu sửa thẳng
+        // vào object mà repo đang giữ thì đến lúc so sánh, giá trị dưới DB đã
+        // là giá trị MỚI và filter không bao giờ khớp.
+        const ban = { ...quy } as LeaveBalance;
+        ban.soNgayDangChoDuyet += p.soNgay;
+        ban.soNgayConLai =
+          ban.soNgayDuocCap - ban.soNgayDaDung - ban.soNgayDangChoDuyet;
+
+        if (await this.capNhatCas((quy as any)._id, truoc, ban)) daXong = true;
+      }
+
+      if (!daXong) {
         throw new ConflictException({
-          code: MA_LOI_QUY_PHEP.KHONG_DU_SO_DU,
-          message: `Quỹ ${quy.nam} không còn đủ để giữ chỗ`,
+          code: MA_LOI_QUY_PHEP.DANG_SUA_DONG_THOI,
+          message: 'Quỹ phép đang được sửa đồng thời, vui lòng thử lại',
         });
       }
-      quy.soNgayDangChoDuyet += p.soNgay;
-      quy.soNgayConLai =
-        quy.soNgayDuocCap - quy.soNgayDaDung - quy.soNgayDangChoDuyet;
-      await this.repo.save(quy);
     }
+  }
+
+  /**
+   * CAS cho quỹ phép — cùng khuôn `quy-gio.service.ts.capNhatCas()`. Cố ý chép
+   * chứ không trừu tượng hoá: hai service không có lớp cha chung, và tên
+   * trường (`soNgay*` / `soGio*`) khác nhau nên một lớp cha sẽ phải nhận map
+   * tên trường — phức tạp hơn hai mươi dòng nó tiết kiệm được.
+   *
+   * Đi thẳng qua `getMongoRepository()` (proxy tenant của @app/database KHÔNG
+   * chặn `findOneAndUpdate`), nên filter phải tự đủ chặt. `_id` là khoá toàn
+   * cục duy nhất nên không cần thêm `tenantId`.
+   */
+  private async capNhatCas(
+    id: unknown,
+    truoc: {
+      soNgayDuocCap: number;
+      soNgayDaDung: number;
+      soNgayDangChoDuyet: number;
+    },
+    sau: LeaveBalance,
+  ): Promise<boolean> {
+    const mongoRepo = this.repo.manager.getMongoRepository(
+      LeaveBalance,
+    ) as unknown as import('typeorm').MongoRepository<LeaveBalance>;
+
+    const kq = await (mongoRepo as any).findOneAndUpdate(
+      { _id: id, ...truoc },
+      {
+        $set: {
+          soNgayDuocCap: sau.soNgayDuocCap,
+          soNgayDaDung: sau.soNgayDaDung,
+          soNgayDangChoDuyet: sau.soNgayDangChoDuyet,
+          soNgayConLai: sau.soNgayConLai,
+        },
+      },
+      { returnDocument: 'after' },
+    );
+    return kq != null;
   }
 
   /**

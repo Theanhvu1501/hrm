@@ -8,6 +8,16 @@ import { QuyPhep_Service } from './quy-phep.service';
 function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
   const kho: any[] = [...banDau];
   let seq = 0;
+  const findOneAndUpdate = jest.fn(
+    async (filter: any, update: any, _opts?: any) => {
+      const i = kho.findIndex((r) =>
+        Object.entries(filter).every(([k, v]) => String(r[k]) === String(v)),
+      );
+      if (i < 0) return null;
+      kho[i] = { ...kho[i], ...(update.$set ?? {}) };
+      return kho[i];
+    },
+  );
   return {
     kho,
     create: (x: any) => ({ ...x }),
@@ -53,6 +63,10 @@ function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
       );
       return x ? { ...x } : null;
     },
+    // CAS (P4.2b Task 2): `giuCho()` ghi qua cửa này thay vì `save()`. So bằng
+    // `String()` vì `_id` trong kho là object `{ toString }`, không phải chuỗi.
+    findOneAndUpdate,
+    manager: { getMongoRepository: () => ({ findOneAndUpdate }) },
   };
 }
 
@@ -851,5 +865,67 @@ describe('QuyPhep_Service — ghi() ghi sổ trước, số dư sau (Task 6)', (
     const lanHai = await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     expect(lanHai).toEqual([]);
     expect(repoQuy.kho).toHaveLength(1);
+  });
+});
+
+describe('QuyPhep_Service — giữ chỗ nguyên tử (P4.2b Task 2)', () => {
+  const PHAN_BO = [{ balanceId: ID_Q2026, nam: 2026, soNgay: 2 }];
+
+  it('ghi qua findOneAndUpdate chứ không qua save()', async () => {
+    const { service, repoQuy } = await dungMotQuy();
+    const saveGoc = repoQuy.save;
+    const save = jest.fn(saveGoc);
+    (repoQuy as any).save = save;
+
+    await service.giuCho(ID_NV1, PHAN_BO, 'don1', 'nv1');
+
+    expect(repoQuy.findOneAndUpdate).toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+    const q = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(q.soNgayDangChoDuyet).toBe(2);
+    expect(q.soNgayConLai).toBe(1);
+  });
+
+  it('CAS trượt thì đọc lại và rớt trên số dư MỚI', async () => {
+    const { service, repoQuy } = await dungMotQuy();
+
+    const that = repoQuy.findOneAndUpdate;
+    let lanDau = true;
+    (repoQuy as any).manager.getMongoRepository = () => ({
+      findOneAndUpdate: async (f: any, u: any, o: any) => {
+        if (lanDau) {
+          lanDau = false;
+          // Một đơn KHÁC vừa ăn gần hết quỹ giữa lúc ta đọc và lúc ta ghi.
+          const q = repoQuy.kho.find((x: any) => x.nam === 2026);
+          q.soNgayDangChoDuyet = 3;
+          q.soNgayConLai = 0;
+          return null;
+        }
+        return that(f, u, o);
+      },
+    });
+
+    await expect(
+      service.giuCho(ID_NV1, PHAN_BO, 'don1', 'nv1'),
+    ).rejects.toMatchObject({ response: { code: 'KHONG_DU_SO_DU' } });
+
+    // Không giữ chồng lên chỗ của đơn kia.
+    expect(repoQuy.kho.find((x: any) => x.nam === 2026).soNgayDangChoDuyet).toBe(3);
+  });
+
+  it('CAS trượt mãi thì bỏ cuộc bằng mã lỗi riêng, không treo vòng lặp', async () => {
+    const { service, repoQuy } = await dungMotQuy();
+
+    (repoQuy as any).manager.getMongoRepository = () => ({
+      findOneAndUpdate: async () => null, // luôn trượt
+    });
+
+    await expect(
+      service.giuCho(ID_NV1, PHAN_BO, 'don1', 'nv1'),
+    ).rejects.toMatchObject({
+      response: { code: 'QUY_PHEP_DANG_SUA_DONG_THOI' },
+    });
+
+    expect(repoQuy.kho.find((x: any) => x.nam === 2026).soNgayDangChoDuyet).toBe(0);
   });
 });
