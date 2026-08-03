@@ -2,7 +2,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { BangLuong_Service } from './bang-luong.service';
-import { CauHinhLuong, DongLuong, Employee, Timesheet } from '@app/entities';
+import {
+  AttendanceRequest,
+  CauHinhLuong,
+  DongLuong,
+  Employee,
+  Timesheet,
+} from '@app/entities';
 import type { CauHinhLuongData } from '@app/entities';
 import { ganCauHinhRieng, lamTronTheo, tinhDongLuong } from '@app/core';
 import { CAU_HINH_LUONG_MAC_DINH } from './cau-hinh-luong.seed';
@@ -27,6 +33,9 @@ describe('BangLuong_Service', () => {
   let mockTimesheetRepo: {
     find: jest.Mock;
   };
+  let mockDonRepo: {
+    find: jest.Mock;
+  };
 
   // In-memory stores backing the mocked `find` calls — a `where` filter is
   // applied against these arrays so tests can assert on genuine filtering
@@ -34,6 +43,7 @@ describe('BangLuong_Service', () => {
   let cauHinhStore: Partial<CauHinhLuong>[];
   let dongLuongStore: Partial<DongLuong>[];
   let timesheetStore: Partial<Timesheet>[];
+  let donStore: any[];
 
   const EMP1 = '507f1f77bcf86cd799439011';
   const EMP2 = '507f1f77bcf86cd799439022';
@@ -46,6 +56,7 @@ describe('BangLuong_Service', () => {
     cauHinhStore = [];
     dongLuongStore = [];
     timesheetStore = [];
+    donStore = [];
 
     mockCauHinhRepo = {
       find: jest.fn(({ where }: any) =>
@@ -80,6 +91,12 @@ describe('BangLuong_Service', () => {
       find: jest.fn().mockResolvedValue([]),
     };
 
+    mockDonRepo = {
+      find: jest.fn(({ where }: any = {}) =>
+        Promise.resolve(donStore.filter((d) => matchesWhere(d, where ?? {}))),
+      ),
+    };
+
     mockTimesheetRepo = {
       find: jest.fn(({ where }: any) =>
         Promise.resolve(timesheetStore.filter((t) => matchesWhere(t, where ?? {}))),
@@ -93,6 +110,7 @@ describe('BangLuong_Service', () => {
         { provide: getRepositoryToken(DongLuong), useValue: mockDongLuongRepo },
         { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
         { provide: getRepositoryToken(Timesheet), useValue: mockTimesheetRepo },
+        { provide: getRepositoryToken(AttendanceRequest), useValue: mockDonRepo },
       ],
     }).compile();
 
@@ -812,6 +830,65 @@ describe('BangLuong_Service', () => {
 
       expect(ch.bhCongTy).toEqual({ tyLe: 0.2, tyLeHopDongThu2: 0.004 });
       expect(mockCauHinhRepo.save).not.toHaveBeenCalled();
+    });
+  });
+  /**
+   * Màn Cấu hình lương cần biết loại ngày nào ĐANG được đơn tham chiếu để
+   * chặn xoá nó (spec P4.2b §6): xoá xong thì `phanBoOt` của đơn cũ trỏ vào
+   * loại không còn trong `uuTienLoai`, biểu mẫu 03-LĐTL mất cột và `traHeSo()`
+   * âm thầm rơi về hệ số ngày thường.
+   */
+  describe('demDonTheoLoaiOt (P4.2b §6)', () => {
+    it('đếm theo phanBoOt — một đơn chẻ hai loại tính vào CẢ HAI', async () => {
+      donStore.push({
+        _id: 'd1', loaiDon: 'lam_them_gio', isActive: true,
+        soGioOt: 6, loaiNgayOt: 'ngay_dem', heSoOt: 1.5,
+        phanBoOt: [
+          { loaiNgayOt: 'ngay_thuong', soGio: 2, heSoTra: 1.5, heSoTichQuy: 1.5 },
+          { loaiNgayOt: 'ngay_dem', soGio: 4, heSoTra: 1.5, heSoTichQuy: 1.5 },
+        ],
+      });
+
+      await expect(service.demDonTheoLoaiOt()).resolves.toEqual({
+        ngay_thuong: 1,
+        ngay_dem: 1,
+      });
+    });
+
+    it('một đơn chỉ góp 1 vào mỗi loại dù phanBoOt có nhiều phần cùng loại', async () => {
+      donStore.push({
+        _id: 'd1', loaiDon: 'lam_them_gio', isActive: true,
+        phanBoOt: [
+          { loaiNgayOt: 'ngay_le', soGio: 2, heSoTra: 3, heSoTichQuy: 3 },
+          { loaiNgayOt: 'ngay_le', soGio: 3, heSoTra: 3, heSoTichQuy: 3 },
+        ],
+      });
+
+      // Con số phải đọc được là "bao nhiêu ĐƠN đang tham chiếu loại này",
+      // không phải "bao nhiêu dòng phanBoOt".
+      await expect(service.demDonTheoLoaiOt()).resolves.toEqual({ ngay_le: 1 });
+    });
+
+    it('đơn cũ chưa backfill thì đếm theo loaiNgayOt', async () => {
+      donStore.push({
+        _id: 'd1', loaiDon: 'lam_them_gio', isActive: true,
+        soGioOt: 3, loaiNgayOt: 'ngay_nghi', heSoOt: 2,
+      });
+
+      await expect(service.demDonTheoLoaiOt()).resolves.toEqual({ ngay_nghi: 1 });
+    });
+
+    it('bỏ qua đơn đã xoá mềm — không chặn xoá loại vì một bản ghi trong thùng rác', async () => {
+      donStore.push({
+        _id: 'd1', loaiDon: 'lam_them_gio', isActive: false,
+        soGioOt: 3, loaiNgayOt: 'ngay_nghi',
+      });
+
+      await expect(service.demDonTheoLoaiOt()).resolves.toEqual({});
+    });
+
+    it('không có đơn nào thì trả object rỗng, không phải null', async () => {
+      await expect(service.demDonTheoLoaiOt()).resolves.toEqual({});
     });
   });
 });

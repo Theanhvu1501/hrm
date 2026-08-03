@@ -1,7 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CauHinhLuong, DongLuong, Employee, Timesheet } from '@app/entities';
+import {
+  AttendanceRequest,
+  CauHinhLuong,
+  DongLuong,
+  Employee,
+  Timesheet,
+} from '@app/entities';
 import type {
   CauHinhLuongApDung,
   CauHinhLuongData,
@@ -46,7 +52,42 @@ export class BangLuong_Service {
     private readonly employeeRepo: Repository<Employee>,
     @InjectRepository(Timesheet)
     private readonly timesheetRepo: Repository<Timesheet>,
+    @InjectRepository(AttendanceRequest)
+    private readonly donRepo: Repository<AttendanceRequest>,
   ) {}
+
+  /**
+   * Đếm số ĐƠN làm thêm đang tham chiếu từng loại ngày (P4.2b §6).
+   *
+   * Màn Cấu hình lương dùng con số này để CHẶN xoá một loại đang được dùng:
+   * xoá xong thì `phanBoOt` của đơn cũ trỏ vào loại không còn trong
+   * `uuTienLoai`, biểu mẫu 03-LĐTL (P4.2c) mất cột, và `traHeSo()` âm thầm rơi
+   * về hệ số ngày thường — trả thiếu mà không báo gì.
+   *
+   * Một đơn góp TỐI ĐA 1 vào mỗi loại (gom qua `Set`), kể cả khi `phanBoOt` có
+   * nhiều phần cùng loại: con số hiện cho admin phải đọc được là "bao nhiêu
+   * đơn", không phải "bao nhiêu dòng phân bổ".
+   *
+   * Chỉ đếm đơn `isActive` — một bản ghi trong thùng rác không đáng chặn admin
+   * dọn bảng hệ số vĩnh viễn.
+   */
+  async demDonTheoLoaiOt(): Promise<Record<string, number>> {
+    const dons = await this.donRepo.find({
+      where: { loaiDon: 'lam_them_gio', isActive: true } as any,
+    });
+
+    const dem: Record<string, number> = {};
+    for (const don of dons) {
+      const loai = new Set<string>();
+      if (don.phanBoOt?.length) {
+        for (const p of don.phanBoOt) loai.add(p.loaiNgayOt);
+      } else if (don.loaiNgayOt) {
+        loai.add(don.loaiNgayOt);
+      }
+      for (const l of loai) dem[l] = (dem[l] ?? 0) + 1;
+    }
+    return dem;
+  }
 
   /**
    * Đọc bản ghi `CauHinhLuong` đang active. Nếu chưa có bản ghi nào (lần đầu

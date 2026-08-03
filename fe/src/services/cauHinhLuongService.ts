@@ -181,6 +181,16 @@ class CauHinhLuongService extends ServiceBase {
   }
 
   /**
+   * Số ĐƠN làm thêm đang tham chiếu từng loại ngày, để chặn xoá loại đang
+   * dùng. Khoá vắng mặt = 0 đơn.
+   */
+  async demDonTheoLoaiOt(): Promise<Record<string, number>> {
+    return super.get<Record<string, number>>({
+      endpoint: '/dem-don-theo-loai-ot',
+    });
+  }
+
+  /**
    * `forbidNonWhitelisted` ở `CapNhatCauHinhLuongDto` (BE) chặn thẳng 400 nếu
    * body có field ngoài whitelist — mà `dto` truyền vào đây thường là cả
    * object `CauHinhLuong` đọc từ state (kèm `id`/`_id`/`tenantId`/`createdAt`/

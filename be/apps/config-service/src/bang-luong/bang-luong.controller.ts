@@ -42,6 +42,23 @@ export class BangLuong_Controller {
     return { success: true, data };
   }
 
+  /**
+   * Số ĐƠN làm thêm đang tham chiếu từng loại ngày — màn Cấu hình lương dùng
+   * để chặn xoá loại đang được dùng (P4.2b §6).
+   *
+   * Dùng lại `/luong/cau-hinh:xem` chứ không mở khoá quyền mới: đây là dữ liệu
+   * phục vụ đúng màn Cấu hình lương, và thêm module quyền là thêm một bước
+   * `ops/grant-quyen-module-moi.ts` bắt buộc lúc deploy — không đáng cho một
+   * endpoint đếm.
+   */
+  @Get('dem-don-theo-loai-ot')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/cau-hinh:xem')
+  async demDonTheoLoaiOt() {
+    const data = await this.bangLuong_Service.demDonTheoLoaiOt();
+    return { success: true, data };
+  }
+
   @Put('cau-hinh')
   @UseGuards(PermissionGuard)
   @Permissions('/luong/cau-hinh:sua')

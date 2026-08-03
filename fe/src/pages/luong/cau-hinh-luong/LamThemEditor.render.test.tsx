@@ -67,8 +67,12 @@ const cauHinhCu: CauHinhLuong = {
   lamTron: 1_000,
 };
 
-async function moTabLamThem(cauHinh: CauHinhLuong) {
+async function moTabLamThem(
+  cauHinh: CauHinhLuong,
+  demDon: Record<string, number> = {},
+) {
   vi.spyOn(cauHinhLuongService, "get").mockResolvedValue(cauHinh);
+  vi.spyOn(cauHinhLuongService, "demDonTheoLoaiOt").mockResolvedValue(demDon);
   const kq = render(<CauHinhLuongPage />);
   await screen.findByText("Làm thêm & quỹ giờ");
   fireEvent.click(screen.getByText("Làm thêm & quỹ giờ"));
@@ -220,5 +224,81 @@ describe("Tab Làm thêm & quỹ giờ — lamThem hình dạng P4.2a (thiếu t
     expect(screen.getByText("Buổi đêm")).toBeTruthy();
     // Giá trị công ty ĐÃ lưu phải giữ nguyên, không bị mặc định đè.
     expect(screen.getByDisplayValue("6")).toBeTruthy(); // soThangHanDung
+  });
+});
+
+describe("Tab Làm thêm & quỹ giờ — thêm/xoá/đổi thứ tự loại ngày (P4.2b §6)", () => {
+  const mo = (demDon: Record<string, number> = {}) =>
+    moTabLamThem(
+      { ...cauHinhCu, soGioMoiNgay: 8, lamThem: LAM_THEM_MAC_DINH },
+      demDon,
+    );
+
+  it("thêm được loại ngày mới, và nó vào CUỐI danh sách ưu tiên", async () => {
+    await mo();
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+
+    fireEvent.change(screen.getByLabelText("Mã loại ngày mới"), {
+      target: { value: "ngay_bao" },
+    });
+    fireEvent.click(screen.getByText("Thêm loại ngày"));
+
+    await waitFor(() => expect(screen.getByText("ngay_bao")).toBeTruthy());
+    // Vào cuối ⇒ nút "Xuống" của nó phải bị khoá (không còn dòng nào dưới).
+    expect(
+      screen.getByLabelText("Xuống ngay_bao").closest("button")!.disabled,
+    ).toBe(true);
+  });
+
+  it("chặn mã sai định dạng và mã trùng — nút Thêm bị khoá", async () => {
+    await mo();
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+    const o = screen.getByLabelText("Mã loại ngày mới");
+
+    fireEvent.change(o, { target: { value: "Ngày Bão" } });
+    expect(screen.getByText("Thêm loại ngày").closest("button")!.disabled).toBe(true);
+
+    fireEvent.change(o, { target: { value: "ngay_dem" } }); // đã có
+    expect(screen.getByText("Thêm loại ngày").closest("button")!.disabled).toBe(true);
+
+    fireEvent.change(o, { target: { value: "ngay_bao" } });
+    expect(screen.getByText("Thêm loại ngày").closest("button")!.disabled).toBe(false);
+  });
+
+  it("CHẶN xoá loại đang được đơn tham chiếu", async () => {
+    await mo({ ngay_dem: 3 });
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+
+    await waitFor(() =>
+      expect(screen.getByLabelText("Xoá ngay_dem").closest("button")!.disabled).toBe(true),
+    );
+    // Loại không có đơn nào thì vẫn xoá được.
+    expect(screen.getByLabelText("Xoá ngay_le").closest("button")!.disabled).toBe(false);
+  });
+
+  it("xoá loại thì mất khỏi bảng", async () => {
+    await mo();
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+    expect(screen.getByText("Buổi đêm")).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText("Xoá ngay_dem"));
+
+    await waitFor(() => expect(screen.queryByText("Buổi đêm")).toBeNull());
+  });
+
+  it("đổi thứ tự ưu tiên bằng nút lên/xuống", async () => {
+    await mo();
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+
+    // Mặc định lễ đứng đầu ⇒ nút "Lên" của nó bị khoá.
+    expect(screen.getByLabelText("Lên ngay_le").closest("button")!.disabled).toBe(true);
+
+    fireEvent.click(screen.getByLabelText("Lên ngay_nghi"));
+
+    // Sau khi đảo, ngày nghỉ lên đầu nên tới lượt NÓ bị khoá nút "Lên".
+    await waitFor(() =>
+      expect(screen.getByLabelText("Lên ngay_nghi").closest("button")!.disabled).toBe(true),
+    );
+    expect(screen.getByLabelText("Lên ngay_le").closest("button")!.disabled).toBe(false);
   });
 });

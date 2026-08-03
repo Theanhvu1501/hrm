@@ -20,6 +20,10 @@ const proto = BangLuong_Controller.prototype as any;
 /** Toàn bộ route của controller kèm động từ HTTP và quyền BẮT BUỘC. */
 const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['layCauHinh', RequestMethod.GET, '/luong/cau-hinh:xem'],
+  // Dùng lại quyền của màn Cấu hình lương thay vì mở module quyền mới — thêm
+  // module là thêm một bước `ops/grant-quyen-module-moi.ts` bắt buộc lúc
+  // deploy, không đáng cho một endpoint đếm (P4.2b §6).
+  ['demDonTheoLoaiOt', RequestMethod.GET, '/luong/cau-hinh:xem'],
   ['capNhatCauHinh', RequestMethod.PUT, '/luong/cau-hinh:sua'],
   ['tongHop', RequestMethod.POST, '/luong/bang-luong:them'],
   ['chot', RequestMethod.POST, '/luong/bang-luong:sua'],
