@@ -16,6 +16,13 @@ export const CAU_HINH_LUONG_MAC_DINH: CauHinhLuongData = {
     { ma: 'PHU_CAP', ten: 'Phụ cấp cố định', loaiCongThuc: 'CO_DINH_THANG', thamSo: { nguonHoSo: 'phuCapCoDinh' }, chiuThue: true, tranMienThue: null, vaoTongThuNhap: true, vaoBHXH: false, thuTu: 3 },
     { ma: 'HIEU_SUAT', ten: 'Hiệu suất', loaiCongThuc: 'NHAP_THEO_KY', thamSo: {}, chiuThue: true, tranMienThue: null, vaoTongThuNhap: true, vaoBHXH: false, thuTu: 4 },
     { ma: 'THUONG', ten: 'Thưởng', loaiCongThuc: 'NHAP_THEO_KY', thamSo: {}, chiuThue: true, tranMienThue: null, vaoTongThuNhap: true, vaoBHXH: false, thuTu: 5 },
+    // `chiuThue: true` + `tranMienThue: null` là ĐÚNG: phần miễn thuế của tiền
+    // làm thêm KHÔNG suy được từ cờ trên khoản (nó phụ thuộc loại ngày và
+    // `mienThueChenh`), nên engine tính riêng qua `dv.otMienThue` rồi cộng
+    // thẳng vào rổ miễn thuế. Khai `chiuThue: false` ở đây là miễn thuế TOÀN BỘ
+    // tiền làm thêm — sai luật và đếm hai lần.
+    // `vaoBHXH: false`: tiền làm thêm không vào nền đóng BHXH.
+    { ma: 'TIEN_OT', ten: 'Tiền làm thêm giờ', loaiCongThuc: 'TIEN_OT', thamSo: {}, chiuThue: true, tranMienThue: null, vaoTongThuNhap: true, vaoBHXH: false, thuTu: 6 },
   ],
   giamTruBanThan: 15_500_000,
   giamTruNPT: 6_200_000,

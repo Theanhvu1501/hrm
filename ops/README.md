@@ -570,3 +570,59 @@ danh sách bỏ qua dài, kiểm lại xem tenant đó có thật sự chưa b�
 
 Không cần chạy `grant-quyen-module-moi.ts` cho đợt này — P4.2b không thêm module quyền mới, màn
 Cấu hình lương dùng lại quyền `/luong/cau-hinh` đã có.
+
+## Thứ tự chốt kỳ lương và khai tay cho công ty cũ (P4.2c-2)
+
+### Thứ tự BẮT BUỘC khi công ty có trả tiền làm thêm
+
+Công ty đã khai `lamThem` và `cheDoBu ≠ chi_nghi_bu`:
+
+1. Chốt **Bảng lương thêm giờ** (mẫu 03-LĐTL) của kỳ.
+2. Rồi mới **Tổng hợp Bảng lương**.
+
+Làm ngược thứ tự sẽ bị **chặn** kèm thông báo nêu đúng kỳ còn thiếu. Đây là cố ý, không phải lỗi:
+một dòng lương thiếu tiền OT trông y hệt dòng lương của người không làm thêm giờ, và không ai đối
+soát ra. Công ty ở chế độ `chi_nghi_bu` (bảng lương không trả tiền OT) không bị chặn.
+
+**Báo kế toán TRƯỚC khi deploy** — đây là thay đổi quy trình làm việc của họ.
+
+### Công ty đã dùng bảng lương TRƯỚC phase này phải khai tay hai thứ
+
+`bang-luong.service.layCauHinh()` chỉ seed cấu hình mặc định khi **CHƯA có hàng nào**; bản ghi đã
+lưu không bao giờ được bồi thêm. Nên với mọi tenant đang chạy:
+
+1. **Khoản `TIEN_OT`** — vào Cấu hình lương → tab Khoản lương → thêm khoản:
+
+   | Trường | Giá trị |
+   |---|---|
+   | Mã | `TIEN_OT` |
+   | Tên | Tiền làm thêm giờ |
+   | Loại công thức | `TIEN_OT` |
+   | Chịu thuế | **có** |
+   | Trần miễn thuế | trống |
+   | Vào tổng thu nhập | có |
+   | Vào BHXH | **không** |
+
+   **Không thêm khoản này thì tiền làm thêm KHÔNG vào bảng lương** dù bảng 03-LĐTL đã chốt — bảng
+   lương vẫn tổng hợp bình thường, chỉ là không có dòng tiền OT nào. Lỗi im lặng.
+
+   Khai `Chịu thuế = không` là **sai**: phần miễn thuế của tiền làm thêm không suy được từ cờ trên
+   khoản (nó phụ thuộc loại ngày và `mienThueChenh`), engine tính riêng và cộng thẳng vào rổ miễn
+   thuế. Tắt cờ ở đây là miễn thuế **toàn bộ** tiền làm thêm — sai luật và đếm hai lần.
+
+2. **Phí công đoàn** — vào Cấu hình lương → tab Hằng số → ô "Phí công đoàn", điền `2`%. Không khai
+   thì tỷ lệ rơi về 0 và không ai bị trừ (an toàn, nhưng không đúng ý công ty).
+
+### Điểm cần chủ sản phẩm xác nhận lại
+
+Con số **2% trừ vào lương NLĐ** lệch với khung pháp lý thông thường (spec P4.2c §4.2):
+
+- **Kinh phí công đoàn** 2% quỹ lương đóng BHXH — **doanh nghiệp nộp**, không thu của NLĐ
+  (NĐ 191/2013 Đ5).
+- **Đoàn phí công đoàn** 1% tiền lương làm căn cứ đóng BHXH — **đoàn viên đóng**, và chỉ thu với
+  người **là đoàn viên** (Điều lệ Công đoàn VN, QĐ 1908/QĐ-TLĐ).
+
+Hiện hệ thống thu **đều mọi người**, kể cả người không đóng BH và HĐLĐ thứ 2. Nếu thực ra là KPCĐ
+thì phải chuyển sang `chiPhiBHCongTy` (không đụng `thucLinh`); nếu là đoàn phí thì tỷ lệ 1% và cần
+thêm cờ "là đoàn viên" vào hồ sơ nhân viên. `tyLe` nằm trong cấu hình theo tenant nên đổi được
+không cần deploy.
