@@ -7,6 +7,16 @@ export class LaborContract extends BaseEntity {
   @Column() employeeId: string;              // Employee._id
   @Column({ nullable: true }) employeeName?: string;  // denormalized (display)
   @Column({ nullable: true }) employeeCode?: string;  // denormalized NV#### (display)
+  /**
+   * Chức danh NHÂN VIÊN TẠI THỜI ĐIỂM KÝ — denormalized snapshot, giống
+   * employeeName/employeeCode ở trên (FE tự điền lúc chọn nhân viên trong
+   * form, xem HopDongLaoDongForm.tsx). CỐ Ý tách khỏi Employee.chucDanh
+   * (thay đổi theo thời gian): in lại hợp đồng cũ phải ra ĐÚNG chức danh đã
+   * ký, không phải chức danh hiện tại của nhân viên đó (review Important #4).
+   * Hợp đồng tạo TRƯỚC cột này sẽ rỗng — renderHopDong() fallback về
+   * Employee.chucDanh hiện tại kèm cảnh báo, không chặn in.
+   */
+  @Column({ nullable: true }) chucDanh?: string;
   @Column() loaiHopDong: string;             // thu_viec|xac_dinh_thoi_han|khong_xac_dinh_thoi_han|dich_vu
   @Column({ nullable: true }) ngayBatDau?: string;
   @Column({ nullable: true }) ngayKetThuc?: string;   // null cho không xác định thời hạn

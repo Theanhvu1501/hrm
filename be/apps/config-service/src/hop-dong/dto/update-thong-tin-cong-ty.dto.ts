@@ -25,4 +25,12 @@ export class UpdateThongTinCongTyDto {
   @IsOptional()
   @IsString()
   chucVuNguoiDaiDien?: string;
+
+  @IsOptional()
+  @IsString()
+  thanhPhoKy?: string;
+
+  @IsOptional()
+  @IsString()
+  maHopDongMau?: string;
 }

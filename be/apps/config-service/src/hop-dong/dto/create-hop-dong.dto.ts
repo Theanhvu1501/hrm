@@ -24,6 +24,12 @@ export class CreateHopDongDto {
   @IsString()
   employeeCode?: string;
 
+  // Snapshot chức danh tại thời điểm ký — xem chú thích entity vì sao KHÔNG
+  // suy ra từ Employee.chucDanh lúc render.
+  @IsOptional()
+  @IsString()
+  chucDanh?: string;
+
   @IsOptional()
   @IsString()
   ngayBatDau?: string;

@@ -32,4 +32,14 @@ export class TenantAppConfig extends BaseEntity {
   @Column({ nullable: true }) maSoThue?: string | null;
   @Column({ nullable: true }) nguoiDaiDien?: string | null;
   @Column({ nullable: true }) chucVuNguoiDaiDien?: string | null;
+  /**
+   * Thành phố nơi ký hợp đồng (dòng "Hà Nội, ngày … tháng … năm …" đầu văn
+   * bản) và hậu tố số hợp đồng mẫu (vd "/HĐLĐ-MC.1"). Bản gốc MASTER CEO có
+   * 2 giá trị này CỨNG trong văn bản — review (Important #6) chỉ ra hard-code
+   * "Hà Nội"/"/HĐLĐ-MC.1" trong mẫu MẶC ĐỊNH dùng chung cho mọi tenant là
+   * SAI cho tenant khác (vd Đà Nẵng) — chuyển thành cấu hình, rỗng thì bản in
+   * để trống, không tự bịa.
+   */
+  @Column({ nullable: true }) thanhPhoKy?: string | null;
+  @Column({ nullable: true }) maHopDongMau?: string | null;
 }
