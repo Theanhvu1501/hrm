@@ -1,61 +1,30 @@
 import { MongoClient } from 'mongodb';
-import sanitizeHtml from 'sanitize-html';
+// Import THẲNG hàm sanitize thật từ be/ — KHÔNG lặp lại cấu hình allowlist ở
+// đây nữa (review Medium, vòng 2: bản lặp lại trước đó kế thừa lỗ hổng
+// 'style' + allowVulnerableTags của bản sanitizer cũ vì là 2 chỗ tách rời,
+// dễ lệch nhau — Fix đúng là "import shared config instead of copying it.
+// That way the migration can never drift from the sanitiser again"). Script
+// này CHỈ chạy được trong container `nhan-su-be` (xem ops/README.md) vì
+// `mongodb` VÀ giờ cả `sanitize-html` (transitive qua hopDongRender.ts) đều
+// phải resolve qua `be/node_modules` — `require()` trong Node đi theo đường
+// dẫn FILE (ops/ là thư mục anh em của be/, không phải con), không theo cwd.
+import { sanitizeHopDongHtml } from '../be/apps/config-service/src/hop-dong/lib/hopDongRender';
 
 /**
  * Vá lại các dòng `phieu_template` (loai='HOP_DONG_LAO_DONG') đã lưu TRƯỚC
  * khi có `sanitizeHopDongHtml` (be/apps/config-service/src/hop-dong/lib/hopDongRender.ts),
- * hoặc lưu bằng một bản sanitizer cũ đã bị bypass.
+ * hoặc lưu bằng một bản sanitizer cũ đã bị bypass (kể cả bản sanitize-html
+ * ĐẦU TIÊN — cho phép `style` + `allowVulnerableTags` — đã bị review vòng 2
+ * chỉ ra là vẫn lộ script qua parser-confusion `</style/>`; xem Critical 1
+ * vòng 2 trong report và comment tại `sanitizeHopDongHtml`).
  *
- * Vì sao cần (review Critical 1): bản sanitizer regex ban đầu
- * (`sanitizeMauInHtml`, đã thay bằng `sanitizeHopDongHtml` dùng `sanitize-html`)
- * để lọt 9/9 payload XSS thật reviewer đưa ra — `</script >`, `</script/>`,
- * script không đóng thẻ, `onerror` ngăn bằng "/", `<svg onload>`,
- * `<iframe srcdoc>`, `javascript:` không dấu nháy/encode entity, `<base
- * href>`. Bất kỳ dòng nào lưu qua bản đó (hoặc qua PUT /config/phieu-template
- * trước khi bị chặn — xem Critical 2) có thể đang mang HTML độc SỐNG trong
- * DB. `renderHopDongHtml` giờ sanitize lại lúc RENDER nên không còn phục vụ
- * HTML sống ra ngoài nữa — script này dọn luôn DỮ LIỆU LƯU, không chỉ chặn ở
- * đầu ra, và loại bỏ phụ thuộc "phải nhớ render luôn sanitize" trong tương lai.
+ * Idempotent: chạy lại nhiều lần an toàn — dòng đã sạch thì
+ * `sanitizeHopDongHtml()` trả về y nguyên, script bỏ qua không ghi.
  *
- * Idempotent: chạy lại nhiều lần an toàn — dòng đã sạch thì `sanitizeHtml()`
- * trả về y nguyên, script bỏ qua không ghi.
- *
- * Cấu hình allowlist PHẢI khớp `sanitizeHopDongHtml` — xem chú thích ở đó.
- * Không import trực tiếp file be/ (ops/ chạy độc lập, tránh kéo theo toàn bộ
- * cây import Nest/TypeORM của be/ vào 1 script Mongo thuần) — lặp lại cấu
- * hình ở đây, có comment trỏ ngược để không lệch nhau.
- *
- * Chạy:
+ * Chạy (BẮT BUỘC trong container `nhan-su-be`, xem ops/README.md):
  *   MONGODB_URI=... MONGODB_DATABASE=nhan_su npx ts-node ops/re-sanitize-hop-dong-mau-in.ts --dry-run
  *   MONGODB_URI=... MONGODB_DATABASE=nhan_su npx ts-node ops/re-sanitize-hop-dong-mau-in.ts
  */
-
-const ALLOWED_TAGS = [
-  'div', 'p', 'span', 'br', 'hr',
-  'b', 'strong', 'i', 'em', 'u', 'small', 'sup', 'sub',
-  'h1', 'h2', 'h3', 'h4',
-  'ul', 'ol', 'li',
-  'table', 'thead', 'tbody', 'tr', 'td', 'th', 'caption',
-  'style',
-];
-
-const ALLOWED_ATTRIBUTES: Record<string, string[]> = {
-  '*': ['style', 'class'],
-  table: ['border', 'cellpadding', 'cellspacing'],
-  td: ['colspan', 'rowspan'],
-  th: ['colspan', 'rowspan'],
-};
-
-function sanitizeHopDongHtml(html: string): string {
-  return sanitizeHtml(html, {
-    allowedTags: ALLOWED_TAGS,
-    allowedAttributes: ALLOWED_ATTRIBUTES,
-    allowedSchemes: [],
-    allowProtocolRelative: false,
-    allowVulnerableTags: true,
-    disallowedTagsMode: 'discard',
-  });
-}
 
 const DRY_RUN = process.argv.includes('--dry-run');
 

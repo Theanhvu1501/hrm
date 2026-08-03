@@ -451,3 +451,43 @@ Không cần backfill hàng loạt "phòng ngừa" — cột này chỉ có tác
 TIÊN sau khi bản vá deploy; hồ sơ nào không bao giờ bị huỷ duyệt/xoá thì không bao giờ đọc tới
 cột này. Không cần chạy `ops/grant-quyen-module-moi.ts` cho đợt này — không thêm module quyền
 mới, vẫn dùng `/nhan-su/thoi-viec:xem|them|sua|xoa` đã có.
+
+## Vá dữ liệu mẫu in hợp đồng lao động cũ (`re-sanitize-hop-dong-mau-in.ts`, P4.2a)
+
+**BẮT BUỘC chạy cùng lần deploy bản đổi sang `sanitize-html` cho mẫu in HĐLĐ** (review Critical
+1) — nếu không, dòng `phieu_template` (`loai='HOP_DONG_LAO_DONG'`) nào đã được lưu qua bản
+sanitizer CŨ (regex, hoặc bản `sanitize-html` đầu tiên cho phép `<style>` — cả hai đều bị chứng
+minh lộ script sống, xem report P4.2a "Critical 1") **vẫn còn HTML độc trong DB** cho tới khi
+script này chạy. `renderHopDongHtml` (BE) sanitize lại lúc RENDER nên vẫn AN TOÀN cho người dùng
+cuối kể cả khi chưa chạy script này — nhưng dữ liệu LƯU vẫn bẩn, và bất kỳ consumer nào đọc thẳng
+`phieu_template.html` sau này (export, backup, tool khác) mà không qua `renderHopDongHtml` sẽ lộ
+lại chuỗi HTML gốc.
+
+**Chỉ chạy được TRONG container `nhan-su-be`** — script import thẳng `sanitizeHopDongHtml` từ
+`be/apps/config-service/src/hop-dong/lib/hopDongRender.ts` (không lặp lại cấu hình allowlist,
+tránh lệch nhau về sau — xem comment đầu file), nên `mongodb` VÀ `sanitize-html` đều phải resolve
+qua `be/node_modules`; chạy `ts-node` từ bên ngoài `be/` (vd thẳng từ `ops/`) sẽ báo
+`Cannot find module 'mongodb'` — đây là hạn chế chung của mọi script trong `ops/`, không riêng
+script này (đã xác nhận cùng lỗi xảy ra với `grant-quyen-module-moi.ts` khi thử chạy sai chỗ).
+
+```bash
+# 1. Xem trước, không ghi gì (chạy từ bên trong container nhan-su-be)
+MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
+  npx ts-node ops/re-sanitize-hop-dong-mau-in.ts --dry-run
+
+# 2. Ghi thật
+MONGODB_URI="mongodb://..." MONGODB_DATABASE=nhan_su \
+  npx ts-node ops/re-sanitize-hop-dong-mau-in.ts
+```
+
+Idempotent — dòng đã sạch thì `sanitizeHopDongHtml()` trả về y nguyên, script bỏ qua không ghi
+(báo "SẠCH"). Không cần chạy `ops/grant-quyen-module-moi.ts` cho đợt này — P4.2a không thêm
+module quyền mới, mẫu in HĐLĐ dùng lại quyền `/nhan-su/hop-dong-lao-dong:xem|sua|xuat` đã có.
+
+**Giới hạn đã biết của mẫu in HĐLĐ (không phải bug, nêu ở đây để không ai "sửa lại"):** allowlist
+HTML cho mẫu in loại hẳn `<a>` và `<img>` (mọi thẻ có thể mang `href`/`src` đều bị loại, xem
+Critical 1) — tenant **không thể** chèn logo công ty hay đường link vào mẫu in hợp đồng. Đây là
+đánh đổi có chủ ý (đóng hẳn 1 nhóm vector tấn công thay vì lọc từng thuộc tính), không phải thiếu
+sót — nếu sau này cần logo, phải thiết kế riêng (vd 1 field ảnh base64 cấu hình sẵn ở tenant, ghép
+vào template lúc render giống `TRUSTED_PRINT_CSS`, KHÔNG mở lại thẻ `<img>` cho tenant tự chèn URL
+bất kỳ).
