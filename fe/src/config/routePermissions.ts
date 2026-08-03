@@ -10,6 +10,7 @@ export const routePermissions: Record<string, string> = {
   // ro (thu nhập thật), và không mở module quyền mới thì không phải chạy
   // ops/grant-quyen-module-moi.ts lúc deploy.
   '/luong/bang-luong-them-gio': '/luong/bang-luong:xem',
+  '/luong/quyet-toan-tncn': '/luong/bang-luong:xem',
   '/nhan-su/ho-so-nhan-vien': '/nhan-su/ho-so-nhan-vien:xem',
   '/nhan-su/hop-dong-lao-dong': '/nhan-su/hop-dong-lao-dong:xem',
   '/nhan-su/qua-trinh-cong-tac': '/nhan-su/qua-trinh-cong-tac:xem',

@@ -294,6 +294,11 @@ const MainLayout: React.FC = () => {
           icon: <DollarOutlined />,
           label: "Bảng lương",
         },
+        {
+          key: "/luong/quyet-toan-tncn",
+          icon: <DollarOutlined />,
+          label: "Quyết toán TNCN",
+        },
       ],
     }] : []),
   ];

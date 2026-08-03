@@ -27,6 +27,7 @@ import {
   BangLuongPage,
   BangThemGioPage,
   PhieuLuongCuaToiPage,
+  QuyetToanTncnPage,
   HoSoNhanVienPage,
   HopDongLaoDongPage,
   QuaTrinhCongTacPage,
@@ -159,6 +160,14 @@ const App = () => (
                     element={
                       <ProtectedRoute requiredPermission="/luong/bang-luong:xem">
                         <BangLuongPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="quyet-toan-tncn"
+                    element={
+                      <ProtectedRoute requiredPermission="/luong/bang-luong:xem">
+                        <QuyetToanTncnPage />
                       </ProtectedRoute>
                     }
                   />

@@ -46,6 +46,10 @@ export const PhieuLuongCuaToiPage = loadable(() => import('./toi/phieu-luong/Phi
   fallback: <PageLoader />
 });
 
+export const QuyetToanTncnPage = loadable(() => import('./luong/quyet-toan-tncn/QuyetToanTncnPage'), {
+  fallback: <PageLoader />
+});
+
 // Nhân sự
 export const HoSoNhanVienPage = loadable(() => import('./nhan-su/ho-so-nhan-vien/HoSoNhanVienPage'), {
   fallback: <PageLoader />
