@@ -3,6 +3,21 @@ import { BaseEntity } from '../base.entity';
 import type { PhanBoQuy } from './leave-balance.entity';
 import type { PhanBoQuyGio as PhanBoQuyGioType } from './overtime-balance.entity';
 
+/**
+ * Một phần của đơn OT sau khi chẻ theo loại ngày và khung giờ đêm (P4.2b).
+ *
+ * Lưu CẢ HAI hệ số vì cả hai đều là cấu hình đổi được: tra lại lúc tính là để
+ * HR sửa cấu hình tháng sau âm thầm đổi số của đơn đã duyệt tháng trước, và
+ * không ai biết số nào mới là số đã trả lương.
+ */
+export interface PhanBoOt {
+  loaiNgayOt: string;
+  /** Giờ CHÍNH XÁC, KHÔNG làm tròn — xem `SO_LE_GIO` ở `luat-quy-gio.ts`. */
+  soGio: number;
+  heSoTra: number;
+  heSoTichQuy: number;
+}
+
 @Entity('attendance_requests')
 export class AttendanceRequest extends BaseEntity {
   @Column() employeeId: string;
@@ -45,7 +60,15 @@ export class AttendanceRequest extends BaseEntity {
   @Column({ nullable: true }) soNgayNghi?: number; // kết quả tinhSoNgayNghi()
   @Column({ nullable: true }) soGioOt?: number; // kết quả tinhSoGioOt()
   @Column({ nullable: true }) heSoOt?: number; // kết quả suyHeSoOt().heSoOt
-  @Column({ nullable: true }) loaiNgayOt?: string; // kết quả suyHeSoOt().loaiNgayOt
+  @Column({ nullable: true }) loaiNgayOt?: string; // kết quả suyLoaiNgay()
+  /**
+   * Phân bổ giờ OT theo loại ngày/đêm (P4.2b) — nguồn sự thật của cả tích quỹ
+   * lẫn tiền làm thêm (P4.2c). Ba trường trên (`soGioOt`/`heSoOt`/`loaiNgayOt`)
+   * là DẪN XUẤT từ đây qua `gopPhanBoOt()`, giữ lại cho màn danh sách và bộ
+   * lọc cũ. Vắng mặt = đơn nộp trước P4.2b, hoặc công ty chưa khai `lamThem`.
+   * CỐ Ý không có trong DTO — cùng lý do ba trường trên.
+   */
+  @Column('json', { nullable: true }) phanBoOt?: PhanBoOt[];
   /**
    * Đơn `nghi_phep` với `loaiNghi='phep_nam'` đã giữ chỗ ở quỹ nào, bao nhiêu
    * (P3.8). Backend tự ghi lúc tạo đơn — CỐ Ý không có trong DTO.

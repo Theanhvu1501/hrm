@@ -9,6 +9,11 @@
  * lý do đã ghi ở `ban-ghi-cham-cong/thoi-gian.util.ts`.
  */
 import { hhmmSangPhut } from '../ban-ghi-cham-cong/thoi-gian.util';
+// `import type` bị xoá lúc biên dịch, nên file luật vẫn không có phụ thuộc
+// runtime vào TypeORM — chỉ mượn hình dạng dữ liệu đã khai trên entity.
+import type { PhanBoOt } from '@app/entities';
+
+export type { PhanBoOt };
 
 /**
  * Giá trị SEED cho `CauHinhLuong.lamThem.heSoTra`. KHÔNG phải nguồn sự thật
@@ -119,14 +124,6 @@ export function tinhSoGioOt(gioTu: string, gioDen: string): number {
 
 const PHUT_MOT_NGAY = 24 * 60;
 
-/** Một phần của đơn OT sau khi chẻ theo loại ngày / khung giờ đêm. */
-export interface PhanBoOt {
-  loaiNgayOt: string;
-  /** Giờ CHÍNH XÁC, KHÔNG làm tròn — xem docblock `chiaGioOtTheoLoai()`. */
-  soGio: number;
-  heSoTra: number;
-  heSoTichQuy: number;
-}
 
 /**
  * Loại đứng trước trong `uuTienLoai` thắng. Loại không có trong danh sách xếp

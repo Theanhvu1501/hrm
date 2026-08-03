@@ -34,10 +34,13 @@ const ID_NV = '650000000000000000000101';
 const T2_DEN_T6 = [1, 2, 3, 4, 5];
 
 /**
- * Repo giả GIỮ THAM CHIẾU (không clone khi đọc): `QuyGio_Service.apDung()`
- * sửa thẳng object lấy từ `findOne()` rồi mới `save()`, nên một fake trả bản
- * sao sẽ làm mọi thay đổi rơi vào hư không. Cùng hình dạng với `repoGia()`
- * trong `quy-gio.service.spec.ts`.
+ * Repo giả — cùng hình dạng với `repoGia()` trong `quy-gio.service.spec.ts`.
+ *
+ * Từ P4.2b, `QuyGio_Service.apDung()` KHÔNG còn sửa tại chỗ rồi `save()`: nó
+ * tính trên bản sao rồi ghi bằng CAS qua `findOneAndUpdate()`. Nên fake trả
+ * tham chiếu hay bản sao đều không còn quan trọng với quỹ giờ — nhưng
+ * `findOneAndUpdate` thì BẮT BUỘC phải có, nếu không mọi lời gọi giữ chỗ ném
+ * "is not a function".
  */
 function repoGia(khoiTao: any[] = []) {
   const rows: any[] = [...khoiTao];
@@ -178,6 +181,7 @@ async function dungHeThong(
     quyGio: module.get<QuyGio_Service>(QuyGio_Service),
     repoQuy,
     repoSo,
+    repoDon,
   };
 }
 
@@ -445,5 +449,91 @@ describe('Rollout blocker: quỹ giờ là opt-in — công ty CHƯA khai lamThe
 
     expect(repoQuy.rows).toHaveLength(0);
     expect(repoSo.rows).toHaveLength(0);
+  });
+});
+
+describe('phanBoOt khi tạo đơn làm thêm (P4.2b Task 6)', () => {
+  it('đơn vắt nửa đêm được chẻ và snapshot vào phanBoOt', async () => {
+    // CAU_HINH là hình dạng P4.2a (chưa có heSoTra/khungGioDem/uuTienLoai) —
+    // đúng trạng thái của mọi tenant ngay sau khi deploy P4.2b, trước khi HR
+    // kịp vào lưu lại cấu hình. Phải rơi về mặc định, không được ra NaN.
+    const { don } = await dungHeThong();
+
+    const donOt = await don.create({
+      employeeId: ID_NV,
+      loaiDon: 'lam_them_gio',
+      ngay: '2026-06-01', // thứ Hai, không lễ
+      gioTu: '20:00',
+      gioDen: '02:00',
+    } as any);
+
+    expect(donOt.phanBoOt).toEqual([
+      { loaiNgayOt: 'ngay_thuong', soGio: 2, heSoTra: 1.5, heSoTichQuy: 1.5 },
+      { loaiNgayOt: 'ngay_dem', soGio: 4, heSoTra: 1.5, heSoTichQuy: 1.5 },
+    ]);
+    // Ba trường dẫn xuất vẫn đúng cho màn danh sách và bộ lọc cũ.
+    expect(donOt.soGioOt).toBe(6);
+    expect(donOt.loaiNgayOt).toBe('ngay_dem');
+    expect(donOt.heSoOt).toBe(1.5);
+  });
+
+  it('ngày lễ thắng ca đêm — một phần ngay_le, hệ số 3.0', async () => {
+    const { don } = await dungHeThong({ ngayLe: ['2026-06-01'] });
+
+    const donOt = await don.create({
+      employeeId: ID_NV,
+      loaiDon: 'lam_them_gio',
+      ngay: '2026-06-01',
+      gioTu: '20:00',
+      gioDen: '02:00',
+    } as any);
+
+    expect(donOt.phanBoOt).toEqual([
+      { loaiNgayOt: 'ngay_le', soGio: 6, heSoTra: 3.0, heSoTichQuy: 3.0 },
+    ]);
+    expect(donOt.loaiNgayOt).toBe('ngay_le');
+  });
+
+  it('quỹ tích theo phanBoOt: 2h thường ×1.5 + 4h đêm ×2.0 = 11 giờ', async () => {
+    // Hệ số tích ca đêm cố ý KHÁC ngày thường: đường cũ (một phần, loại đại
+    // diện `ngay_dem` → rơi về ngay_thuong 1.5) sẽ ra 6×1.5 = 9, nên con số
+    // 11 chỉ đạt được nếu quỹ thật sự cộng theo từng phần.
+    const { don, repoQuy } = await dungHeThong({
+      cauHinh: {
+        ...CAU_HINH,
+        lamThem: {
+          ...CAU_HINH.lamThem,
+          heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3, ngay_dem: 2 },
+        },
+      },
+    });
+
+    const donOt = await don.create({
+      employeeId: ID_NV,
+      loaiDon: 'lam_them_gio',
+      ngay: '2026-06-01',
+      gioTu: '20:00',
+      gioDen: '02:00',
+    } as any);
+    await don.updateStatus(String((donOt as any)._id), 'da_duyet', 'HR', HR);
+
+    expect(repoQuy.rows[0].soGioTich).toBe(11);
+  });
+
+  it('công ty CHƯA khai lamThem thì không chẻ, giữ nguyên hành vi trước P4.2b', async () => {
+    const { don } = await dungHeThong({ cauHinh: null });
+
+    const donOt = await don.create({
+      employeeId: ID_NV,
+      loaiDon: 'lam_them_gio',
+      ngay: '2026-06-01',
+      gioTu: '20:00',
+      gioDen: '02:00',
+    } as any);
+
+    expect(donOt.phanBoOt).toBeUndefined();
+    expect(donOt.soGioOt).toBe(6);
+    expect(donOt.loaiNgayOt).toBe('ngay_thuong');
+    expect(donOt.heSoOt).toBe(1.5);
   });
 });

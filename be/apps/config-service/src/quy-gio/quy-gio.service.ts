@@ -5,6 +5,7 @@ import {
   CauHinhLuong,
   OvertimeBalance,
   OvertimeBalanceEntry,
+  PhanBoOt,
 } from '@app/entities';
 import {
   EPSILON_GIO,
@@ -16,6 +17,11 @@ import {
   lamTronGio,
   phanBoFifo,
 } from './luat-quy-gio';
+import {
+  HE_SO_OT_MAC_DINH,
+  KHUNG_GIO_DEM_MAC_DINH,
+  UU_TIEN_LOAI_MAC_DINH,
+} from '../don-cham-cong/luat-don';
 
 /** Mã lỗi ổn định cho FE so khớp — KHÔNG so khớp câu chữ tiếng Việt. */
 export const MA_LOI_QUY_GIO = {
@@ -33,7 +39,10 @@ const SO_LAN_THU_LAI_CAS = 5;
 interface CauHinhLamThemApDung {
   soGioMoiNgay: number;
   cheDoBu: string;
+  heSoTra: Record<string, number>;
   heSoTichQuy: HeSoTichQuy;
+  khungGioDem: { tu: string; den: string } | null;
+  uuTienLoai: string[];
   soThangHanDung: number | null;
   khiHetHan: string;
 }
@@ -66,10 +75,34 @@ export class QuyGio_Service {
     return {
       soGioMoiNgay: ch.soGioMoiNgay ?? 8,
       cheDoBu: ch.lamThem.cheDoBu,
+      // Công ty đã khai `lamThem` từ P4.2a chưa có bốn trường của P4.2b — rơi
+      // về mặc định thay vì `undefined`, để đơn nộp ngay sau deploy (trước khi
+      // HR kịp vào lưu lại cấu hình) không chẻ ra hệ số NaN.
+      heSoTra: ch.lamThem.heSoTra ?? { ...HE_SO_OT_MAC_DINH },
       heSoTichQuy: ch.lamThem.heSoTichQuy,
+      khungGioDem: ch.lamThem.khungGioDem ?? { ...KHUNG_GIO_DEM_MAC_DINH },
+      uuTienLoai: ch.lamThem.uuTienLoai ?? [...UU_TIEN_LOAI_MAC_DINH],
       soThangHanDung: ch.lamThem.soThangHanDung ?? null,
       khiHetHan: ch.lamThem.khiHetHan ?? 'quy_ra_tien',
     };
+  }
+
+  /**
+   * Bảng hệ số + khung giờ đêm cho `chiaGioOtTheoLoai()`. `null` = công ty
+   * CHƯA khai `lamThem` — nơi gọi giữ nguyên hành vi trước P4.2b (không chẻ),
+   * đi qua đúng cửa `layCauHinh()` mà `tichTuDonOt()` dùng để quyết có tích
+   * hay không, nên hai bên không bao giờ lệch pha về việc quỹ đã bật hay chưa.
+   */
+  async cauHinhChiaGio(): Promise<{
+    heSoTra: Record<string, number>;
+    heSoTichQuy: HeSoTichQuy;
+    khungGioDem: { tu: string; den: string } | null;
+    uuTienLoai: string[];
+  } | null> {
+    const ch = await this.layCauHinh();
+    if (!ch) return null;
+    const { heSoTra, heSoTichQuy, khungGioDem, uuTienLoai } = ch;
+    return { heSoTra, heSoTichQuy, khungGioDem, uuTienLoai };
   }
 
   /** Số giờ của một ngày công — nơi gọi bên ngoài (đơn nghỉ bù) cần biết. */
@@ -184,6 +217,8 @@ export class QuyGio_Service {
     ngay: string;
     soGioOt: number;
     loaiNgayOt: string;
+    /** P4.2b — có thì cộng theo từng phần bằng hệ số snapshot trên đơn. */
+    phanBoOt?: PhanBoOt[];
     requestId: string;
     nguoiThucHien: string;
   }): Promise<void> {
@@ -200,6 +235,7 @@ export class QuyGio_Service {
       soGioOt: input.soGioOt,
       loaiNgayOt: input.loaiNgayOt,
       heSoTichQuy: cauHinh.heSoTichQuy,
+      phanBoOt: input.phanBoOt,
     });
     if (soGio <= 0) return;
 

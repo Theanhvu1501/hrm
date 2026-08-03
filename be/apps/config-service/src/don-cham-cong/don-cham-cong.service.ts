@@ -14,6 +14,8 @@ import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 import { QuyGio_Service } from '../quy-gio/quy-gio.service';
 import {
+  chiaGioOtTheoLoai,
+  gopPhanBoOt,
   suyLoaiNgay,
   tinhSoGioOt,
   tinhSoNgayNghi,
@@ -228,20 +230,47 @@ export class DonChamCong_Service {
     Partial<
       Pick<
         AttendanceRequest,
-        'soGioOt' | 'heSoOt' | 'loaiNgayOt' | 'soNgayNghi' | 'soGioNghiBu'
+        | 'soGioOt'
+        | 'heSoOt'
+        | 'loaiNgayOt'
+        | 'phanBoOt'
+        | 'soNgayNghi'
+        | 'soGioNghiBu'
       >
     >
   > {
     if (dto.loaiDon === 'lam_them_gio') {
-      const soGioOt = tinhSoGioOt(dto.gioTu!, dto.gioDen!);
       const ngayLe = await this.ngayLeService.timTheoNgay(dto.ngay);
-      const loaiNgayOt = suyLoaiNgay({
+      const loaiNgay = suyLoaiNgay({
         ngay: dto.ngay,
         laNgayLe: ngayLe !== null,
         ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
       });
-      const heSoOt = traHeSo(HE_SO_OT_MAC_DINH, loaiNgayOt);
-      return { soGioOt, heSoOt, loaiNgayOt };
+
+      const chia = await this.quyGio_Service.cauHinhChiaGio();
+      if (!chia) {
+        // Công ty chưa khai `lamThem`: giữ nguyên hành vi trước P4.2b — một
+        // loại, hệ số mặc định, KHÔNG có `phanBoOt`. Không chẻ theo một mặc
+        // định ngầm, vì chẻ hay không là quyết định của công ty chứ không
+        // phải hệ quả phụ của một lần deploy.
+        return {
+          soGioOt: tinhSoGioOt(dto.gioTu!, dto.gioDen!),
+          heSoOt: traHeSo(HE_SO_OT_MAC_DINH, loaiNgay),
+          loaiNgayOt: loaiNgay,
+        };
+      }
+
+      const phanBoOt = chiaGioOtTheoLoai({
+        gioTu: dto.gioTu!,
+        gioDen: dto.gioDen!,
+        loaiNgay,
+        khungGioDem: chia.khungGioDem,
+        uuTienLoai: chia.uuTienLoai,
+        heSoTra: chia.heSoTra,
+        heSoTichQuy: chia.heSoTichQuy,
+      });
+
+      return { ...gopPhanBoOt(phanBoOt), phanBoOt };
     }
 
     if (dto.loaiDon === 'nghi_phep' || dto.loaiDon === 'nghi_bu') {
@@ -849,6 +878,7 @@ export class DonChamCong_Service {
             ngay: item.ngay,
             soGioOt: item.soGioOt ?? 0,
             loaiNgayOt: item.loaiNgayOt ?? 'ngay_thuong',
+            phanBoOt: item.phanBoOt,
             requestId: String((daLuu as any)._id),
             nguoiThucHien: String(nguoiThucHien?.id ?? ''),
           });

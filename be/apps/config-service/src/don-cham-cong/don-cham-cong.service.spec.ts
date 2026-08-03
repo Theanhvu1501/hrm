@@ -47,6 +47,7 @@ describe('DonChamCong_Service', () => {
   let mockQuyGioService: {
     soGioMoiNgay: jest.Mock;
     dangKichHoat: jest.Mock;
+    cauHinhChiaGio: jest.Mock;
     phanBoChoNghiBu: jest.Mock;
     giuCho: jest.Mock;
     nhaCho: jest.Mock;
@@ -132,6 +133,12 @@ describe('DonChamCong_Service', () => {
       // vọng có giữ chỗ quỹ giờ (phanBoChoNghiBu được gọi). Describe chuyên
       // trách gate opt-in (rollout blocker) tự override thành `false`.
       dangKichHoat: jest.fn().mockResolvedValue(true),
+      // `null` = công ty chưa khai `lamThem` → đơn OT KHÔNG bị chẻ theo khung
+      // đêm, giữ nguyên hình dạng snapshot trước P4.2b mà cả trăm bài test ở
+      // file này đang khẳng định. Đường chẻ THẬT được phủ ở
+      // `don-cham-cong.quy-gio.tich-hop.spec.ts`, nơi QuyGio_Service là hàng
+      // thật — đúng chỗ nó thuộc về, vì ở đây quỹ bị mock hoàn toàn.
+      cauHinhChiaGio: jest.fn().mockResolvedValue(null),
       phanBoChoNghiBu: jest.fn().mockResolvedValue([]),
       giuCho: jest.fn().mockResolvedValue(undefined),
       nhaCho: jest.fn().mockResolvedValue(undefined),
@@ -1217,6 +1224,12 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
     const quyGio = {
       soGioMoiNgay: jest.fn().mockResolvedValue(8),
       dangKichHoat: jest.fn().mockResolvedValue(true),
+      // `null` = công ty chưa khai `lamThem` → đơn OT KHÔNG bị chẻ theo khung
+      // đêm, giữ nguyên hình dạng snapshot trước P4.2b mà cả trăm bài test ở
+      // file này đang khẳng định. Đường chẻ THẬT được phủ ở
+      // `don-cham-cong.quy-gio.tich-hop.spec.ts`, nơi QuyGio_Service là hàng
+      // thật — đúng chỗ nó thuộc về, vì ở đây quỹ bị mock hoàn toàn.
+      cauHinhChiaGio: jest.fn().mockResolvedValue(null),
       phanBoChoNghiBu: jest.fn().mockResolvedValue([]),
       giuCho: jest.fn().mockResolvedValue(undefined),
       nhaCho: jest.fn().mockResolvedValue(undefined),
@@ -1862,6 +1875,9 @@ describe('DonChamCong_Service — nghỉ bù trừ quỹ giờ (Task 7)', () => 
       tichTuDonOt: jest.fn().mockResolvedValue(undefined),
       thuHoiTichTuDonOt: jest.fn().mockResolvedValue(undefined),
       soDuKhaDung: jest.fn().mockResolvedValue({ soGioConLai: 0, theoKy: [] }),
+      // Xem lập luận ở khối mock đầu file: `null` = chưa khai `lamThem`, đơn
+      // OT không bị chẻ, giữ nguyên hình dạng snapshot trước P4.2b.
+      cauHinhChiaGio: jest.fn().mockResolvedValue(null),
       ...ghiDe,
     };
   }
