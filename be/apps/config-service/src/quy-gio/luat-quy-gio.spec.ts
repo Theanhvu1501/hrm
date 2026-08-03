@@ -215,3 +215,57 @@ describe('phanBoFifo — epsilon', () => {
     expect(phanBoFifo(BA_KY, 25).every((p) => p.soGio > 0)).toBe(true);
   });
 });
+
+/**
+ * Mọi hệ số ở đây cố ý KHÁC nhau và khác `ngay_thuong`. Đường cũ (`if/else`
+ * ba nhánh) rơi loại lạ về `ngay_thuong`, nên nếu fixture để `ngay_dem` bằng
+ * `ngay_thuong` thì hai đường ra cùng một con số và test xanh vì trùng ngẫu
+ * nhiên chứ không vì đúng.
+ */
+describe('gioTichTuDonOt với phanBoOt (P4.2b)', () => {
+  const heSoTichQuy = { ngay_thuong: 1.5, ngay_nghi: 2.0, ngay_le: 3.0, ngay_dem: 2.5 };
+
+  it('cộng theo từng phần, dùng hệ số SNAPSHOT chứ không tra lại cấu hình', () => {
+    // Cấu hình hiện tại để ngay_dem = 4.0, nhưng đơn snapshot 2.0 lúc nộp —
+    // phải giữ 2.0, nếu không thì sửa cấu hình là đổi giờ của đơn đã duyệt.
+    expect(
+      gioTichTuDonOt({
+        soGioOt: 6,
+        loaiNgayOt: 'ngay_dem',
+        heSoTichQuy: { ...heSoTichQuy, ngay_dem: 4.0 },
+        phanBoOt: [
+          { loaiNgayOt: 'ngay_thuong', soGio: 2, heSoTra: 1.5, heSoTichQuy: 1.5 },
+          { loaiNgayOt: 'ngay_dem', soGio: 4, heSoTra: 2.0, heSoTichQuy: 2.0 },
+        ],
+      }),
+    ).toBe(11); // 2×1.5 + 4×2.0 — đường cũ sẽ ra 6×1.5 = 9
+  });
+
+  it('HỒI QUY: đơn một phần cho ĐÚNG con số đường cũ — 2h20 ngày lễ = 7.00', () => {
+    const soGioOt = 2 + 20 / 60;
+    const cu = gioTichTuDonOt({ soGioOt, loaiNgayOt: 'ngay_le', heSoTichQuy });
+    const moi = gioTichTuDonOt({
+      soGioOt,
+      loaiNgayOt: 'ngay_le',
+      heSoTichQuy,
+      phanBoOt: [
+        { loaiNgayOt: 'ngay_le', soGio: soGioOt, heSoTra: 3.0, heSoTichQuy: 3.0 },
+      ],
+    });
+    expect(cu).toBe(7);
+    expect(moi).toBe(7); // KHÔNG phải 6.99 — làm tròn vẫn ở SAU phép nhân
+  });
+
+  it('đơn cũ không có phanBoOt rơi về đường cũ, TRA BẢNG chứ không if/else', () => {
+    // if/else ba nhánh sẽ ra 4×1.5 = 6 vì `ngay_dem` không khớp nhánh nào.
+    expect(gioTichTuDonOt({ soGioOt: 4, loaiNgayOt: 'ngay_dem', heSoTichQuy })).toBe(10);
+    // Loại thật sự lạ mới rơi về ngay_thuong — hệ số THẤP nhất.
+    expect(gioTichTuDonOt({ soGioOt: 4, loaiNgayOt: 'loai_la', heSoTichQuy })).toBe(6);
+  });
+
+  it('phanBoOt rỗng xử như không có', () => {
+    expect(
+      gioTichTuDonOt({ soGioOt: 4, loaiNgayOt: 'ngay_le', heSoTichQuy, phanBoOt: [] }),
+    ).toBe(12);
+  });
+});

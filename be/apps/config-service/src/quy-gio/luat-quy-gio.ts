@@ -9,6 +9,8 @@
  * Dùng `Date.UTC` + `getUTC*` cho mọi phép tính ngày, cùng lý do đã ghi ở
  * `luat-don.ts`: `new Date("YYYY-MM-DD").getDay()` đọc theo múi giờ tiến trình.
  */
+import { PhanBoOt, traHeSo } from '../don-cham-cong/luat-don';
+
 
 /** Bảng tra MỞ — thêm loại ngày là thêm một khoá cấu hình, không phải sửa kiểu. */
 export type HeSoTichQuy = Record<string, number>;
@@ -114,27 +116,37 @@ export function hanDungCuaKy(
 /**
  * Giờ nghỉ được hưởng sinh ra từ MỘT đơn làm thêm đã duyệt.
  *
- * Loại ngày lạ rơi về hệ số NGÀY THƯỜNG — hệ số thấp nhất. Rơi về hệ số cao
- * là tự tặng giờ cho người nộp đơn khi có ai đó thêm loại ngày mới mà quên
- * cập nhật cấu hình.
+ * Cộng theo `phanBoOt` khi đơn có (đơn nộp từ P4.2b trở đi): mỗi phần dùng hệ
+ * số SNAPSHOT trên chính nó, KHÔNG tra lại cấu hình — sửa cấu hình sau không
+ * được đổi giờ của đơn đã duyệt, cùng lập luận đã ghi ở
+ * `don-cham-cong.service.ts` về việc snapshot ngay lúc tạo đơn.
  *
- * Đây là BIÊN LÀM TRÒN của chiều tích quỹ: nhân hệ số XONG rồi mới làm tròn
- * (xem `SO_LE_GIO`). 2h20' ngày lễ = 2.3333…× 3.0 = 6.99999…→ 7.00, đúng con
- * số mà con người tính nhẩm ra; làm tròn trước khi nhân sẽ cho 6.99.
+ * Đơn cũ (chưa backfill) rơi về đường một-phần, tra `heSoTichQuy` qua
+ * `traHeSo()` — BẢNG TRA, không `if/else` ba nhánh. Khuôn if/else cũ khoá cứng
+ * ba loại vào mã nguồn: `ngay_dem` rơi nhầm về hệ số ngày thường dù cấu hình
+ * đã khai đủ. Loại thật sự lạ vẫn rơi về `ngay_thuong` — hệ số THẤP nhất, để
+ * việc ai đó thêm loại mới mà quên cấu hình không thành tự tặng giờ.
+ *
+ * BIÊN LÀM TRÒN của chiều tích quỹ: nhân hệ số XONG rồi mới làm tròn, TỪNG
+ * PHẦN một (xem `SO_LE_GIO`). 2h20' ngày lễ = 2.3333…× 3.0 = 6.99999…→ 7.00,
+ * đúng con số con người tính nhẩm ra; làm tròn trước khi nhân cho 6.99.
  */
 export function gioTichTuDonOt(input: {
   soGioOt: number;
   loaiNgayOt: string;
   heSoTichQuy: HeSoTichQuy;
+  phanBoOt?: PhanBoOt[];
 }): number {
-  const heSo =
-    input.loaiNgayOt === 'ngay_le'
-      ? input.heSoTichQuy.ngay_le
-      : input.loaiNgayOt === 'ngay_nghi'
-        ? input.heSoTichQuy.ngay_nghi
-        : input.heSoTichQuy.ngay_thuong;
+  if (input.phanBoOt?.length) {
+    return input.phanBoOt.reduce(
+      (tong, p) => tong + lamTronGio(p.soGio * p.heSoTichQuy),
+      0,
+    );
+  }
 
-  return lamTronGio(input.soGioOt * heSo);
+  return lamTronGio(
+    input.soGioOt * traHeSo(input.heSoTichQuy, input.loaiNgayOt),
+  );
 }
 
 /**
