@@ -1,8 +1,19 @@
-import { Row, Col, InputNumber, Select, Alert, Button, Switch } from "antd";
+import {
+  Row,
+  Col,
+  InputNumber,
+  Select,
+  Alert,
+  Button,
+  Switch,
+  TimePicker,
+} from "antd";
+import dayjs from "dayjs";
 import { useCauHinhLuongState } from "../CauHinhLuongHandlerContext";
 import {
   HE_SO_TICH_SAN,
   LAM_THEM_MAC_DINH,
+  NHAN_LOAI_NGAY,
   type CauHinhLamThem,
   type CauHinhLuong,
 } from "@/services/cauHinhLuongService";
@@ -30,11 +41,6 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <label className="block mb-1 text-sm font-medium">{children}</label>;
 }
 
-const TRUONG_HE_SO = [
-  { khoa: "ngay_thuong", nhan: "Ngày thường" },
-  { khoa: "ngay_nghi", nhan: "Ngày nghỉ hằng tuần" },
-  { khoa: "ngay_le", nhan: "Ngày lễ / Tết" },
-] as const;
 
 export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
   const [cauHinh, setCauHinh] = useCauHinhLuongState(
@@ -147,29 +153,138 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
           />
         </Col>
 
-        {TRUONG_HE_SO.map(({ khoa, nhan }) => (
-          <Col span={8} key={khoa}>
-            <FieldLabel>Hệ số tích quỹ — {nhan}</FieldLabel>
-            <InputNumber
-              className="w-full"
-              min={HE_SO_TICH_SAN[khoa]}
-              step={0.5}
-              value={lamThem.heSoTichQuy[khoa]}
-              disabled={!canEdit}
-              onChange={(v) =>
-                capNhatLamThem({
-                  heSoTichQuy: {
-                    ...lamThem.heSoTichQuy,
-                    [khoa]: v ?? HE_SO_TICH_SAN[khoa],
-                  },
-                })
-              }
-            />
+        <Col span={24}>
+          <FieldLabel>Hệ số theo loại ngày</FieldLabel>
+          <p className="mb-2 text-xs text-muted-foreground">
+            Thứ tự từ trên xuống là thứ tự ưu tiên: một giờ thuộc nhiều loại
+            thì loại ở trên thắng. Mặc định lễ &gt; nghỉ &gt; đêm &gt; thường,
+            nên làm đêm ngày lễ vẫn ăn hệ số ngày lễ.
+          </p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left">
+                <th className="py-1">Loại ngày</th>
+                <th className="py-1">Hệ số trả tiền</th>
+                <th className="py-1">Hệ số tích quỹ</th>
+                <th className="py-1">Miễn thuế phần chênh</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lamThem.uuTienLoai.map((khoa) => (
+                <tr key={khoa}>
+                  {/* Loại công ty tự thêm chưa có nhãn tiếng Việt thì hiện
+                      chính khoá — thà xấu còn hơn ẩn mất một dòng hệ số đang
+                      có hiệu lực. */}
+                  <td className="py-1 pr-2">{NHAN_LOAI_NGAY[khoa] ?? khoa}</td>
+                  <td className="py-1 pr-2">
+                    <InputNumber
+                      className="w-full"
+                      min={0.1}
+                      step={0.5}
+                      value={lamThem.heSoTra[khoa]}
+                      disabled={!canEdit}
+                      onChange={(v) =>
+                        capNhatLamThem({
+                          heSoTra: { ...lamThem.heSoTra, [khoa]: v ?? 1 },
+                        })
+                      }
+                    />
+                  </td>
+                  <td className="py-1 pr-2">
+                    <InputNumber
+                      className="w-full"
+                      min={HE_SO_TICH_SAN[khoa] ?? 0.1}
+                      step={0.5}
+                      value={lamThem.heSoTichQuy[khoa]}
+                      disabled={!canEdit}
+                      onChange={(v) =>
+                        capNhatLamThem({
+                          heSoTichQuy: {
+                            ...lamThem.heSoTichQuy,
+                            [khoa]: v ?? HE_SO_TICH_SAN[khoa] ?? 1,
+                          },
+                        })
+                      }
+                    />
+                  </td>
+                  <td className="py-1">
+                    <Switch
+                      checked={lamThem.mienThueChenh.includes(khoa)}
+                      disabled={!canEdit}
+                      onChange={(bat) =>
+                        capNhatLamThem({
+                          mienThueChenh: bat
+                            ? [...lamThem.mienThueChenh, khoa]
+                            : lamThem.mienThueChenh.filter((x) => x !== khoa),
+                        })
+                      }
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Hệ số tích quỹ tối thiểu 1,5 / 2,0 / 3,0 cho ngày thường / ngày
+            nghỉ / ngày lễ (sàn BLLĐ 2019 Đ98.1) khi chế độ là “chỉ nghỉ bù”.
+          </p>
+        </Col>
+
+        <Col span={8} className="flex items-end gap-2">
+          <Switch
+            checked={lamThem.khungGioDem !== null}
+            disabled={!canEdit}
+            onChange={(bat) =>
+              capNhatLamThem({
+                khungGioDem: bat ? { tu: "22:00", den: "06:00" } : null,
+              })
+            }
+          />
+          <span className="text-sm">Công ty có ca đêm</span>
+        </Col>
+
+        {lamThem.khungGioDem && (
+          <Col span={16}>
+            <FieldLabel>Khung giờ ban đêm</FieldLabel>
+            <div className="flex items-center gap-2">
+              <TimePicker
+                format="HH:mm"
+                minuteStep={15}
+                allowClear={false}
+                value={dayjs(lamThem.khungGioDem.tu, "HH:mm")}
+                disabled={!canEdit}
+                onChange={(v) =>
+                  capNhatLamThem({
+                    khungGioDem: {
+                      ...lamThem.khungGioDem!,
+                      tu: v?.format("HH:mm") ?? "22:00",
+                    },
+                  })
+                }
+              />
+              <span>→</span>
+              <TimePicker
+                format="HH:mm"
+                minuteStep={15}
+                allowClear={false}
+                value={dayjs(lamThem.khungGioDem.den, "HH:mm")}
+                disabled={!canEdit}
+                onChange={(v) =>
+                  capNhatLamThem({
+                    khungGioDem: {
+                      ...lamThem.khungGioDem!,
+                      den: v?.format("HH:mm") ?? "06:00",
+                    },
+                  })
+                }
+              />
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              Tối thiểu {HE_SO_TICH_SAN[khoa].toFixed(1)} (sàn BLLĐ 2019 Đ98.1)
+              BLLĐ 2019 Đ106 định nghĩa ban đêm là 22:00–06:00. Giờ làm thêm
+              rơi vào khung này được tách riêng khi tính lương.
             </p>
           </Col>
-        ))}
+        )}
 
         <Col span={8} className="flex items-end gap-2">
           <Switch

@@ -51,22 +51,51 @@ export type CheDoBuLamThem =
 
 export interface CauHinhLamThem {
   cheDoBu: CheDoBuLamThem;
-  heSoTichQuy: { ngay_thuong: number; ngay_nghi: number; ngay_le: number };
+  /** Hệ số TRẢ TIỀN từng loại ngày (P4.2c dùng để tính tiền làm thêm). */
+  heSoTra: Record<string, number>;
+  /** Hệ số quy đổi vào quỹ nghỉ bù. */
+  heSoTichQuy: Record<string, number>;
+  /** null = công ty không có ca đêm. */
+  khungGioDem: { tu: string; den: string } | null;
+  /** Giờ thuộc nhiều loại thì loại đứng TRƯỚC trong mảng này thắng. */
+  uuTienLoai: string[];
+  /** Loại nào được tách phần chênh miễn thuế TNCN. */
+  mienThueChenh: string[];
   /** null = quỹ không bao giờ hết hạn. */
   soThangHanDung: number | null;
   khiHetHan: 'quy_ra_tien' | 'huy_bo';
 }
 
-/** Sàn BLLĐ 2019 Đ98.1 — backend chặn nếu khai thấp hơn ở chế độ chi_nghi_bu. */
-export const HE_SO_TICH_SAN = {
+/**
+ * Sàn BLLĐ 2019 Đ98.1 — backend chặn nếu hệ số TÍCH QUỸ khai thấp hơn ở chế
+ * độ `chi_nghi_bu`. `ngay_dem` cố ý KHÔNG có sàn: BLLĐ Đ98.1 không nói về ca
+ * đêm, và mức 1,5 chủ sản phẩm chốt là lựa chọn của công ty (spec P4.2b §8.1).
+ */
+export const HE_SO_TICH_SAN: Record<string, number> = {
   ngay_thuong: 1.5,
   ngay_nghi: 2.0,
   ngay_le: 3.0,
-} as const;
+};
+
+/**
+ * Nhãn tiếng Việt của các loại ngày mặc định. Loại do công ty tự thêm không
+ * có ở đây thì màn hình hiện chính khoá của nó — thà xấu còn hơn ẩn mất một
+ * dòng hệ số đang có hiệu lực.
+ */
+export const NHAN_LOAI_NGAY: Record<string, string> = {
+  ngay_thuong: 'Ngày thường',
+  ngay_nghi: 'Ngày nghỉ hằng tuần',
+  ngay_le: 'Ngày lễ / Tết',
+  ngay_dem: 'Buổi đêm',
+};
 
 export const LAM_THEM_MAC_DINH: CauHinhLamThem = {
   cheDoBu: 'chi_nghi_bu',
-  heSoTichQuy: { ...HE_SO_TICH_SAN },
+  heSoTra: { ngay_thuong: 1.5, ngay_nghi: 2.0, ngay_le: 3.0, ngay_dem: 1.5 },
+  heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2.0, ngay_le: 3.0, ngay_dem: 1.5 },
+  khungGioDem: { tu: '22:00', den: '06:00' },
+  uuTienLoai: ['ngay_le', 'ngay_nghi', 'ngay_dem', 'ngay_thuong'],
+  mienThueChenh: ['ngay_dem'],
   soThangHanDung: null,
   khiHetHan: 'quy_ra_tien',
 };

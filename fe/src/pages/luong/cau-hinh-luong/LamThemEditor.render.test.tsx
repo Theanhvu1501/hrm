@@ -22,6 +22,7 @@ import CauHinhLuongPage from "./CauHinhLuongPage";
 import {
   cauHinhLuongService,
   CauHinhLuong,
+  LAM_THEM_MAC_DINH,
 } from "@/services/cauHinhLuongService";
 
 beforeAll(() => {
@@ -97,9 +98,11 @@ describe("Tab Làm thêm & quỹ giờ", () => {
     });
     // Hệ số mặc định = đúng sàn BLLĐ 2019 Đ98.1. `step={0.5}` nên antd
     // InputNumber hiện một chữ số thập phân ("2.0", không phải "2").
-    expect(screen.getByDisplayValue("1.5")).toBeTruthy();
-    expect(screen.getByDisplayValue("2.0")).toBeTruthy();
-    expect(screen.getByDisplayValue("3.0")).toBeTruthy();
+    // `getAllBy…`: từ P4.2b mỗi loại ngày có HAI ô (trả tiền / tích quỹ), nên
+    // 1.5 xuất hiện 4 lần (ngay_thuong ×2, ngay_dem ×2).
+    expect(screen.getAllByDisplayValue("1.5").length).toBeGreaterThan(0);
+    expect(screen.getAllByDisplayValue("2.0").length).toBeGreaterThan(0);
+    expect(screen.getAllByDisplayValue("3.0").length).toBeGreaterThan(0);
     // soGioMoiNgay mặc định 8 — con số quy đổi ngày↔giờ cho nghỉ bù.
     expect(screen.getByDisplayValue("8.0")).toBeTruthy();
   });
@@ -109,16 +112,16 @@ describe("Tab Làm thêm & quỹ giờ", () => {
       ...cauHinhCu,
       soGioMoiNgay: 7.5,
       lamThem: {
-        cheDoBu: "chi_nghi_bu",
-        heSoTichQuy: { ngay_thuong: 2, ngay_nghi: 2.5, ngay_le: 3.5 },
+        ...LAM_THEM_MAC_DINH,
+        heSoTichQuy: { ngay_thuong: 2, ngay_nghi: 2.5, ngay_le: 3.5, ngay_dem: 2 },
         soThangHanDung: 6,
         khiHetHan: "huy_bo",
       },
     });
 
     expect(await screen.findByDisplayValue("7.5")).toBeTruthy();
-    expect(screen.getByDisplayValue("2.5")).toBeTruthy();
-    expect(screen.getByDisplayValue("3.5")).toBeTruthy();
+    expect(screen.getAllByDisplayValue("2.5").length).toBeGreaterThan(0);
+    expect(screen.getAllByDisplayValue("3.5").length).toBeGreaterThan(0);
     // soThangHanDung khác null ⇒ ô số tháng phải hiện ra.
     expect(screen.getByDisplayValue("6")).toBeTruthy();
   });
@@ -127,15 +130,67 @@ describe("Tab Làm thêm & quỹ giờ", () => {
     await moTabLamThem({
       ...cauHinhCu,
       soGioMoiNgay: 8,
-      lamThem: {
-        cheDoBu: "chi_nghi_bu",
-        heSoTichQuy: { ngay_thuong: 1.5, ngay_nghi: 2, ngay_le: 3 },
-        soThangHanDung: null,
-        khiHetHan: "quy_ra_tien",
-      },
+      lamThem: { ...LAM_THEM_MAC_DINH, soThangHanDung: null },
     });
 
     await screen.findByText(/Quỹ giờ làm thêm đang bật/);
     expect(screen.queryByText("Số tháng còn hiệu lực")).toBeNull();
+  });
+});
+
+describe("Tab Làm thêm & quỹ giờ — bảng hệ số (P4.2b)", () => {
+  it("hiện một dòng cho MỖI loại trong uuTienLoai, kể cả Buổi đêm", async () => {
+    await moTabLamThem({
+      ...cauHinhCu,
+      soGioMoiNgay: 8,
+      lamThem: LAM_THEM_MAC_DINH,
+    });
+
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+    expect(screen.getByText("Ngày lễ / Tết")).toBeTruthy();
+    expect(screen.getByText("Ngày nghỉ hằng tuần")).toBeTruthy();
+    expect(screen.getByText("Buổi đêm")).toBeTruthy();
+    expect(screen.getByText("Ngày thường")).toBeTruthy();
+  });
+
+  it("loại do công ty tự thêm hiện bằng CHÍNH KHOÁ của nó, không bị bỏ sót", async () => {
+    // Thà hiện một khoá xấu còn hơn ẩn mất một dòng hệ số đang có hiệu lực.
+    await moTabLamThem({
+      ...cauHinhCu,
+      soGioMoiNgay: 8,
+      lamThem: {
+        ...LAM_THEM_MAC_DINH,
+        uuTienLoai: [...LAM_THEM_MAC_DINH.uuTienLoai, "ngay_bao"],
+        heSoTra: { ...LAM_THEM_MAC_DINH.heSoTra, ngay_bao: 2.5 },
+        heSoTichQuy: { ...LAM_THEM_MAC_DINH.heSoTichQuy, ngay_bao: 2.5 },
+      },
+    });
+
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+    expect(screen.getByText("ngay_bao")).toBeTruthy();
+  });
+
+  it("có ca đêm: hiện khung giờ ban đêm đã lưu", async () => {
+    await moTabLamThem({
+      ...cauHinhCu,
+      soGioMoiNgay: 8,
+      lamThem: { ...LAM_THEM_MAC_DINH, khungGioDem: { tu: "21:00", den: "05:00" } },
+    });
+
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+    expect(screen.getByText("Khung giờ ban đêm")).toBeTruthy();
+    expect(screen.getByDisplayValue("21:00")).toBeTruthy();
+    expect(screen.getByDisplayValue("05:00")).toBeTruthy();
+  });
+
+  it("khungGioDem = null (không có ca đêm) thì ẩn hẳn khối khung giờ", async () => {
+    await moTabLamThem({
+      ...cauHinhCu,
+      soGioMoiNgay: 8,
+      lamThem: { ...LAM_THEM_MAC_DINH, khungGioDem: null },
+    });
+
+    await screen.findByText(/Quỹ giờ làm thêm đang bật/);
+    expect(screen.queryByText("Khung giờ ban đêm")).toBeNull();
   });
 });
