@@ -4,6 +4,7 @@ import {
   FileTextOutlined,
   TableOutlined,
   UserOutlined,
+  DollarOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { homNayVN } from '@/ultils/thoiGianVN';
@@ -17,6 +18,7 @@ const TAB = [
   { den: '/toi/cham-cong', nhan: 'Chấm công', icon: <ClockCircleOutlined /> },
   { den: '/toi/don-tu', nhan: 'Đơn từ', icon: <FileTextOutlined /> },
   { den: '/toi/bang-cong', nhan: 'Bảng công', icon: <TableOutlined /> },
+  { den: '/toi/phieu-luong', nhan: 'Phiếu lương', icon: <DollarOutlined /> },
   { den: '/toi/tai-khoan', nhan: 'Tài khoản', icon: <UserOutlined /> },
 ];
 

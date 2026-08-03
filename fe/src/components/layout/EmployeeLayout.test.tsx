@@ -68,7 +68,7 @@ describe('EmployeeLayout', () => {
 
   it('có đủ 4 tab ở đáy', () => {
     ve('/toi/cham-cong');
-    ['Chấm công', 'Đơn từ', 'Bảng công', 'Tài khoản'].forEach((nhan) => {
+    ['Chấm công', 'Đơn từ', 'Bảng công', 'Phiếu lương', 'Tài khoản'].forEach((nhan) => {
       expect(screen.getByText(nhan)).toBeTruthy();
     });
   });

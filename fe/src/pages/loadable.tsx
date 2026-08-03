@@ -42,6 +42,10 @@ export const BangThemGioPage = loadable(() => import('./luong/bang-luong-them-gi
   fallback: <PageLoader />
 });
 
+export const PhieuLuongCuaToiPage = loadable(() => import('./toi/phieu-luong/PhieuLuongCuaToi'), {
+  fallback: <PageLoader />
+});
+
 // Nhân sự
 export const HoSoNhanVienPage = loadable(() => import('./nhan-su/ho-so-nhan-vien/HoSoNhanVienPage'), {
   fallback: <PageLoader />
