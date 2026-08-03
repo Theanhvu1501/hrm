@@ -527,26 +527,40 @@ thêm.
 và `doiSoat()` báo đỏ hàng loạt. **Ca đêm chỉ áp cho đơn nộp từ ngày deploy trở đi.** Đây là
 quyết định trong spec P4.2b §4.3, không phải thiếu sót.
 
-Cùng ràng buộc chạy như `re-sanitize-hop-dong-mau-in.ts`: **không chạy được trong container
-`nhan-su-be`** (`ops/` không được rsync lên server, image không có `ts-node`). Chạy từ máy có mã
-nguồn qua SSH tunnel, và phải ở trong `be/` để resolve `mongodb`.
+### ⚠️ Thứ tự bắt buộc: chạy SAU khi công ty đã bật quỹ giờ làm thêm
+
+Script lấy `heSoTichQuy` từ `cau_hinh_luong.lamThem` của từng tenant. Tenant **chưa bật** quỹ giờ
+(chưa khai `lamThem`) thì mọi đơn của họ bị **BỎ QUA**, không đoán hệ số — đúng hành vi, vì
+`layCauHinh()` của app cũng trả `null` và không tích quỹ cho những đơn đó.
+
+Hệ quả: chạy script trước khi HR bật quỹ giờ là chạy phí, 0 đơn được backfill. Chạy đúng thứ tự:
+**bật quỹ giờ ở màn Cấu hình lương → rồi mới chạy script này**.
+
+(Đo trên production 2026-08-03: tenant duy nhất chưa bật `lamThem`, `overtime_balances` rỗng
+hoàn toàn, nên lần chạy đầu là no-op — 0 backfill / 1 bỏ qua. Đã kiểm.)
+
+### Cách chạy
+
+**Chạy được TRONG container `nhan-su-be`** — image có sẵn `ts-node` và `mongodb`, và đã có
+`MONGODB_URI`/`MONGODB_DATABASE` trong env, nên không cần SSH tunnel. (Khác
+`re-sanitize-hop-dong-mau-in.ts`: script đó phải chạy ngoài vì nó `import` mã nguồn TypeScript của
+app, còn script này chỉ dùng `mongodb`.)
 
 ```bash
-# 0. Mở tunnel tới Mongo production ở một terminal khác
-ssh -L 27018:localhost:27017 kt
-
-# 1. Chép script vào be/ để resolve được node_modules
-cp ops/backfill-phan-bo-ot.ts be/_tmp-backfill.ts
+# 1. Đẩy script vào container
+scp ops/backfill-phan-bo-ot.ts kt:/tmp/
+ssh kt "docker cp /tmp/backfill-phan-bo-ot.ts nhan-su-be:/app/backfill-phan-bo-ot.ts"
 
 # 2. Xem trước, không ghi gì
-cd be && MONGODB_URI="mongodb://dbadmin:...@localhost:27018/?authSource=admin" \
-  MONGODB_DATABASE=nhan_su \
-  ./node_modules/.bin/ts-node --compiler-options '{"module":"commonjs"}' \
-  _tmp-backfill.ts --dry-run
+ssh kt "docker exec -w /app nhan-su-be npx ts-node \
+  --compiler-options '{\"module\":\"commonjs\"}' backfill-phan-bo-ot.ts --dry-run"
 
-# 3. Ghi thật (bỏ --dry-run), rồi dọn
-./node_modules/.bin/ts-node --compiler-options '{"module":"commonjs"}' _tmp-backfill.ts
-rm _tmp-backfill.ts
+# 3. Ghi thật (bỏ --dry-run)
+ssh kt "docker exec -w /app nhan-su-be npx ts-node \
+  --compiler-options '{\"module\":\"commonjs\"}' backfill-phan-bo-ot.ts"
+
+# 4. Dọn
+ssh kt "docker exec nhan-su-be rm -f /app/backfill-phan-bo-ot.ts && rm -f /tmp/backfill-phan-bo-ot.ts"
 ```
 
 Idempotent — chỉ đụng đơn chưa có `phanBoOt`, chạy lại lần hai báo 0 đơn.

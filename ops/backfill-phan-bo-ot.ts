@@ -62,12 +62,24 @@ async function main() {
   const cauHinhs = await db.collection('cau_hinh_luong').find({}).toArray();
   const bangTheoTenant = new Map<string, Record<string, number>>();
   for (const ch of cauHinhs) {
-    bangTheoTenant.set(
-      String(ch.tenantId ?? ''),
-      (ch.lamThem?.heSoTichQuy as Record<string, number>) ?? {},
-    );
+    // CHỈ nhận tenant đã khai `lamThem.heSoTichQuy` thật sự. Bản đầu dùng
+    // `?? {}` nên tenant có hàng cấu hình nhưng CHƯA bật quỹ giờ lọt qua guard
+    // `if (!bang)` (một object rỗng là truthy) và được backfill với
+    // `traHeSo({}, ...)` = 1.0 — một con số bịa ra, không phải hệ số công ty
+    // từng dùng. Đúng hành vi là BỎ QUA, khớp với `layCauHinh()` của app: chưa
+    // khai `lamThem` thì không tích quỹ, nên cũng không có gì để backfill.
+    const bang = ch.lamThem?.heSoTichQuy as Record<string, number> | undefined;
+    if (bang && Object.keys(bang).length > 0) {
+      bangTheoTenant.set(String(ch.tenantId ?? ''), bang);
+    } else {
+      console.log(
+        `- Tenant ${ch.tenantId} có hàng cấu hình lương nhưng CHƯA khai lamThem.heSoTichQuy — mọi đơn của tenant này sẽ bị bỏ qua`,
+      );
+    }
   }
-  console.log(`Tìm thấy cấu hình lương của ${bangTheoTenant.size} tenant`);
+  console.log(
+    `Tìm thấy ${bangTheoTenant.size}/${cauHinhs.length} tenant đã khai hệ số tích quỹ`,
+  );
 
   const dons = await db
     .collection('attendance_requests')
@@ -84,7 +96,7 @@ async function main() {
 
     if (!bang) {
       console.log(
-        `- BỎ QUA ${nhan}: tenant ${don.tenantId} chưa khai cấu hình lương`,
+        `- BỎ QUA ${nhan}: tenant ${don.tenantId} chưa khai hệ số tích quỹ (chưa bật quỹ giờ làm thêm) — không đoán hệ số`,
       );
       boQua++;
       continue;
