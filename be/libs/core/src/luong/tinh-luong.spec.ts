@@ -26,6 +26,8 @@ function cauHinh(over: Partial<CauHinhLuongData> = {}): CauHinhLuongData {
     quyTacThoiVu: { tyLe: 0.1, nguong: 2_000_000 },
     quyTacCamKet: { mienThue: true },
     bhCongTy: { tyLe: 0.215, tyLeHopDongThu2: 0.005 },
+    // Mặc định 0 để mọi bài test cũ giữ nguyên con số; bài nào cần thì override.
+    phiCongDoan: { tyLe: 0 },
     lamTron: 1000,
     ...over,
   };
@@ -234,5 +236,61 @@ describe('HĐLĐ thứ 2', () => {
     );
     expect(r.giamTru).toBe(15_500_000 + 6_200_000);
     expect(r.bhxh).toBe(lamTronTheo(0.105 * 5_500_000, 1000));
+  });
+});
+
+describe('phí công đoàn (P4.2c-2)', () => {
+  it('tyLe = 0 thì mọi con số cũ GIỮ NGUYÊN — không đổi lương của ai', () => {
+    // Bài hồi quy quan trọng nhất của task: công ty chưa khai phí công đoàn
+    // (hoặc khai 0) phải ra đúng bảng lương như trước khi có phase này.
+    const dv = dauVao({ tamUng: 500_000, khauTruKhac: 200_000 });
+    const r = tinhDongLuong(dv, cauHinh({ phiCongDoan: { tyLe: 0 } }));
+
+    expect(r.phiCongDoan).toBe(0);
+    expect(r.thucLinh).toBe(
+      r.tongThuNhap - r.bhxh - r.thue - dv.tamUng - dv.khauTruKhac,
+    );
+  });
+
+  it('2% tính trên CÙNG căn cứ với BHXH', () => {
+    const r = tinhDongLuong(
+      dauVao({ mucKhaiBao: 10_000_000 }),
+      cauHinh({ phiCongDoan: { tyLe: 0.02 } }),
+    );
+
+    // canCu mặc định là MUC_KHAI_BAO ⇒ 2% × 10.000.000 = 200.000.
+    expect(r.phiCongDoan).toBe(200_000);
+  });
+
+  it('KHÔNG làm giảm thu nhập tính thuế — TT 111/2013 Đ9 không liệt kê đoàn phí', () => {
+    const khong = tinhDongLuong(dauVao(), cauHinh({ phiCongDoan: { tyLe: 0 } }));
+    const co = tinhDongLuong(dauVao(), cauHinh({ phiCongDoan: { tyLe: 0.02 } }));
+
+    // Tính thuế TRƯỚC, trừ phí công đoàn SAU. Làm ngược là tính thiếu thuế
+    // TNCN và chỉ lộ ra lúc quyết toán năm.
+    expect(co.thuNhapTinhThue).toBe(khong.thuNhapTinhThue);
+    expect(co.thue).toBe(khong.thue);
+  });
+
+  it('trừ vào thực lĩnh', () => {
+    const khong = tinhDongLuong(dauVao(), cauHinh({ phiCongDoan: { tyLe: 0 } }));
+    const co = tinhDongLuong(dauVao(), cauHinh({ phiCongDoan: { tyLe: 0.02 } }));
+
+    expect(co.thucLinh).toBe(khong.thucLinh - co.phiCongDoan);
+  });
+
+  it('KHÔNG cộng vào chi phí công ty — đây là tiền NLĐ trả, không phải công ty', () => {
+    const r = tinhDongLuong(dauVao(), cauHinh({ phiCongDoan: { tyLe: 0.02 } }));
+
+    expect(r.tongChiPhiCongTy).toBe(r.tongThuNhap + r.chiPhiBHCongTy);
+  });
+
+  it('cấu hình thiếu phiCongDoan (bản ghi cũ) rơi về 0, KHÔNG NaN', () => {
+    const ch = cauHinh() as any;
+    delete ch.phiCongDoan;
+
+    const r = tinhDongLuong(dauVao(), ch);
+    expect(r.phiCongDoan).toBe(0);
+    expect(Number.isNaN(r.thucLinh)).toBe(false);
   });
 });

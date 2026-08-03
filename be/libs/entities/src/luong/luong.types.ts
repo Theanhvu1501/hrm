@@ -79,6 +79,16 @@ export interface CauHinhLuongData {
    * vì BHXH/BHYT/BHTN đã đóng ở nơi thứ nhất.
    */
   bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
+  /**
+   * Phí công đoàn trừ vào lương NLĐ, tính trên cùng căn cứ với BHXH.
+   *
+   * Con số 2% chủ sản phẩm chốt LỆCH với khung pháp lý thông thường và được
+   * ghi nhận có ý thức (spec P4.2c §4.2): kinh phí công đoàn 2% là DOANH
+   * NGHIỆP nộp (NĐ 191/2013 Đ5), còn đoàn phí đoàn viên đóng là 1% và chỉ thu
+   * với người LÀ đoàn viên. Đặt trong cấu hình theo tenant để đổi được mà
+   * không phải deploy.
+   */
+  phiCongDoan: { tyLe: number };
   lamTron: number;
   /** Số giờ của MỘT ngày công. Quy đổi ngày↔giờ cho nghỉ bù, và là mẫu số của đơn giá giờ. */
   soGioMoiNgay: number;
@@ -131,6 +141,11 @@ export interface KetQuaLuong {
   giamTru: number;
   thuNhapTinhThue: number;
   thue: number;
+  /**
+   * Trừ khỏi `thucLinh`, KHÔNG trừ khỏi `thuNhapTinhThue` — TT 111/2013 Đ9
+   * liệt kê đủ khoản được trừ trước thuế và đoàn phí công đoàn không có ở đó.
+   */
+  phiCongDoan: number;
   thucLinh: number;
   /** BH phần công ty chịu — KHÔNG trừ vào `thucLinh`. */
   chiPhiBHCongTy: number;

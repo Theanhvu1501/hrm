@@ -256,3 +256,9 @@ describe('CauHinhLamThemDto — bảng hệ số mở (P4.2b)', () => {
     expect(JSON.stringify(loi.getResponse().message)).toMatch(/ngay_dem/);
   });
 });
+
+describe('phiCongDoan (P4.2c-2)', () => {
+  it('nhận phiCongDoan', async () => {
+    await expect(chay({ phiCongDoan: { tyLe: 0.02 } })).resolves.toBeDefined();
+  });
+});

@@ -143,6 +143,22 @@ export function HangSoEditor({ canEdit }: HangSoEditorProps) {
         />
       </Col>
       <Col span={8}>
+        <FieldLabel>Phí công đoàn</FieldLabel>
+        <InputNumber
+          className="w-full"
+          min={0}
+          max={100}
+          addonAfter="%"
+          value={(cauHinh.phiCongDoan?.tyLe ?? 0) * 100}
+          disabled={!canEdit}
+          onChange={(v) => capNhat({ phiCongDoan: { tyLe: (v ?? 0) / 100 } })}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Trừ vào lương người lao động, tính trên lương đóng bảo hiểm. KHÔNG
+          làm giảm thu nhập tính thuế.
+        </p>
+      </Col>
+      <Col span={8}>
         <FieldLabel>Tỷ lệ hưởng khi thử việc</FieldLabel>
         <InputNumber
           className="w-full"

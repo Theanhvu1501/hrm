@@ -23,6 +23,9 @@ export const CAU_HINH_LUONG_MAC_DINH: CauHinhLuongData = {
   // Phần công ty chịu: 21,5% (BHXH 17,5 + BHYT 3 + BHTN 1 + BHTNLĐ-BNN 0,5)
   // với HĐ thường; HĐLĐ thứ 2 chỉ còn BHTNLĐ-BNN 0,5%.
   bhCongTy: { tyLe: 0.215, tyLeHopDongThu2: 0.005 },
+  // Trừ vào lương NLĐ, tính trên lương đóng bảo hiểm. Xem ghi chú pháp lý ở
+  // `CauHinhLuongData.phiCongDoan` — con số này lệch khung thông thường.
+  phiCongDoan: { tyLe: 0.02 },
   bacThue: [
     { den: 10_000_000, suat: 0.05 },
     { den: 30_000_000, suat: 0.1 },

@@ -11,6 +11,8 @@ export class CauHinhLuong extends BaseEntity {
   @Column({ default: 6_200_000 }) giamTruNPT: number;
   @Column('json', { nullable: true }) bhxh: { tyLe: number; canCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN' };
   @Column('json', { nullable: true }) bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
+  /** Trừ vào lương NLĐ, tính trên lương đóng bảo hiểm — xem `CauHinhLuongData`. */
+  @Column('json', { nullable: true }) phiCongDoan: { tyLe: number };
   @Column('json', { nullable: true }) bacThue: BacThue[];
   @Column('json', { nullable: true }) thuViec: { tyLe: number };
   @Column('json', { nullable: true }) quyTacThoiVu: { tyLe: number; nguong: number };

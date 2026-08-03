@@ -110,6 +110,8 @@ export interface CauHinhLuong {
   bhxh: { tyLe: number; canCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN' };
   /** Phần BH công ty chịu — `tyLeHopDongThu2` áp khi NV là HĐLĐ thứ 2. */
   bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
+  /** Phí công đoàn trừ vào lương NLĐ. Cấu hình cũ chưa có → đọc `?? 0`. */
+  phiCongDoan?: { tyLe: number };
   bacThue: BacThue[];
   thuViec: { tyLe: number };
   quyTacThoiVu: { tyLe: number; nguong: number };

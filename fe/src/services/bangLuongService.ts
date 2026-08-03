@@ -12,6 +12,10 @@ export interface KetQuaLuong {
   /** Dòng chốt trước P4.1 không có 2 trường này → đọc `?? 0`. */
   chiPhiBHCongTy?: number;
   tongChiPhiCongTy?: number;
+  /** Dòng chốt trước P4.2c-2 không có 3 trường này → đọc `?? 0`. */
+  phiCongDoan?: number;
+  mienThueKhoan?: number;
+  otMienThue?: number;
 }
 
 /** Mirror `DongLuong` entity (be/libs/entities/src/luong/dong-luong.entity.ts). */

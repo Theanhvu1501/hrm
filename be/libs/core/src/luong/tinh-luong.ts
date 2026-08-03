@@ -136,7 +136,22 @@ export function tinhDongLuong(
     thue = lamTronTheo(thueLuyTien(thuNhapTinhThue, ch.bacThue), ch.lamTron);
   }
 
-  const thucLinh = tongThuNhap - bhxh - thue - dv.tamUng - dv.khauTruKhac;
+  // Tính SAU thuế, KHÔNG đụng `thuNhapTinhThue`: TT 111/2013 Đ9 liệt kê đủ các
+  // khoản được trừ trước thuế (giảm trừ gia cảnh, bảo hiểm bắt buộc, quỹ hưu
+  // trí tự nguyện, từ thiện/nhân đạo/khuyến học) — đoàn phí công đoàn KHÔNG
+  // nằm trong đó. Trừ nó khỏi thu nhập tính thuế là tính THIẾU thuế TNCN, và
+  // sai này chỉ lộ ra lúc quyết toán năm.
+  //
+  // `?? 0`: cấu hình lưu trước phase này không có trường `phiCongDoan`.
+  // `undefined × số` ra `NaN`, mà `NaN` đi qua `lamTronTheo()` vẫn là `NaN`
+  // rồi thành `thucLinh = NaN` trên phiếu lương của người thật.
+  const phiCongDoan = lamTronTheo(
+    (ch.phiCongDoan?.tyLe ?? 0) * baseBHXH,
+    ch.lamTron,
+  );
+
+  const thucLinh =
+    tongThuNhap - bhxh - thue - phiCongDoan - dv.tamUng - dv.khauTruKhac;
 
   return {
     giaTriTungKhoan,
@@ -146,6 +161,7 @@ export function tinhDongLuong(
     giamTru,
     thuNhapTinhThue,
     thue,
+    phiCongDoan,
     thucLinh,
     chiPhiBHCongTy,
     tongChiPhiCongTy: tongThuNhap + chiPhiBHCongTy,

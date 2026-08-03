@@ -192,6 +192,7 @@ export class CapNhatCauHinhLuongDto {
   @IsOptional() @IsObject() quyTacThoiVu?: { tyLe: number; nguong: number };
   @IsOptional() @IsObject() quyTacCamKet?: { mienThue: boolean };
   @IsOptional() @IsObject() bhCongTy?: { tyLe: number; tyLeHopDongThu2: number };
+  @IsOptional() @IsObject() phiCongDoan?: { tyLe: number };
   @IsOptional() @IsNumber() lamTron?: number;
 
   @IsOptional() @IsNumber() @Min(0.5) soGioMoiNgay?: number;
