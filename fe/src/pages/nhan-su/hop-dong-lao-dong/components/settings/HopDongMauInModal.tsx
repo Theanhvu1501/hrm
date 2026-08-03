@@ -125,7 +125,10 @@ export function HopDongMauInModal({ open, onClose }: Props) {
                   <Text type="secondary">
                     Dùng token dạng <code>{"{{hoTenNLD}}"}</code>. Sửa trực tiếp
                     HTML bên dưới, hoặc bấm "Khôi phục mặc định" để quay về mẫu
-                    gốc theo BLLĐ 45/2019/QH14.
+                    gốc theo BLLĐ 45/2019/QH14. Để an toàn, mẫu KHÔNG hỗ trợ thẻ{" "}
+                    <code>{"<a>"}</code>/<code>{"<img>"}</code> (không chèn được
+                    logo hay link) và không tự chèn <code>{"<style>"}</code> — CSS
+                    khổ giấy/định dạng in do hệ thống quản lý sẵn.
                   </Text>
                   <Tag color={isCustom ? "blue" : "default"}>
                     {isCustom ? "Mẫu riêng" : "Mẫu mặc định"}

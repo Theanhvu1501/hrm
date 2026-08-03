@@ -12,12 +12,21 @@
  * `html` đã qua `sanitizeHopDongHtml` (parser HTML thật) ở BE trước khi tới
  * đây — NHƯNG iframe này vẫn được sandbox (review Critical 1: "add sandbox
  * to the preview iframe"), không tin tưởng mù quáng 1 lớp sanitize duy nhất.
- * `sandbox="allow-same-origin"` (KHÔNG có `allow-scripts`) chặn TUYỆT ĐỐI
- * mọi script, thuộc tính on-nào-đó, và scheme javascript: chạy được bên
- * trong iframe này ở tầng trình duyệt — kể cả nếu có payload nào đó lọt qua sanitize-html trong tương lai
- * — trong khi vẫn giữ được `allow-same-origin` để parent (trang này) còn
- * gọi được `iframeDoc.write()`/`win.print()` (thiếu allow-same-origin thì
- * iframe có origin "null" đối lập, parent bị chặn truy cập contentDocument).
+ * `sandbox="allow-same-origin allow-modals"` (KHÔNG có `allow-scripts`) chặn
+ * TUYỆT ĐỐI mọi script, thuộc tính on-nào-đó, và scheme javascript: chạy
+ * được bên trong iframe này ở tầng trình duyệt — kể cả nếu có payload nào
+ * đó lọt qua sanitize-html trong tương lai — trong khi vẫn giữ được:
+ *  - `allow-same-origin`: để parent (trang này) còn gọi được
+ *    `iframeDoc.write()`/`win.print()` (thiếu token này thì iframe có origin
+ *    "null" đối lập, parent bị chặn truy cập contentDocument).
+ *  - `allow-modals`: BẮT BUỘC để `window.print()` thật sự mở hộp thoại in.
+ *    Review vòng 2 (High) phát hiện: HTML Standard xếp `window.print()` cùng
+ *    nhóm với `alert`/`confirm`/`prompt`, gác bằng "sandboxed modals flag" —
+ *    có `sandbox` mà THIẾU `allow-modals` thì Chrome ÂM THẦM bỏ qua lệnh in
+ *    ("Ignored call to 'print()'..."), không báo lỗi gì lên JS, người dùng
+ *    bấm "In" mà không có gì xảy ra. Bản trước bản vá này chỉ có
+ *    `allow-same-origin` — tính năng in KHÔNG HOẠT ĐỘNG. `allow-modals`
+ *    KHÔNG mở thêm lỗ hổng script nào (không phải allow-scripts).
  */
 
 function escapeHtml(value: string): string {
@@ -47,7 +56,7 @@ export function printHopDong(html: string, title?: string): void {
   iframe.style.width = "0";
   iframe.style.height = "0";
   iframe.style.border = "0";
-  iframe.setAttribute("sandbox", "allow-same-origin");
+  iframe.setAttribute("sandbox", "allow-same-origin allow-modals");
   document.body.appendChild(iframe);
 
   const iframeDoc = iframe.contentWindow?.document;
