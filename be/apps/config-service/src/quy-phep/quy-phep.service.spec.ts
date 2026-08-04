@@ -96,11 +96,34 @@ const NV_THU_VIEC = {
   isActive: true,
 };
 
-async function dungService(nhanVien: any[] = [NV_CHINH_THUC, NV_THU_VIEC]) {
+/**
+ * Bảng công ĐÃ CHỐT, đủ công, cho T8–T12/2026 của NV1.
+ *
+ * (P3.10) Quỹ năm chưa qua mở RỖNG rồi tích dần, nên test nào cần một quỹ có
+ * số dư thật phải đi qua đúng con đường đó. 26 công vượt ngưỡng 50% của mọi
+ * tháng trong khoảng (tháng nhiều ngày làm việc nhất là 27), và mucCaNam = 12
+ * ⇒ mỗi tháng cộng 1 ngày ⇒ 5 tháng = 5 ngày, đúng con số luật cũ từng cấp.
+ */
+function bangCongDuCong2026(employeeId = ID_NV1): any[] {
+  return ['08', '09', '10', '11', '12'].map((mm, i) => ({
+    _id: { toString: () => `6500000000000000000008${i}0` },
+    thang: `2026-${mm}`,
+    employeeId,
+    soNgayCong: 26,
+    soNgayOm: 0,
+    trangThai: 'chot',
+    isActive: true,
+  }));
+}
+
+async function dungService(
+  nhanVien: any[] = [NV_CHINH_THUC, NV_THU_VIEC],
+  bangCong: any[] = [],
+) {
   const repoQuy = taoRepoGia<any>();
   const repoSo = taoRepoGia<any>();
   const repoNv = taoRepoGia<any>(nhanVien);
-  const repoBangCong = taoRepoGia<any>();
+  const repoBangCong = taoRepoGia<any>(bangCong);
   const moduleRef = await Test.createTestingModule({
     providers: [
       QuyPhep_Service,
@@ -129,7 +152,9 @@ describe('QuyPhep_Service — cấp phép', () => {
     expect(ketQua.boQuaThuViec).toBe(1);
     expect(repoQuy.kho).toHaveLength(1);
     expect(repoQuy.kho[0].employeeId).toBe(ID_NV1);
-    expect(repoQuy.kho[0].soNgayDuocCap).toBe(12);
+    // (P3.10) Năm chưa qua ⇒ quỹ RỖNG, phép cộng dần khi chốt bảng công.
+    expect(repoQuy.kho[0].soNgayDuocCap).toBe(0);
+    expect(repoQuy.kho[0].thangDaTich).toEqual([]);
     expect(repoQuy.kho[0].hanDung).toBe('2028-03-31');
   });
 
@@ -172,10 +197,12 @@ describe('QuyPhep_Service — cấp phép', () => {
     const quy = await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     expect(quy).toHaveLength(1);
     expect(repoQuy.kho[0].nam).toBe(2026);
-    expect(repoQuy.kho[0].soNgayDuocCap).toBe(5);
-    expect(repoQuy.kho[0].soNgayConLai).toBe(5);
+    // (P3.10) 2026 chưa qua ⇒ quỹ mở RỖNG. 5 ngày theo lịch cũ không còn được
+    // cấp trước; chúng tích dần khi bảng công từng tháng được chốt.
+    expect(repoQuy.kho[0].soNgayDuocCap).toBe(0);
+    expect(repoQuy.kho[0].soNgayConLai).toBe(0);
     expect(repoSo.kho[0].lyDo).toBe('cap_len_chinh_thuc');
-    expect(repoSo.kho[0].soNgay).toBe(5);
+    expect(repoSo.kho[0].soNgay).toBe(0);
   });
 
   it('ca D — lên chính thức năm sau thì CẤP BÙ quỹ năm trước, không bỏ rơi', async () => {
@@ -187,7 +214,10 @@ describe('QuyPhep_Service — cấp phép', () => {
     const theoNam = Object.fromEntries(
       repoQuy.kho.map((q: any) => [q.nam, q.soNgayDuocCap]),
     );
-    expect(theoNam).toEqual({ 2026: 1, 2027: 12 });
+    // (P3.10) So với homNay '2027-02-01': 2026 ĐÃ QUA nên vẫn cấp theo lịch
+    // cũ (1 ngày) — bảng công 2026 có thể chưa từng chốt, cấp 0 là cướp trắng
+    // phép của một năm đã làm việc thật. 2027 chưa qua nên mở RỖNG, tích dần.
+    expect(theoNam).toEqual({ 2026: 1, 2027: 0 });
     expect(repoQuy.kho.find((q: any) => q.nam === 2026).hanDung).toBe('2027-03-31');
   });
 
@@ -234,7 +264,11 @@ describe('QuyPhep_Service — cấp phép', () => {
     expect(cacNam).toContain(2026); // quỹ năm hiện tại LUÔN được cấp
     // Vào làm 2019-03-01 → tới 31/12/2026 đã tròn 7 năm thâm niên (⌊7/5⌋=1)
     // → mucCaNam = 12 + 1 = 13, làm trọn năm 2026 nên soNgay = đúng mucCaNam.
-    expect(quy.find((q: any) => q.nam === 2026)?.soNgayDuocCap).toBe(13);
+    // (P3.10) 2026 là năm hiện tại ⇒ quỹ mở rỗng, tích dần theo bảng công.
+    // Căn cứ vẫn phải ghi mucCaNam = 13 (thâm niên 7 năm) vì phepMotThang()
+    // đọc nó để biết mỗi tháng cộng bao nhiêu.
+    expect(quy.find((q: any) => q.nam === 2026)?.soNgayDuocCap).toBe(0);
+    expect(quy.find((q: any) => q.nam === 2026)?.canCuCap?.mucCaNam).toBe(13);
     // lyDo của quỹ 2026: NV đã chính thức từ lâu, đây thực chất là phần cấp
     // đầu năm bị lỡ — không phải "cấp lên chính thức" (đã xảy ra 2019) hay
     // "cấp bù năm trước" (2026 là năm nay, không phải năm trước).
@@ -769,7 +803,7 @@ describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () =
   });
 
   it('đối soát khớp sau chuỗi thao tác hỗn hợp', async () => {
-    const { service } = await dungService([NV_CHINH_THUC]);
+    const { service } = await dungService([NV_CHINH_THUC], bangCongDuCong2026());
     await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     const [quy] = await service.layQuyCuaNhanVien(ID_NV1);
     const id = String((quy as any)._id);
@@ -784,7 +818,10 @@ describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () =
   });
 
   it('đối soát PHÁT HIỆN được số dư bị sửa lén không qua sổ', async () => {
-    const { service, repoQuy } = await dungService([NV_CHINH_THUC]);
+    const { service, repoQuy } = await dungService(
+      [NV_CHINH_THUC],
+      bangCongDuCong2026(),
+    );
     await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     repoQuy.kho[0].soNgayDuocCap = 99; // ai đó ghi thẳng vào quỹ, không ghi sổ
 
@@ -801,7 +838,10 @@ describe('QuyPhep_Service — điều chỉnh, đóng quỹ, đối soát', () =
   // doiSoat() không được báo đây là lệch (sổ vẫn khớp số), và dongQuy() chạy
   // lại sau đó không được hồi sinh quỹ này về dang_hieu_luc.
   it('quỹ đã đóng được hoàn phép vào không sống lại, vẫn đối soát khớp, không hồi sinh', async () => {
-    const { service, repoQuy } = await dungService([NV_CHINH_THUC]);
+    const { service, repoQuy } = await dungService(
+      [NV_CHINH_THUC],
+      bangCongDuCong2026(),
+    );
     await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
     const [quy] = await service.layQuyCuaNhanVien(ID_NV1);
     const id = String((quy as any)._id);
@@ -1083,5 +1123,127 @@ describe('QuyPhep_Service — tichPhepTheoThang (P3.10)', () => {
     expect(dong[0].soNgay).toBe(1);
     expect(dong[0].ghiChu).toMatch(/2026-08/);
     expect(dong[0].ghiChu).toMatch(new RegExp(`${NGUONG_T8_2026}/26`));
+  });
+});
+
+describe('QuyPhep_Service — cấp quỹ RỖNG cho năm chưa qua (P3.10)', () => {
+  const namNay = Number(new Date().toISOString().slice(0, 4));
+
+  it('năm HIỆN TẠI: tạo quỹ 0 ngày để tích dần, không cấp một cục', async () => {
+    // Nếu vẫn cấp cả năm ở đây thì thangDaTich phủ kín ngay và
+    // tichPhepTheoThang() thành mã chết vĩnh viễn.
+    const { service, repoQuy } = await dungService([
+      { ...NV_CHINH_THUC, ngayVaoLam: `${namNay - 2}-01-01`, ngayChinhThuc: `${namNay - 2}-04-01` },
+    ]);
+
+    const kq = await service.capPhepDauNam(namNay, 'hr1');
+
+    expect(kq.daCap).toBe(1);
+    const quy = repoQuy.kho[0];
+    expect(quy.soNgayDuocCap).toBe(0);
+    expect(quy.soNgayConLai).toBe(0);
+    expect(quy.thangDaTich).toEqual([]);
+    // Căn cứ vẫn phải có: phepMotThang() đọc mucCaNam từ đây.
+    expect(quy.canCuCap.mucCaNam).toBeGreaterThanOrEqual(12);
+  });
+
+  it('năm ĐÃ QUA: vẫn cấp theo lịch và đánh dấu đủ tháng', async () => {
+    // Bảng công năm cũ có thể chưa từng chốt; cấp 0 là cướp trắng phép của
+    // một năm người ta đã làm việc thật.
+    const { service, repoQuy } = await dungService([
+      { ...NV_CHINH_THUC, ngayVaoLam: `${namNay - 3}-01-01`, ngayChinhThuc: `${namNay - 3}-04-01` },
+    ]);
+
+    await service.capPhepDauNam(namNay - 1, 'hr1');
+
+    const quy = repoQuy.kho[0];
+    expect(quy.soNgayDuocCap).toBe(12);
+    expect(quy.thangDaTich).toHaveLength(12);
+  });
+
+  it('quỹ rỗng của năm hiện tại tích được ngay khi chốt bảng công', async () => {
+    const { service, repoQuy } = await dungService([
+      { ...NV_CHINH_THUC, ngayVaoLam: `${namNay - 2}-01-01`, ngayChinhThuc: `${namNay - 2}-04-01` },
+    ]);
+    await service.capPhepDauNam(namNay, 'hr1');
+
+    await service.tichPhepTheoThang(`${namNay}-08`, 'hr1', [
+      {
+        _id: { toString: () => '650000000000000000000601' },
+        thang: `${namNay}-08`,
+        employeeId: ID_NV1,
+        soNgayCong: 26,
+        soNgayOm: 0,
+        trangThai: 'chot',
+        isActive: true,
+      },
+    ] as any);
+
+    expect(repoQuy.kho[0].soNgayDuocCap).toBe(1);
+    expect(repoQuy.kho[0].thangDaTich).toEqual([`${namNay}-08`]);
+  });
+});
+
+describe('QuyPhep_Service — tích bù khi tạo quỹ muộn (P3.10)', () => {
+  it('lên chính thức tháng 10 vẫn nhận phép của các tháng ĐÃ chốt trước đó', async () => {
+    // tichPhepTheoThang() bỏ qua người chưa có quỹ, và bảng công cũ sẽ không
+    // được chốt lần nữa — thiếu bước tích bù là mất trắng, không đường lấy lại.
+    const { service, repoQuy } = await dungService(
+      [NV_CHINH_THUC],
+      bangCongDuCong2026().filter((b) => b.thang <= '2026-09'),
+    );
+
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
+
+    const quy = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(quy.soNgayDuocCap).toBe(2); // T8 + T9
+    expect(quy.thangDaTich).toEqual(['2026-08', '2026-09']);
+  });
+
+  it('tích bù BỎ tháng không đạt ngưỡng', async () => {
+    const bc = bangCongDuCong2026().filter((b) => b.thang <= '2026-09');
+    bc[1].soNgayCong = 3; // T9 nghỉ gần hết
+    const { service, repoQuy } = await dungService([NV_CHINH_THUC], bc);
+
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
+
+    const quy = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(quy.soNgayDuocCap).toBe(1);
+    expect(quy.thangDaTich).toEqual(['2026-08']);
+  });
+
+  it('tích bù BỎ bảng công còn nháp', async () => {
+    const bc = bangCongDuCong2026().filter((b) => b.thang <= '2026-09');
+    bc[1].trangThai = 'nhap';
+    const { service, repoQuy } = await dungService([NV_CHINH_THUC], bc);
+
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2026-10-15');
+
+    expect(repoQuy.kho.find((x: any) => x.nam === 2026).soNgayDuocCap).toBe(1);
+  });
+
+  it('KHÔNG tích bù cho năm đã qua — năm đó đã cấp theo lịch, tích thêm là cấp trùng', async () => {
+    const { service, repoQuy } = await dungService(
+      [{ ...NV_CHINH_THUC, ngayVaoLam: '2025-01-01', ngayChinhThuc: '2025-04-01' }],
+      [
+        {
+          _id: { toString: () => '650000000000000000000850' },
+          thang: '2026-06',
+          employeeId: ID_NV1,
+          soNgayCong: 26,
+          soNgayOm: 0,
+          trangThai: 'chot',
+          isActive: true,
+        },
+      ],
+    );
+
+    // homNay 2027 ⇒ 2026 là năm ĐÃ QUA. (Quỹ 2025 không được tạo vì hạn dùng
+    // 2026-03-31 đã trôi qua — luật sẵn có, không phải chuyện của P3.10.)
+    await service.moKhoaLenChinhThuc(ID_NV1, 'hr1', '2027-01-10');
+
+    const quy2026 = repoQuy.kho.find((x: any) => x.nam === 2026);
+    expect(quy2026.soNgayDuocCap).toBe(12); // cấp theo lịch, KHÔNG +1 của T6
+    expect(quy2026.thangDaTich).toHaveLength(12);
   });
 });

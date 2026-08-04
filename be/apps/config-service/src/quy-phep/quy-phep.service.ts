@@ -20,6 +20,7 @@ import {
   PHEP_CO_BAN,
   phepMotThang,
   soNgayLamViecCuaThang,
+  thangTheoLich,
   tinhPhepDuocCap,
 } from './luat-phep';
 import { ngayVN } from '../ban-ghi-cham-cong/thoi-gian.util';
@@ -232,6 +233,7 @@ export class QuyPhep_Service {
     nam: number,
     lyDo: string,
     nguoiThucHien: string,
+    homNay: string = ngayVN(new Date()),
   ): Promise<{
     quy: LeaveBalance | null;
     lyDoBoQua?: 'da_co_quy' | 'khong_du_thang';
@@ -248,23 +250,58 @@ export class QuyPhep_Service {
     });
     if (soNgay <= 0) return { quy: null, lyDoBoQua: 'khong_du_thang' };
 
+    // (P3.10) Năm CHƯA QUA thì tạo quỹ RỖNG — phép cộng dần mỗi lần chốt bảng
+    // công, theo công thực tế. Cấp một cục ở đây sẽ khiến `thangDaTich` phủ
+    // kín ngay từ đầu năm và `tichPhepTheoThang()` thành mã chết vĩnh viễn.
+    //
+    // Năm ĐÃ QUA thì giữ luật cũ: bảng công của năm cũ có thể chưa từng được
+    // chốt (hoặc chưa hề tồn tại — quỹ cấp bù khi NV lên chính thức muộn),
+    // nên cấp 0 là cướp trắng phép của một năm người ta đã làm việc thật.
+    // Đánh dấu đủ 12 tháng để không tháng nào của năm đó được cấp lần hai nếu
+    // sau này HR chốt lại bảng công cũ.
+    const daQua = nam < Number(homNay.slice(0, 4));
+    const soNgayCap = daQua ? soNgay : 0;
+    const thangDaTich = daQua
+      ? thangTheoLich({
+          ngayVaoLam: nv.ngayVaoLam!,
+          nam,
+          ngayLamViecTrongTuan: nv.ngayLamViecTrongTuan,
+        })
+      : [];
+
     const quy = this.repo.create({
       employeeId,
       employeeName: nv.hoTen,
       employeeCode: nv.employeeId,
       nam,
       loaiQuy: LOAI_QUY_PHEP_NAM,
-      soNgayDuocCap: soNgay,
+      soNgayDuocCap: soNgayCap,
       soNgayDaDung: 0,
       soNgayDangChoDuyet: 0,
-      soNgayConLai: soNgay,
+      soNgayConLai: soNgayCap,
       hanDung: hanDungCuaNam(nam),
       trangThai: 'dang_hieu_luc',
       canCuCap,
+      thangDaTich,
       isActive: true,
     } as Partial<LeaveBalance>);
 
-    return { quy: await this.ghi(quy, { soNgay, lyDo, nguoiThucHien }) };
+    const daLuu = await this.ghi(quy, {
+      soNgay: soNgayCap,
+      lyDo,
+      nguoiThucHien,
+    });
+
+    // Quỹ rỗng của năm chưa qua phải TÍCH BÙ các tháng đã chốt bảng công
+    // trước khi quỹ tồn tại. `tichPhepTheoThang()` bỏ qua người chưa có quỹ
+    // (`if (!quy) continue`), nên NV lên chính thức vào tháng 10 sẽ mất trắng
+    // phép của mọi tháng đã chốt trước đó nếu không có bước này — và không
+    // đường nào lấy lại, vì bảng công cũ sẽ không được chốt lần nữa.
+    if (!daQua) {
+      await this.tichBuCaNam(daLuu, nv, nam, nguoiThucHien);
+    }
+
+    return { quy: daLuu };
   }
 
   async xemTruocCapPhepDauNam(nam: number): Promise<DongXemTruocCap[]> {
@@ -330,6 +367,46 @@ export class QuyPhep_Service {
     const boQuaThuViec = tatCa.length - ds.length + khongDuThang;
 
     return { daCap, daCoQuy, boQuaThuViec };
+  }
+
+  /**
+   * Tích bù cho quỹ VỪA TẠO: quét mọi bảng công đã chốt của năm đó và cộng
+   * phép cho từng tháng đạt ngưỡng.
+   *
+   * Cần vì `tichPhepTheoThang()` chạy TẠI thời điểm chốt và bỏ qua người chưa
+   * có quỹ. NV lên chính thức tháng 10 sẽ mất trắng phép của mọi tháng đã
+   * chốt trước đó — và không lấy lại được, vì bảng công cũ không được chốt
+   * lần nữa.
+   */
+  private async tichBuCaNam(
+    quy: LeaveBalance,
+    nv: Employee,
+    nam: number,
+    nguoiThucHien: string,
+  ): Promise<void> {
+    const dsBangCong = await this.repoBangCong.find({
+      where: {
+        employeeId: String((nv as any)._id),
+        trangThai: 'chot',
+        isActive: true,
+      } as any,
+    });
+
+    const cuaNam = dsBangCong
+      .filter((bc) => (bc.thang ?? '').startsWith(`${nam}-`))
+      .sort((a, b) => (a.thang ?? '').localeCompare(b.thang ?? ''));
+
+    for (const bc of cuaNam) {
+      await this.tichPhepTheoThang(bc.thang, nguoiThucHien, [bc]);
+    }
+    // Số dư trên `quy` mà caller đang giữ đã cũ sau vòng lặp trên; caller chỉ
+    // dùng nó làm giá trị trả về nên đọc lại cho khớp thực tế.
+    const moi = await this.timQuy(quy.employeeId, nam);
+    if (moi) {
+      quy.soNgayDuocCap = moi.soNgayDuocCap;
+      quy.soNgayConLai = moi.soNgayConLai;
+      quy.thangDaTich = moi.thangDaTich;
+    }
   }
 
   /**
@@ -485,7 +562,7 @@ export class QuyPhep_Service {
             // đầu năm bình thường mà NV lẽ ra đã nhận qua capPhepDauNam() nếu
             // hồ sơ có ngayChinhThuc từ đầu năm.
             : 'cap_dau_nam';
-      const { quy } = await this.capMotNam(nv, nam, lyDo, nguoiThucHien);
+      const { quy } = await this.capMotNam(nv, nam, lyDo, nguoiThucHien, homNay);
       if (quy) daCap.push(quy);
     }
 
