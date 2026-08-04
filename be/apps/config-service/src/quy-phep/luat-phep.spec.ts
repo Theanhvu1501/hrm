@@ -4,6 +4,10 @@ import {
   demThangLamViec,
   tinhPhepDuocCap,
   hanDungCuaNam,
+  soNgayLamViecCuaThang,
+  datNguongThangLe,
+  phepMotThang,
+  thangTheoLich,
 } from './luat-phep';
 
 /** Lịch T2–T7 (nghỉ Chủ nhật) — cấu hình phổ biến nhất ở VN. */
@@ -171,5 +175,92 @@ describe('tinhPhepDuocCap', () => {
 describe('hanDungCuaNam', () => {
   it('quỹ năm N dùng đến 31/3 năm N+1', () => {
     expect(hanDungCuaNam(2026)).toBe('2027-03-31');
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// P3.10 — phép tích theo công thực tế
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Lịch T2–T6 (nghỉ thứ Bảy + Chủ nhật). */
+const T2_T6 = [1, 2, 3, 4, 5];
+
+describe('soNgayLamViecCuaThang', () => {
+  it('đếm đúng số ngày làm việc theo lịch của tháng', () => {
+    // 08/2026: 31 ngày, mùng 1 rơi vào thứ Bảy ⇒ 21 ngày T2–T6.
+    expect(
+      soNgayLamViecCuaThang({ nam: 2026, thang: 8, ngayLamViecTrongTuan: T2_T6 }),
+    ).toBe(21);
+  });
+
+  it('lịch rỗng = CHƯA CẤU HÌNH ⇒ mọi ngày đều tính', () => {
+    expect(soNgayLamViecCuaThang({ nam: 2026, thang: 2 })).toBe(28);
+  });
+});
+
+describe('datNguongThangLe', () => {
+  it('đúng 50% là ĐẠT — NĐ 145 nói "ít nhất 50%"', () => {
+    expect(datNguongThangLe({ congHopLe: 11, soNgayLamViecChuan: 22 })).toBe(true);
+  });
+
+  it('dưới 50% là KHÔNG đạt', () => {
+    expect(datNguongThangLe({ congHopLe: 10.5, soNgayLamViecChuan: 22 })).toBe(false);
+  });
+
+  it('mẫu số 0 (tháng không có ngày làm việc nào) → không đạt, không chia 0', () => {
+    expect(datNguongThangLe({ congHopLe: 0, soNgayLamViecChuan: 0 })).toBe(false);
+  });
+});
+
+describe('phepMotThang', () => {
+  it('chia đều 12 tháng, KHÔNG làm tròn', () => {
+    expect(phepMotThang(12)).toBe(1);
+    expect(phepMotThang(13)).toBeCloseTo(13 / 12, 10);
+  });
+
+  it('làm tròn từng tháng sẽ phá số cả năm — chốt lại bằng phép cộng 12 tháng', () => {
+    // 13/12 = 1,083 làm tròn lên bội 0,5 thành 1,5 ⇒ 18 ngày/năm thay vì 13.
+    const tong = Array.from({ length: 12 }, () => phepMotThang(13)).reduce(
+      (s, x) => s + x,
+      0,
+    );
+    expect(tong).toBeCloseTo(13, 10);
+  });
+});
+
+describe('thangTheoLich — dùng cho backfill, phải khớp LUẬT CŨ', () => {
+  it('vào làm 01/08 ⇒ tính từ tháng 8 tới hết năm', () => {
+    expect(
+      thangTheoLich({ ngayVaoLam: '2026-08-01', nam: 2026, ngayLamViecTrongTuan: T2_T6 }),
+    ).toEqual(['2026-08', '2026-09', '2026-10', '2026-11', '2026-12']);
+  });
+
+  it('vào làm cuối tháng ⇒ tháng đó KHÔNG đủ 50% nên bị loại', () => {
+    const ds = thangTheoLich({
+      ngayVaoLam: '2026-08-25',
+      nam: 2026,
+      ngayLamViecTrongTuan: T2_T6,
+    });
+    expect(ds).not.toContain('2026-08');
+    expect(ds[0]).toBe('2026-09');
+  });
+
+  it.each([
+    ['2026-03-10', 2026],
+    ['2026-08-25', 2026],
+    ['2025-11-20', 2026],
+    ['2026-01-01', 2026],
+  ])(
+    'số phần tử KHỚP demThangLamViec (%s) — backfill lệch là cấp trùng',
+    (ngayVaoLam, nam) => {
+      const input = { ngayVaoLam, nam, ngayLamViecTrongTuan: T2_T6 };
+      expect(thangTheoLich(input)).toHaveLength(demThangLamViec(input));
+    },
+  );
+
+  it('năm trước ngày vào làm ⇒ rỗng', () => {
+    expect(
+      thangTheoLich({ ngayVaoLam: '2026-08-01', nam: 2025, ngayLamViecTrongTuan: T2_T6 }),
+    ).toEqual([]);
   });
 });
