@@ -114,6 +114,16 @@ export class QuyPhep_Controller {
     return { success: true, data };
   }
 
+  // Route tên cố định phải khai TRƯỚC `:id/...` — nếu không NestJS khớp
+  // "du-kien-thang" thành tham số `:id`.
+  @Get('du-kien-thang')
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/quy-phep:xem')
+  async duKienThang(@Query('thang') thang: string) {
+    const data = await this.quyPhep_Service.duKienThang(thang);
+    return { success: true, data };
+  }
+
   @Get(':id/so-bien-dong')
   @UseGuards(PermissionGuard)
   @Permissions('/cham-cong/quy-phep:xem')

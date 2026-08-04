@@ -51,6 +51,24 @@ export interface DongXemTruocCap {
   daCoQuy: boolean;
 }
 
+/**
+ * Một dòng "dự kiến tháng này" (P3.10) — đọc từ bảng công BẤT KỂ đã chốt hay
+ * chưa, và KHÔNG nằm trong số dư. Nó trả lời "tháng này tôi có được ngày phép
+ * không" mà không làm số dư nhảy theo từng ô HR đang sửa.
+ */
+export interface DongDuKienPhep {
+  employeeId: string;
+  hoTen: string;
+  /** soNgayCong + soNgayOm — nghỉ ốm hưởng BHXH vẫn là thời gian làm việc. */
+  congHopLe: number;
+  /** Số ngày làm việc theo LỊCH của tháng; ngưỡng là một nửa con số này. */
+  soNgayLamViecChuan: number;
+  datNguong: boolean;
+  soNgayDuKien: number;
+  /** Đã cộng vào số dư chưa (bảng công tháng này đã chốt và đã tích). */
+  daTich: boolean;
+}
+
 export interface DongXemTruocDong {
   balanceId: string;
   employeeName?: string;
@@ -104,6 +122,13 @@ class LeaveBalanceService extends ServiceBase {
       thoiDiem: x.thoiDiem as string,
       ghiChu: x.ghiChu as string | undefined,
     }));
+  }
+
+  async duKienThang(thang: string): Promise<DongDuKienPhep[]> {
+    return super.get<DongDuKienPhep[]>({
+      endpoint: '/du-kien-thang',
+      params: { thang },
+    });
   }
 
   async doiSoat(employeeId?: string): Promise<Array<Record<string, unknown>>> {

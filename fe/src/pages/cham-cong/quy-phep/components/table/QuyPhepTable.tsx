@@ -3,9 +3,9 @@ import { Table, Button, Tag, Space, Select, Modal, Form, InputNumber, Input } fr
 import type { ColumnsType } from "antd/es/table";
 import { useQuyPhepHandler, useQuyPhepState } from "../../QuyPhepHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
-import { LeaveBalance } from "@/services/leaveBalanceService";
+import { DongDuKienPhep, LeaveBalance } from "@/services/leaveBalanceService";
 import { homNayVN } from "@/ultils/thoiGianVN";
-import { nhanTrangThaiQuy, sapHetHan } from "../../nhanQuy";
+import { nhanTrangThaiQuy, oDuKien, sapHetHan } from "../../nhanQuy";
 import "./QuyPhepTable.state";
 
 const NAM_HIEN_TAI = Number(homNayVN().slice(0, 4));
@@ -23,6 +23,10 @@ export function QuyPhepTable() {
   // vừa nhập, chỉ đóng khi lưu thành công.
   const [dieuChinhRecord] = useQuyPhepState("dieuChinhRecord", null as LeaveBalance | null);
   const { canCreate, canEdit } = usePagePermission("/cham-cong/quy-phep");
+  // (P3.10) Dự kiến đọc từ bảng công CHƯA CHỐT — hiển thị để NV biết trước,
+  // nhưng KHÔNG nằm trong số dư. Nhãn phải nói rõ điều đó.
+  const [duKien] = useQuyPhepState("duKien", {} as Record<string, DongDuKienPhep>);
+  const [thangDuKien] = useQuyPhepState("thangDuKien", homNayVN().slice(0, 7));
 
   const [form] = Form.useForm<{ soNgay: number; ghiChu: string }>();
 
@@ -63,6 +67,36 @@ export function QuyPhepTable() {
       width: 100,
       align: "right",
       render: (v: number) => <strong>{v}</strong>,
+    },
+    {
+      title: `Dự kiến ${thangDuKien.slice(5)}/${thangDuKien.slice(0, 4)}`,
+      key: "duKien",
+      width: 190,
+      render: (_v: unknown, r: LeaveBalance) => {
+        // Chỉ có nghĩa với quỹ của năm chứa tháng đang xét — quỹ năm khác
+        // không tích từ bảng công tháng này.
+        if (r.nam !== Number(thangDuKien.slice(0, 4))) return null;
+        const o = oDuKien(duKien[r.employeeId]);
+        switch (o.kieu) {
+          case "khong_ap_dung":
+            return <span className="text-muted-foreground text-xs">—</span>;
+          case "da_tich":
+            return <Tag color="green">Đã vào số dư</Tag>;
+          case "dat":
+            return (
+              <span className="text-xs">
+                <Tag color="blue">+{o.soNgay} ngày</Tag>
+                {o.congHopLe}/{o.chuan} công — chưa chốt
+              </span>
+            );
+          case "chua_dat":
+            return (
+              <span className="text-muted-foreground text-xs">
+                Chưa đạt — {o.congHopLe}/{o.chuan} công, cần ≥{o.can}
+              </span>
+            );
+        }
+      },
     },
     {
       title: "Hạn dùng",

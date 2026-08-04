@@ -39,6 +39,20 @@ const SO_LAN_THU_LAI_CAS = 5;
 
 export const LOAI_QUY_PHEP_NAM = 'phep_nam';
 
+/** Một dòng của khối "dự kiến tháng này" trên màn Quỹ phép (P3.10). */
+export interface DongDuKienPhep {
+  employeeId: string;
+  hoTen: string;
+  /** soNgayCong + soNgayOm — xem `tichPhepTheoThang()`. */
+  congHopLe: number;
+  /** Số ngày làm việc theo LỊCH của tháng; ngưỡng là một nửa con số này. */
+  soNgayLamViecChuan: number;
+  datNguong: boolean;
+  soNgayDuKien: number;
+  /** Đã cộng vào số dư chưa (bảng công tháng này đã chốt và đã tích). */
+  daTich: boolean;
+}
+
 export interface DongXemTruocCap {
   employeeId: string;
   employeeName?: string;
@@ -367,6 +381,61 @@ export class QuyPhep_Service {
     const boQuaThuViec = tatCa.length - ds.length + khongDuThang;
 
     return { daCap, daCoQuy, boQuaThuViec };
+  }
+
+  /**
+   * Dòng "dự kiến tháng này" cho màn Quỹ phép — trả lời "tháng này tôi có
+   * được ngày phép không" mà KHÔNG làm số dư nhảy.
+   *
+   * Khác `tichPhepTheoThang()` ở đúng hai chỗ: đọc bảng công BẤT KỂ trạng
+   * thái (nháp cũng tính — đó chính là điểm của nó), và KHÔNG ghi gì.
+   * `daTich` để FE phân biệt "đã vào số dư" với "chưa chốt nên chưa tính".
+   */
+  async duKienThang(
+    thang: string,
+    dsBangCong?: Timesheet[],
+  ): Promise<DongDuKienPhep[]> {
+    const rows =
+      dsBangCong ??
+      (await this.repoBangCong.find({ where: { thang, isActive: true } as any }));
+
+    const [namStr, thangStr] = thang.split('-');
+    const nam = Number(namStr);
+    const thangSo = Number(thangStr);
+
+    const nhanVien = new Map<string, Employee>();
+    for (const nv of await this.repoNhanVien.find({})) {
+      nhanVien.set(String((nv as any)._id), nv);
+    }
+
+    const ds: DongDuKienPhep[] = [];
+    for (const bc of rows) {
+      const employeeId = String(bc.employeeId);
+      const nv = nhanVien.get(employeeId);
+      const quy = await this.timQuy(employeeId, nam);
+
+      const congHopLe = (bc.soNgayCong ?? 0) + (bc.soNgayOm ?? 0);
+      const soNgayLamViecChuan = soNgayLamViecCuaThang({
+        nam,
+        thang: thangSo,
+        ngayLamViecTrongTuan: nv?.ngayLamViecTrongTuan,
+      });
+      const datNguong = datNguongThangLe({ congHopLe, soNgayLamViecChuan });
+
+      ds.push({
+        employeeId,
+        hoTen: nv?.hoTen ?? '',
+        congHopLe,
+        soNgayLamViecChuan,
+        datNguong,
+        soNgayDuKien: datNguong
+          ? phepMotThang(quy?.canCuCap?.mucCaNam ?? PHEP_CO_BAN)
+          : 0,
+        daTich: (quy?.thangDaTich ?? []).includes(thang),
+      });
+    }
+
+    return ds;
   }
 
   /**

@@ -1,5 +1,5 @@
 import { BaseStates } from "@/common/c-handler/core/actions/c-state.action";
-import { LeaveBalance } from "@/services/leaveBalanceService";
+import { DongDuKienPhep, LeaveBalance } from "@/services/leaveBalanceService";
 
 export interface TableStates extends BaseStates {
   danhSach: LeaveBalance[];
@@ -13,6 +13,10 @@ export interface TableStates extends BaseStates {
   // gọi executeEvent — nếu không, lưu thất bại vẫn đóng modal và người dùng
   // mất luôn số liệu vừa nhập dù đã thấy thông báo lỗi.
   dieuChinhRecord: LeaveBalance | null;
+  // (P3.10) Dòng "dự kiến tháng này", đọc từ bảng công CHƯA CHỐT nên KHÔNG
+  // nằm trong số dư. Khoá theo employeeId để tra nhanh khi vẽ cột.
+  duKien: Record<string, DongDuKienPhep>;
+  thangDuKien: string;
 }
 
 declare module "../../quyPhepHandler" {

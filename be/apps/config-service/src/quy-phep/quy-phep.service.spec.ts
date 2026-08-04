@@ -1247,3 +1247,76 @@ describe('QuyPhep_Service — tích bù khi tạo quỹ muộn (P3.10)', () => {
     expect(quy2026.thangDaTich).toHaveLength(12);
   });
 });
+
+describe('QuyPhep_Service — duKienThang (P3.10)', () => {
+  const bcNhap = (over: any = {}) => ({
+    _id: { toString: () => '650000000000000000000901' },
+    thang: '2026-08',
+    employeeId: ID_NV1,
+    soNgayCong: 20,
+    soNgayOm: 0,
+    trangThai: 'nhap',
+    isActive: true,
+    ...over,
+  });
+
+  it('đọc cả bảng công NHÁP — đó chính là điểm của dòng dự kiến', async () => {
+    const { service } = await dungQuyDaCapTheoLuatCu();
+
+    const ds = await service.duKienThang('2026-08', [bcNhap()] as any);
+
+    expect(ds[0]).toMatchObject({
+      employeeId: ID_NV1,
+      congHopLe: 20,
+      soNgayLamViecChuan: 26,
+      datNguong: true,
+      daTich: false,
+      soNgayDuKien: 1,
+    });
+  });
+
+  it('cộng ngày ốm giống hệt đường tích thật', async () => {
+    const { service } = await dungQuyDaCapTheoLuatCu();
+
+    const ds = await service.duKienThang('2026-08', [
+      bcNhap({ soNgayCong: 10, soNgayOm: 3 }),
+    ] as any);
+
+    expect(ds[0].congHopLe).toBe(13);
+    expect(ds[0].datNguong).toBe(true);
+  });
+
+  it('chưa đạt thì nêu rõ, và dự kiến 0', async () => {
+    const { service } = await dungQuyDaCapTheoLuatCu();
+
+    const ds = await service.duKienThang('2026-08', [
+      bcNhap({ soNgayCong: 8 }),
+    ] as any);
+
+    expect(ds[0]).toMatchObject({
+      congHopLe: 8,
+      soNgayLamViecChuan: 26,
+      datNguong: false,
+      soNgayDuKien: 0,
+    });
+  });
+
+  it('tháng đã tích rồi thì báo daTich — FE phân biệt "đã vào số dư"', async () => {
+    const { service, repoQuy } = await dungQuyDaCapTheoLuatCu();
+    quy2026(repoQuy).thangDaTich = ['2026-08'];
+
+    const ds = await service.duKienThang('2026-08', [bcNhap()] as any);
+
+    expect(ds[0].daTich).toBe(true);
+  });
+
+  it('KHÔNG ghi gì vào quỹ hay sổ — đây là màn xem trước', async () => {
+    const { service, repoQuy, repoSo } = await dungQuyDaCapTheoLuatCu();
+    const truoc = quy2026(repoQuy).soNgayDuocCap;
+
+    await service.duKienThang('2026-08', [bcNhap()] as any);
+
+    expect(quy2026(repoQuy).soNgayDuocCap).toBe(truoc);
+    expect(repoSo.kho).toHaveLength(0);
+  });
+});
