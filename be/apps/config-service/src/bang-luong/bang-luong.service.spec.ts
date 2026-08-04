@@ -1182,4 +1182,51 @@ describe('BangLuong_Service', () => {
       expect(kq.ds[0].ghiChu).toMatch(/thời vụ/);
     });
   });
+  describe('giữ tiền OT khi sửa khoản biến động (P4.2c-2 hotfix)', () => {
+    /**
+     * Khoản `TIEN_OT` khai TAY có mã tự sinh `KHOAN_<timestamp>`, không phải
+     * chuỗi 'TIEN_OT'. Tra theo mã cứng làm `capNhatDong()` không thấy tiền
+     * làm thêm và ghi đè về 0 — mất tiền IM LẶNG, bảng vẫn hiện bình thường.
+     */
+    it('tìm khoản TIEN_OT theo LOẠI CÔNG THỨC, không theo mã cứng', async () => {
+      seedCauHinh();
+      (cauHinhStore[0] as any).khoanLuong = [
+        ...(cauHinhStore[0] as any).khoanLuong.filter(
+          (k: any) => k.loaiCongThuc !== 'TIEN_OT',
+        ),
+        {
+          ma: 'KHOAN_1754200000000', ten: 'Tiền làm thêm giờ',
+          loaiCongThuc: 'TIEN_OT', thamSo: {}, chiuThue: true,
+          tranMienThue: null, vaoTongThuNhap: true, vaoBHXH: false, thuTu: 9,
+        },
+      ];
+      dongLuongStore.push({
+        _id: '650000000000000000000901',
+        thang: '2026-07', employeeId: EMP1,
+        congThuong: 24, congThuViec: 0, congKhac: 0,
+        luongThoaThuan: 15_000_000, mucKhaiBao: 5_500_000,
+        phuCapCoDinh: 0, soNguoiPhuThuoc: 0,
+        dongBH: false, thoiVu: false, camKet: false, hopDongThu2: false,
+        cauHinhApDung: { congChuan: 24, thuViecTyLe: 0.85, bhxhTyLe: 0.105, bhxhCanCu: 'MUC_KHAI_BAO' },
+        tamUng: 0, khauTruKhac: 0, nhapTheoKy: {},
+        thucTe: {
+          giaTriTungKhoan: { KHOAN_1754200000000: 1_504_000 },
+          tongThuNhap: 1_504_000, thuNhapMienThue: 0, mienThueKhoan: 0,
+          otMienThue: 0, bhxh: 0, giamTru: 0, thuNhapTinhThue: 0, thue: 0,
+          phiCongDoan: 0, thucLinh: 1_504_000,
+          chiPhiBHCongTy: 0, tongChiPhiCongTy: 1_504_000,
+        },
+        khaiBao: { giaTriTungKhoan: {}, tongThuNhap: 0 },
+        trangThai: 'nhap', isActive: true,
+      } as any);
+      mockDongLuongRepo.findOne.mockResolvedValue(dongLuongStore[0]);
+
+      const kq = await service.capNhatDong('650000000000000000000901', {
+        tamUng: 100_000,
+      } as any);
+
+      // Tiền làm thêm PHẢI còn nguyên sau khi sửa tạm ứng.
+      expect(kq.thucTe.giaTriTungKhoan.KHOAN_1754200000000).toBe(1_504_000);
+    });
+  });
 });

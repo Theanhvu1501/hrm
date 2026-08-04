@@ -10,12 +10,16 @@ import { useCauHinhLuongState } from "../CauHinhLuongHandlerContext";
 import type { CauHinhLuong, KhoanLuong, LoaiCongThuc } from "@/services/cauHinhLuongService";
 import "../CauHinhLuongPage.state";
 
-const LOAI_CONG_THUC_OPTIONS: { value: LoaiCongThuc; label: string }[] = [
+export const LOAI_CONG_THUC_OPTIONS: { value: LoaiCongThuc; label: string }[] = [
   { value: "LUONG_THEO_CONG", label: "Lương theo công" },
   { value: "DINH_MUC_x_CONG", label: "Định mức x Công" },
   { value: "CO_DINH_THANG", label: "Cố định hàng tháng" },
   { value: "PHAN_TRAM_BASE", label: "% theo lương cơ sở" },
   { value: "NHAP_THEO_KY", label: "Nhập tay theo kỳ" },
+  // Lấy thẳng tổng tiền từ bảng 03-LĐTL ĐÃ CHỐT của kỳ — không có tham số,
+  // không tính lại công thức. Thiếu lựa chọn này thì không có đường nào bật
+  // tiền làm thêm vào bảng lương từ giao diện.
+  { value: "TIEN_OT", label: "Tiền làm thêm giờ (từ bảng 03-LĐTL)" },
 ];
 
 function taoMaKhoanMoi(): string {

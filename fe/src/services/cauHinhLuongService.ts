@@ -6,7 +6,9 @@ export type LoaiCongThuc =
   | 'DINH_MUC_x_CONG'
   | 'CO_DINH_THANG'
   | 'PHAN_TRAM_BASE'
-  | 'NHAP_THEO_KY';
+  | 'NHAP_THEO_KY'
+  /** Lấy thẳng tổng tiền từ bảng 03-LĐTL đã chốt của kỳ (P4.2c-2). */
+  | 'TIEN_OT';
 
 export interface ThamSoKhoan {
   dinhMuc?: number;

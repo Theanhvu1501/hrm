@@ -185,6 +185,23 @@ export class BangLuong_Service {
     };
   }
 
+  /**
+   * Tiền làm thêm đã tính trên một dòng lương, tra theo LOẠI CÔNG THỨC.
+   *
+   * Không tra theo mã: `ma` do người dùng/giao diện đặt (khoản khai tay có mã
+   * tự sinh), còn `loaiCongThuc` là thứ engine thật sự diễn giải.
+   */
+  private layTienOtCuaDong(
+    dong: DongLuong,
+    ch: CauHinhLuongData,
+  ): number {
+    const khoan = (ch.khoanLuong ?? []).find(
+      (k) => k.loaiCongThuc === 'TIEN_OT',
+    );
+    if (!khoan) return 0;
+    return (dong.thucTe as any)?.giaTriTungKhoan?.[khoan.ma] ?? 0;
+  }
+
   /** Ảnh chụp cấu hình ĐÃ resolve cho một NV — nguồn duy nhất để tính lại. */
   private toCauHinhApDung(ch: CauHinhLuongData): CauHinhLuongApDung {
     return {
@@ -479,7 +496,12 @@ export class BangLuong_Service {
       // không được kéo theo thay đổi mà kế toán vừa làm ở bảng khác. Lấy từ
       // `thucTe` vì `tienOt` là khoản đi thẳng, hai mức khai báo/thực tế đều
       // mang cùng một con số.
-      tienOt: item.thucTe?.giaTriTungKhoan?.TIEN_OT ?? 0,
+      //
+      // Tra theo LOẠI CÔNG THỨC, không theo mã cứng 'TIEN_OT': khoản khai tay
+      // ở màn Cấu hình lương có mã tự sinh `KHOAN_<timestamp>`. Tra mã cứng
+      // thì không thấy và ghi đè tiền làm thêm về 0 — MẤT TIỀN IM LẶNG, bảng
+      // vẫn hiện bình thường và không ai đối soát ra.
+      tienOt: this.layTienOtCuaDong(item, ch),
       otMienThue: item.thucTe?.otMienThue ?? 0,
     };
 
