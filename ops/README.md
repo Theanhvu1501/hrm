@@ -626,3 +626,50 @@ Hiện hệ thống thu **đều mọi người**, kể cả người không đ�
 thì phải chuyển sang `chiPhiBHCongTy` (không đụng `thucLinh`); nếu là đoàn phí thì tỷ lệ 1% và cần
 thêm cờ "là đoàn viên" vào hồ sơ nhân viên. `tyLe` nằm trong cấu hình theo tenant nên đổi được
 không cần deploy.
+
+## Backfill `thangDaTich` cho quỹ phép cũ (`backfill-thang-da-tich.ts`, P3.10)
+
+**PHẢI CHẠY TRƯỚC LẦN CHỐT BẢNG CÔNG ĐẦU TIÊN SAU KHI DEPLOY P3.10.**
+
+Từ P3.10, **chốt bảng công không chỉ khoá số công — nó CẤP PHÉP NĂM** cho tháng đó. HR cần biết
+điều này: bảng công phải phản ánh đúng thực tế trước khi bấm chốt.
+
+Quỹ phép cấp trước P3.10 được cấp một cục theo lịch và **không ghi lại nó đã tính những tháng
+nào**. Không đánh dấu trước thì mọi tháng đã nằm trong lần cấp cũ sẽ được cấp **lần thứ hai** khi
+bảng công của nó được chốt.
+
+Script chỉ ghi `thangDaTich`. Nó **không đụng `soNgayDuocCap`** — số dư nhân viên đang nhìn thấy
+giữ nguyên tuyệt đối, kể cả khi luật mới lẽ ra cho ít hơn. Hạ số là đẩy quỹ về âm với người đã
+nghỉ hết phép.
+
+```bash
+# 1. Đẩy script vào container
+scp ops/backfill-thang-da-tich.ts kt:/tmp/
+ssh kt "docker cp /tmp/backfill-thang-da-tich.ts nhan-su-be:/app/backfill-thang-da-tich.ts"
+
+# 2. Xem trước, không ghi gì
+ssh kt "docker exec -w /app nhan-su-be npx ts-node \
+  --compiler-options '{\"module\":\"commonjs\"}' backfill-thang-da-tich.ts --dry-run"
+
+# 3. Ghi thật (bỏ --dry-run)
+ssh kt "docker exec -w /app nhan-su-be npx ts-node \
+  --compiler-options '{\"module\":\"commonjs\"}' backfill-thang-da-tich.ts"
+
+# 4. Dọn
+ssh kt "docker exec nhan-su-be rm -f /app/backfill-thang-da-tich.ts && rm -f /tmp/backfill-thang-da-tich.ts"
+```
+
+Idempotent — chỉ đụng quỹ chưa có `thangDaTich`, chạy lại lần hai báo 0 quỹ.
+
+**Cách đọc kết quả dry-run:** với quỹ cấp ở mức 12 ngày/năm, `soNgayDuocCap` phải **đúng bằng số
+tháng** được liệt kê (12/12 × số tháng). Lệch là dấu hiệu quỹ đó được sửa tay hoặc cấp ở mức khác
+— kiểm trước khi ghi thật.
+
+Quỹ thiếu `canCuCap.ngayVaoLam` bị **bỏ qua** (in "BỎ QUA"), không đoán ngày vào làm. Phải xử lý
+tay những quỹ đó trước lần chốt bảng công đầu tiên, nếu không chúng sẽ được cấp trùng.
+
+**Hệ quả cho năm đang chạy:** quỹ hiện có thường đã phủ kín tới hết tháng 12, nên chốt bảng công
+các tháng còn lại của năm nay sẽ không cộng thêm gì. Tích theo công thực tế bắt đầu có hiệu lực
+thật từ năm sau, khi `capPhepDauNam` tạo quỹ **rỗng** rồi cộng dần mỗi lần chốt bảng công.
+
+Không cần chạy `grant-quyen-module-moi.ts` cho đợt này — P3.10 không thêm module quyền mới.
