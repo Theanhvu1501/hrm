@@ -33,6 +33,15 @@ export class LeaveBalance extends BaseEntity {
   @Column() hanDung: string;
   @Column({ default: 'dang_hieu_luc' }) trangThai: string; // dang_hieu_luc|da_dong
   @Column('json', { nullable: true }) canCuCap?: CanCuCapPhep;
+  /**
+   * Các tháng 'YYYY-MM' đã được tích vào quỹ này (P3.10).
+   *
+   * Vừa làm việc tích idempotent (chốt lại bảng công không cấp lần hai), vừa
+   * là thứ giữ cho quỹ cấp theo LUẬT CŨ khỏi bị cấp trùng: script
+   * `ops/backfill-thang-da-tich.ts` điền sẵn các tháng mà luật cũ đã tính,
+   * nên deploy không hạ số dư của ai.
+   */
+  @Column('json', { nullable: true }) thangDaTich?: string[];
   @Column({ nullable: true }) ghiChu?: string;
   @Column({ default: true }) isActive: boolean;
 }

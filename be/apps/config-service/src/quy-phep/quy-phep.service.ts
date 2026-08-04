@@ -7,8 +7,21 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Employee, LeaveBalance, LeaveBalanceEntry, PhanBoQuy } from '@app/entities';
-import { hanDungCuaNam, tinhPhepDuocCap } from './luat-phep';
+import {
+  Employee,
+  LeaveBalance,
+  LeaveBalanceEntry,
+  PhanBoQuy,
+  Timesheet,
+} from '@app/entities';
+import {
+  datNguongThangLe,
+  hanDungCuaNam,
+  PHEP_CO_BAN,
+  phepMotThang,
+  soNgayLamViecCuaThang,
+  tinhPhepDuocCap,
+} from './luat-phep';
 import { ngayVN } from '../ban-ghi-cham-cong/thoi-gian.util';
 
 export const MA_LOI_QUY_PHEP = {
@@ -50,6 +63,8 @@ export class QuyPhep_Service {
     private readonly repoSo: Repository<LeaveBalanceEntry>,
     @InjectRepository(Employee)
     private readonly repoNhanVien: Repository<Employee>,
+    @InjectRepository(Timesheet)
+    private readonly repoBangCong: Repository<Timesheet>,
   ) {}
 
   /**
@@ -315,6 +330,99 @@ export class QuyPhep_Service {
     const boQuaThuViec = tatCa.length - ds.length + khongDuThang;
 
     return { daCap, daCoQuy, boQuaThuViec };
+  }
+
+  /**
+   * Tích phép của MỘT tháng vào quỹ, dựa trên bảng công ĐÃ CHỐT của tháng đó.
+   *
+   * Gọi từ `BangCong_Service.chotKy()`. Từ P3.10 phép không còn cấp một cục
+   * đầu năm theo lịch — nó cộng dần theo số công thực tế, đúng NĐ 145 Đ66.2.
+   *
+   * Ba điểm không được sửa nếu chưa đọc kỹ:
+   *
+   * 1. `congHopLe = soNgayCong + soNgayOm`. `soNgayCong` KHÔNG gồm nghỉ ốm —
+   *    bảng ký hiệu quy `O` = 0 công — trong khi NĐ 145 Đ65 tính nghỉ ốm
+   *    hưởng BHXH là thời gian làm việc. Lấy thẳng `soNgayCong` là bỏ mất
+   *    ngày ốm.
+   * 2. MẪU SỐ vẫn theo lịch: "50% số ngày làm việc BÌNH THƯỜNG của tháng" là
+   *    con số của lịch công ty, không của riêng một người.
+   * 3. KHÔNG nhánh nào hạ `soNgayDuocCap`. NV có thể đã nghỉ bằng đúng số phép
+   *    đã cấp; hạ xuống là đẩy quỹ về âm. Tháng không đạt ngưỡng chỉ đơn giản
+   *    là không cộng gì.
+   *
+   * Idempotent qua `thangDaTich` — chốt lại một tháng đã tích không cộng thêm.
+   *
+   * `dsBangCong` chỉ dùng cho test; đường production để trống và hàm tự đọc.
+   */
+  async tichPhepTheoThang(
+    thang: string,
+    nguoiThucHien: string,
+    dsBangCong?: Timesheet[],
+  ): Promise<{
+    soNguoiDuocTich: number;
+    soNguoiKhongDat: number;
+    soNguoiDaTich: number;
+  }> {
+    const rows =
+      dsBangCong ??
+      (await this.repoBangCong.find({ where: { thang, isActive: true } as any }));
+
+    const [namStr, thangStr] = thang.split('-');
+    const nam = Number(namStr);
+    const thangSo = Number(thangStr);
+
+    // Index nhân viên theo id thay vì findOne từng người: tránh dựng ObjectId
+    // cho mỗi dòng, và một tháng chỉ có vài trăm dòng nên một lượt đọc là đủ.
+    const nhanVien = new Map<string, Employee>();
+    for (const nv of await this.repoNhanVien.find({})) {
+      nhanVien.set(String((nv as any)._id), nv);
+    }
+
+    let soNguoiDuocTich = 0;
+    let soNguoiKhongDat = 0;
+    let soNguoiDaTich = 0;
+
+    for (const bc of rows) {
+      // Bảng công nháp còn sửa được — tích theo nó thì số dư phép tụt xuống
+      // SAU KHI nhân viên đã nhìn thấy.
+      if (bc.trangThai !== 'chot') continue;
+
+      const employeeId = String(bc.employeeId);
+      const quy = await this.timQuy(employeeId, nam);
+      if (!quy) continue; // chưa có quỹ năm đó (chưa lên chính thức)
+
+      const daTich = quy.thangDaTich ?? [];
+      if (daTich.includes(thang)) {
+        soNguoiDaTich += 1;
+        continue;
+      }
+
+      const congHopLe = (bc.soNgayCong ?? 0) + (bc.soNgayOm ?? 0);
+      const soNgayLamViecChuan = soNgayLamViecCuaThang({
+        nam,
+        thang: thangSo,
+        ngayLamViecTrongTuan: nhanVien.get(employeeId)?.ngayLamViecTrongTuan,
+      });
+
+      if (!datNguongThangLe({ congHopLe, soNgayLamViecChuan })) {
+        soNguoiKhongDat += 1;
+        continue;
+      }
+
+      const themNgay = phepMotThang(quy.canCuCap?.mucCaNam ?? PHEP_CO_BAN);
+      quy.soNgayDuocCap += themNgay;
+      quy.thangDaTich = [...daTich, thang];
+
+      await this.ghi(quy, {
+        soNgay: themNgay,
+        lyDo: 'tich_theo_thang',
+        nguoiThucHien,
+        ghiChu: `Tháng ${thang}: ${congHopLe}/${soNgayLamViecChuan} công`,
+      });
+      soNguoiDuocTich += 1;
+    }
+
+    return { soNguoiDuocTich, soNguoiKhongDat, soNguoiDaTich };
   }
 
   /**

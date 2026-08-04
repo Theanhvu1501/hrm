@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
-import { LeaveBalance, LeaveBalanceEntry, Employee } from '@app/entities';
+import { LeaveBalance, LeaveBalanceEntry, Employee, Timesheet } from '@app/entities';
 import { QuyPhep_Service } from './quy-phep.service';
 
 /** Repo giả tối thiểu: đủ find/findOne/save/create cho service này. */
@@ -100,15 +100,22 @@ async function dungService(nhanVien: any[] = [NV_CHINH_THUC, NV_THU_VIEC]) {
   const repoQuy = taoRepoGia<any>();
   const repoSo = taoRepoGia<any>();
   const repoNv = taoRepoGia<any>(nhanVien);
+  const repoBangCong = taoRepoGia<any>();
   const moduleRef = await Test.createTestingModule({
     providers: [
       QuyPhep_Service,
       { provide: getRepositoryToken(LeaveBalance), useValue: repoQuy },
       { provide: getRepositoryToken(LeaveBalanceEntry), useValue: repoSo },
       { provide: getRepositoryToken(Employee), useValue: repoNv },
+      { provide: getRepositoryToken(Timesheet), useValue: repoBangCong },
     ],
   }).compile();
-  return { service: moduleRef.get(QuyPhep_Service), repoQuy, repoSo };
+  return {
+    service: moduleRef.get(QuyPhep_Service),
+    repoQuy,
+    repoSo,
+    repoBangCong,
+  };
 }
 
 describe('QuyPhep_Service — cấp phép', () => {
@@ -927,5 +934,154 @@ describe('QuyPhep_Service — giữ chỗ nguyên tử (P4.2b Task 2)', () => {
     });
 
     expect(repoQuy.kho.find((x: any) => x.nam === 2026).soNgayDangChoDuyet).toBe(0);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// P3.10 — tích phép theo công thực tế của bảng công đã chốt
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * NV_CHINH_THUC chạy lịch T2–T7, nên 08/2026 (31 ngày, 5 Chủ nhật) có 26 ngày
+ * làm việc ⇒ ngưỡng 50% là 13 công.
+ */
+const NGUONG_T8_2026 = 13;
+
+/** Quỹ 2026 đã cấp sẵn theo LUẬT CŨ, kèm thangDaTich rỗng. */
+async function dungQuyDaCapTheoLuatCu(soNgayDuocCap = 5) {
+  const boDo = await dungService([NV_CHINH_THUC]);
+  boDo.repoQuy.kho.push({
+    _id: { toString: () => '650000000000000000000900' },
+    employeeId: ID_NV1,
+    employeeName: 'Nguyễn Văn A',
+    nam: 2026,
+    loaiQuy: 'phep_nam',
+    soNgayDuocCap,
+    soNgayDaDung: 0,
+    soNgayDangChoDuyet: 0,
+    soNgayConLai: soNgayDuocCap,
+    hanDung: '2027-03-31',
+    trangThai: 'dang_hieu_luc',
+    canCuCap: { ngayVaoLam: '2026-08-01', soThang: 5, thamNienNam: 0, mucCaNam: 12 },
+    thangDaTich: [],
+    isActive: true,
+  });
+  return boDo;
+}
+
+const bangCong = (over: any = {}) => ({
+  _id: { toString: () => '650000000000000000000501' },
+  thang: '2026-08',
+  employeeId: ID_NV1,
+  soNgayCong: NGUONG_T8_2026,
+  soNgayOm: 0,
+  trangThai: 'chot',
+  isActive: true,
+  ...over,
+});
+
+const quy2026 = (repoQuy: any) => repoQuy.kho.find((x: any) => x.nam === 2026);
+
+describe('QuyPhep_Service — tichPhepTheoThang (P3.10)', () => {
+  it('đạt ngưỡng → cộng phép của tháng và ghi vào thangDaTich', async () => {
+    const { service, repoQuy } = await dungQuyDaCapTheoLuatCu();
+
+    const kq = await service.tichPhepTheoThang('2026-08', 'hr1', [bangCong()] as any);
+
+    expect(kq.soNguoiDuocTich).toBe(1);
+    expect(quy2026(repoQuy).thangDaTich).toContain('2026-08');
+    // mucCaNam 12 ⇒ phepMotThang = 1 ngày.
+    expect(quy2026(repoQuy).soNgayDuocCap).toBe(6);
+  });
+
+  it('CỘNG NGÀY ỐM: soNgayCong một mình dưới ngưỡng, cộng soNgayOm thì đủ', async () => {
+    // Bảng ký hiệu quy O (ốm BHXH) = 0 công, nên soNgayCong KHÔNG gồm ngày ốm.
+    // Nếu hiện thực lấy thẳng soNgayCong thì bài này đỏ.
+    const { service, repoQuy } = await dungQuyDaCapTheoLuatCu();
+
+    await service.tichPhepTheoThang('2026-08', 'hr1', [
+      bangCong({ soNgayCong: NGUONG_T8_2026 - 3, soNgayOm: 3 }),
+    ] as any);
+
+    expect(quy2026(repoQuy).thangDaTich).toContain('2026-08');
+    expect(quy2026(repoQuy).soNgayDuocCap).toBe(6);
+  });
+
+  it('KHÔNG đạt ngưỡng → không cộng gì, không đánh dấu tháng', async () => {
+    const { service, repoQuy } = await dungQuyDaCapTheoLuatCu();
+
+    const kq = await service.tichPhepTheoThang('2026-08', 'hr1', [
+      bangCong({ soNgayCong: NGUONG_T8_2026 - 1, soNgayOm: 0 }),
+    ] as any);
+
+    expect(kq.soNguoiKhongDat).toBe(1);
+    expect(quy2026(repoQuy).soNgayDuocCap).toBe(5);
+    expect(quy2026(repoQuy).thangDaTich ?? []).not.toContain('2026-08');
+  });
+
+  it('IDEMPOTENT: chốt lại tháng đã tích KHÔNG cộng thêm lần hai', async () => {
+    const { service, repoQuy } = await dungQuyDaCapTheoLuatCu();
+    await service.tichPhepTheoThang('2026-08', 'hr1', [bangCong()] as any);
+    const sauLan1 = quy2026(repoQuy).soNgayDuocCap;
+
+    const kq = await service.tichPhepTheoThang('2026-08', 'hr1', [bangCong()] as any);
+
+    expect(kq.soNguoiDaTich).toBe(1);
+    expect(kq.soNguoiDuocTich).toBe(0);
+    expect(quy2026(repoQuy).soNgayDuocCap).toBe(sauLan1);
+    expect(quy2026(repoQuy).thangDaTich).toEqual(['2026-08']);
+  });
+
+  it('BỎ bảng công còn nháp — số dư không được nhảy theo ô HR đang sửa', async () => {
+    const { service, repoQuy } = await dungQuyDaCapTheoLuatCu();
+
+    await service.tichPhepTheoThang('2026-08', 'hr1', [
+      bangCong({ trangThai: 'nhap' }),
+    ] as any);
+
+    expect(quy2026(repoQuy).soNgayDuocCap).toBe(5);
+    expect(quy2026(repoQuy).thangDaTich).toEqual([]);
+  });
+
+  it('nhân viên CHƯA có quỹ năm đó thì bỏ qua, không ném', async () => {
+    const { service } = await dungService([NV_CHINH_THUC]); // không seed quỹ
+
+    await expect(
+      service.tichPhepTheoThang('2026-08', 'hr1', [bangCong()] as any),
+    ).resolves.toMatchObject({ soNguoiDuocTich: 0 });
+  });
+
+  it('KHÔNG hạ soNgayDuocCap kể cả khi tháng đó công bằng 0', async () => {
+    // Ràng buộc sống còn: NV có thể đã nghỉ hết số phép đã cấp; hạ xuống là
+    // đẩy quỹ về âm.
+    const { service, repoQuy } = await dungQuyDaCapTheoLuatCu();
+
+    await service.tichPhepTheoThang('2026-08', 'hr1', [
+      bangCong({ soNgayCong: 0, soNgayOm: 0 }),
+    ] as any);
+
+    expect(quy2026(repoQuy).soNgayDuocCap).toBe(5);
+  });
+
+  it('tháng đã nằm sẵn trong thangDaTich (backfill luật cũ) KHÔNG được cấp lần hai', async () => {
+    const { service, repoQuy } = await dungQuyDaCapTheoLuatCu();
+    quy2026(repoQuy).thangDaTich = ['2026-08', '2026-09'];
+
+    const kq = await service.tichPhepTheoThang('2026-08', 'hr1', [bangCong()] as any);
+
+    expect(kq.soNguoiDaTich).toBe(1);
+    expect(quy2026(repoQuy).soNgayDuocCap).toBe(5);
+  });
+
+  it('ghi đúng một dòng sổ cho mỗi lần tích, nêu rõ công/chuẩn', async () => {
+    const { service, repoSo } = await dungQuyDaCapTheoLuatCu();
+
+    await service.tichPhepTheoThang('2026-08', 'hr1', [bangCong()] as any);
+
+    const dong = repoSo.kho.filter((x: any) => x.lyDo === 'tich_theo_thang');
+    expect(dong).toHaveLength(1);
+    expect(dong[0].soNgay).toBe(1);
+    expect(dong[0].ghiChu).toMatch(/2026-08/);
+    expect(dong[0].ghiChu).toMatch(new RegExp(`${NGUONG_T8_2026}/26`));
   });
 });
