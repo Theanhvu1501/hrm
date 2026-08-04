@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { BangCong_Service, MA_LOI_BANG_CONG } from './bang-cong.service';
+import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 import {
   Timesheet,
   Employee,
@@ -109,6 +110,10 @@ describe('BangCong_Service', () => {
           provide: getRepositoryToken(Resignation),
           useValue: { find: jest.fn().mockResolvedValue([]) },
         },
+        {
+          provide: QuyPhep_Service,
+          useValue: { tichPhepTheoThang: jest.fn().mockResolvedValue({}) },
+        },
       ],
     }).compile();
 
@@ -137,7 +142,7 @@ describe('BangCong_Service', () => {
         },
       ];
 
-      const result = await service.finalize('2026-07');
+      const result = await service.finalize('2026-07', 'hr1');
 
       expect(result).toHaveLength(2);
       expect(result.every((r) => r.trangThai === 'chot')).toBe(true);
@@ -150,7 +155,7 @@ describe('BangCong_Service', () => {
     it('ném 409 khi tháng chưa có dòng bảng công nào', async () => {
       timesheetStore = [];
 
-      const loi = await service.finalize('2026-07').catch((e) => e);
+      const loi = await service.finalize('2026-07', 'hr1').catch((e) => e);
 
       expect(loi).toBeInstanceOf(ConflictException);
       expect((loi as any).getResponse().code).toBe(
@@ -173,7 +178,7 @@ describe('BangCong_Service', () => {
         },
       ];
 
-      const result = await service.finalize('2026-07');
+      const result = await service.finalize('2026-07', 'hr1');
 
       expect(result).toHaveLength(1);
       expect(result[0].trangThai).toBe('chot');
@@ -203,7 +208,7 @@ describe('BangCong_Service', () => {
         },
       ];
 
-      const result = await service.finalize('2026-07');
+      const result = await service.finalize('2026-07', 'hr1');
 
       expect(result.every((r) => r.trangThai === 'chot')).toBe(true);
       expect(mockTimesheetRepo.save).toHaveBeenCalledTimes(1);
@@ -573,6 +578,11 @@ async function dungService(
   const repoBanGhi = taoRepoGia<any>(opts.banGhi ?? []);
   const repoLe = taoRepoGia<any>(opts.ngayLe ?? []);
   const repoThoiViec = taoRepoGia<any>(opts.thoiViec ?? []);
+  const quyPhep = {
+    tichPhepTheoThang: jest
+      .fn()
+      .mockResolvedValue({ soNguoiDuocTich: 0, soNguoiKhongDat: 0, soNguoiDaTich: 0 }),
+  };
 
   const moduleRef = await Test.createTestingModule({
     providers: [
@@ -583,6 +593,7 @@ async function dungService(
       { provide: getRepositoryToken(AttendanceRecord), useValue: repoBanGhi },
       { provide: getRepositoryToken(Holiday), useValue: repoLe },
       { provide: getRepositoryToken(Resignation), useValue: repoThoiViec },
+      { provide: QuyPhep_Service, useValue: quyPhep },
     ],
   }).compile();
 
@@ -594,6 +605,7 @@ async function dungService(
     repoBanGhi,
     repoLe,
     repoThoiViec,
+    quyPhep,
   };
 }
 
@@ -1385,7 +1397,7 @@ describe('BangCong_Service.finalize / moLai (P3.9)', () => {
       bangCongCoSan: [dongCo(0), dongCo(3)],
     });
 
-    const loi = await service.finalize('2026-08').catch((e) => e);
+    const loi = await service.finalize('2026-08', 'hr1').catch((e) => e);
 
     expect(loi).toBeInstanceOf(ConflictException);
     // Không chỉ đúng LOẠI lỗi — bài học từ review Task 5: thiếu khẳng định
@@ -1400,7 +1412,7 @@ describe('BangCong_Service.finalize / moLai (P3.9)', () => {
       bangCongCoSan: [dongCo(0), dongCo(0)],
     });
 
-    await service.finalize('2026-08');
+    await service.finalize('2026-08', 'hr1');
 
     expect(repoBc.kho.every((d: any) => d.trangThai === 'chot')).toBe(true);
   });
@@ -1415,5 +1427,65 @@ describe('BangCong_Service.finalize / moLai (P3.9)', () => {
 
     expect(so).toBe(1);
     expect(repoBc.kho.every((d: any) => d.trangThai === 'nhap')).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// P3.10 — chốt bảng công tích phép
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('finalize tích phép (P3.10)', () => {
+  const bangCongSan = [
+    {
+      _id: { toString: () => '650000000000000000000701' },
+      thang: '2026-08',
+      employeeId: NV1,
+      soNgayCong: 20,
+      soNgayOm: 0,
+      soOTrong: 0,
+      trangThai: 'nhap',
+      isActive: true,
+    },
+  ];
+
+  it('gọi tichPhepTheoThang SAU khi đã khoá số công', async () => {
+    const { service, quyPhep, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: bangCongSan,
+    });
+
+    await service.finalize('2026-08', 'hr1');
+
+    expect(quyPhep.tichPhepTheoThang).toHaveBeenCalledWith('2026-08', 'hr1');
+    // Khoá số TRƯỚC: nếu tích phép ném thì số công vẫn đã chốt, bảng công
+    // không rơi vào trạng thái nửa vời.
+    expect(repoBc.kho.every((r: any) => r.trangThai === 'chot')).toBe(true);
+  });
+
+  it('tích phép HỎNG không làm hỏng việc chốt bảng công', async () => {
+    // Chốt bảng công là việc CHÍNH; tích phép là hệ quả. Để một lỗi phép cuộn
+    // ngược việc chốt là bắt HR làm lại từ đầu vì một thứ phụ.
+    const { service, quyPhep, repoBc } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: bangCongSan,
+    });
+    quyPhep.tichPhepTheoThang.mockRejectedValue(new Error('mất kết nối'));
+
+    await expect(service.finalize('2026-08', 'hr1')).resolves.toBeDefined();
+    expect(repoBc.kho.every((r: any) => r.trangThai === 'chot')).toBe(true);
+  });
+
+  it('mở lại kỳ KHÔNG thu hồi phép đã tích', async () => {
+    // NV có thể đã nghỉ bằng đúng số phép đó; thu hồi là đẩy quỹ xuống âm.
+    const { service, quyPhep } = await dungService({
+      nhanVien: [HO_SO_NV1],
+      bangCongCoSan: [{ ...bangCongSan[0], trangThai: 'chot' }],
+    });
+
+    await service.moLai('2026-08');
+
+    expect(
+      Object.keys(quyPhep).some((k) => /thuHoi|hoanTac|tru/i.test(k)),
+    ).toBe(false);
   });
 });

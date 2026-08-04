@@ -8,6 +8,8 @@ import {
   Body,
   Param,
   Query,
+  Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { BangCong_Service } from './bang-cong.service';
@@ -95,8 +97,21 @@ export class BangCong_Controller {
   @Post('finalize')
   @UseGuards(PermissionGuard)
   @Permissions('/cham-cong/bang-cong:sua')
-  async finalize(@Body() body: ThangDto) {
-    const data = await this.bangCong_Service.finalize(body.thang);
+  async finalize(@Body() body: ThangDto, @Req() req: any) {
+    // (P3.10) Chốt bảng công nay CẤP PHÉP NĂM, và mỗi lần cấp ghi một dòng sổ
+    // biến động quỹ. Sổ đó tồn tại để truy vết ai làm gì, nên một actor rỗng
+    // là lỗ hổng audit — ném thay vì âm thầm ghi ''. Cùng luật với
+    // `nguoiThucHienTuToken()` bên quy-phep.controller.ts.
+    const nguoiThucHien = req.user?.id;
+    if (!nguoiThucHien) {
+      throw new UnauthorizedException(
+        'Không xác định được người thực hiện thao tác',
+      );
+    }
+    const data = await this.bangCong_Service.finalize(
+      body.thang,
+      String(nguoiThucHien),
+    );
     return { success: true, data };
   }
 

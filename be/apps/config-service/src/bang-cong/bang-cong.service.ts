@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -20,6 +25,7 @@ import {
   demMuonSom,
   tongGioOt,
 } from './nguon-thang';
+import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 
 export interface BangCongFilter {
   thang?: string;
@@ -59,6 +65,8 @@ export interface TomTatTongHop {
 
 @Injectable()
 export class BangCong_Service {
+  private readonly logger = new Logger(BangCong_Service.name);
+
   constructor(
     @InjectRepository(Timesheet)
     private readonly repo: Repository<Timesheet>,
@@ -72,6 +80,7 @@ export class BangCong_Service {
     private readonly holidayRepo: Repository<Holiday>,
     @InjectRepository(Resignation)
     private readonly resignationRepo: Repository<Resignation>,
+    private readonly quyPhep_Service: QuyPhep_Service,
   ) {}
 
   private coerceIsActive(value?: boolean | string): boolean {
@@ -567,7 +576,7 @@ export class BangCong_Service {
    * rồi mới báo lỗi là trạng thái tệ nhất — HR không biết đã chốt tới đâu, và
    * bảng công thành nửa chốt nửa không.
    */
-  async finalize(thang: string): Promise<Timesheet[]> {
+  async finalize(thang: string, nguoiThucHien: string): Promise<Timesheet[]> {
     const rows = await this.repo.find({ where: { thang, isActive: true } as any });
 
     // Chưa từng bấm "Tổng hợp bảng công" cho tháng này thì không có gì để
@@ -600,6 +609,23 @@ export class BangCong_Service {
       }
       row.trangThai = 'chot';
       saved.push(await this.repo.save(row));
+    }
+
+    // (P3.10) Tích phép SAU khi đã khoá số công. Từ đây "chốt bảng công"
+    // không chỉ khoá số — nó CẤP PHÉP cho tháng đó, nên bảng công phải đúng
+    // thực tế trước khi bấm.
+    //
+    // Bọc try/catch có chủ ý: chốt bảng công là việc CHÍNH, tích phép là hệ
+    // quả. Để một lỗi phép cuộn ngược việc chốt là bắt HR làm lại từ đầu vì
+    // một thứ phụ. Tích phép idempotent qua `thangDaTich`, nên đường sửa là
+    // mở lại rồi chốt lại kỳ — không cấp trùng.
+    try {
+      await this.quyPhep_Service.tichPhepTheoThang(thang, nguoiThucHien);
+    } catch (e) {
+      this.logger.error(
+        `Chốt bảng công ${thang} xong nhưng tích phép năm lỗi — mở lại rồi chốt lại kỳ này để tích bù`,
+        e as Error,
+      );
     }
 
     return saved;
