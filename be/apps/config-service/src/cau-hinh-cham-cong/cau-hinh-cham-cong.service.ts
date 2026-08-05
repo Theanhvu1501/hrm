@@ -37,9 +37,26 @@ export class CauHinhChamCong_Service {
     return lich && lich.length > 0 ? lich : undefined;
   }
 
+  /**
+   * `Object.assign(item, dto)` trần là KHÔNG an toàn ở đây: `tsconfig.json`
+   * đặt `target: ES2023` ⇒ `useDefineForClassFields` mặc định bật, nên MỌI
+   * field khai trên class DTO (kể cả field optional không ai gán) đều tồn
+   * tại sẵn trên instance với giá trị `undefined` —
+   * `plainToInstance(CapNhatCauHinhChamCongDto, {})` cho
+   * `Object.keys() === ['ngayLamViecTrongTuan']`. PUT body rỗng vì vậy sẽ
+   * ghi đè lịch tuần đang có thành `undefined`, công ty rơi về "chưa cấu
+   * hình" ⇒ T7/CN thành ngày làm việc ⇒ rào chặn chốt (đã gỡ ở P4.5) quay
+   * lại mà không một thông báo nào. Chỉ gán những khoá dto THỰC SỰ có giá
+   * trị (client cố ý gửi `null`/`[]` để xoá trắng vẫn đi qua bình thường —
+   * chỉ `undefined`, tức "không gửi gì", mới bị bỏ qua).
+   */
   async capNhat(dto: CapNhatCauHinhChamCongDto): Promise<CauHinhChamCong> {
     const item = await this.layCauHinh();
-    Object.assign(item, dto);
+    for (const [key, value] of Object.entries(dto)) {
+      if (value !== undefined) {
+        (item as unknown as Record<string, unknown>)[key] = value;
+      }
+    }
     return this.repo.save(item);
   }
 }

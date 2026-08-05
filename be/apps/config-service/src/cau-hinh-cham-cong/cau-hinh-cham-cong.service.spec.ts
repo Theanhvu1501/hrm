@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { plainToInstance } from 'class-transformer';
 import { CauHinhChamCong } from '@app/entities';
 import { CauHinhChamCong_Service } from './cau-hinh-cham-cong.service';
 import { CAU_HINH_CHAM_CONG_MAC_DINH } from './cau-hinh-cham-cong.seed';
+import { CapNhatCauHinhChamCongDto } from './dto';
 
 describe('CauHinhChamCong_Service', () => {
   let service: CauHinhChamCong_Service;
@@ -57,6 +59,29 @@ describe('CauHinhChamCong_Service', () => {
 
   it('capNhat() ghi đè lịch và trả bản ghi đã lưu', async () => {
     const ch = await service.capNhat({ ngayLamViecTrongTuan: [1, 2, 3, 4, 5, 6] });
+    expect(ch.ngayLamViecTrongTuan).toEqual([1, 2, 3, 4, 5, 6]);
+    expect((await service.layCauHinh()).ngayLamViecTrongTuan).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  // Việc 2, review toàn nhánh P4.5: `target: ES2023` trong tsconfig bật
+  // `useDefineForClassFields` mặc định ⇒ MỌI field khai trên class DTO
+  // (kể cả field optional không ai gán) tồn tại sẵn trên instance với giá
+  // trị `undefined`. `plainToInstance(dto, {})` mô phỏng đúng ValidationPipe
+  // thật (`main.ts` bật `transform: true`) — client PUT body rỗng cũng tạo
+  // ra CHÍNH instance này, không phải `{}` trần. `Object.assign` cũ sẽ đọc
+  // khoá `ngayLamViecTrongTuan: undefined` đó và ghi đè lịch đang có thành
+  // `undefined`, kéo công ty về "chưa cấu hình" ⇒ T7/CN thành ngày làm việc.
+  it('PUT với body rỗng KHÔNG làm mất lịch tuần đang có (bẫy useDefineForClassFields)', async () => {
+    await service.capNhat({ ngayLamViecTrongTuan: [1, 2, 3, 4, 5, 6] });
+
+    const dtoRong = plainToInstance(CapNhatCauHinhChamCongDto, {});
+    // Khẳng định TRƯỚC: field có tồn tại trên instance (đúng bẫy đang test),
+    // không phải test một `{}` không đại diện cho input thật.
+    expect(Object.keys(dtoRong)).toStrictEqual(['ngayLamViecTrongTuan']);
+    expect(dtoRong.ngayLamViecTrongTuan).toBeUndefined();
+
+    const ch = await service.capNhat(dtoRong);
+
     expect(ch.ngayLamViecTrongTuan).toEqual([1, 2, 3, 4, 5, 6]);
     expect((await service.layCauHinh()).ngayLamViecTrongTuan).toEqual([1, 2, 3, 4, 5, 6]);
   });
