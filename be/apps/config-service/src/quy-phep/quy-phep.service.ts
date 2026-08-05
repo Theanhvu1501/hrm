@@ -24,6 +24,8 @@ import {
   tinhPhepDuocCap,
 } from './luat-phep';
 import { ngayVN } from '../ban-ghi-cham-cong/thoi-gian.util';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
+import { lichTuanApDung } from '../cau-hinh-cham-cong/lich-tuan';
 
 export const MA_LOI_QUY_PHEP = {
   /** Nộp đơn `phep_nam` khi hồ sơ chưa có `ngayChinhThuc`. */
@@ -80,6 +82,7 @@ export class QuyPhep_Service {
     private readonly repoNhanVien: Repository<Employee>,
     @InjectRepository(Timesheet)
     private readonly repoBangCong: Repository<Timesheet>,
+    private readonly cauHinhChamCong_Service: CauHinhChamCong_Service,
   ) {}
 
   /**
@@ -257,10 +260,12 @@ export class QuyPhep_Service {
       return { quy: null, lyDoBoQua: 'da_co_quy' };
     }
 
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
+
     const { soNgay, canCuCap } = tinhPhepDuocCap({
       ngayVaoLam: nv.ngayVaoLam!,
       nam,
-      ngayLamViecTrongTuan: nv.ngayLamViecTrongTuan,
+      ngayLamViecTrongTuan: lichTuanApDung(nv, lichChung),
     });
     if (soNgay <= 0) return { quy: null, lyDoBoQua: 'khong_du_thang' };
 
@@ -279,7 +284,7 @@ export class QuyPhep_Service {
       ? thangTheoLich({
           ngayVaoLam: nv.ngayVaoLam!,
           nam,
-          ngayLamViecTrongTuan: nv.ngayLamViecTrongTuan,
+          ngayLamViecTrongTuan: lichTuanApDung(nv, lichChung),
         })
       : [];
 
@@ -320,13 +325,16 @@ export class QuyPhep_Service {
 
   async xemTruocCapPhepDauNam(nam: number): Promise<DongXemTruocCap[]> {
     const ds = this.locNhanVienDuocCap(await this.nhanVienDangHoatDong(), nam);
+    // Nạp MỘT LẦN ngoài Promise.all(ds.map(...)) — gọi bên trong sẽ là N lượt
+    // đọc DB cho một lệnh xem trước có thể có hàng trăm NV.
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
     return Promise.all(
       ds.map(async (nv) => {
         const employeeId = String((nv as any)._id);
         const { soNgay } = tinhPhepDuocCap({
           ngayVaoLam: nv.ngayVaoLam!,
           nam,
-          ngayLamViecTrongTuan: nv.ngayLamViecTrongTuan,
+          ngayLamViecTrongTuan: lichTuanApDung(nv, lichChung),
         });
         return {
           employeeId,
@@ -408,6 +416,8 @@ export class QuyPhep_Service {
       nhanVien.set(String((nv as any)._id), nv);
     }
 
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
+
     const ds: DongDuKienPhep[] = [];
     for (const bc of rows) {
       const employeeId = String(bc.employeeId);
@@ -418,7 +428,7 @@ export class QuyPhep_Service {
       const soNgayLamViecChuan = soNgayLamViecCuaThang({
         nam,
         thang: thangSo,
-        ngayLamViecTrongTuan: nv?.ngayLamViecTrongTuan,
+        ngayLamViecTrongTuan: lichTuanApDung(nv, lichChung),
       });
       const datNguong = datNguongThangLe({ congHopLe, soNgayLamViecChuan });
 
@@ -524,6 +534,8 @@ export class QuyPhep_Service {
       nhanVien.set(String((nv as any)._id), nv);
     }
 
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
+
     let soNguoiDuocTich = 0;
     let soNguoiKhongDat = 0;
     let soNguoiDaTich = 0;
@@ -547,7 +559,7 @@ export class QuyPhep_Service {
       const soNgayLamViecChuan = soNgayLamViecCuaThang({
         nam,
         thang: thangSo,
-        ngayLamViecTrongTuan: nhanVien.get(employeeId)?.ngayLamViecTrongTuan,
+        ngayLamViecTrongTuan: lichTuanApDung(nhanVien.get(employeeId), lichChung),
       });
 
       if (!datNguongThangLe({ congHopLe, soNgayLamViecChuan })) {
