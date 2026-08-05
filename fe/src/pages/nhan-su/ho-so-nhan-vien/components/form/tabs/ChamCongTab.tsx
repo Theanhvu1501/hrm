@@ -3,6 +3,7 @@ import { Controller, useFormContext } from "react-hook-form";
 import { Select, Checkbox, Alert } from "antd";
 import { workShiftService, WorkShift } from "@/services/workShiftService";
 import { nguoiDungService } from "@/services/nguoiDungService";
+import { cauHinhChamCongService } from "@/services/cauHinhChamCongService";
 import type { NguoiDung } from "@/types";
 import { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
 import {
@@ -11,11 +12,31 @@ import {
   workShiftToOptions,
 } from "./chamCongTab.convert";
 
+const TEN_THU: Record<number, string> = {
+  0: "CN",
+  1: "T2",
+  2: "T3",
+  3: "T4",
+  4: "T5",
+  5: "T6",
+  6: "T7",
+};
+
+/** [1,2,3,4,5] → "T2, T3, T4, T5, T6". Rỗng/lỗi mạng → null (ẩn phần trong ngoặc). */
+function moTaLich(lich: number[] | null): string | null {
+  if (!lich || lich.length === 0) return null;
+  return [...lich]
+    .sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b))
+    .map((t) => TEN_THU[t])
+    .join(", ");
+}
+
 export function ChamCongTab() {
   const { control } = useFormContext<HoSoNhanVienFormValues>();
 
   const [shiftList, setShiftList] = useState<WorkShift[]>([]);
   const [userList, setUserList] = useState<NguoiDung[]>([]);
+  const [lichChung, setLichChung] = useState<number[] | null>(null);
 
   useEffect(() => {
     workShiftService
@@ -35,6 +56,14 @@ export function ChamCongTab() {
       .catch((e) => {
         console.error("Tải danh sách tài khoản lỗi:", e);
         setUserList([]);
+      });
+
+    cauHinhChamCongService
+      .get()
+      .then((ch) => setLichChung(ch.ngayLamViecTrongTuan ?? []))
+      .catch((e) => {
+        console.error("Tải cấu hình chấm công lỗi:", e);
+        setLichChung(null);
       });
   }, []);
 
@@ -113,8 +142,9 @@ export function ChamCongTab() {
           )}
         />
         <div className="mt-1 text-xs text-gray-500">
-          Bỏ trống nghĩa là chưa cấu hình — hệ thống sẽ không coi ngày nào là
-          ngày nghỉ (không phải nghỉ tất cả các ngày).
+          Bỏ trống = theo lịch chung của công ty
+          {moTaLich(lichChung) ? ` (${moTaLich(lichChung)})` : ""}. Chỉ khai ở
+          đây khi người này làm khác lịch chung.
         </div>
       </div>
 
