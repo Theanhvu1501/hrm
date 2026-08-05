@@ -26,6 +26,8 @@ import {
   tongGioOt,
 } from './nguon-thang';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
+import { lichTuanApDung } from '../cau-hinh-cham-cong/lich-tuan';
 
 export interface BangCongFilter {
   thang?: string;
@@ -81,6 +83,7 @@ export class BangCong_Service {
     @InjectRepository(Resignation)
     private readonly resignationRepo: Repository<Resignation>,
     private readonly quyPhep_Service: QuyPhep_Service,
+    private readonly cauHinhChamCong_Service: CauHinhChamCong_Service,
   ) {}
 
   private coerceIsActive(value?: boolean | string): boolean {
@@ -146,6 +149,10 @@ export class BangCong_Service {
       this.holidayRepo.find({ where: { isActive: true } as any }),
       this.resignationRepo.find({ where: { isActive: true } as any }),
     ]);
+
+    // Nạp MỘT LẦN cho cả tháng × toàn bộ nhân viên. Gọi trong vòng lặp là
+    // 200 NV × 31 ngày lượt đọc DB cho một lần bấm nút.
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
 
     const cacNgay = cacNgayTrongThang(thang);
     const tapLe = tapNgayLeCuaThang(ngayLe, thang);
@@ -229,7 +236,7 @@ export class BangCong_Service {
           ngay,
           ngayVaoLam: emp.ngayVaoLam,
           ngayLamViecCuoi: ngayCuoi.get(employeeId),
-          ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
+          ngayLamViecTrongTuan: lichTuanApDung(emp, lichChung),
           laNgayLe: tapLe.has(ngay),
           donNghi: duLieu?.donNghi ?? null,
           coChamVao: duLieu?.coChamVao ?? false,
@@ -412,12 +419,13 @@ export class BangCong_Service {
     ]);
 
     const duLieu = gomTheoNgay(banGhi, don, item.thang).get(item.employeeId)?.get(ngay);
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
 
     return suyKyHieuNgay({
       ngay,
       ngayVaoLam: emp?.ngayVaoLam,
       ngayLamViecCuoi: this.mocNgayLamViecCuoi(thoiViec),
-      ngayLamViecTrongTuan: emp?.ngayLamViecTrongTuan,
+      ngayLamViecTrongTuan: lichTuanApDung(emp, lichChung),
       laNgayLe: tapNgayLeCuaThang(ngayLe, item.thang).has(ngay),
       donNghi: duLieu?.donNghi ?? null,
       coChamVao: duLieu?.coChamVao ?? false,
@@ -466,6 +474,7 @@ export class BangCong_Service {
     const tapLe = tapNgayLeCuaThang(ngayLe, item.thang);
     const theoNgay = gomTheoNgay(banGhi, don, item.thang).get(item.employeeId);
     const ngayLamViecCuoi = this.mocNgayLamViecCuoi(thoiViec);
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
 
     const daCo = new Set((item.chiTietNgay ?? []).map((c) => c.ngay));
     let soOTrong = 0;
@@ -483,7 +492,7 @@ export class BangCong_Service {
         ngay,
         ngayVaoLam: emp?.ngayVaoLam,
         ngayLamViecCuoi,
-        ngayLamViecTrongTuan: emp?.ngayLamViecTrongTuan,
+        ngayLamViecTrongTuan: lichTuanApDung(emp, lichChung),
         laNgayLe: tapLe.has(ngay),
         donNghi: duLieu?.donNghi ?? null,
         coChamVao: duLieu?.coChamVao ?? false,

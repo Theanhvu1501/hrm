@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { BangCong_Service, MA_LOI_BANG_CONG } from './bang-cong.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
 import {
   Timesheet,
   Employee,
@@ -113,6 +114,13 @@ describe('BangCong_Service', () => {
         {
           provide: QuyPhep_Service,
           useValue: { tichPhepTheoThang: jest.fn().mockResolvedValue({}) },
+        },
+        // (P4.5) constructor giờ cần thêm CauHinhChamCong_Service — describe
+        // cũ dưới đây không gọi generate() nên không chạm tới lịch tuần,
+        // stub trả undefined là đủ để module Nest resolve được.
+        {
+          provide: CauHinhChamCong_Service,
+          useValue: { lichTuanChung: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();
@@ -570,6 +578,8 @@ async function dungService(
     bangCongCoSan?: any[];
     ngayLe?: any[];
     thoiViec?: any[];
+    lichChung?: number[];
+    khongCoLichChung?: boolean;
   } = {},
 ) {
   const repoBc = taoRepoGia<any>(opts.bangCongCoSan ?? []);
@@ -583,6 +593,17 @@ async function dungService(
       .fn()
       .mockResolvedValue({ soNguoiDuocTich: 0, soNguoiKhongDat: 0, soNguoiDaTich: 0 }),
   };
+  // `khongCoLichChung` là cờ RIÊNG chứ không phải `lichChung: []`: service
+  // thật trả `undefined` (không phải `[]`) khi công ty bỏ trống, và chính
+  // sự khác biệt đó là thứ giữ đáy "mọi ngày là ngày làm việc". Mock bằng
+  // `[]` sẽ test một giá trị mà production không bao giờ tạo ra.
+  const cauHinhChamCong = {
+    lichTuanChung: jest
+      .fn()
+      .mockResolvedValue(
+        opts.khongCoLichChung ? undefined : (opts.lichChung ?? [1, 2, 3, 4, 5]),
+      ),
+  };
 
   const moduleRef = await Test.createTestingModule({
     providers: [
@@ -594,6 +615,7 @@ async function dungService(
       { provide: getRepositoryToken(Holiday), useValue: repoLe },
       { provide: getRepositoryToken(Resignation), useValue: repoThoiViec },
       { provide: QuyPhep_Service, useValue: quyPhep },
+      { provide: CauHinhChamCong_Service, useValue: cauHinhChamCong },
     ],
   }).compile();
 
@@ -606,6 +628,7 @@ async function dungService(
     repoLe,
     repoThoiViec,
     quyPhep,
+    cauHinhChamCong,
   };
 }
 
@@ -1066,6 +1089,39 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
 
     const where = repoBanGhi.lanFindCuoi?.where ?? {};
     expect(where.ngay).toEqual({ $gte: '2026-08-01', $lte: '2026-08-31' });
+  });
+
+  // 2026-08 có 31 ngày: 21 ngày T2–T6 và 10 ngày T7/CN (T7: 1,8,15,22,29;
+  // CN: 2,9,16,23,30). Trước P4.5 cả 31 ngày đều là ô chưa xử lý.
+  it('NV không khai lịch riêng thì theo lịch công ty T2–T6: T7/CN hết là ô trống', async () => {
+    const { service } = await dungService({
+      nhanVien: [{ ...HO_SO_NV1, ngayLamViecTrongTuan: undefined }],
+    });
+
+    const tomTat = await service.generate('2026-08');
+
+    expect(tomTat.soOTrong).toBe(21);
+  });
+
+  it('khai riêng trên hồ sơ vẫn thắng lịch công ty', async () => {
+    // HO_SO_NV1 khai sẵn [1,2,3,4,5,6] — làm cả thứ Bảy. Chỉ 5 ngày Chủ
+    // nhật rơi ra ngoài ⇒ 26 ô trống, không phải 21.
+    const { service } = await dungService({ nhanVien: [HO_SO_NV1] });
+
+    const tomTat = await service.generate('2026-08');
+
+    expect(tomTat.soOTrong).toBe(26);
+  });
+
+  it('công ty bỏ trống lịch thì giữ đáy cũ: mọi ngày đều là ngày làm việc', async () => {
+    const { service } = await dungService({
+      nhanVien: [{ ...HO_SO_NV1, ngayLamViecTrongTuan: undefined }],
+      khongCoLichChung: true,
+    });
+
+    const tomTat = await service.generate('2026-08');
+
+    expect(tomTat.soOTrong).toBe(31);
   });
 });
 
