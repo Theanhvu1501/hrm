@@ -11,6 +11,7 @@ import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 import { QuyGio_Service } from '../quy-gio/quy-gio.service';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
 import { tinhSoNgayNghi } from './luat-don';
 import { AttendanceRequest, Employee } from '@app/entities';
 
@@ -161,6 +162,13 @@ describe('DonChamCong_Service', () => {
         { provide: NhanVien_Service, useValue: mockNhanVienService },
         { provide: QuyPhep_Service, useValue: mockQuyPhepService },
         { provide: QuyGio_Service, useValue: mockQuyGioService },
+        // (P4.5) constructor giờ cần thêm CauHinhChamCong_Service — mock trả
+        // lịch T2–T6 mặc định, các describe không nhắm vào lịch tuần dùng
+        // luôn giá trị này qua fallback ba tầng của lichTuanApDung().
+        {
+          provide: CauHinhChamCong_Service,
+          useValue: { lichTuanChung: jest.fn(async () => [1, 2, 3, 4, 5]) },
+        },
       ],
     }).compile();
 
@@ -305,6 +313,30 @@ describe('DonChamCong_Service', () => {
       ngayLamViecTrongTuan: T2_DEN_T6,
       ngayChinhThuc: '2026-01-01',
     };
+    const EMP1 = EMP_ID;
+
+    // (P4.5, Task 5) NV không khai lịch riêng ⇒ cacNgayTruPhep()/
+    // tinhCacTruongSnapshot() phải rơi về lịch chung công ty (mock ở
+    // beforeEach: T2–T6) thay vì đáy cũ "mọi ngày đều là ngày làm việc".
+    it('đơn nghỉ phép T6→T2 chỉ trừ 2 ngày khi công ty nghỉ T7/CN', async () => {
+      // 2026-08-07 là thứ Sáu, 2026-08-10 là thứ Hai; 08 và 09 là T7/CN.
+      // NV không khai lịch riêng ⇒ theo lịch công ty T2–T6 ⇒ trừ T6 + T2 = 2.
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        ...employee,
+        ngayLamViecTrongTuan: undefined,
+      });
+
+      const don = await service.create({
+        employeeId: EMP1,
+        loaiDon: 'nghi_phep',
+        loaiNghi: 'phep_nam',
+        ngay: '2026-08-07',
+        denNgay: '2026-08-10',
+        lyDo: 'test',
+      } as any);
+
+      expect(don.soNgayNghi).toBe(2);
+    });
 
     it('khoảng nghỉ vắt cuối tuần → soNgayNghi bỏ qua T7/CN', async () => {
       mockEmployeeRepo.findOne.mockResolvedValue(employee);
@@ -1249,6 +1281,11 @@ describe('DonChamCong_Service — nối quỹ phép (P3.8)', () => {
         { provide: NhanVien_Service, useValue: nhanVienSvc },
         { provide: QuyPhep_Service, useValue: quyPhep },
         { provide: QuyGio_Service, useValue: quyGio },
+        // (P4.5) constructor giờ cần thêm CauHinhChamCong_Service.
+        {
+          provide: CauHinhChamCong_Service,
+          useValue: { lichTuanChung: jest.fn(async () => [1, 2, 3, 4, 5]) },
+        },
       ],
     }).compile();
 
@@ -1936,6 +1973,11 @@ describe('DonChamCong_Service — nghỉ bù trừ quỹ giờ (Task 7)', () => 
         { provide: NhanVien_Service, useValue: mockNhanVienService },
         { provide: QuyPhep_Service, useValue: mockQuyPhepService },
         { provide: QuyGio_Service, useValue: quyGio },
+        // (P4.5) constructor giờ cần thêm CauHinhChamCong_Service.
+        {
+          provide: CauHinhChamCong_Service,
+          useValue: { lichTuanChung: jest.fn(async () => [1, 2, 3, 4, 5]) },
+        },
       ],
     }).compile();
 
