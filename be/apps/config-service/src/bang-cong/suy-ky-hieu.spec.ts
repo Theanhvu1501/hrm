@@ -224,7 +224,11 @@ describe('suyKyHieuNgay — cờ cảnh báo', () => {
       nen({ ngay: '2026-08-02', coChamVao: true, coBanGhiNgoaiVung: true }),
     );
     expect(kq.kyHieu).toBeNull();
-    expect(kq.canhBao).toEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
+    // toStrictEqual chứ không toEqual: `MA_CANH_BAO.LAM_NGOAI_LICH_TUAN` nếu
+    // bị xoá/đổi tên sẽ là `undefined`, và Jest's toEqual coi `[]` khớp
+    // `[undefined]` (bỏ qua phần tử undefined trong mảng) nên assertion sẽ
+    // xanh giả — không bắt được lỗi. toStrictEqual thì không tha cho việc đó.
+    expect(kq.canhBao).toStrictEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
   });
 
   it('mỗi lời gọi trả mảng canhBao RIÊNG, không dùng chung', () => {
@@ -262,13 +266,14 @@ describe('ngày ngoài lịch làm việc trong tuần', () => {
   it('CÓ chấm công thì cảnh báo LAM_NGOAI_LICH_TUAN nhưng vẫn không chặn chốt', () => {
     const kq = suyKyHieuNgay({ ...nen, coChamVao: true, coChamRa: true });
     expect(kq.kyHieu).toBeNull();
-    expect(kq.canhBao).toEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
+    // toStrictEqual — xem giải thích ở test tương tự trong describe trên.
+    expect(kq.canhBao).toStrictEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
     expect(kq.chuaXuLy).toBe(false);
   });
 
   it('chỉ có lượt chấm RA (ca đêm / nhập bù một đầu) cũng cảnh báo', () => {
     const kq = suyKyHieuNgay({ ...nen, coChamRa: true });
-    expect(kq.canhBao).toEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
+    expect(kq.canhBao).toStrictEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
   });
 
   it('đơn nghỉ dài ngày bắc qua cuối tuần KHÔNG đẻ cảnh báo rác', () => {
