@@ -858,6 +858,40 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
     expect(dong.soOCanhBao).toBe(26);
   });
 
+  // Việc 1, review toàn nhánh P4.5: `suyKyHieuNgay()` trả `kyHieu: null` cho
+  // LAM_NGOAI_LICH_TUAN (đi làm ngày ngoài lịch tuần công ty), và trước bản
+  // vá, nhánh `if (kq.kyHieu)` không đẩy gì vào `chiTietNgay` khi đó — ô
+  // biến mất HOÀN TOÀN khỏi lưới, dấu vết duy nhất là `soOCanhBao` (một con
+  // số gộp, không tra ra được NGÀY nào). `BangCongTable` (FE) tra ô theo
+  // `ngay` trong đúng mảng `chiTietNgay` đó, nên ô vắng mặt = không nền
+  // vàng, không tooltip. NV đi làm thứ Bảy chạy deadline có chấm công thật,
+  // nhưng sau khi tổng hợp, ô đó không hiện gì cả — HR chốt bình thường,
+  // một ngày công thật lặng lẽ biến mất khỏi lương. Cố ý KHÔNG chỉ khẳng
+  // định `soOCanhBao` tăng: chính con số đó là thứ đang che giấu lỗi.
+  it('NV đi làm ngoài lịch tuần công ty (thứ Bảy) có chấm công thật → ô CÓ mặt trong chiTietNgay kèm cảnh báo lam_ngoai_lich_tuan', async () => {
+    const { service, repoBc } = await dungService({
+      // Không khai lịch riêng ⇒ rơi xuống lịch chung của công ty — mặc định
+      // của dungService() là T2–T6 ([1,2,3,4,5]), không có ngày 6 (T7).
+      nhanVien: [{ ...HO_SO_NV1, ngayLamViecTrongTuan: undefined }],
+      banGhi: [
+        // 2026-08-08 là thứ Bảy (getUTCDay() === 6).
+        { employeeId: NV1, ngay: '2026-08-08', loai: 'vao', isActive: true },
+        { employeeId: NV1, ngay: '2026-08-08', loai: 'ra', isActive: true },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    const o8 = repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 8);
+    expect(o8).toBeDefined();
+    expect(o8.kyHieu).toBe('');
+    // toStrictEqual chứ không toEqual: bẫy repo — Jest coi `[]` khớp
+    // `[undefined]` với toEqual, nên phải strict để không lọt qua nếu
+    // canhBao vô tình rớt xuống mảng rỗng/undefined.
+    expect(o8.canhBao).toStrictEqual(['lam_ngoai_lich_tuan']);
+    expect(o8.nguon).toBe('tu_dong');
+  });
+
   it('tính lại số lượt đi muộn / về sớm từ bản ghi', async () => {
     const { service, repoBc } = await dungService({
       nhanVien: [HO_SO_NV1],
@@ -1288,6 +1322,40 @@ describe('BangCong_Service.setDay — nguồn ô và chốt (P3.9)', () => {
       kyHieu: 'X',
       nguon: 'tu_dong',
     });
+  });
+
+  // Việc 1, review toàn nhánh P4.5: cùng lỗi của generate() nhưng ở đường
+  // "Trả về tự động" của MỘT ô — `suyLaiMotNgay()` trả `kyHieu: null` cho
+  // LAM_NGOAI_LICH_TUAN, trước bản vá nhánh `if (kq.kyHieu)` không đẩy gì
+  // vào `cells`, nên ô biến mất khỏi lưới thay vì quay lại trạng thái
+  // "trống nhưng có cảnh báo".
+  it('trả về tự động rơi đúng ngày ngoài lịch tuần công ty → ô rỗng kèm cảnh báo, không biến mất khỏi lưới', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [{ ...HO_SO_NV1, ngayLamViecTrongTuan: undefined }],
+      banGhi: [
+        // 2026-08-08 là thứ Bảy (getUTCDay() === 6).
+        { employeeId: NV1, ngay: '2026-08-08', loai: 'vao', isActive: true },
+        { employeeId: NV1, ngay: '2026-08-08', loai: 'ra', isActive: true },
+      ],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 8, kyHieu: 'CT', nguon: 'hr_sua' }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.setDay(ID_BC1, { ngay: 8, kyHieu: '', veTuDong: true } as any);
+
+    const o8 = repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 8);
+    expect(o8).toBeDefined();
+    expect(o8.kyHieu).toBe('');
+    expect(o8.canhBao).toStrictEqual(['lam_ngoai_lich_tuan']);
+    expect(o8.nguon).toBe('tu_dong');
   });
 
   // Lỗ hổng sẵn có trước P3.9: finalize() đặt cờ chot nhưng setDay/update

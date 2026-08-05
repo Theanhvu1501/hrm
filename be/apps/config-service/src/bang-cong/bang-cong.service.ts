@@ -255,6 +255,26 @@ export class BangCong_Service {
             canhBao: kq.canhBao.length ? kq.canhBao : undefined,
           });
           tomTat.soODaDien += 1;
+        } else if (!kq.chuaXuLy && kq.canhBao.length) {
+          // Cảnh báo KHÔNG chặn chốt (vd LAM_NGOAI_LICH_TUAN) nhưng cũng
+          // không có ký hiệu để điền — vẫn phải ghi một ô rỗng mang cờ
+          // cảnh báo. Không ghi thì ô này vắng mặt hoàn toàn khỏi
+          // `chiTietNgay`, và `BangCongTable` (FE) tra ô theo `ngay` trong
+          // đúng mảng này — ô không tồn tại thì không có gì để bám nền vàng/
+          // tooltip vào, cảnh báo chết ngay tại đây dù `soOCanhBao` (cộng ở
+          // trên, không phụ thuộc oMoi) vẫn tăng đúng. Không áp dụng cho các
+          // cảnh báo có `chuaXuLy: true` (CHUA_XU_LY/SAU_NGAY_NGHI_VIEC/
+          // TRUOC_NGAY_VAO_LAM): những ô đó CỐ Ý không nằm trong mảng để
+          // `demLaiOTrong()` còn suy lại và cộng vào `soOTrong` ở lần sửa
+          // tay kế tiếp — đẩy chúng vào đây sẽ khiến `demLaiOTrong()` coi là
+          // "đã có" (`daCo`) rồi bỏ qua, làm ô chặn chốt biến mất khỏi phép
+          // đếm sau lần HR sửa ô đầu tiên trong cùng dòng.
+          oMoi.push({
+            ngay: soNgay,
+            kyHieu: '',
+            nguon: NGUON_O.TU_DONG,
+            canhBao: kq.canhBao,
+          });
         }
       }
 
@@ -533,6 +553,17 @@ export class BangCong_Service {
           kyHieu: kq.kyHieu,
           nguon: NGUON_O.TU_DONG,
           canhBao: kq.canhBao.length ? kq.canhBao : undefined,
+        });
+      } else if (!kq.chuaXuLy && kq.canhBao.length) {
+        // Cùng luật với generate() ở trên: một ô "Trả về tự động" có thể hạ
+        // cánh đúng vào một ngày LAM_NGOAI_LICH_TUAN — không ghi ô rỗng kèm
+        // canhBao thì cảnh báo cũng chết y hệt đường generate(), chỉ khác ở
+        // chỗ đây là một ô, không phải cả tháng.
+        cells.push({
+          ngay: dto.ngay,
+          kyHieu: '',
+          nguon: NGUON_O.TU_DONG,
+          canhBao: kq.canhBao,
         });
       }
     } else if (dto.kyHieu) {
