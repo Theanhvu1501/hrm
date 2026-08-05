@@ -336,6 +336,18 @@ describe('DonChamCong_Service', () => {
       } as any);
 
       expect(don.soNgayNghi).toBe(2);
+
+      // (review Important) `don.soNgayNghi` chỉ đi qua tinhCacTruongSnapshot()
+      // — assert riêng danh sách ngày mà cacNgayTruPhep() SINH RA (lộ diện
+      // qua tham số thứ hai gửi cho phanBoChoNgayNghi()), nếu không điểm gọi
+      // lichTuanApDung() ở cacNgayTruPhep() (:159) không hề được test này bảo
+      // vệ dù soNgayNghi vẫn đúng — cùng idiom với test
+      // 'cacNgayTruPhep khớp tinhSoNgayNghi...' ở dòng ~1600.
+      // toStrictEqual, không toEqual: ts-jest isolatedModules không type-check
+      // và Jest coi [] khớp [undefined] khi dùng toEqual trên mảng.
+      expect(
+        mockQuyPhepService.phanBoChoNgayNghi.mock.calls[0][1],
+      ).toStrictEqual(['2026-08-07', '2026-08-10']);
     });
 
     it('khoảng nghỉ vắt cuối tuần → soNgayNghi bỏ qua T7/CN', async () => {
