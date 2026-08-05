@@ -177,6 +177,7 @@ const MainLayout: React.FC = () => {
   const canViewQuyGio = hasPermission('/cham-cong/quy-gio:xem') || user?.isSuperAdmin;
   const canViewThietBi = hasPermission('/cham-cong/thiet-bi:xem') || user?.isSuperAdmin;
   const canViewBanGhi = hasPermission('/cham-cong/ban-ghi:xem') || user?.isSuperAdmin;
+  const canViewCauHinhChamCong = hasPermission('/cham-cong/cau-hinh:xem') || user?.isSuperAdmin;
   // Nhóm CHẤM CÔNG luôn hiện vì "Chấm công của tôi" là mục tự phục vụ, hiển
   // thị vô điều kiện (xem ngay dưới). Cố ý KHÔNG gộp điều kiện quyền vào đây.
   const canViewChamCongGroup = true;
@@ -276,6 +277,11 @@ const MainLayout: React.FC = () => {
           key: "/cham-cong/ban-ghi",
           icon: <AuditOutlined />,
           label: "Bản ghi chấm công",
+        }] : []),
+        ...(canViewCauHinhChamCong ? [{
+          key: "/cham-cong/cau-hinh",
+          icon: <SettingOutlined />,
+          label: "Cấu hình chấm công",
         }] : []),
       ],
     }] : []),

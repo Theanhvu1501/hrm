@@ -104,6 +104,10 @@ export const BanGhiPage = loadable(() => import('./cham-cong/ban-ghi/BanGhiPage'
   fallback: <PageLoader />
 });
 
+export const CauHinhChamCongPage = loadable(() => import('./cham-cong/cau-hinh/CauHinhChamCongPage'), {
+  fallback: <PageLoader />
+});
+
 export const ChamCongCuaToiPage = loadable(
   () => import('./cham-cong/cua-toi/ChamCongCuaToiPage'),
   { fallback: <PageLoader /> }
