@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { BangCong_Service, MA_LOI_BANG_CONG } from './bang-cong.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
 import {
   Timesheet,
   Employee,
@@ -113,6 +114,13 @@ describe('BangCong_Service', () => {
         {
           provide: QuyPhep_Service,
           useValue: { tichPhepTheoThang: jest.fn().mockResolvedValue({}) },
+        },
+        // (P4.5) constructor giờ cần thêm CauHinhChamCong_Service — describe
+        // cũ dưới đây không gọi generate() nên không chạm tới lịch tuần,
+        // stub trả undefined là đủ để module Nest resolve được.
+        {
+          provide: CauHinhChamCong_Service,
+          useValue: { lichTuanChung: jest.fn().mockResolvedValue(undefined) },
         },
       ],
     }).compile();
@@ -570,6 +578,8 @@ async function dungService(
     bangCongCoSan?: any[];
     ngayLe?: any[];
     thoiViec?: any[];
+    lichChung?: number[];
+    khongCoLichChung?: boolean;
   } = {},
 ) {
   const repoBc = taoRepoGia<any>(opts.bangCongCoSan ?? []);
@@ -583,6 +593,17 @@ async function dungService(
       .fn()
       .mockResolvedValue({ soNguoiDuocTich: 0, soNguoiKhongDat: 0, soNguoiDaTich: 0 }),
   };
+  // `khongCoLichChung` là cờ RIÊNG chứ không phải `lichChung: []`: service
+  // thật trả `undefined` (không phải `[]`) khi công ty bỏ trống, và chính
+  // sự khác biệt đó là thứ giữ đáy "mọi ngày là ngày làm việc". Mock bằng
+  // `[]` sẽ test một giá trị mà production không bao giờ tạo ra.
+  const cauHinhChamCong = {
+    lichTuanChung: jest
+      .fn()
+      .mockResolvedValue(
+        opts.khongCoLichChung ? undefined : (opts.lichChung ?? [1, 2, 3, 4, 5]),
+      ),
+  };
 
   const moduleRef = await Test.createTestingModule({
     providers: [
@@ -594,6 +615,7 @@ async function dungService(
       { provide: getRepositoryToken(Holiday), useValue: repoLe },
       { provide: getRepositoryToken(Resignation), useValue: repoThoiViec },
       { provide: QuyPhep_Service, useValue: quyPhep },
+      { provide: CauHinhChamCong_Service, useValue: cauHinhChamCong },
     ],
   }).compile();
 
@@ -606,6 +628,7 @@ async function dungService(
     repoLe,
     repoThoiViec,
     quyPhep,
+    cauHinhChamCong,
   };
 }
 
@@ -833,6 +856,40 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
     expect(dong.soOTrong).toBe(25);
     // Ô ngày 3 mang cờ thiếu giờ ra; 25 ô trống mang cờ chưa xử lý.
     expect(dong.soOCanhBao).toBe(26);
+  });
+
+  // Việc 1, review toàn nhánh P4.5: `suyKyHieuNgay()` trả `kyHieu: null` cho
+  // LAM_NGOAI_LICH_TUAN (đi làm ngày ngoài lịch tuần công ty), và trước bản
+  // vá, nhánh `if (kq.kyHieu)` không đẩy gì vào `chiTietNgay` khi đó — ô
+  // biến mất HOÀN TOÀN khỏi lưới, dấu vết duy nhất là `soOCanhBao` (một con
+  // số gộp, không tra ra được NGÀY nào). `BangCongTable` (FE) tra ô theo
+  // `ngay` trong đúng mảng `chiTietNgay` đó, nên ô vắng mặt = không nền
+  // vàng, không tooltip. NV đi làm thứ Bảy chạy deadline có chấm công thật,
+  // nhưng sau khi tổng hợp, ô đó không hiện gì cả — HR chốt bình thường,
+  // một ngày công thật lặng lẽ biến mất khỏi lương. Cố ý KHÔNG chỉ khẳng
+  // định `soOCanhBao` tăng: chính con số đó là thứ đang che giấu lỗi.
+  it('NV đi làm ngoài lịch tuần công ty (thứ Bảy) có chấm công thật → ô CÓ mặt trong chiTietNgay kèm cảnh báo lam_ngoai_lich_tuan', async () => {
+    const { service, repoBc } = await dungService({
+      // Không khai lịch riêng ⇒ rơi xuống lịch chung của công ty — mặc định
+      // của dungService() là T2–T6 ([1,2,3,4,5]), không có ngày 6 (T7).
+      nhanVien: [{ ...HO_SO_NV1, ngayLamViecTrongTuan: undefined }],
+      banGhi: [
+        // 2026-08-08 là thứ Bảy (getUTCDay() === 6).
+        { employeeId: NV1, ngay: '2026-08-08', loai: 'vao', isActive: true },
+        { employeeId: NV1, ngay: '2026-08-08', loai: 'ra', isActive: true },
+      ],
+    });
+
+    await service.generate('2026-08');
+
+    const o8 = repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 8);
+    expect(o8).toBeDefined();
+    expect(o8.kyHieu).toBe('');
+    // toStrictEqual chứ không toEqual: bẫy repo — Jest coi `[]` khớp
+    // `[undefined]` với toEqual, nên phải strict để không lọt qua nếu
+    // canhBao vô tình rớt xuống mảng rỗng/undefined.
+    expect(o8.canhBao).toStrictEqual(['lam_ngoai_lich_tuan']);
+    expect(o8.nguon).toBe('tu_dong');
   });
 
   it('tính lại số lượt đi muộn / về sớm từ bản ghi', async () => {
@@ -1067,6 +1124,39 @@ describe('BangCong_Service.generate — tự sinh ký hiệu (P3.9)', () => {
     const where = repoBanGhi.lanFindCuoi?.where ?? {};
     expect(where.ngay).toEqual({ $gte: '2026-08-01', $lte: '2026-08-31' });
   });
+
+  // 2026-08 có 31 ngày: 21 ngày T2–T6 và 10 ngày T7/CN (T7: 1,8,15,22,29;
+  // CN: 2,9,16,23,30). Trước P4.5 cả 31 ngày đều là ô chưa xử lý.
+  it('NV không khai lịch riêng thì theo lịch công ty T2–T6: T7/CN hết là ô trống', async () => {
+    const { service } = await dungService({
+      nhanVien: [{ ...HO_SO_NV1, ngayLamViecTrongTuan: undefined }],
+    });
+
+    const tomTat = await service.generate('2026-08');
+
+    expect(tomTat.soOTrong).toBe(21);
+  });
+
+  it('khai riêng trên hồ sơ vẫn thắng lịch công ty', async () => {
+    // HO_SO_NV1 khai sẵn [1,2,3,4,5,6] — làm cả thứ Bảy. Chỉ 5 ngày Chủ
+    // nhật rơi ra ngoài ⇒ 26 ô trống, không phải 21.
+    const { service } = await dungService({ nhanVien: [HO_SO_NV1] });
+
+    const tomTat = await service.generate('2026-08');
+
+    expect(tomTat.soOTrong).toBe(26);
+  });
+
+  it('công ty bỏ trống lịch thì giữ đáy cũ: mọi ngày đều là ngày làm việc', async () => {
+    const { service } = await dungService({
+      nhanVien: [{ ...HO_SO_NV1, ngayLamViecTrongTuan: undefined }],
+      khongCoLichChung: true,
+    });
+
+    const tomTat = await service.generate('2026-08');
+
+    expect(tomTat.soOTrong).toBe(31);
+  });
 });
 
 // `findOne()`/`setDay()`/`update()` chạy `new ObjectId(id)` thật trên tham số
@@ -1232,6 +1322,40 @@ describe('BangCong_Service.setDay — nguồn ô và chốt (P3.9)', () => {
       kyHieu: 'X',
       nguon: 'tu_dong',
     });
+  });
+
+  // Việc 1, review toàn nhánh P4.5: cùng lỗi của generate() nhưng ở đường
+  // "Trả về tự động" của MỘT ô — `suyLaiMotNgay()` trả `kyHieu: null` cho
+  // LAM_NGOAI_LICH_TUAN, trước bản vá nhánh `if (kq.kyHieu)` không đẩy gì
+  // vào `cells`, nên ô biến mất khỏi lưới thay vì quay lại trạng thái
+  // "trống nhưng có cảnh báo".
+  it('trả về tự động rơi đúng ngày ngoài lịch tuần công ty → ô rỗng kèm cảnh báo, không biến mất khỏi lưới', async () => {
+    const { service, repoBc } = await dungService({
+      nhanVien: [{ ...HO_SO_NV1, ngayLamViecTrongTuan: undefined }],
+      banGhi: [
+        // 2026-08-08 là thứ Bảy (getUTCDay() === 6).
+        { employeeId: NV1, ngay: '2026-08-08', loai: 'vao', isActive: true },
+        { employeeId: NV1, ngay: '2026-08-08', loai: 'ra', isActive: true },
+      ],
+      bangCongCoSan: [
+        {
+          _id: { toString: () => ID_BC1 },
+          thang: '2026-08',
+          employeeId: NV1,
+          chiTietNgay: [{ ngay: 8, kyHieu: 'CT', nguon: 'hr_sua' }],
+          trangThai: 'nhap',
+          isActive: true,
+        },
+      ],
+    });
+
+    await service.setDay(ID_BC1, { ngay: 8, kyHieu: '', veTuDong: true } as any);
+
+    const o8 = repoBc.kho[0].chiTietNgay.find((c: any) => c.ngay === 8);
+    expect(o8).toBeDefined();
+    expect(o8.kyHieu).toBe('');
+    expect(o8.canhBao).toStrictEqual(['lam_ngoai_lich_tuan']);
+    expect(o8.nguon).toBe('tu_dong');
   });
 
   // Lỗ hổng sẵn có trước P3.9: finalize() đặt cờ chot nhưng setDay/update

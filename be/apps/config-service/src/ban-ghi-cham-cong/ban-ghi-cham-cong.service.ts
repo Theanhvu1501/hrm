@@ -27,6 +27,8 @@ import {
 } from './thoi-gian.util';
 import { chuanHoaIp } from './ip.util';
 import { ChamCongDto, HrNhapChamCongDto } from './dto';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
+import { lichTuanApDung } from '../cau-hinh-cham-cong/lich-tuan';
 
 const NGUONG_TRUNG_LAP_MS = 60_000;
 const MOT_NGAY_MS = 86_400_000;
@@ -87,6 +89,8 @@ export class BanGhiChamCong_Service {
     private readonly thietBi_Service: ThietBiChamCong_Service,
     private readonly ngayLe_Service: NgayLe_Service,
     private readonly rules: ChamCongRules_Service,
+    // (P4.5) lịch tuần mức công ty — dùng làm đáy khi NV không khai riêng.
+    private readonly cauHinhChamCong_Service: CauHinhChamCong_Service,
   ) {}
 
   async checkIn(
@@ -451,15 +455,15 @@ export class BanGhiChamCong_Service {
   /**
    * Ngày lễ, hoặc ngày ngoài lịch làm việc của NV.
    *
-   * Danh sách ngayLamViecTrongTuan rỗng/chưa đặt nghĩa là CHƯA cấu hình —
-   * không suy ra "mọi ngày đều là ngày nghỉ", vì như thế sẽ âm thầm tắt
-   * việc tính đi muộn cho toàn bộ nhân viên chưa được HR gán lịch.
+   * Lịch lấy theo thứ tự: khai riêng trên hồ sơ → lịch chung công ty →
+   * rỗng cả hai. Rỗng cả hai vẫn KHÔNG suy ra "mọi ngày đều là ngày nghỉ",
+   * vì như thế sẽ âm thầm tắt việc tính đi muộn cho toàn bộ công ty.
    */
   private async suyNgayNghi(emp: Employee, ngay: string): Promise<boolean> {
     const le = await this.ngayLe_Service.timTheoNgay(ngay);
     if (le) return true;
 
-    const lich = emp.ngayLamViecTrongTuan;
+    const lich = lichTuanApDung(emp, await this.cauHinhChamCong_Service.lichTuanChung());
     if (!lich || lich.length === 0) return false;
 
     return !lich.includes(thuTrongTuanCuaNgay(ngay));

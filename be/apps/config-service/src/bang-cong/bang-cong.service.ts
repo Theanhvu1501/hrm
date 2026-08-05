@@ -26,6 +26,8 @@ import {
   tongGioOt,
 } from './nguon-thang';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
+import { lichTuanApDung } from '../cau-hinh-cham-cong/lich-tuan';
 
 export interface BangCongFilter {
   thang?: string;
@@ -81,6 +83,7 @@ export class BangCong_Service {
     @InjectRepository(Resignation)
     private readonly resignationRepo: Repository<Resignation>,
     private readonly quyPhep_Service: QuyPhep_Service,
+    private readonly cauHinhChamCong_Service: CauHinhChamCong_Service,
   ) {}
 
   private coerceIsActive(value?: boolean | string): boolean {
@@ -146,6 +149,10 @@ export class BangCong_Service {
       this.holidayRepo.find({ where: { isActive: true } as any }),
       this.resignationRepo.find({ where: { isActive: true } as any }),
     ]);
+
+    // Nạp MỘT LẦN cho cả tháng × toàn bộ nhân viên. Gọi trong vòng lặp là
+    // 200 NV × 31 ngày lượt đọc DB cho một lần bấm nút.
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
 
     const cacNgay = cacNgayTrongThang(thang);
     const tapLe = tapNgayLeCuaThang(ngayLe, thang);
@@ -229,7 +236,7 @@ export class BangCong_Service {
           ngay,
           ngayVaoLam: emp.ngayVaoLam,
           ngayLamViecCuoi: ngayCuoi.get(employeeId),
-          ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
+          ngayLamViecTrongTuan: lichTuanApDung(emp, lichChung),
           laNgayLe: tapLe.has(ngay),
           donNghi: duLieu?.donNghi ?? null,
           coChamVao: duLieu?.coChamVao ?? false,
@@ -248,6 +255,26 @@ export class BangCong_Service {
             canhBao: kq.canhBao.length ? kq.canhBao : undefined,
           });
           tomTat.soODaDien += 1;
+        } else if (!kq.chuaXuLy && kq.canhBao.length) {
+          // Cảnh báo KHÔNG chặn chốt (vd LAM_NGOAI_LICH_TUAN) nhưng cũng
+          // không có ký hiệu để điền — vẫn phải ghi một ô rỗng mang cờ
+          // cảnh báo. Không ghi thì ô này vắng mặt hoàn toàn khỏi
+          // `chiTietNgay`, và `BangCongTable` (FE) tra ô theo `ngay` trong
+          // đúng mảng này — ô không tồn tại thì không có gì để bám nền vàng/
+          // tooltip vào, cảnh báo chết ngay tại đây dù `soOCanhBao` (cộng ở
+          // trên, không phụ thuộc oMoi) vẫn tăng đúng. Không áp dụng cho các
+          // cảnh báo có `chuaXuLy: true` (CHUA_XU_LY/SAU_NGAY_NGHI_VIEC/
+          // TRUOC_NGAY_VAO_LAM): những ô đó CỐ Ý không nằm trong mảng để
+          // `demLaiOTrong()` còn suy lại và cộng vào `soOTrong` ở lần sửa
+          // tay kế tiếp — đẩy chúng vào đây sẽ khiến `demLaiOTrong()` coi là
+          // "đã có" (`daCo`) rồi bỏ qua, làm ô chặn chốt biến mất khỏi phép
+          // đếm sau lần HR sửa ô đầu tiên trong cùng dòng.
+          oMoi.push({
+            ngay: soNgay,
+            kyHieu: '',
+            nguon: NGUON_O.TU_DONG,
+            canhBao: kq.canhBao,
+          });
         }
       }
 
@@ -412,12 +439,13 @@ export class BangCong_Service {
     ]);
 
     const duLieu = gomTheoNgay(banGhi, don, item.thang).get(item.employeeId)?.get(ngay);
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
 
     return suyKyHieuNgay({
       ngay,
       ngayVaoLam: emp?.ngayVaoLam,
       ngayLamViecCuoi: this.mocNgayLamViecCuoi(thoiViec),
-      ngayLamViecTrongTuan: emp?.ngayLamViecTrongTuan,
+      ngayLamViecTrongTuan: lichTuanApDung(emp, lichChung),
       laNgayLe: tapNgayLeCuaThang(ngayLe, item.thang).has(ngay),
       donNghi: duLieu?.donNghi ?? null,
       coChamVao: duLieu?.coChamVao ?? false,
@@ -466,6 +494,7 @@ export class BangCong_Service {
     const tapLe = tapNgayLeCuaThang(ngayLe, item.thang);
     const theoNgay = gomTheoNgay(banGhi, don, item.thang).get(item.employeeId);
     const ngayLamViecCuoi = this.mocNgayLamViecCuoi(thoiViec);
+    const lichChung = await this.cauHinhChamCong_Service.lichTuanChung();
 
     const daCo = new Set((item.chiTietNgay ?? []).map((c) => c.ngay));
     let soOTrong = 0;
@@ -483,7 +512,7 @@ export class BangCong_Service {
         ngay,
         ngayVaoLam: emp?.ngayVaoLam,
         ngayLamViecCuoi,
-        ngayLamViecTrongTuan: emp?.ngayLamViecTrongTuan,
+        ngayLamViecTrongTuan: lichTuanApDung(emp, lichChung),
         laNgayLe: tapLe.has(ngay),
         donNghi: duLieu?.donNghi ?? null,
         coChamVao: duLieu?.coChamVao ?? false,
@@ -524,6 +553,17 @@ export class BangCong_Service {
           kyHieu: kq.kyHieu,
           nguon: NGUON_O.TU_DONG,
           canhBao: kq.canhBao.length ? kq.canhBao : undefined,
+        });
+      } else if (!kq.chuaXuLy && kq.canhBao.length) {
+        // Cùng luật với generate() ở trên: một ô "Trả về tự động" có thể hạ
+        // cánh đúng vào một ngày LAM_NGOAI_LICH_TUAN — không ghi ô rỗng kèm
+        // canhBao thì cảnh báo cũng chết y hệt đường generate(), chỉ khác ở
+        // chỗ đây là một ô, không phải cả tháng.
+        cells.push({
+          ngay: dto.ngay,
+          kyHieu: '',
+          nguon: NGUON_O.TU_DONG,
+          canhBao: kq.canhBao,
         });
       }
     } else if (dto.kyHieu) {

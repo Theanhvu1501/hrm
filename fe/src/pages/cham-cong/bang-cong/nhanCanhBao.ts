@@ -8,6 +8,8 @@ export const NHAN_CANH_BAO: Record<string, string> = {
     'Có dữ liệu chấm công sau ngày làm việc cuối — kiểm tra lại hồ sơ thôi việc',
   truoc_ngay_vao_lam:
     'Có dữ liệu chấm công trước ngày vào làm — kiểm tra lại hồ sơ nhân viên',
+  lam_ngoai_lich_tuan:
+    'Có chấm công ngoài lịch làm việc trong tuần (vd đi làm thứ Bảy) — giờ này tính vào làm thêm, không phải một ngày công',
 };
 
 /** Mã lạ trả nguyên chuỗi: thà hiện mã còn hơn ô trống không giải thích được. */

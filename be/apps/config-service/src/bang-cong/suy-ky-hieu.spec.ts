@@ -215,12 +215,20 @@ describe('suyKyHieuNgay — cờ cảnh báo', () => {
     expect(kq.canhBao).toContain(MA_CANH_BAO.NGOAI_VUNG);
   });
 
-  it('ngày ngoài lịch làm việc KHÔNG mang cờ nào, kể cả khi có bản ghi ngoài vùng', () => {
+  // Trước P4.5, ngày ngoài lịch làm việc không mang cờ nào dù có chấm công.
+  // Giờ có chấm công thì phải cảnh báo LAM_NGOAI_LICH_TUAN (công thật không
+  // được lặng lẽ biến mất) — nhưng KHÔNG cộng thêm NGOAI_VUNG, vì nhánh dòng
+  // 2 trả sớm trước khi chạm tới đoạn kiểm tra coBanGhiNgoaiVung.
+  it('ngày ngoài lịch làm việc có chấm công → chỉ cờ LAM_NGOAI_LICH_TUAN, không cộng thêm NGOAI_VUNG dù có bản ghi ngoài vùng', () => {
     const kq = suyKyHieuNgay(
       nen({ ngay: '2026-08-02', coChamVao: true, coBanGhiNgoaiVung: true }),
     );
     expect(kq.kyHieu).toBeNull();
-    expect(kq.canhBao).toEqual([]);
+    // toStrictEqual chứ không toEqual: `MA_CANH_BAO.LAM_NGOAI_LICH_TUAN` nếu
+    // bị xoá/đổi tên sẽ là `undefined`, và Jest's toEqual coi `[]` khớp
+    // `[undefined]` (bỏ qua phần tử undefined trong mảng) nên assertion sẽ
+    // xanh giả — không bắt được lỗi. toStrictEqual thì không tha cho việc đó.
+    expect(kq.canhBao).toStrictEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
   });
 
   it('mỗi lời gọi trả mảng canhBao RIÊNG, không dùng chung', () => {
@@ -230,5 +238,56 @@ describe('suyKyHieuNgay — cờ cảnh báo', () => {
 
     a.canhBao.push('ban');
     expect(b.canhBao).toEqual([]);
+  });
+});
+
+describe('ngày ngoài lịch làm việc trong tuần', () => {
+  // 2026-08-08 là thứ Bảy; lịch T2–T6 nên hôm đó không phải ngày làm việc.
+  const T7 = '2026-08-08';
+  const LICH_T2_T6 = [1, 2, 3, 4, 5];
+
+  const nen = {
+    ngay: T7,
+    ngayLamViecTrongTuan: LICH_T2_T6,
+    laNgayLe: false,
+    donNghi: null,
+    coChamVao: false,
+    coChamRa: false,
+    coBanGhiNgoaiVung: false,
+  };
+
+  it('không có gì thì để trống, không cảnh báo, không chặn chốt', () => {
+    const kq = suyKyHieuNgay({ ...nen });
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.canhBao).toEqual([]);
+    expect(kq.chuaXuLy).toBe(false);
+  });
+
+  it('CÓ chấm công thì cảnh báo LAM_NGOAI_LICH_TUAN nhưng vẫn không chặn chốt', () => {
+    const kq = suyKyHieuNgay({ ...nen, coChamVao: true, coChamRa: true });
+    expect(kq.kyHieu).toBeNull();
+    // toStrictEqual — xem giải thích ở test tương tự trong describe trên.
+    expect(kq.canhBao).toStrictEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
+    expect(kq.chuaXuLy).toBe(false);
+  });
+
+  it('chỉ có lượt chấm RA (ca đêm / nhập bù một đầu) cũng cảnh báo', () => {
+    const kq = suyKyHieuNgay({ ...nen, coChamRa: true });
+    expect(kq.canhBao).toStrictEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
+  });
+
+  it('đơn nghỉ dài ngày bắc qua cuối tuần KHÔNG đẻ cảnh báo rác', () => {
+    const kq = suyKyHieuNgay({
+      ...nen,
+      donNghi: { loaiDon: 'nghi_phep', loaiNghi: 'phep_nam', laNuaNgay: false },
+    });
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.canhBao).toEqual([]);
+    expect(kq.chuaXuLy).toBe(false);
+  });
+
+  it('lịch undefined (chưa cấu hình gì) giữ nguyên hành vi cũ: T7 vẫn là ngày làm việc', () => {
+    const kq = suyKyHieuNgay({ ...nen, ngayLamViecTrongTuan: undefined, coChamVao: true, coChamRa: true });
+    expect(kq.kyHieu).toBe('X');
   });
 });

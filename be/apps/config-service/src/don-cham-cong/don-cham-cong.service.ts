@@ -13,6 +13,8 @@ import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 import { QuyGio_Service } from '../quy-gio/quy-gio.service';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
+import { lichTuanApDung } from '../cau-hinh-cham-cong/lich-tuan';
 import {
   chiaGioOtTheoLoai,
   gopPhanBoOt,
@@ -104,6 +106,8 @@ export class DonChamCong_Service {
     // Task 7 (P4.2a): song song với quyPhep_Service — giữ/nhả/chuyển/hoàn quỹ
     // giờ cho đơn nghỉ bù, và tích/thu hồi quỹ giờ cho đơn OT đã duyệt.
     private readonly quyGio_Service: QuyGio_Service,
+    // (P4.5) lịch tuần mức công ty — dùng làm đáy khi NV không khai riêng.
+    private readonly cauHinhChamCong_Service: CauHinhChamCong_Service,
   ) {}
 
   /** Đơn này có trừ quỹ phép năm không. Chỉ `phep_nam` mới đụng quỹ — các
@@ -152,8 +156,8 @@ export class DonChamCong_Service {
     emp: Employee,
   ): Promise<string[]> {
     const ngayLe = new Set(await this.layNgayLeTrongKhoang(tuNgay, denNgay));
-    const daCauHinh =
-      !!emp.ngayLamViecTrongTuan && emp.ngayLamViecTrongTuan.length > 0;
+    const lich = lichTuanApDung(emp, await this.cauHinhChamCong_Service.lichTuanChung());
+    const daCauHinh = !!lich && lich.length > 0;
 
     return this.cacNgayTrongKhoang(tuNgay, denNgay).filter((ngay) => {
       if (ngayLe.has(ngay)) return false;
@@ -162,7 +166,7 @@ export class DonChamCong_Service {
       const thu = new Date(
         Date.UTC(nam, thang - 1, ngayTrongThang),
       ).getUTCDay();
-      return emp.ngayLamViecTrongTuan!.includes(thu);
+      return lich!.includes(thu);
     });
   }
 
@@ -239,12 +243,19 @@ export class DonChamCong_Service {
       >
     >
   > {
+    // (P4.5) Nạp MỘT LẦN cho cả hàm — dùng chung cho cả ba nhánh dưới đây,
+    // không hỏi lại DB mỗi nhánh.
+    const lichLamViec = lichTuanApDung(
+      emp,
+      await this.cauHinhChamCong_Service.lichTuanChung(),
+    );
+
     if (dto.loaiDon === 'lam_them_gio') {
       const ngayLe = await this.ngayLeService.timTheoNgay(dto.ngay);
       const loaiNgay = suyLoaiNgay({
         ngay: dto.ngay,
         laNgayLe: ngayLe !== null,
-        ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
+        ngayLamViecTrongTuan: lichLamViec,
       });
 
       const chia = await this.quyGio_Service.cauHinhChiaGio();
@@ -317,7 +328,7 @@ export class DonChamCong_Service {
           denNgay,
           buoi: dto.buoi,
           ngayLeTrongKhoang,
-          ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
+          ngayLamViecTrongTuan: lichLamViec,
         });
         return {
           soNgayNghi: soNgay,
@@ -332,7 +343,7 @@ export class DonChamCong_Service {
         denNgay,
         buoi: dto.buoi,
         ngayLeTrongKhoang,
-        ngayLamViecTrongTuan: emp.ngayLamViecTrongTuan,
+        ngayLamViecTrongTuan: lichLamViec,
       });
       return { soNgayNghi };
     }

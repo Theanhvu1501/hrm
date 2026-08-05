@@ -27,6 +27,7 @@ import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 import { QuyGio_Service } from '../quy-gio/quy-gio.service';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
 
 // 24 hex — `findOne()`/`findEmployee()` dựng `new ObjectId(...)` trước khi
 // chạm repo, nên id kiểu 'nv1' sẽ ném BSONError.
@@ -172,6 +173,14 @@ async function dungHeThong(
           chuyenSangDaDung: jest.fn(),
           hoanTraDaDung: jest.fn(),
         },
+      },
+      // (P4.5) constructor giờ cần thêm CauHinhChamCong_Service. NV ở đây
+      // luôn khai riêng T2_DEN_T6, nên giá trị mock không bao giờ thực sự
+      // được đọc (lichTuanApDung ưu tiên lịch riêng) — vẫn phải cấp đủ
+      // provider để DI resolve được.
+      {
+        provide: CauHinhChamCong_Service,
+        useValue: { lichTuanChung: jest.fn(async () => [1, 2, 3, 4, 5]) },
       },
     ],
   }).compile();

@@ -35,6 +35,17 @@ export const MA_CANH_BAO = {
    * nhìn thấy trước khi chốt, không phải im lặng bỏ qua.
    */
   TRUOC_NGAY_VAO_LAM: 'truoc_ngay_vao_lam',
+  /**
+   * Có CHẤM CÔNG vào ngày ngoài lịch làm việc trong tuần (vd đi làm thứ Bảy
+   * để chạy deadline). Ô vẫn để trống — giờ hôm đó thuộc về cột làm thêm,
+   * không phải một ngày công — nhưng phải la lên: nếu im lặng thì một ngày
+   * công thật biến mất khỏi lương mà không ai nhìn thấy. Cùng triết lý
+   * TRUOC_NGAY_VAO_LAM / SAU_NGAY_NGHI_VIEC.
+   *
+   * `chuaXuLy: false` là CỐ Ý — cảnh báo, KHÔNG chặn chốt. Chặn ở đây là
+   * dựng lại đúng cái rào mà P4.5 sinh ra để gỡ.
+   */
+  LAM_NGOAI_LICH_TUAN: 'lam_ngoai_lich_tuan',
 } as const;
 
 export interface DonNghiCuaNgay {
@@ -153,7 +164,23 @@ export function suyKyHieuNgay(input: SuyKyHieuInput): SuyKyHieuKetQua {
 
   // Dòng 2: ngoài lịch làm việc trong tuần. Đi làm Chủ nhật vẫn để trống —
   // giờ hôm đó đi vào cột làm thêm với hệ số 2.0, không phải một ngày công.
-  if (!laNgayLamViec(input.ngay, input.ngayLamViecTrongTuan)) return khongTinh();
+  //
+  // Điều kiện cảnh báo là CHẤM CÔNG, cố ý KHÔNG dùng `coBangChung()` (vốn
+  // tính cả `donNghi`): `gomTheoNgay()` trải đơn nghỉ ra từng ngày trong
+  // khoảng, nên một đơn phép T5→T3 tuần sau phủ cả T7 lẫn CN. Dùng
+  // `coBangChung()` là mỗi đơn dài ngày đẻ hai cảnh báo rác, trong khi
+  // `luat-don.ts` vốn đã loại đúng những ngày đó khỏi `soNgayNghi` — không
+  // có công nào mất, không có gì để la.
+  if (!laNgayLamViec(input.ngay, input.ngayLamViecTrongTuan)) {
+    if (input.coChamVao || input.coChamRa) {
+      return {
+        kyHieu: null,
+        canhBao: [MA_CANH_BAO.LAM_NGOAI_LICH_TUAN],
+        chuaXuLy: false,
+      };
+    }
+    return khongTinh();
+  }
 
   const canhBao: string[] = [];
   if (input.coBanGhiNgoaiVung) canhBao.push(MA_CANH_BAO.NGOAI_VUNG);

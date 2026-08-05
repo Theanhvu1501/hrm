@@ -5,6 +5,7 @@ import { NgayLe_Module } from '../ngay-le/ngay-le.module';
 import { NhanVien_Module } from '../nhan-vien/nhan-vien.module';
 import { QuyPhep_Module } from '../quy-phep/quy-phep.module';
 import { QuyGio_Module } from '../quy-gio/quy-gio.module';
+import { CauHinhChamCong_Module } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.module';
 import { DonChamCong_Service } from './don-cham-cong.service';
 import { DonChamCong_Controller } from './don-cham-cong.controller';
 
@@ -26,6 +27,10 @@ import { DonChamCong_Controller } from './don-cham-cong.controller';
     // chuyển/hoàn quỹ giờ xuyên vòng đời đơn nghỉ bù. Xem create()/
     // updateStatus().
     QuyGio_Module,
+    // (P4.5) cacNgayTruPhep()/tinhCacTruongSnapshot() đọc lịch tuần chung khi
+    // NV không khai riêng — CauHinhChamCong_Module không phụ thuộc module
+    // nào (không có vòng import ngược), nên không cần forwardRef().
+    CauHinhChamCong_Module,
   ],
   controllers: [DonChamCong_Controller],
   providers: [DonChamCong_Service],

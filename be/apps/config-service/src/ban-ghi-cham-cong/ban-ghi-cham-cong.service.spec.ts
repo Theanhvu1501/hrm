@@ -10,6 +10,7 @@ import { ChamCongRules_Service, khoangCachMet } from './cham-cong-rules.service'
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { ThietBiChamCong_Service } from '../thiet-bi-cham-cong/thiet-bi-cham-cong.service';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
 import { AttendanceRecord, WorkShift, AttendanceLocation } from '@app/entities';
 
 const USER = { id: 'sso-1', email: 'hai@cty.vn' };
@@ -76,6 +77,7 @@ describe('BanGhiChamCong_Service', () => {
   let nhanVien: any;
   let thietBi: any;
   let ngayLe: any;
+  let cauHinhChamCong: any;
 
   beforeEach(async () => {
     recordRepo = {
@@ -112,6 +114,13 @@ describe('BanGhiChamCong_Service', () => {
     };
     thietBi = { kiemTraThietBi: jest.fn().mockResolvedValue(undefined) };
     ngayLe = { timTheoNgay: jest.fn().mockResolvedValue(null) };
+    // (P4.5) lịch chung mặc định T2–T6 — cùng giá trị NV.ngayLamViecTrongTuan
+    // ở trên, nên hầu hết test (NV luôn khai riêng) không bao giờ thực sự
+    // đọc tới nhánh fallback này. Test nào cố tình bỏ trống lịch riêng của
+    // NV (dòng ~296, ~325 trở xuống) tự override biến này khi cần.
+    cauHinhChamCong = {
+      lichTuanChung: jest.fn().mockResolvedValue([1, 2, 3, 4, 5]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -126,6 +135,7 @@ describe('BanGhiChamCong_Service', () => {
         { provide: NhanVien_Service, useValue: nhanVien },
         { provide: ThietBiChamCong_Service, useValue: thietBi },
         { provide: NgayLe_Service, useValue: ngayLe },
+        { provide: CauHinhChamCong_Service, useValue: cauHinhChamCong },
       ],
     }).compile();
 
@@ -294,6 +304,11 @@ describe('BanGhiChamCong_Service', () => {
     });
 
     it('ngayLamViecTrongTuan rỗng nghĩa là CHƯA cấu hình → không suy ra ngày nghỉ', async () => {
+      // (P4.5) NV rỗng giờ rơi về lịch CÔNG TY qua lichTuanApDung() — để giữ
+      // đúng ý test gốc ("CHƯA cấu hình Ở CẢ HAI TẦNG"), phải tắt luôn lịch
+      // công ty ở đây, nếu không assertion sẽ phụ thuộc ngày chạy test (chỉ
+      // đúng vào các ngày rơi trong mock mặc định T2–T6 của beforeEach).
+      cauHinhChamCong.lichTuanChung.mockResolvedValue(undefined);
       nhanVien.resolveEmployeeFromUser.mockResolvedValue({
         ...NV,
         ngayLamViecTrongTuan: [] as number[],
@@ -301,6 +316,28 @@ describe('BanGhiChamCong_Service', () => {
 
       const rec = await service.checkIn(USER, DTO);
       expect(rec.laNgayNghi).toBe(false);
+    });
+
+    it('NV không khai lịch riêng thì theo lịch công ty', async () => {
+      // Không dùng homNayVN() để suy ra kỳ vọng: hàm đó chạy đúng công thức
+      // MÀ code sản xuất cũng dùng (thứ trong tuần của ngày hôm nay), nên một
+      // bug lật ngược includes()/laNgayNghi vẫn cho ra kỳ vọng khớp — test sẽ
+      // xanh giả bất kể code đúng hay sai. Cố định một ngày THẬT (2026-08-08,
+      // thứ Bảy) làm `thoiDiem` giả lập qua fake timer, để cả kỳ vọng lẫn
+      // input đều là hằng số độc lập với logic đang được kiểm.
+      jest.useFakeTimers().setSystemTime(new Date('2026-08-08T03:00:00.000Z'));
+      try {
+        // Bỏ hẳn khai riêng ⇒ rơi về lịch chung T2–T6 đã mock ở beforeEach.
+        nhanVien.resolveEmployeeFromUser.mockResolvedValue({
+          ...NV,
+          ngayLamViecTrongTuan: undefined,
+        });
+
+        // 2026-08-08 là thứ Bảy — ngoài lịch chung T2–T6 ⇒ phải là ngày nghỉ.
+        expect((await service.checkIn(USER, DTO)).laNgayNghi).toBe(true);
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('đánh dấu laNgayNghi khi ngày ngoài lịch làm việc của NV', async () => {

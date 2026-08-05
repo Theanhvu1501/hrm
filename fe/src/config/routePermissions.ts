@@ -24,6 +24,7 @@ export const routePermissions: Record<string, string> = {
   '/cham-cong/quy-gio': '/cham-cong/quy-gio:xem',
   '/cham-cong/thiet-bi': '/cham-cong/thiet-bi:xem',
   '/cham-cong/ban-ghi': '/cham-cong/ban-ghi:xem',
+  '/cham-cong/cau-hinh': '/cham-cong/cau-hinh:xem',
   // CỐ Ý KHÔNG khai '/cham-cong/cua-toi' ở đây, và route đó cũng cố ý không
   // bọc `requiredPermission` trong App.tsx: mọi nhân viên đăng nhập đều phải
   // chấm công được ngay ngày đầu tiên đi làm, trước khi HR kịp gán vai trò.

@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { LeaveBalance, LeaveBalanceEntry, Employee, Timesheet } from '@app/entities';
 import { QuyPhep_Service } from './quy-phep.service';
+import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
 
 /** Repo giả tối thiểu: đủ find/findOne/save/create cho service này. */
 function taoRepoGia<T extends { _id?: any }>(banDau: T[] = []) {
@@ -131,6 +132,12 @@ async function dungService(
       { provide: getRepositoryToken(LeaveBalanceEntry), useValue: repoSo },
       { provide: getRepositoryToken(Employee), useValue: repoNv },
       { provide: getRepositoryToken(Timesheet), useValue: repoBangCong },
+      // (P4.5 Task 4) lịch tuần công ty — mặc định T2–T6 cho mọi test không
+      // tự khai ngayLamViecTrongTuan riêng.
+      {
+        provide: CauHinhChamCong_Service,
+        useValue: { lichTuanChung: jest.fn(async () => [1, 2, 3, 4, 5]) },
+      },
     ],
   }).compile();
   return {
@@ -1123,6 +1130,60 @@ describe('QuyPhep_Service — tichPhepTheoThang (P3.10)', () => {
     expect(dong[0].soNgay).toBe(1);
     expect(dong[0].ghiChu).toMatch(/2026-08/);
     expect(dong[0].ghiChu).toMatch(new RegExp(`${NGUONG_T8_2026}/26`));
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// P4.5 Task 4 — mẫu số của ngưỡng NĐ145 Đ66.2 phải theo LỊCH CÔNG TY, không
+// theo cả 31 ngày, khi NV không tự khai lịch tuần riêng.
+// ──────────────────────────────────────────────────────────────────────────
+describe('QuyPhep_Service — mẫu số tích phép theo lịch công ty (P4.5 Task 4)', () => {
+  const EMP1 = '650000000000000000000801';
+
+  it('mẫu số tích phép tháng lẻ dùng lịch công ty T2–T6, không phải cả 31 ngày', async () => {
+    // 2026-08 có 21 ngày T2–T6 ⇒ ngưỡng NĐ145 Đ66.2 (50%) là 10.5 công.
+    // Bảng công đã CHỐT với 12 công hợp lệ ⇒ ĐẠT ⇒ được tích.
+    // Nếu mẫu số vẫn là 31 ngày (hành vi cũ) thì ngưỡng là 15.5 ⇒ KHÔNG đạt.
+    const nv1KhongKhaiLichRieng = {
+      _id: { toString: () => EMP1 },
+      employeeId: 'NV0101',
+      hoTen: 'Phạm Văn C',
+      ngayVaoLam: '2020-01-01',
+      ngayChinhThuc: '2020-04-01',
+      trangThai: 'dang_lam_viec',
+      isActive: true,
+      // CỐ Ý không khai ngayLamViecTrongTuan — phải rơi xuống lịch chung
+      // công ty qua lichTuanApDung(), đúng điểm Task 4 đấu dây.
+    };
+    const { service, repoQuy } = await dungService([nv1KhongKhaiLichRieng]);
+    repoQuy.kho.push({
+      _id: { toString: () => '650000000000000000000802' },
+      employeeId: EMP1,
+      nam: 2026,
+      loaiQuy: 'phep_nam',
+      soNgayDuocCap: 0,
+      soNgayDaDung: 0,
+      soNgayDangChoDuyet: 0,
+      soNgayConLai: 0,
+      hanDung: '2027-03-31',
+      trangThai: 'dang_hieu_luc',
+      canCuCap: { mucCaNam: 12 },
+      thangDaTich: [],
+      isActive: true,
+    });
+
+    const kq = await service.tichPhepTheoThang('2026-08', 'test', [
+      {
+        employeeId: EMP1,
+        thang: '2026-08',
+        trangThai: 'chot',
+        soNgayCong: 12,
+        soNgayOm: 0,
+      } as any,
+    ]);
+
+    expect(kq.soNguoiDuocTich).toBe(1);
+    expect(kq.soNguoiKhongDat).toBe(0);
   });
 });
 
