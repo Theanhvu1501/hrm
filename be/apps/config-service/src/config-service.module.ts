@@ -24,6 +24,7 @@ import { BanGhiChamCong_Module } from './ban-ghi-cham-cong/ban-ghi-cham-cong.mod
 import { BangLuong_Module } from './bang-luong/bang-luong.module';
 import { QuyPhep_Module } from './quy-phep/quy-phep.module';
 import { QuyGio_Module } from './quy-gio/quy-gio.module';
+import { CauHinhChamCong_Module } from './cau-hinh-cham-cong/cau-hinh-cham-cong.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { QuyGio_Module } from './quy-gio/quy-gio.module';
     BangLuong_Module,
     QuyPhep_Module,
     QuyGio_Module,
+    CauHinhChamCong_Module,
   ],
 })
 export class ConfigServiceModule {}

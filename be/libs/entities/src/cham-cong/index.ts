@@ -7,3 +7,4 @@ export * from './employee-device.entity';
 export * from './attendance-record.entity';
 export * from './leave-balance.entity';
 export * from './overtime-balance.entity';
+export * from './cau-hinh-cham-cong.entity';
