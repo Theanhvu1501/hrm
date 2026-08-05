@@ -38,6 +38,21 @@ rsync -az --delete \
 rsync -az /Users/os_anhvt/Documents/Dino/hrm/docker-compose.production.yml kt:/root/chimseo/nhan-su/
 ```
 
+### 1b. Dọn build cache TRƯỚC khi build (bắt buộc từ 2026-08-05)
+
+`build --no-cache` mỗi lần deploy để lại một lớp cache mới mà không xoá lớp cũ. Đợt P4.5
+build hỏng giữa chừng vì `ENOSPC: no space left on device` — đĩa 50G đã dùng 86%, trong đó
+**build cache chiếm 14.57GB và 0% đang dùng**.
+
+```bash
+ssh kt "df -h / && docker system df"
+ssh kt "docker builder prune -af"
+```
+
+Lần đó giải phóng 19.58GB (86% → 45%). Build cache tái tạo được, xoá là an toàn — chỉ làm
+lần build kế tiếp chậm hơn. **Đừng** `docker system prune` cả cụm: server chạy chung với
+`ke-toan` và `giao-viec`.
+
 ### 2. Build + restart
 
 ```bash
