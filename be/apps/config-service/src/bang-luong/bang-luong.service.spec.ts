@@ -1391,4 +1391,143 @@ describe('BangLuong_Service', () => {
       expect(kq.thucTe.giaTriTungKhoan.AN_CA).toBe(80_000 * 20);
     });
   });
+  /**
+   * Import số nhập tay theo kỳ (hiệu suất, thưởng) từ file Excel.
+   *
+   * Giá trị của tính năng này nằm ở BÁO CÁO LỖI TỪNG DÒNG, không ở việc ghi
+   * nhanh: import mà hỏng giữa chừng rồi im lặng sẽ để lại một nửa dữ liệu
+   * đã ghi mà không ai biết nửa nào.
+   */
+  describe('importNhapTheoKy', () => {
+    function dungDong(over: Record<string, unknown> = {}) {
+      return {
+        _id: '650000000000000000000910',
+        thang: '2026-08',
+        employeeId: EMP1,
+        employeeCode: 'NV0001',
+        employeeName: 'Nguyen Van A',
+        congThuong: 22, congThuViec: 0, congKhac: 0, congDayDu: 22,
+        luongThoaThuan: 10_000_000, mucKhaiBao: 5_500_000,
+        phuCapCoDinh: 0, soNguoiPhuThuoc: 0,
+        dongBH: false, thoiVu: false, camKet: false, hopDongThu2: false,
+        cauHinhApDung: { congChuan: 24, thuViecTyLe: 0.85, bhxhTyLe: 0.105, bhxhCanCu: 'MUC_KHAI_BAO' },
+        tamUng: 0, khauTruKhac: 0, nhapTheoKy: {},
+        thucTe: { giaTriTungKhoan: {}, tongThuNhap: 0 },
+        khaiBao: { giaTriTungKhoan: {}, tongThuNhap: 0 },
+        trangThai: 'nhap', isActive: true,
+        ...over,
+      } as any;
+    }
+
+    it('ghi đúng giá trị vào dòng khớp mã nhân viên và tính lại dòng', async () => {
+      dongLuongStore.length = 0;
+      dongLuongStore.push(dungDong());
+
+      const kq = await service.importNhapTheoKy('2026-08', [
+        { maNhanVien: 'NV0001', giaTri: { HIEU_SUAT: 2_000_000 } },
+      ]);
+
+      expect(kq.soDongGhi).toBe(1);
+      expect(kq.loi).toEqual([]);
+      expect(dongLuongStore[0].nhapTheoKy.HIEU_SUAT).toBe(2_000_000);
+      // Tính lại chứ không chỉ ghi số: nếu chỉ ghi thì bảng hiện số mới mà
+      // tổng thu nhập/thuế vẫn là số cũ cho tới lần Tổng hợp sau.
+      expect(dongLuongStore[0].thucTe.giaTriTungKhoan.HIEU_SUAT).toBe(2_000_000);
+    });
+
+    it('GỘP với khoản đã nhập trước, không xoá khoản không có trong file', async () => {
+      dongLuongStore.length = 0;
+      dongLuongStore.push(dungDong({ nhapTheoKy: { THUONG: 500_000 } }));
+
+      await service.importNhapTheoKy('2026-08', [
+        { maNhanVien: 'NV0001', giaTri: { HIEU_SUAT: 2_000_000 } },
+      ]);
+
+      expect(dongLuongStore[0].nhapTheoKy).toEqual({
+        THUONG: 500_000,
+        HIEU_SUAT: 2_000_000,
+      });
+    });
+
+    it('mã nhân viên không có dòng lương trong kỳ → báo lỗi, KHÔNG tạo dòng mới', async () => {
+      // Dòng lương phải sinh ra từ Tổng hợp mới có đủ công và cấu hình; tạo
+      // tay ở đây là đẻ ra một dòng thiếu dữ liệu.
+      dongLuongStore.length = 0;
+      dongLuongStore.push(dungDong());
+
+      const kq = await service.importNhapTheoKy('2026-08', [
+        { maNhanVien: 'NV9999', giaTri: { HIEU_SUAT: 1_000 } },
+      ]);
+
+      expect(kq.soDongGhi).toBe(0);
+      expect(kq.loi).toHaveLength(1);
+      expect(kq.loi[0].maNhanVien).toBe('NV9999');
+      expect(dongLuongStore).toHaveLength(1);
+    });
+
+    it('kỳ đã chốt → báo lỗi, không sửa gì', async () => {
+      dongLuongStore.length = 0;
+      dongLuongStore.push(dungDong({ trangThai: 'chot' }));
+
+      const kq = await service.importNhapTheoKy('2026-08', [
+        { maNhanVien: 'NV0001', giaTri: { HIEU_SUAT: 2_000_000 } },
+      ]);
+
+      expect(kq.soDongGhi).toBe(0);
+      expect(kq.loi[0].lyDo).toMatch(/chốt/i);
+      expect(dongLuongStore[0].nhapTheoKy).toEqual({});
+    });
+
+    it('mã khoản không phải khoản nhập tay → báo lỗi', async () => {
+      // Ghi vào `nhapTheoKy` một mã mà engine không đọc thì số biến mất im
+      // lặng: bảng hiện đã import xong mà lương không đổi.
+      dongLuongStore.length = 0;
+      dongLuongStore.push(dungDong());
+
+      const kq = await service.importNhapTheoKy('2026-08', [
+        { maNhanVien: 'NV0001', giaTri: { LUONG_CONG: 9_000_000 } },
+      ]);
+
+      expect(kq.soDongGhi).toBe(0);
+      expect(kq.loi[0].lyDo).toMatch(/nhập tay|không tồn tại/i);
+    });
+
+    it('giá trị không phải số → báo lỗi, không ghi', async () => {
+      dongLuongStore.length = 0;
+      dongLuongStore.push(dungDong());
+
+      const kq = await service.importNhapTheoKy('2026-08', [
+        { maNhanVien: 'NV0001', giaTri: { HIEU_SUAT: NaN } },
+      ]);
+
+      expect(kq.soDongGhi).toBe(0);
+      expect(kq.loi).toHaveLength(1);
+      expect(dongLuongStore[0].nhapTheoKy).toEqual({});
+    });
+
+    it('dòng hỏng KHÔNG chặn dòng lành — ghi được cái nào ghi cái đó', async () => {
+      dongLuongStore.length = 0;
+      dongLuongStore.push(dungDong());
+
+      const kq = await service.importNhapTheoKy('2026-08', [
+        { maNhanVien: 'NV9999', giaTri: { HIEU_SUAT: 1_000 } },
+        { maNhanVien: 'NV0001', giaTri: { HIEU_SUAT: 3_000_000 } },
+      ]);
+
+      expect(kq.soDongGhi).toBe(1);
+      expect(kq.loi).toHaveLength(1);
+      expect(dongLuongStore[0].nhapTheoKy.HIEU_SUAT).toBe(3_000_000);
+    });
+
+    it('khớp mã không phân biệt hoa thường và khoảng trắng thừa', async () => {
+      dongLuongStore.length = 0;
+      dongLuongStore.push(dungDong());
+
+      const kq = await service.importNhapTheoKy('2026-08', [
+        { maNhanVien: ' nv0001 ', giaTri: { HIEU_SUAT: 1_500_000 } },
+      ]);
+
+      expect(kq.soDongGhi).toBe(1);
+    });
+  });
 });

@@ -504,6 +504,19 @@ export class BangLuong_Service {
     if (dto.khauTruKhac !== undefined) item.khauTruKhac = dto.khauTruKhac;
 
     const chEntity = await this.layCauHinh();
+    return this.tinhLaiDong(item, chEntity);
+  }
+
+  /**
+   * Tính lại MỘT dòng lương từ chính snapshot của nó rồi lưu.
+   *
+   * Tách ra để đường sửa tay (`capNhatDong`) và đường import dùng CHUNG một
+   * phép tính — hai bản riêng là hai kết quả khác nhau cho cùng một dòng.
+   */
+  private async tinhLaiDong(
+    item: DongLuong,
+    chEntity: CauHinhLuong,
+  ): Promise<DongLuong> {
     // Cố ý dùng `item.cauHinhApDung` (snapshot của dòng) chứ không đọc lại
     // Employee: sửa một khoản biến động không được kéo theo thay đổi cấu hình
     // riêng mà HR vừa sửa trên hồ sơ giữa kỳ.
@@ -560,6 +573,90 @@ export class BangLuong_Service {
     );
 
     return this.dongLuongRepo.save(item);
+  }
+
+  /**
+   * Import số nhập tay theo kỳ (hiệu suất, thưởng…) cho cả một tháng.
+   *
+   * Trả về BÁO CÁO TỪNG DÒNG chứ không ném ở dòng hỏng đầu tiên: import mà
+   * dừng giữa chừng sẽ để lại một nửa dữ liệu đã ghi mà không ai biết nửa
+   * nào. Dòng hỏng bị bỏ qua, dòng lành vẫn vào.
+   *
+   * Khớp nhân viên CHỈ theo mã (`employeeCode`) — khớp theo họ tên thì hai
+   * người trùng tên là ghi lương của người này sang người kia.
+   *
+   * KHÔNG tạo dòng lương mới cho mã không có trong kỳ: dòng lương phải sinh
+   * ra từ Tổng hợp mới có đủ công và cấu hình đã resolve.
+   */
+  async importNhapTheoKy(
+    thang: string,
+    dong: Array<{ maNhanVien: string; giaTri: Record<string, number> }>,
+  ): Promise<{
+    soDongGhi: number;
+    loi: Array<{ maNhanVien: string; lyDo: string }>;
+  }> {
+    const chEntity = await this.layCauHinh();
+
+    // Chỉ khoản NHAP_THEO_KY mới nhận được số nhập tay. Ghi vào `nhapTheoKy`
+    // một mã mà engine không đọc thì số biến mất im lặng — bảng báo import
+    // xong mà lương không đổi, và không ai đối soát ra.
+    const maHopLe = new Set(
+      (chEntity.khoanLuong ?? [])
+        .filter((k) => k.loaiCongThuc === 'NHAP_THEO_KY')
+        .map((k) => k.ma),
+    );
+
+    const rows = await this.dongLuongRepo.find({
+      where: { thang, isActive: true } as any,
+    });
+    const theoMa = new Map<string, DongLuong>();
+    for (const r of rows) {
+      const ma = String(r.employeeCode ?? '').trim().toLowerCase();
+      if (ma) theoMa.set(ma, r);
+    }
+
+    const loi: Array<{ maNhanVien: string; lyDo: string }> = [];
+    let soDongGhi = 0;
+
+    for (const d of dong) {
+      const maGoc = String(d.maNhanVien ?? '').trim();
+      const item = theoMa.get(maGoc.toLowerCase());
+      if (!item) {
+        loi.push({ maNhanVien: maGoc, lyDo: 'Không có dòng lương trong kỳ này' });
+        continue;
+      }
+      if (item.trangThai === 'chot') {
+        loi.push({ maNhanVien: maGoc, lyDo: 'Kỳ đã chốt, mở lại để sửa' });
+        continue;
+      }
+
+      const canGhi: Record<string, number> = {};
+      let hong: string | null = null;
+      for (const [ma, v] of Object.entries(d.giaTri ?? {})) {
+        if (!maHopLe.has(ma)) {
+          hong = `Khoản "${ma}" không tồn tại hoặc không phải khoản nhập tay`;
+          break;
+        }
+        if (typeof v !== 'number' || !Number.isFinite(v)) {
+          hong = `Giá trị của khoản "${ma}" không phải số`;
+          break;
+        }
+        canGhi[ma] = v;
+      }
+      if (hong) {
+        // Hỏng MỘT ô thì bỏ cả dòng, không ghi nửa vời: ghi một nửa rồi báo
+        // lỗi là trạng thái không ai đối soát nổi.
+        loi.push({ maNhanVien: maGoc, lyDo: hong });
+        continue;
+      }
+      if (Object.keys(canGhi).length === 0) continue;
+
+      item.nhapTheoKy = { ...(item.nhapTheoKy ?? {}), ...canGhi };
+      await this.tinhLaiDong(item, chEntity);
+      soDongGhi += 1;
+    }
+
+    return { soDongGhi, loi };
   }
 
   private async setTrangThai(
