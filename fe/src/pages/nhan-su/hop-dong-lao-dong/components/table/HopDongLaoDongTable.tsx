@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Table, Tag, Button, Space, Popconfirm, Select } from "antd";
 import {
   EditOutlined,
@@ -22,7 +23,6 @@ import {
   labelFor,
 } from "../../constants";
 import { HopDongPrintModal } from "../print/HopDongPrintModal";
-import { HopDongMauInModal } from "../settings/HopDongMauInModal";
 import "./HopDongLaoDongTable.state";
 
 function formatCurrency(value?: number): string {
@@ -39,9 +39,10 @@ export function HopDongLaoDongTable() {
     "/nhan-su/hop-dong-lao-dong"
   );
 
+  const navigate = useNavigate();
+
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [employeeFilter, setEmployeeFilter] = useState<string | undefined>(undefined);
-  const [mauInOpen, setMauInOpen] = useState(false);
   const [printTarget, setPrintTarget] = useState<LaborContract | null>(null);
 
   const handleAdd = () => {
@@ -203,8 +204,14 @@ export function HopDongLaoDongTable() {
           </p>
         </div>
         <Space>
+          {/* Soạn mẫu đã chuyển sang màn riêng `Nhân sự → Mẫu in hợp đồng`:
+              giờ có NHIỀU mẫu nên một modal không còn chứa nổi, và cấu hình
+              in không thuộc về thanh công cụ của danh sách hợp đồng. */}
           {canEdit && (
-            <Button icon={<SettingOutlined />} onClick={() => setMauInOpen(true)}>
+            <Button
+              icon={<SettingOutlined />}
+              onClick={() => navigate("/nhan-su/mau-in-hop-dong")}
+            >
               Mẫu in hợp đồng
             </Button>
           )}
@@ -247,7 +254,6 @@ export function HopDongLaoDongTable() {
         scroll={{ x: "max-content" }}
       />
 
-      <HopDongMauInModal open={mauInOpen} onClose={() => setMauInOpen(false)} />
       <HopDongPrintModal
         open={!!printTarget}
         contractId={printTarget?.id}

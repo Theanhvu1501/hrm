@@ -15,7 +15,8 @@ import type { HopDongFilter } from './hop-dong.service';
 import {
   CreateHopDongDto,
   UpdateHopDongDto,
-  UpsertMauInHopDongDto,
+  CreateMauInHopDongDto,
+  UpdateMauInHopDongDto,
   UpdateThongTinCongTyDto,
 } from './dto';
 import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
@@ -51,28 +52,43 @@ export class HopDong_Controller {
   // TĨNH, phải khai TRƯỚC `:id` bên dưới, nếu không Nest khớp "mau-in"/
   // "cong-ty" vào tham số `:id` (cùng 1 đoạn URL, cùng phương thức GET).
 
+  // Nhiều mẫu/tenant: cùng một hợp đồng có thể cần in ra nhiều dạng khác
+  // nhau, nên mẫu do người in chọn tại chỗ chứ không gắn cứng vào loại HĐ.
+  // Quyền dùng lại đúng bộ của CRUD hợp đồng — không khai module quyền mới,
+  // nên không phải chạy `ops/grant-quyen-module-moi.ts` khi deploy.
   @Get('mau-in')
   @UseGuards(PermissionGuard)
   @Permissions('/nhan-su/hop-dong-lao-dong:xem')
-  async getMauIn() {
-    const data = await this.hopDong_Service.getMauIn();
+  async dsMauIn() {
+    const data = await this.hopDong_Service.dsMauIn();
     return { success: true, data };
   }
 
-  @Put('mau-in')
+  @Post('mau-in')
   @UseGuards(PermissionGuard)
-  @Permissions('/nhan-su/hop-dong-lao-dong:sua')
-  async upsertMauIn(@Body() dto: UpsertMauInHopDongDto) {
-    const data = await this.hopDong_Service.upsertMauIn(dto.html);
+  @Permissions('/nhan-su/hop-dong-lao-dong:them')
+  async themMauIn(@Body() dto: CreateMauInHopDongDto) {
+    const data = await this.hopDong_Service.themMauIn(dto);
     return { success: true, data };
   }
 
-  @Delete('mau-in')
+  @Put('mau-in/:mauInId')
   @UseGuards(PermissionGuard)
   @Permissions('/nhan-su/hop-dong-lao-dong:sua')
-  async removeMauIn() {
-    await this.hopDong_Service.removeMauIn();
-    return { success: true, message: 'Đã khôi phục mẫu in mặc định' };
+  async suaMauIn(
+    @Param('mauInId') mauInId: string,
+    @Body() dto: UpdateMauInHopDongDto,
+  ) {
+    const data = await this.hopDong_Service.suaMauIn(mauInId, dto);
+    return { success: true, data };
+  }
+
+  @Delete('mau-in/:mauInId')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/hop-dong-lao-dong:xoa')
+  async xoaMauIn(@Param('mauInId') mauInId: string) {
+    await this.hopDong_Service.xoaMauIn(mauInId);
+    return { success: true, message: 'Đã xoá mẫu in' };
   }
 
   @Get('cong-ty')
@@ -99,11 +115,16 @@ export class HopDong_Controller {
     return { success: true, data };
   }
 
+  // `mauInId` tuỳ chọn — thiếu thì lấy mẫu đầu danh sách, để đường in cũ
+  // (và bất kỳ chỗ nào chưa kịp truyền) vẫn chạy.
   @Get(':id/in')
   @UseGuards(PermissionGuard)
   @Permissions('/nhan-su/hop-dong-lao-dong:xuat')
-  async renderHopDong(@Param('id') id: string) {
-    const data = await this.hopDong_Service.renderHopDong(id);
+  async renderHopDong(
+    @Param('id') id: string,
+    @Query('mauInId') mauInId?: string,
+  ) {
+    const data = await this.hopDong_Service.renderHopDong(id, mauInId);
     return { success: true, data };
   }
 

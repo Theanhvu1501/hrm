@@ -59,6 +59,10 @@ export const HopDongLaoDongPage = loadable(() => import('./nhan-su/hop-dong-lao-
   fallback: <PageLoader />
 });
 
+export const MauInHopDongPage = loadable(() => import('./nhan-su/mau-in-hop-dong/MauInHopDongPage'), {
+  fallback: <PageLoader />
+});
+
 export const QuaTrinhCongTacPage = loadable(() => import('./nhan-su/qua-trinh-cong-tac/QuaTrinhCongTacPage'), {
   fallback: <PageLoader />
 });

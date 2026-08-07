@@ -30,6 +30,7 @@ import {
   QuyetToanTncnPage,
   HoSoNhanVienPage,
   HopDongLaoDongPage,
+  MauInHopDongPage,
   QuaTrinhCongTacPage,
   ThoiViecPage,
   CaLamViecPage,
@@ -189,6 +190,17 @@ const App = () => (
                     element={
                       <ProtectedRoute requiredPermission="/nhan-su/hop-dong-lao-dong:xem">
                         <HopDongLaoDongPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  {/* Soạn mẫu = sửa cấu hình in của hợp đồng, nên dùng chung
+                      bộ quyền `/nhan-su/hop-dong-lao-dong:*`. Vào màn cần
+                      `:xem`; nút Thêm/Lưu/Xoá trong màn tự ẩn theo `canEdit`. */}
+                  <Route
+                    path="mau-in-hop-dong"
+                    element={
+                      <ProtectedRoute requiredPermission="/nhan-su/hop-dong-lao-dong:xem">
+                        <MauInHopDongPage />
                       </ProtectedRoute>
                     }
                   />

@@ -206,6 +206,11 @@ const MainLayout: React.FC = () => {
           icon: <FileTextOutlined />,
           label: "Hợp đồng lao động",
         }] : []),
+        ...(canViewHopDongLaoDong ? [{
+          key: "/nhan-su/mau-in-hop-dong",
+          icon: <FileTextOutlined />,
+          label: "Mẫu in hợp đồng",
+        }] : []),
         ...(canViewQuaTrinhCongTac ? [{
           key: "/nhan-su/qua-trinh-cong-tac",
           icon: <SwapOutlined />,

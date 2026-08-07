@@ -6,7 +6,14 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { LaborContract, ContractCounter, PhieuTemplate, TenantAppConfig, Employee } from '@app/entities';
+import {
+  LaborContract,
+  ContractCounter,
+  PhieuTemplate,
+  LaborContractTemplate,
+  TenantAppConfig,
+  Employee,
+} from '@app/entities';
 import { TenantContextService } from '@app/core';
 import { CreateHopDongDto, UpdateHopDongDto, UpdateThongTinCongTyDto } from './dto';
 import {
@@ -57,8 +64,12 @@ export class HopDong_Service {
     private readonly repo: Repository<LaborContract>,
     @InjectRepository(ContractCounter)
     private readonly counterRepo: Repository<ContractCounter>,
+    // Bảng CŨ (1 mẫu/tenant). Giữ lại DUY NHẤT để di trú sang bảng mới ở
+    // `dsMauIn()` — không còn đường ghi nào trỏ vào đây nữa.
     @InjectRepository(PhieuTemplate)
     private readonly mauInRepo: Repository<PhieuTemplate>,
+    @InjectRepository(LaborContractTemplate)
+    private readonly mauInMoiRepo: Repository<LaborContractTemplate>,
     @InjectRepository(TenantAppConfig)
     private readonly congTyRepo: Repository<TenantAppConfig>,
     @InjectRepository(Employee)
@@ -229,53 +240,126 @@ export class HopDong_Service {
   // `/nhan-su/hop-dong-lao-dong:xem|sua` giống hệt CRUD hợp đồng.
   // ──────────────────────────────────────────────────────────────────────────
 
-  /** Mẫu hiện dùng (riêng của tenant nếu đã cấu hình, không thì mặc định) + cờ đã tuỳ biến hay chưa. */
-  async getMauIn(): Promise<{ html: string; isCustom: boolean }> {
-    const tpl = await this.mauInRepo.findOne({
-      where: { loai: LOAI_MAU_IN_HOP_DONG },
-    });
-    return tpl ? { html: tpl.html, isCustom: true } : { html: DEFAULT_HOP_DONG_HTML, isCustom: false };
-  }
-
   /**
-   * Lưu mẫu riêng của tenant.
+   * Hai bước bảo vệ dùng chung cho mọi đường ghi mẫu:
    *
-   * 2 bước bảo vệ trước khi ghi:
    *  1. `timTokenLaCuaMauIn` — từ chối lưu nếu mẫu dùng token KHÔNG tồn tại
-   *     (vd lỗi gõ `{{mucLuongg}}`) — review Important #7: âm thầm in trống
-   *     do lỗi gõ tệ hơn báo lỗi ngay lúc lưu.
+   *     (vd lỗi gõ `{{mucLuongg}}`): âm thầm in trống do lỗi gõ tệ hơn hẳn
+   *     báo lỗi ngay lúc lưu.
    *  2. `sanitizeHopDongHtml` (parser HTML thật, xem lib/hopDongRender.ts) —
-   *     cắt thẻ có thể mang script/URL độc trước khi lưu. Đây là lớp phòng
-   *     thủ ĐẦU (lúc ghi); `renderHopDongHtml` ở lib sanitize LẦN NỮA lúc
-   *     đọc/ghép — không coi lớp nào là chốt chặn duy nhất (review Critical 1).
+   *     cắt thẻ có thể mang script/URL độc. Đây là lớp phòng thủ ĐẦU (lúc
+   *     ghi); `renderHopDongHtml` sanitize LẦN NỮA lúc đọc/ghép — không coi
+   *     lớp nào là chốt chặn duy nhất.
    */
-  async upsertMauIn(html: string): Promise<{ html: string }> {
+  private lamSachHtmlMau(html: string): string {
     const tokenLa = timTokenLaCuaMauIn(html);
     if (tokenLa.length > 0) {
       throw new BadRequestException(
         `Mẫu dùng token không tồn tại: ${tokenLa.map((t) => `{{${t}}}`).join(', ')}`,
       );
     }
-
-    const sanitized = sanitizeHopDongHtml(html);
-    let tpl = await this.mauInRepo.findOne({
-      where: { loai: LOAI_MAU_IN_HOP_DONG },
-    });
-    if (tpl) {
-      tpl.html = sanitized;
-    } else {
-      tpl = this.mauInRepo.create({ loai: LOAI_MAU_IN_HOP_DONG, html: sanitized });
-    }
-    const saved = await this.mauInRepo.save(tpl);
-    return { html: saved.html };
+    return sanitizeHopDongHtml(html);
   }
 
-  /** Xoá mẫu riêng — về mặc định. */
-  async removeMauIn(): Promise<void> {
-    const tpl = await this.mauInRepo.findOne({
+  private async timMauIn(id: string): Promise<LaborContractTemplate> {
+    const objectId = await parseObjectIdOrNotFound(id, 'ID mẫu in');
+    const mau = await this.mauInMoiRepo.findOne({
+      where: { _id: objectId as any, isActive: true },
+    });
+    if (!mau) {
+      throw new NotFoundException(`Không tìm thấy mẫu in với ID ${id}`);
+    }
+    return mau;
+  }
+
+  /**
+   * Danh sách mẫu in của tenant.
+   *
+   * Lần đầu gọi mà bảng còn rỗng thì tự tạo một mẫu để màn hình không mở ra
+   * trống trơn: lấy HTML tenant đã tự soạn ở bảng CŨ (`phieu_template`, thời
+   * còn 1 mẫu/tenant) nếu có, không thì mẫu chuẩn dựng sẵn. Di trú nằm ở đây
+   * chứ không ở script deploy vì nó tự chạy đúng một lần cho mỗi tenant và
+   * không ai phải nhớ chạy gì — cùng lý do đã đẩy `grant-quyen-module-moi`
+   * thành thao tác thủ công dễ quên.
+   */
+  async dsMauIn(): Promise<LaborContractTemplate[]> {
+    const ds = await this.mauInMoiRepo.find({ where: { isActive: true } });
+    if (ds.length > 0) return ds;
+
+    const cu = await this.mauInRepo.findOne({
       where: { loai: LOAI_MAU_IN_HOP_DONG },
     });
-    if (tpl) await this.mauInRepo.remove(tpl);
+    const dauTien = this.mauInMoiRepo.create({
+      ten: cu ? 'Mẫu đang dùng' : 'Mẫu chuẩn',
+      html: cu ? cu.html : DEFAULT_HOP_DONG_HTML,
+      isActive: true,
+    } as Partial<LaborContractTemplate>);
+
+    return [await this.mauInMoiRepo.save(dauTien)];
+  }
+
+  async themMauIn(dto: {
+    ten: string;
+    html: string;
+  }): Promise<LaborContractTemplate> {
+    const ten = String(dto.ten ?? '').trim();
+    if (!ten) {
+      // Danh sách toàn dòng không tên thì chọn mẫu lúc in thành đoán mò.
+      throw new BadRequestException('Tên mẫu in không được để trống');
+    }
+    const html = this.lamSachHtmlMau(dto.html);
+
+    return this.mauInMoiRepo.save(
+      this.mauInMoiRepo.create({
+        ten,
+        html,
+        isActive: true,
+      } as Partial<LaborContractTemplate>),
+    );
+  }
+
+  async suaMauIn(
+    id: string,
+    dto: { ten?: string; html?: string },
+  ): Promise<LaborContractTemplate> {
+    // Làm sạch TRƯỚC khi đọc bản ghi: mẫu gõ sai token không được phép ghi
+    // đè lên một mẫu đang dùng tốt.
+    const htmlMoi = dto.html === undefined ? undefined : this.lamSachHtmlMau(dto.html);
+
+    const mau = await this.timMauIn(id);
+
+    if (dto.ten !== undefined) {
+      const ten = String(dto.ten).trim();
+      if (!ten) throw new BadRequestException('Tên mẫu in không được để trống');
+      mau.ten = ten;
+    }
+    if (htmlMoi !== undefined) mau.html = htmlMoi;
+
+    return this.mauInMoiRepo.save(mau);
+  }
+
+  /**
+   * Xoá được cả mẫu cuối cùng — `mauInDeRender()` đã có nhánh rơi về mẫu
+   * chuẩn dựng sẵn, nên in không bao giờ chết. Chặn "không cho xoá mẫu cuối"
+   * chỉ đẻ ra một trạng thái kẹt mà không bảo vệ được gì.
+   */
+  async xoaMauIn(id: string): Promise<void> {
+    const mau = await this.timMauIn(id);
+    await this.mauInMoiRepo.remove(mau);
+  }
+
+  /**
+   * HTML mẫu dùng cho một lượt in.
+   *
+   * Chỉ định `mauInId` mà không tìm thấy thì NÉM, tuyệt đối không lặng lẽ
+   * rơi về mẫu khác: in nhầm mẫu mà không ai báo là thứ chỉ phát hiện ra sau
+   * khi hợp đồng đã ký.
+   */
+  async mauInDeRender(mauInId?: string): Promise<string> {
+    if (mauInId) return (await this.timMauIn(mauInId)).html;
+
+    const ds = await this.dsMauIn();
+    return ds[0]?.html ?? DEFAULT_HOP_DONG_HTML;
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -328,7 +412,10 @@ export class HopDong_Service {
   // thông tin công ty ra HTML sẵn sàng in. Việc thay token nằm hết trong
   // `renderHopDongHtml` (hàm thuần, có unit test riêng ở lib/hopDongRender).
   // ──────────────────────────────────────────────────────────────────────────
-  async renderHopDong(id: string): Promise<{ html: string; canhBao: string[] }> {
+  async renderHopDong(
+    id: string,
+    mauInId?: string,
+  ): Promise<{ html: string; canhBao: string[] }> {
     const contract = await this.findOne(id);
 
     const employeeObjectId = await parseObjectIdOrNotFound(
@@ -344,9 +431,12 @@ export class HopDong_Service {
       );
     }
 
-    const [congTy, mauIn] = await Promise.all([this.getThongTinCongTy(), this.getMauIn()]);
+    const [congTy, htmlMau] = await Promise.all([
+      this.getThongTinCongTy(),
+      this.mauInDeRender(mauInId),
+    ]);
 
-    return renderHopDongHtml(mauIn.html, {
+    return renderHopDongHtml(htmlMau, {
       contract: {
         contractNo: contract.contractNo,
         loaiHopDong: contract.loaiHopDong,

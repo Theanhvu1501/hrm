@@ -15,10 +15,15 @@ export interface ThongTinCongTy {
 
 export type UpdateThongTinCongTyDto = Partial<Omit<ThongTinCongTy, never>>;
 
+/**
+ * Một mẫu in hợp đồng. Nhiều mẫu mỗi tenant — cùng một hợp đồng có thể cần
+ * in ra nhiều dạng (thử việc, chính thức, dịch vụ…), nên mẫu do người in
+ * chọn tại chỗ chứ không gắn cứng vào `loaiHopDong` của dữ liệu.
+ */
 export interface MauInHopDong {
+  id: string;
+  ten: string;
   html: string;
-  /** true = tenant đã tự soạn mẫu riêng; false = đang dùng mẫu mặc định dựng sẵn. */
-  isCustom: boolean;
 }
 
 export interface HopDongRendered {
@@ -40,16 +45,45 @@ class HopDongTemplateService extends ServiceBase {
     super({ endpoint: "/config/hop-dong" });
   }
 
-  async getMauIn(): Promise<MauInHopDong> {
-    return this.get<MauInHopDong>({ endpoint: "/mau-in" });
+  async dsMauIn(): Promise<MauInHopDong[]> {
+    const res = await this.get<Array<Record<string, unknown>>>({
+      endpoint: "/mau-in",
+    });
+    return res.map((x) => ({
+      id: (x._id as string) || (x.id as string),
+      ten: x.ten as string,
+      html: x.html as string,
+    }));
   }
 
-  async upsertMauIn(html: string): Promise<{ html: string }> {
-    return this.put<{ html: string }>({ html }, { endpoint: "/mau-in" });
+  async themMauIn(ten: string, html: string): Promise<MauInHopDong> {
+    const res = await this.post<Record<string, unknown>>(
+      { ten, html },
+      { endpoint: "/mau-in" },
+    );
+    return {
+      id: (res._id as string) || (res.id as string),
+      ten: res.ten as string,
+      html: res.html as string,
+    };
   }
 
-  async removeMauIn(): Promise<void> {
-    await this.delete({ endpoint: "/mau-in" });
+  async suaMauIn(
+    id: string,
+    dto: { ten?: string; html?: string },
+  ): Promise<MauInHopDong> {
+    const res = await this.put<Record<string, unknown>>(dto, {
+      endpoint: `/mau-in/${id}`,
+    });
+    return {
+      id: (res._id as string) || (res.id as string),
+      ten: res.ten as string,
+      html: res.html as string,
+    };
+  }
+
+  async xoaMauIn(id: string): Promise<void> {
+    await this.delete({ endpoint: `/mau-in/${id}` });
   }
 
   async getThongTinCongTy(): Promise<ThongTinCongTy> {
@@ -60,9 +94,17 @@ class HopDongTemplateService extends ServiceBase {
     return this.put<ThongTinCongTy>(dto, { endpoint: "/cong-ty" });
   }
 
-  /** Ghép dữ liệu 1 hợp đồng (theo id) vào mẫu in → HTML sẵn sàng in. */
-  async render(id: string): Promise<HopDongRendered> {
-    return this.get<HopDongRendered>({ endpoint: `/${id}/in` });
+  /**
+   * Ghép dữ liệu 1 hợp đồng (theo id) vào mẫu in → HTML sẵn sàng in.
+   *
+   * `mauInId` bỏ trống thì BE lấy mẫu đầu danh sách — đủ cho lần mở đầu tiên,
+   * trước khi người dùng kịp chọn mẫu.
+   */
+  async render(id: string, mauInId?: string): Promise<HopDongRendered> {
+    return this.get<HopDongRendered>({
+      endpoint: `/${id}/in`,
+      params: mauInId ? { mauInId } : undefined,
+    });
   }
 }
 

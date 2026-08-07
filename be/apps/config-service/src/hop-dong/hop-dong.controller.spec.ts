@@ -29,10 +29,15 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   // Đổi trạng thái hợp đồng (hiệu lực/hết hạn/thanh lý) là SỬA hợp đồng đã
   // có, không phải xoá.
   ['updateStatus', RequestMethod.PATCH, '/nhan-su/hop-dong-lao-dong:sua'],
-  // Mẫu in HĐLĐ (xem P nhân sự — in HĐLĐ): xem = đọc mẫu, sửa = lưu/khôi phục.
-  ['getMauIn', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xem'],
-  ['upsertMauIn', RequestMethod.PUT, '/nhan-su/hop-dong-lao-dong:sua'],
-  ['removeMauIn', RequestMethod.DELETE, '/nhan-su/hop-dong-lao-dong:sua'],
+  // Mẫu in HĐLĐ — nhiều mẫu/tenant, CRUD đầy đủ. Quyền bám đúng bảng ánh xạ
+  // động-từ→quyền dùng chung (@Get→:xem, @Post→:them, @Put→:sua,
+  // @Delete→:xoa), KHÔNG khai module quyền riêng cho mẫu in: quyền là dữ
+  // liệu có sẵn trên production, thêm module mới là thêm một bước cấp quyền
+  // dễ quên lúc deploy (màn hình 403 với mọi người).
+  ['dsMauIn', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xem'],
+  ['themMauIn', RequestMethod.POST, '/nhan-su/hop-dong-lao-dong:them'],
+  ['suaMauIn', RequestMethod.PUT, '/nhan-su/hop-dong-lao-dong:sua'],
+  ['xoaMauIn', RequestMethod.DELETE, '/nhan-su/hop-dong-lao-dong:xoa'],
   ['getThongTinCongTy', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xem'],
   ['upsertThongTinCongTy', RequestMethod.PUT, '/nhan-su/hop-dong-lao-dong:sua'],
   // In hợp đồng (render) = hành động xuất tài liệu → quyền "xuat", giống
