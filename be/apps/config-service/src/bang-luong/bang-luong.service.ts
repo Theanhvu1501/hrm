@@ -18,6 +18,7 @@ import type {
 import {
   dungPhieuLuong,
   ganCauHinhRieng,
+  mucKhaiBaoApDung,
   quyetToanMotNguoi,
   tinhDongLuong,
 } from '@app/core';
@@ -32,6 +33,8 @@ interface CongThang {
   congThuong: number;
   congThuViec: number;
   congKhac: number;
+  /** Số ngày làm đủ (ký hiệu `X`) — cho khoản tính theo suất/ngày có mặt. */
+  congDayDu: number;
 }
 
 /** Phần snapshot dùng chung để dựng `DauVaoDongLuong` cho cả hai mức (chỉ khác `base`). */
@@ -39,6 +42,7 @@ interface SnapshotChung {
   congThuong: number;
   congThuViec: number;
   congKhac: number;
+  congDayDu: number;
   phuCapCoDinh: number;
   soNguoiPhuThuoc: number;
   tamUng: number;
@@ -161,7 +165,28 @@ export class BangLuong_Service {
       congThuong: ts?.soNgayCong ?? 0,
       congThuViec: 0,
       congKhac: 0,
+      congDayDu: this.demNgayLamDu(ts),
     };
+  }
+
+  /**
+   * Số ngày LÀM ĐỦ trong tháng — đếm ô mang ký hiệu `X`.
+   *
+   * `soNgayCong` KHÔNG dùng được cho việc này: nó là tổng công quy đổi, tính
+   * P/L/NB/CT là 1 công và `1/2` là 0,5 công. Khoản ăn ca nhân với nó thì
+   * người nghỉ phép vẫn được suất ăn (đo trên production 07/2026: NV0004 có
+   * X=22 + P=1 ⇒ ăn ca ra 50k×23).
+   *
+   * Chỉ `X`, cố ý KHÔNG tính `CT` (công tác) hay `NB` (nghỉ bù): đó là quyết
+   * định nghiệp vụ, đổi thì đổi ở đúng đây.
+   *
+   * Thiếu `chiTietNgay` (bảng công cũ, hoặc chưa Tổng hợp) thì rơi về
+   * `soNgayCong` chứ không về 0 — xem nhánh fallback trong `tinhKhoan`.
+   */
+  private demNgayLamDu(ts?: Timesheet): number {
+    const chiTiet = ts?.chiTietNgay;
+    if (!chiTiet || chiTiet.length === 0) return ts?.soNgayCong ?? 0;
+    return chiTiet.filter((o) => o.kyHieu === 'X').length;
   }
 
   private buildDauVao(base: number, mucKhaiBao: number, sn: SnapshotChung): DauVaoDongLuong {
@@ -171,6 +196,7 @@ export class BangLuong_Service {
       congThuong: sn.congThuong,
       congThuViec: sn.congThuViec,
       congKhac: sn.congKhac,
+      congDayDu: sn.congDayDu,
       phuCapCoDinh: sn.phuCapCoDinh,
       soNguoiPhuThuoc: sn.soNguoiPhuThuoc,
       tamUng: sn.tamUng,
@@ -244,7 +270,10 @@ export class BangLuong_Service {
         continue;
       }
 
-      const mucKhaiBao = emp.mucKhaiBao ?? ch.mucKhaiBaoMacDinh;
+      // KHÔNG dùng `??`: hồ sơ lưu `mucKhaiBao = 0` thì `??` coi đó là mức
+      // đã khai ⇒ baseBHXH = 0 ⇒ không trừ BHXH dù HR đã tích "đóng BH", và
+      // TNCN bị tính thừa. Xem `mucKhaiBaoApDung`.
+      const mucKhaiBao = mucKhaiBaoApDung(emp.mucKhaiBao, ch.mucKhaiBaoMacDinh);
       const luongThoaThuan = emp.luongThoaThuan ?? 0;
 
       // Cấu hình riêng của NV gộp lên cấu hình chung; `ch` KHÔNG bị mutate nên
@@ -255,6 +284,7 @@ export class BangLuong_Service {
         congThuong: cong.congThuong,
         congThuViec: cong.congThuViec,
         congKhac: cong.congKhac,
+        congDayDu: cong.congDayDu,
         phuCapCoDinh: emp.phuCapCoDinh ?? 0,
         soNguoiPhuThuoc: emp.soNguoiPhuThuoc ?? 0,
         tamUng: existing?.tamUng ?? 0,
@@ -288,6 +318,7 @@ export class BangLuong_Service {
       row.congThuong = snapshot.congThuong;
       row.congThuViec = snapshot.congThuViec;
       row.congKhac = snapshot.congKhac;
+      row.congDayDu = snapshot.congDayDu;
       row.luongThoaThuan = luongThoaThuan;
       row.mucKhaiBao = mucKhaiBao;
       row.phuCapCoDinh = snapshot.phuCapCoDinh;
@@ -481,6 +512,9 @@ export class BangLuong_Service {
       congThuong: item.congThuong,
       congThuViec: item.congThuViec,
       congKhac: item.congKhac,
+      // `?? item.congThuong`: dòng lưu trước bản vá không có cột này. Xem
+      // nhánh fallback trong `tinhKhoan` — cho 0 là xoá trắng khoản ăn ca.
+      congDayDu: item.congDayDu ?? item.congThuong,
       phuCapCoDinh: item.phuCapCoDinh,
       soNguoiPhuThuoc: item.soNguoiPhuThuoc,
       tamUng: item.tamUng,
@@ -505,12 +539,18 @@ export class BangLuong_Service {
       otMienThue: item.thucTe?.otMienThue ?? 0,
     };
 
+    // Cùng chuẩn hoá với đường Tổng hợp: dòng lưu TRƯỚC bản vá mang
+    // `mucKhaiBao = 0` (đúng số 0, không phải null). Sửa một khoản biến động
+    // trên dòng đó mà vẫn dùng 0 thì BHXH lại về 0 — lỗi cũ quay lại ngay
+    // trên chính dòng vừa được Tổng hợp sửa đúng.
+    const mucKhaiBao = mucKhaiBaoApDung(item.mucKhaiBao, chEntity.mucKhaiBaoMacDinh);
+
     item.khaiBao = tinhDongLuong(
-      this.buildDauVao(item.mucKhaiBao, item.mucKhaiBao, snapshot),
+      this.buildDauVao(mucKhaiBao, mucKhaiBao, snapshot),
       ch,
     );
     item.thucTe = tinhDongLuong(
-      this.buildDauVao(item.luongThoaThuan, item.mucKhaiBao, snapshot),
+      this.buildDauVao(item.luongThoaThuan, mucKhaiBao, snapshot),
       ch,
     );
 

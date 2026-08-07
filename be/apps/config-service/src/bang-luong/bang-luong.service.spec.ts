@@ -1229,4 +1229,111 @@ describe('BangLuong_Service', () => {
       expect(kq.thucTe.giaTriTungKhoan.KHOAN_1754200000000).toBe(1_504_000);
     });
   });
+  /**
+   * Hai lỗi thật đo trên production tháng 07/2026 (xem chú thích tại
+   * `mucKhaiBaoApDung` và `layCongThang`).
+   */
+  describe('lỗi production 07/2026', () => {
+    it('mucKhaiBao = 0 trên hồ sơ được hiểu là CHƯA KHAI → BHXH vẫn bị trừ', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0004',
+          hoTen: 'Vu Duy Manh',
+          luongThoaThuan: 15_000_000,
+          // Đúng dữ liệu thật đã gây lỗi: số 0, không phải null.
+          mucKhaiBao: 0,
+          dongBH: true,
+          isActive: true,
+        },
+      ]);
+      timesheetStore = [{ thang: '2026-07', employeeId: EMP1, soNgayCong: 23 }];
+
+      const [row] = await service.tongHop('2026-07');
+
+      // Rơi về mức mặc định của công ty, không phải base 0.
+      expect(row.mucKhaiBao).toBe(5_500_000);
+      expect(row.thucTe.bhxh).toBeGreaterThan(0);
+    });
+
+    it('ăn ca chỉ tính ngày ký hiệu X, không tính ngày nghỉ phép', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0004',
+          hoTen: 'Vu Duy Manh',
+          luongThoaThuan: 15_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+        },
+      ]);
+      // Đúng bảng công thật: 22 ngày X + 1 ngày P ⇒ soNgayCong 23.
+      timesheetStore = [
+        {
+          thang: '2026-07',
+          employeeId: EMP1,
+          soNgayCong: 23,
+          // `ngay` là SỐ 1..31 (xem ChiTietNgayCong), không phải chuỗi ngày.
+          chiTietNgay: [
+            ...Array.from({ length: 22 }, (_, i) => ({ ngay: i + 1, kyHieu: 'X' })),
+            { ngay: 23, kyHieu: 'P' },
+          ],
+        },
+      ];
+
+      const [row] = await service.tongHop('2026-07');
+
+      // Lương theo công VẪN ăn đủ 23 công — phép là ngày hưởng lương.
+      expect(row.congThuong).toBe(23);
+      expect(row.congDayDu).toBe(22);
+      expect(row.thucTe.giaTriTungKhoan.AN_CA).toBe(50_000 * 22);
+    });
+
+    it('bảng công chưa có chiTietNgay (dữ liệu cũ) → congDayDu rơi về tổng công, không về 0', async () => {
+      // Ăn ca tụt về 0 vì thiếu dữ liệu chi tiết là mất tiền im lặng trên
+      // phiếu lương thật; con số cũ hơi rộng tay còn đỡ hơn.
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 10_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+        },
+      ]);
+      timesheetStore = [{ thang: '2026-07', employeeId: EMP1, soNgayCong: 20 }];
+
+      const [row] = await service.tongHop('2026-07');
+
+      expect(row.congDayDu).toBe(20);
+      expect(row.thucTe.giaTriTungKhoan.AN_CA).toBe(50_000 * 20);
+    });
+    it('tính lại dòng CŨ có mucKhaiBao = 0 cũng rơi về mức mặc định', async () => {
+      // Không vá đường này thì mọi lần sửa tạm ứng/khoản biến động sẽ đưa
+      // BHXH của dòng đó về 0 lần nữa — lỗi cũ quay lại ngay sau khi Tổng hợp
+      // vừa sửa đúng.
+      dongLuongStore.length = 0;
+      dongLuongStore.push({
+        _id: '650000000000000000000902',
+        thang: '2026-07', employeeId: EMP1,
+        congThuong: 23, congThuViec: 0, congKhac: 0,
+        luongThoaThuan: 15_000_000, mucKhaiBao: 0,
+        phuCapCoDinh: 0, soNguoiPhuThuoc: 0,
+        dongBH: true, thoiVu: false, camKet: false, hopDongThu2: false,
+        cauHinhApDung: { congChuan: 24, thuViecTyLe: 0.85, bhxhTyLe: 0.105, bhxhCanCu: 'MUC_KHAI_BAO' },
+        tamUng: 0, khauTruKhac: 0, nhapTheoKy: {},
+        thucTe: { giaTriTungKhoan: {}, tongThuNhap: 0, bhxh: 0 },
+        khaiBao: { giaTriTungKhoan: {}, tongThuNhap: 0 },
+        trangThai: 'nhap', isActive: true,
+      } as any);
+      mockDongLuongRepo.findOne.mockResolvedValue(dongLuongStore[0]);
+
+      const kq = await service.capNhatDong('650000000000000000000902', {
+        tamUng: 100_000,
+      } as any);
+
+      expect(kq.thucTe.bhxh).toBeGreaterThan(0);
+    });
+  });
 });

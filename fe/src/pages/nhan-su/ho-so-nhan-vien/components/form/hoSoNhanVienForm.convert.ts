@@ -75,7 +75,12 @@ export function toCreateEmployeeDto(
     // CỐ Ý giữ `undefined` khi trống — nó có nghĩa "dùng mức mặc định trong
     // Cấu hình lương", ép về 0 sẽ đổi hẳn ý nghĩa nghiệp vụ.
     luongThoaThuan: values.luongThoaThuan ?? 0,
-    mucKhaiBao: values.mucKhaiBao,
+    // 0 gửi lên là DỮ LIỆU GÂY HIỂU LẦM, không phải một mức đóng: hồ sơ
+    // NV0004 từng lưu đúng số 0 và BE (dùng `??`) hiểu đó là "đã khai mức 0"
+    // ⇒ không trừ BHXH dù đã tích đóng BH, kéo theo TNCN tính thừa. BE nay
+    // đã tự chuẩn hoá (`mucKhaiBaoApDung`), đây là lớp thứ hai để dữ liệu
+    // lưu xuống nói đúng điều người nhập muốn nói.
+    mucKhaiBao: values.mucKhaiBao ? values.mucKhaiBao : undefined,
     phuCapCoDinh: values.phuCapCoDinh ?? 0,
     soNguoiPhuThuoc: values.soNguoiPhuThuoc ?? 0,
     dongBH: values.dongBH ?? false,
