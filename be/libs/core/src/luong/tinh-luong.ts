@@ -27,6 +27,28 @@ export function thueLuyTien(tntt: number, bac: BacThue[]): number {
   return thue;
 }
 
+/**
+ * Số tiền RIÊNG của người này cho một khoản, nếu hồ sơ có khai.
+ *
+ * Dùng `Object.prototype.hasOwnProperty` chứ KHÔNG `?? ` hay `||`: "để trống"
+ * (ăn mức chung công ty) và "đặt bằng 0" (người này không có khoản đó) là hai
+ * câu trả lời khác nhau. Gộp chúng lại chính là lớp lỗi đã làm tắt BHXH của
+ * NV0004 (`mucKhaiBao = 0` bị hiểu là một mức đã khai).
+ *
+ * Trả `undefined` = không khai riêng.
+ */
+function giaTriRieng(
+  khoan: KhoanLuong,
+  dv: DauVaoDongLuong,
+): number | undefined {
+  const bang = dv.giaTriKhoan;
+  if (!bang || !Object.prototype.hasOwnProperty.call(bang, khoan.ma)) {
+    return undefined;
+  }
+  const v = bang[khoan.ma];
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+}
+
 function tinhKhoan(
   khoan: KhoanLuong,
   dv: DauVaoDongLuong,
@@ -34,6 +56,7 @@ function tinhKhoan(
 ): number {
   const congChuan = ch.congChuan || 24;
   const tyLeTV = ch.thuViec.tyLe;
+  const rieng = giaTriRieng(khoan, dv);
   let x = 0;
   switch (khoan.loaiCongThuc) {
     case 'LUONG_THEO_CONG':
@@ -52,13 +75,19 @@ function tinhKhoan(
       // Cho về 0 là xoá trắng khoản ăn ca khi tính lại một dòng cũ — mất tiền
       // im lặng trên phiếu lương thật, tệ hơn hẳn con số cũ hơi rộng tay.
       // Dòng sẽ tự đúng ở lần Tổng hợp kế tiếp.
-      x = (khoan.thamSo.dinhMuc ?? 0) * (dv.congDayDu ?? dv.congThuong);
+      // `rieng` là ĐỊNH MỨC/ngày của riêng người này, không phải thành tiền —
+      // vẫn nhân với số ngày như mức chung.
+      x = (rieng ?? khoan.thamSo.dinhMuc ?? 0) * (dv.congDayDu ?? dv.congThuong);
       break;
     case 'CO_DINH_THANG': {
+      // Thứ tự: mức riêng của người → `nguonHoSo` (cơ chế cũ, một ô phụ cấp
+      // gộp trên hồ sơ, GIỮ NGUYÊN để cấu hình đang chạy không đổi số) → mức
+      // chung của công ty.
       const soTien =
-        khoan.thamSo.nguonHoSo === 'phuCapCoDinh'
+        rieng ??
+        (khoan.thamSo.nguonHoSo === 'phuCapCoDinh'
           ? dv.phuCapCoDinh
-          : khoan.thamSo.soTien ?? 0;
+          : khoan.thamSo.soTien ?? 0);
       x =
         (soTien / congChuan) *
         (dv.congThuong + dv.congThuViec * tyLeTV);

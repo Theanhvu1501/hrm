@@ -23,6 +23,12 @@ export interface KhoanLuong {
   ten: string;
   loaiCongThuc: LoaiCongThuc;
   thamSo: ThamSoKhoan;
+  /**
+   * Cho phép đặt số riêng cho từng người ở Hồ sơ NV. Chỉ có nghĩa với khoản
+   * mang SỐ TIỀN (CO_DINH_THANG, DINH_MUC_x_CONG) — khoản mang tỷ lệ cố ý
+   * không mở, tỷ lệ là quy tắc của công ty.
+   */
+  choPhepRieng?: boolean;
   chiuThue: boolean;
   /** phần ≤ trần được miễn thuế, phần vượt mới chịu (null = không có trần). */
   tranMienThue: number | null;

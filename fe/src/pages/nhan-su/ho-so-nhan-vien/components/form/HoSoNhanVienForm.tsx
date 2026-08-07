@@ -41,6 +41,9 @@ const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   choPhepChamNgoaiVung: false,
   luongThoaThuan: 0,
   mucKhaiBao: undefined,
+  // Vắng khoá = ăn mức chung công ty; đừng khởi tạo 0 cho từng khoản, 0 mang
+  // nghĩa khác hẳn ("người này không có khoản đó").
+  giaTriKhoan: {},
   phuCapCoDinh: 0,
   soNguoiPhuThuoc: 0,
   dongBH: false,
@@ -88,6 +91,7 @@ export function toFormValues(employee: Employee | null): HoSoNhanVienFormValues 
     // nó có nghĩa "dùng mức mặc định trong Cấu hình lương", khác với 0.
     luongThoaThuan: employee.luongThoaThuan ?? 0,
     mucKhaiBao: employee.mucKhaiBao,
+    giaTriKhoan: employee.giaTriKhoan ?? {},
     phuCapCoDinh: employee.phuCapCoDinh ?? 0,
     soNguoiPhuThuoc: employee.soNguoiPhuThuoc ?? 0,
     dongBH: employee.dongBH ?? false,

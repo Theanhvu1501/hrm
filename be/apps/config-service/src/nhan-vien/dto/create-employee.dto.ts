@@ -155,6 +155,18 @@ export class CreateEmployeeDto {
   @Min(0)
   phuCapCoDinh?: number;
 
+  /**
+   * Số tiền riêng theo từng khoản lương, khoá theo `ma` khoản. Giá trị 0 là
+   * HỢP LỆ và mang nghĩa "người này không có khoản đó" — khác hẳn với việc
+   * không gửi khoá lên (ăn mức chung công ty).
+   *
+   * Phải khai ở đây: `main.ts` bật `forbidNonWhitelisted`, thiếu là cả form
+   * 400 chứ không phải bị bỏ qua im lặng.
+   */
+  @IsOptional()
+  @IsObject()
+  giaTriKhoan?: Record<string, number>;
+
   @IsOptional()
   @IsInt()
   @Min(0)

@@ -54,6 +54,8 @@ export interface Employee {
   luongThoaThuan: number;
   mucKhaiBao?: number;
   phuCapCoDinh: number;
+  /** Số tiền riêng theo từng khoản lương, khoá theo mã khoản. */
+  giaTriKhoan?: Record<string, number>;
   soNguoiPhuThuoc: number;
   dongBH: boolean;
   thoiVu: boolean;
@@ -102,6 +104,7 @@ export interface CreateEmployeeDto {
   luongThoaThuan?: number;
   mucKhaiBao?: number;
   phuCapCoDinh?: number;
+  giaTriKhoan?: Record<string, number>;
   soNguoiPhuThuoc?: number;
   dongBH?: boolean;
   thoiVu?: boolean;
@@ -182,6 +185,7 @@ class EmployeeService extends ServiceBase {
       luongThoaThuan: (x.luongThoaThuan as number) ?? 0,
       mucKhaiBao: x.mucKhaiBao as number | undefined,
       phuCapCoDinh: (x.phuCapCoDinh as number) ?? 0,
+      giaTriKhoan: x.giaTriKhoan as Record<string, number> | undefined,
       soNguoiPhuThuoc: (x.soNguoiPhuThuoc as number) ?? 0,
       dongBH: (x.dongBH as boolean) ?? false,
       thoiVu: (x.thoiVu as boolean) ?? false,

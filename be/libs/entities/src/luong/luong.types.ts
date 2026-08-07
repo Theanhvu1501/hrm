@@ -20,6 +20,18 @@ export interface KhoanLuong {
   ten: string;
   loaiCongThuc: LoaiCongThuc;
   thamSo: ThamSoKhoan;
+  /**
+   * Cho phép đặt số riêng cho từng người ở Hồ sơ NV (`Employee.giaTriKhoan`).
+   *
+   * Chỉ có nghĩa với khoản mang SỐ TIỀN (`CO_DINH_THANG`, `DINH_MUC_x_CONG`).
+   * Khoản mang TỶ LỆ cố ý không mở: tỷ lệ là quy tắc của công ty, mở ra theo
+   * người là mời một con số sai lặng lẽ đi thẳng vào phiếu lương.
+   *
+   * Cờ này chỉ điều khiển GIAO DIỆN (khoản nào hiện trong tab Lương của hồ
+   * sơ) — engine luôn ưu tiên `giaTriKhoan` nếu có khoá, để một dòng lương
+   * đã tính không đổi số chỉ vì admin tắt cờ này sau đó.
+   */
+  choPhepRieng?: boolean;
   /** khoản này có tính vào thu nhập chịu thuế không. */
   chiuThue: boolean;
   /** phần ≤ trần được miễn thuế, phần vượt mới chịu (null = không có trần). */
@@ -114,6 +126,15 @@ export interface DauVaoDongLuong {
    */
   congDayDu?: number;
   phuCapCoDinh: number; // từ Hồ sơ NV
+  /**
+   * Số tiền RIÊNG của người này cho từng khoản, khoá theo `ma` khoản
+   * (vd `{ PC_CHUC_VU: 3000000, AN_CA: 80000 }`).
+   *
+   * Vắng khoá = ăn mức chung của công ty. CÓ khoá, kể cả bằng 0 = dùng đúng
+   * số đó. Hai thứ này KHÁC nhau và không được gộp: "để trống" nghĩa là theo
+   * công ty, "đặt 0" nghĩa là người này không có khoản đó.
+   */
+  giaTriKhoan?: Record<string, number>;
   soNguoiPhuThuoc: number;
   tamUng: number;
   khauTruKhac: number;
