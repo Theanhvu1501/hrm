@@ -1,6 +1,11 @@
 import { Controller, Get, Post, Put, Patch, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { BangLuong_Service } from './bang-luong.service';
-import { CapNhatCauHinhLuongDto, CapNhatDongLuongDto, TongHopKyDto } from './dto';
+import {
+  CapNhatCauHinhLuongDto,
+  CapNhatDongLuongDto,
+  ImportNhapTheoKyDto,
+  TongHopKyDto,
+} from './dto';
 import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 
@@ -121,6 +126,27 @@ export class BangLuong_Controller {
   @Permissions('/luong/bang-luong:sua')
   async moLai(@Body() body: TongHopKyDto) {
     const data = await this.bangLuong_Service.moLai(body.thang);
+    return { success: true, data };
+  }
+
+  /**
+   * Import số nhập tay theo kỳ (hiệu suất, thưởng) cho cả tháng.
+   *
+   * Trả 200 kèm BÁO CÁO từng dòng, KHÔNG 4xx khi có dòng hỏng: người dùng
+   * cần biết dòng nào vào được và dòng nào không, chứ không phải một lỗi
+   * chung chung cho cả file.
+   *
+   * Cùng quyền `:sua` với sửa từng dòng — ghi đè số của cả kỳ nguy hiểm
+   * ngang, không hơn.
+   */
+  @Post('import-nhap-theo-ky')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:sua')
+  async importNhapTheoKy(@Body() body: ImportNhapTheoKyDto) {
+    const data = await this.bangLuong_Service.importNhapTheoKy(
+      body.thang,
+      body.dong,
+    );
     return { success: true, data };
   }
 

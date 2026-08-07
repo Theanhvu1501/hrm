@@ -82,6 +82,20 @@ class BangLuongService extends ServiceBase {
     return this.transform(res);
   }
 
+  /**
+   * Import số nhập tay theo kỳ. Trả BÁO CÁO từng dòng — dòng hỏng không chặn
+   * dòng lành, nên phải đọc `loi` chứ không chỉ nhìn `soDongGhi`.
+   */
+  async importNhapTheoKy(
+    thang: string,
+    dong: Array<{ maNhanVien: string; giaTri: Record<string, number> }>,
+  ): Promise<{ soDongGhi: number; loi: Array<{ maNhanVien: string; lyDo: string }> }> {
+    return this.post<{
+      soDongGhi: number;
+      loi: Array<{ maNhanVien: string; lyDo: string }>;
+    }>({ thang, dong }, { endpoint: '/import-nhap-theo-ky' });
+  }
+
   async chot(thang: string): Promise<DongLuong[]> {
     const res = await super.post<Array<Record<string, unknown>>>(
       { thang },

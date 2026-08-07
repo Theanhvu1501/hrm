@@ -39,6 +39,9 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['quyetToanTncn', RequestMethod.GET, '/luong/bang-luong:xem'],
   ['danhSachDong', RequestMethod.GET, '/luong/bang-luong:xem'],
   ['capNhatDong', RequestMethod.PATCH, '/luong/bang-luong:sua'],
+  // Import ghi đè số nhập tay của cả kỳ — cùng mức nguy hiểm với sửa từng
+  // dòng, nên cùng quyền `:sua`.
+  ['importNhapTheoKy', RequestMethod.POST, '/luong/bang-luong:sua'],
 ];
 
 describe('BangLuong_Controller — phân quyền', () => {
