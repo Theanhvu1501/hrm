@@ -106,6 +106,17 @@ export function LuongTab() {
       .catch(() => setChung(null));
   }, []);
 
+  /**
+   * Khoản được phép đặt số riêng cho từng người. Cố ý lọc theo cờ
+   * `choPhepRieng` chứ không hiện hết: công ty khai 20 khoản thì tab Lương
+   * biến thành 20 ô trống, không ai biết ô nào cần điền.
+   */
+  const khoanRieng = (chung?.khoanLuong ?? []).filter((k) => k.choPhepRieng);
+
+  /** Mức chung công ty của một khoản, để hiện làm gợi ý dưới ô nhập. */
+  const mucChung = (k: (typeof khoanRieng)[number]): number | undefined =>
+    k.loaiCongThuc === "DINH_MUC_x_CONG" ? k.thamSo.dinhMuc : k.thamSo.soTien;
+
   const [dongBH, thoiVu, camKet, hopDongThu2] =
     useWatch({
       control,
@@ -178,6 +189,43 @@ export function LuongTab() {
           </O>
         </Col>
       </Row>
+
+      {khoanRieng.length > 0 && (
+        <div className="mt-6">
+          <TieuDeNhom mo="Để trống = ăn mức chung của công ty. Điền 0 = người này không có khoản đó.">
+            Phụ cấp riêng của người này
+          </TieuDeNhom>
+          <Row gutter={[16, 12]}>
+            {khoanRieng.map((k) => (
+              <Col span={12} key={k.ma}>
+                <O
+                  nhan={`${k.ten}${
+                    k.loaiCongThuc === "DINH_MUC_x_CONG" ? " (₫/ngày)" : " (₫/tháng)"
+                  }`}
+                  goiY={
+                    mucChung(k) === undefined
+                      ? "Công ty chưa đặt mức chung."
+                      : `Theo công ty: ${mucChung(k)!.toLocaleString("vi-VN")} ₫`
+                  }
+                >
+                  <Controller
+                    name={`giaTriKhoan.${k.ma}` as never}
+                    control={control}
+                    render={({ field }) => (
+                      <InputNumber
+                        {...tien}
+                        placeholder="Theo công ty"
+                        {...field}
+                        value={(field.value as number | null | undefined) ?? null}
+                      />
+                    )}
+                  />
+                </O>
+              </Col>
+            ))}
+          </Row>
+        </div>
+      )}
 
       <div className="mt-6">
         <TieuDeNhom>Hợp đồng &amp; bảo hiểm</TieuDeNhom>

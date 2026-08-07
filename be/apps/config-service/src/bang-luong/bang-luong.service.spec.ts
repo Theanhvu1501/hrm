@@ -1336,4 +1336,59 @@ describe('BangLuong_Service', () => {
       expect(kq.thucTe.bhxh).toBeGreaterThan(0);
     });
   });
+
+  describe('mức riêng theo người', () => {
+    it('giaTriKhoan trên hồ sơ được snapshot vào dòng và engine dùng đúng số riêng', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0008',
+          hoTen: 'Nguyen Thi Phuong Thao',
+          luongThoaThuan: 20_000_000,
+          mucKhaiBao: 5_500_000,
+          // Trưởng ban: ăn ca cao hơn mức chung 50k của công ty.
+          giaTriKhoan: { AN_CA: 80_000 },
+          isActive: true,
+        },
+      ]);
+      timesheetStore = [
+        {
+          thang: '2026-07',
+          employeeId: EMP1,
+          soNgayCong: 20,
+          chiTietNgay: Array.from({ length: 20 }, (_, i) => ({ ngay: i + 1, kyHieu: 'X' })),
+        },
+      ];
+
+      const [row] = await service.tongHop('2026-07');
+
+      expect(row.giaTriKhoan).toEqual({ AN_CA: 80_000 });
+      expect(row.thucTe.giaTriTungKhoan.AN_CA).toBe(80_000 * 20);
+    });
+
+    it('tính lại dòng dùng snapshot của dòng, KHÔNG đọc lại hồ sơ đã đổi giữa kỳ', async () => {
+      dongLuongStore.length = 0;
+      dongLuongStore.push({
+        _id: '650000000000000000000903',
+        thang: '2026-07', employeeId: EMP1,
+        congThuong: 20, congThuViec: 0, congKhac: 0, congDayDu: 20,
+        luongThoaThuan: 20_000_000, mucKhaiBao: 5_500_000,
+        phuCapCoDinh: 0, soNguoiPhuThuoc: 0,
+        giaTriKhoan: { AN_CA: 80_000 },
+        dongBH: false, thoiVu: false, camKet: false, hopDongThu2: false,
+        cauHinhApDung: { congChuan: 24, thuViecTyLe: 0.85, bhxhTyLe: 0.105, bhxhCanCu: 'MUC_KHAI_BAO' },
+        tamUng: 0, khauTruKhac: 0, nhapTheoKy: {},
+        thucTe: { giaTriTungKhoan: {}, tongThuNhap: 0 },
+        khaiBao: { giaTriTungKhoan: {}, tongThuNhap: 0 },
+        trangThai: 'nhap', isActive: true,
+      } as any);
+      mockDongLuongRepo.findOne.mockResolvedValue(dongLuongStore[0]);
+
+      const kq = await service.capNhatDong('650000000000000000000903', {
+        tamUng: 100_000,
+      } as any);
+
+      expect(kq.thucTe.giaTriTungKhoan.AN_CA).toBe(80_000 * 20);
+    });
+  });
 });

@@ -27,6 +27,12 @@ export interface HoSoNhanVienFormValues {
   luongThoaThuan: number;
   mucKhaiBao?: number;
   phuCapCoDinh: number;
+  /**
+   * Số riêng theo từng khoản. `null`/vắng = để trống (ăn mức chung công ty);
+   * `0` = người này không có khoản đó. Hai thứ KHÁC nhau — xem
+   * `giaTriKhoanToDto`.
+   */
+  giaTriKhoan?: Record<string, number | null>;
   soNguoiPhuThuoc: number;
   dongBH: boolean;
   thoiVu: boolean;

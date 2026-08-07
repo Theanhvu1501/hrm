@@ -477,3 +477,126 @@ describe('DINH_MUC_x_CONG — chỉ tính ngày làm đủ', () => {
     expect(r.giaTriTungKhoan.AN_CA).toBe(50_000 * 23);
   });
 });
+
+/**
+ * Mức riêng theo người: mỗi khoản mang SỐ TIỀN có một mức chung của công ty
+ * (`thamSo.soTien` / `thamSo.dinhMuc`), và hồ sơ từng nhân viên ghi đè được
+ * bằng `giaTriKhoan[mã khoản]`.
+ *
+ * Phân biệt bằng CÓ KHOÁ hay không, KHÔNG bằng "khác 0": "để trống" (ăn theo
+ * công ty) và "đặt bằng 0" (người này không có khoản đó) là hai câu trả lời
+ * khác nhau. Hiểu lẫn hai thứ này chính là lỗi đã làm tắt BHXH của NV0004.
+ */
+describe('giaTriKhoan — mức riêng theo người', () => {
+  function chungCoPhuCap() {
+    const ch = cauHinh();
+    ch.khoanLuong = [
+      ...ch.khoanLuong,
+      {
+        ma: 'PC_CHUC_VU', ten: 'Phụ cấp chức vụ', loaiCongThuc: 'CO_DINH_THANG',
+        thamSo: { soTien: 500_000 }, chiuThue: true, tranMienThue: null,
+        vaoTongThuNhap: true, vaoBHXH: false, thuTu: 9,
+      },
+    ];
+    return ch;
+  }
+
+  it('không khai riêng → ăn mức chung của công ty', () => {
+    const r = tinhDongLuong(dauVao(), chungCoPhuCap());
+    expect(r.giaTriTungKhoan.PC_CHUC_VU).toBe(500_000); // 500k/24×24
+  });
+
+  it('khai riêng → ăn mức riêng, không phải mức chung', () => {
+    const r = tinhDongLuong(
+      dauVao({ giaTriKhoan: { PC_CHUC_VU: 3_000_000 } }),
+      chungCoPhuCap(),
+    );
+    expect(r.giaTriTungKhoan.PC_CHUC_VU).toBe(3_000_000);
+  });
+
+  it('khai riêng bằng 0 → ĐÚNG 0, không rơi về mức chung', () => {
+    // Đây là điểm dễ sai nhất của cả tính năng: `|| mức chung` sẽ biến người
+    // cố ý không có phụ cấp thành người ăn mức chung.
+    const r = tinhDongLuong(
+      dauVao({ giaTriKhoan: { PC_CHUC_VU: 0 } }),
+      chungCoPhuCap(),
+    );
+    expect(r.giaTriTungKhoan.PC_CHUC_VU).toBe(0);
+  });
+
+  it('khai riêng khoản KHÁC không ảnh hưởng khoản này', () => {
+    const r = tinhDongLuong(
+      dauVao({ giaTriKhoan: { KHOAN_LA: 9_000_000 } }),
+      chungCoPhuCap(),
+    );
+    expect(r.giaTriTungKhoan.PC_CHUC_VU).toBe(500_000);
+  });
+
+  it('mức riêng VẪN chia theo công như mức chung', () => {
+    // Nghỉ nửa tháng thì phụ cấp cũng nửa — không trả nguyên tháng.
+    const r = tinhDongLuong(
+      dauVao({ congThuong: 12, congDayDu: 12, giaTriKhoan: { PC_CHUC_VU: 2_400_000 } }),
+      chungCoPhuCap(),
+    );
+    expect(r.giaTriTungKhoan.PC_CHUC_VU).toBe(1_200_000); // 2.4tr/24×12
+  });
+
+  it('DINH_MUC_x_CONG cũng ghi đè được — ăn ca riêng cho một người', () => {
+    const r = tinhDongLuong(
+      dauVao({ congDayDu: 20, giaTriKhoan: { AN_CA: 80_000 } }),
+      cauHinh(),
+    );
+    expect(r.giaTriTungKhoan.AN_CA).toBe(80_000 * 20);
+  });
+
+  it('khoản mang TỶ LỆ không bị ghi đè — tỷ lệ là việc của công ty', () => {
+    const ch = cauHinh();
+    ch.khoanLuong = [
+      ...ch.khoanLuong,
+      {
+        ma: 'TRACH_NHIEM', ten: 'Trách nhiệm', loaiCongThuc: 'PHAN_TRAM_BASE',
+        thamSo: { tyLe: 0.1 }, chiuThue: true, tranMienThue: null,
+        vaoTongThuNhap: true, vaoBHXH: false, thuTu: 10,
+      },
+    ];
+
+    const r = tinhDongLuong(
+      dauVao({ base: 10_000_000, giaTriKhoan: { TRACH_NHIEM: 0.5 } }),
+      ch,
+    );
+    expect(r.giaTriTungKhoan.TRACH_NHIEM).toBe(1_000_000); // vẫn 10%
+  });
+
+  it('nguonHoSo cũ vẫn chạy khi chưa khai giaTriKhoan (không phá cấu hình đang dùng)', () => {
+    const ch = cauHinh();
+    ch.khoanLuong = [
+      ...ch.khoanLuong,
+      {
+        ma: 'PHU_CAP', ten: 'Phụ cấp cố định', loaiCongThuc: 'CO_DINH_THANG',
+        thamSo: { nguonHoSo: 'phuCapCoDinh' }, chiuThue: true, tranMienThue: null,
+        vaoTongThuNhap: true, vaoBHXH: false, thuTu: 11,
+      },
+    ];
+
+    const r = tinhDongLuong(dauVao({ phuCapCoDinh: 700_000 }), ch);
+    expect(r.giaTriTungKhoan.PHU_CAP).toBe(700_000);
+  });
+
+  it('giaTriKhoan THẮNG nguonHoSo cũ khi cả hai cùng có', () => {
+    const ch = cauHinh();
+    ch.khoanLuong = [
+      ...ch.khoanLuong,
+      {
+        ma: 'PHU_CAP', ten: 'Phụ cấp cố định', loaiCongThuc: 'CO_DINH_THANG',
+        thamSo: { nguonHoSo: 'phuCapCoDinh' }, chiuThue: true, tranMienThue: null,
+        vaoTongThuNhap: true, vaoBHXH: false, thuTu: 11,
+      },
+    ];
+
+    const r = tinhDongLuong(
+      dauVao({ phuCapCoDinh: 700_000, giaTriKhoan: { PHU_CAP: 1_500_000 } }),
+      ch,
+    );
+    expect(r.giaTriTungKhoan.PHU_CAP).toBe(1_500_000);
+  });
+});

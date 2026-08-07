@@ -56,3 +56,27 @@ export function cauHinhLuongRiengToForm(
     orBhxhCanCu: rieng?.bhxhCanCu,
   };
 }
+
+/**
+ * Mức riêng theo từng khoản lương → phần DTO.
+ *
+ * Ô để trống (`null`/`undefined`) bị LOẠI khỏi map: vắng khoá nghĩa là "ăn
+ * mức chung của công ty". Ô điền **0** thì GIỮ: 0 nghĩa là "người này không
+ * có khoản đó". Gộp hai thứ này lại (bằng `||` hay `filter(Boolean)`) chính
+ * là lớp lỗi đã làm tắt BHXH của một nhân viên thật.
+ *
+ * Không còn khoá nào thì không gửi trường `giaTriKhoan` — xem QUY TẮC CHUNG
+ * ở đầu `hoSoNhanVienForm.convert.ts` về `undefined` = giữ nguyên.
+ */
+export function giaTriKhoanToDto(
+  giaTri?: Record<string, number | null>,
+): { giaTriKhoan?: Record<string, number> } {
+  if (!giaTri) return {};
+
+  const kq: Record<string, number> = {};
+  for (const [ma, v] of Object.entries(giaTri)) {
+    if (typeof v === "number" && Number.isFinite(v)) kq[ma] = v;
+  }
+
+  return Object.keys(kq).length > 0 ? { giaTriKhoan: kq } : {};
+}

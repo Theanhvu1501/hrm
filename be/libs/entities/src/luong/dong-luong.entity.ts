@@ -23,6 +23,12 @@ export class DongLuong extends BaseEntity {
   @Column({ default: 0 }) luongThoaThuan: number;
   @Column({ default: 0 }) mucKhaiBao: number;
   @Column({ default: 0 }) phuCapCoDinh: number;
+  /**
+   * Snapshot mức riêng theo khoản LÚC TỔNG HỢP. Cùng lý do với
+   * `cauHinhApDung`: sửa một khoản biến động rồi tính lại dòng không được
+   * kéo theo thay đổi mà HR vừa làm trên hồ sơ giữa kỳ.
+   */
+  @Column('json', { nullable: true }) giaTriKhoan?: Record<string, number>;
   @Column({ default: 0 }) soNguoiPhuThuoc: number;
   @Column({ default: false }) dongBH: boolean;
   @Column({ default: false }) thoiVu: boolean;

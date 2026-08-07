@@ -168,6 +168,35 @@ describe("toCreateEmployeeDto — các trường tuỳ chọn khác giữ nguyê
     expect("mucKhaiBao" in body).toBe(false);
   });
 
+  /**
+   * Mức riêng theo khoản. Điểm dễ sai nhất: ô để trống và ô điền 0 là HAI
+   * câu trả lời khác nhau — "theo công ty" và "người này không có khoản đó".
+   */
+  it("tab Lương: giaTriKhoan bỏ ô trống nhưng GIỮ số 0", () => {
+    const body = bodyThucGui(
+      toCreateEmployeeDto(
+        values({
+          giaTriKhoan: {
+            PC_CHUC_VU: 3000000,
+            AN_CA: 0,
+            XANG_XE: null,
+          },
+        })
+      )
+    );
+
+    expect(body.giaTriKhoan).toEqual({ PC_CHUC_VU: 3000000, AN_CA: 0 });
+    expect("XANG_XE" in (body.giaTriKhoan as object)).toBe(false);
+  });
+
+  it("tab Lương: không khai riêng khoản nào thì không gửi giaTriKhoan", () => {
+    const body = bodyThucGui(
+      toCreateEmployeeDto(values({ giaTriKhoan: { PC_CHUC_VU: null } }))
+    );
+
+    expect("giaTriKhoan" in body).toBe(false);
+  });
+
   it("tab Lương: mucKhaiBao có số thật vẫn gửi nguyên", () => {
     const body = bodyThucGui(
       toCreateEmployeeDto(values({ mucKhaiBao: 8000000 }))

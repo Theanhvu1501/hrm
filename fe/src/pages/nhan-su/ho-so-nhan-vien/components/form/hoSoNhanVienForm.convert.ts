@@ -1,7 +1,10 @@
 import { CreateEmployeeDto } from "@/services/employeeService";
 import { HoSoNhanVienFormValues } from "./HoSoNhanVienForm.state";
 import { choPhepChamNgoaiVungToDto } from "./tabs/chamCongTab.convert";
-import { cauHinhLuongRiengToDto } from "./tabs/luongTab.convert";
+import {
+  cauHinhLuongRiengToDto,
+  giaTriKhoanToDto,
+} from "./tabs/luongTab.convert";
 
 /**
  * Dựng DTO gửi lên BE từ giá trị form.
@@ -81,6 +84,7 @@ export function toCreateEmployeeDto(
     // đã tự chuẩn hoá (`mucKhaiBaoApDung`), đây là lớp thứ hai để dữ liệu
     // lưu xuống nói đúng điều người nhập muốn nói.
     mucKhaiBao: values.mucKhaiBao ? values.mucKhaiBao : undefined,
+    ...giaTriKhoanToDto(values.giaTriKhoan),
     phuCapCoDinh: values.phuCapCoDinh ?? 0,
     soNguoiPhuThuoc: values.soNguoiPhuThuoc ?? 0,
     dongBH: values.dongBH ?? false,

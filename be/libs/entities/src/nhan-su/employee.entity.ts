@@ -54,6 +54,12 @@ export class Employee extends BaseEntity {
   @Column({ default: 0 }) luongThoaThuan: number;
   @Column({ nullable: true }) mucKhaiBao?: number; // rỗng → dùng mucKhaiBaoMacDinh
   @Column({ default: 0 }) phuCapCoDinh: number;
+  /**
+   * Số tiền RIÊNG của người này cho từng khoản lương, khoá theo `ma` khoản.
+   * Vắng khoá = ăn mức chung của công ty; CÓ khoá kể cả bằng 0 = dùng đúng số
+   * đó (người này không có khoản đó). Xem `giaTriRieng()` trong tinh-luong.ts.
+   */
+  @Column('json', { nullable: true }) giaTriKhoan?: Record<string, number>;
   @Column({ default: 0 }) soNguoiPhuThuoc: number;
   @Column({ default: false }) dongBH: boolean;
   @Column({ default: false }) thoiVu: boolean;

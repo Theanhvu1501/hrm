@@ -203,6 +203,31 @@ export function KhoanLuongEditor({ canEdit }: KhoanLuongEditorProps) {
       },
     },
     {
+      // Chỉ khoản mang SỐ TIỀN mới đặt riêng được: tỷ lệ là quy tắc của công
+      // ty, mở theo người là mời một con số sai lặng lẽ vào phiếu lương.
+      title: "Đặt riêng theo người",
+      key: "choPhepRieng",
+      width: 130,
+      align: "center",
+      render: (_: unknown, record: KhoanLuong, index: number) => {
+        const duocPhep =
+          record.loaiCongThuc === "CO_DINH_THANG" ||
+          record.loaiCongThuc === "DINH_MUC_x_CONG";
+        if (!duocPhep) {
+          return <span className="text-muted-foreground text-xs">—</span>;
+        }
+        return (
+          <Checkbox
+            checked={!!record.choPhepRieng}
+            disabled={!canEdit}
+            onChange={(e) =>
+              capNhatDong(index, { choPhepRieng: e.target.checked })
+            }
+          />
+        );
+      },
+    },
+    {
       title: "Chịu thuế",
       key: "chiuThue",
       width: 90,

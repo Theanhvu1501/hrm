@@ -44,6 +44,7 @@ interface SnapshotChung {
   congKhac: number;
   congDayDu: number;
   phuCapCoDinh: number;
+  giaTriKhoan?: Record<string, number>;
   soNguoiPhuThuoc: number;
   tamUng: number;
   khauTruKhac: number;
@@ -198,6 +199,7 @@ export class BangLuong_Service {
       congKhac: sn.congKhac,
       congDayDu: sn.congDayDu,
       phuCapCoDinh: sn.phuCapCoDinh,
+      giaTriKhoan: sn.giaTriKhoan,
       soNguoiPhuThuoc: sn.soNguoiPhuThuoc,
       tamUng: sn.tamUng,
       khauTruKhac: sn.khauTruKhac,
@@ -286,6 +288,7 @@ export class BangLuong_Service {
         congKhac: cong.congKhac,
         congDayDu: cong.congDayDu,
         phuCapCoDinh: emp.phuCapCoDinh ?? 0,
+        giaTriKhoan: emp.giaTriKhoan,
         soNguoiPhuThuoc: emp.soNguoiPhuThuoc ?? 0,
         tamUng: existing?.tamUng ?? 0,
         khauTruKhac: existing?.khauTruKhac ?? 0,
@@ -322,6 +325,7 @@ export class BangLuong_Service {
       row.luongThoaThuan = luongThoaThuan;
       row.mucKhaiBao = mucKhaiBao;
       row.phuCapCoDinh = snapshot.phuCapCoDinh;
+      row.giaTriKhoan = snapshot.giaTriKhoan;
       row.soNguoiPhuThuoc = snapshot.soNguoiPhuThuoc;
       row.dongBH = snapshot.dongBH;
       row.thoiVu = snapshot.thoiVu;
@@ -516,6 +520,7 @@ export class BangLuong_Service {
       // nhánh fallback trong `tinhKhoan` — cho 0 là xoá trắng khoản ăn ca.
       congDayDu: item.congDayDu ?? item.congThuong,
       phuCapCoDinh: item.phuCapCoDinh,
+      giaTriKhoan: item.giaTriKhoan,
       soNguoiPhuThuoc: item.soNguoiPhuThuoc,
       tamUng: item.tamUng,
       khauTruKhac: item.khauTruKhac,
