@@ -49,6 +49,9 @@ function dauVao(over: Partial<DauVaoDongLuong> = {}): DauVaoDongLuong {
   return {
     base: 5_500_000, mucKhaiBao: 5_500_000,
     congThuong: 24, congThuViec: 0, congKhac: 0,
+    // Số ngày ký hiệu X. Mặc định bằng congThuong để mọi bài cũ giữ nguyên
+    // số; bài nào cần tách hai con số thì override.
+    congDayDu: 24,
     phuCapCoDinh: 0, soNguoiPhuThuoc: 0, tamUng: 0, khauTruKhac: 0,
     dongBH: false, thoiVu: false, camKet: false, hopDongThu2: false,
     nhapTheoKy: {},
@@ -140,8 +143,8 @@ describe('tinhDongLuong', () => {
   });
 
   it('ăn ca VƯỢT trần thật (giá trị > tranMienThue): chỉ phần trần được miễn, phần vượt chịu thuế', () => {
-    // congThuong=30 → AN_CA = 50k×30 = 1.500.000 > trần 1.200.000
-    const r = tinhDongLuong(dauVao({ congThuong: 30 }), cauHinh());
+    // congDayDu=30 → AN_CA = 50k×30 = 1.500.000 > trần 1.200.000
+    const r = tinhDongLuong(dauVao({ congThuong: 30, congDayDu: 30 }), cauHinh());
     expect(r.giaTriTungKhoan.AN_CA).toBe(1_500_000); // giá trị thực của khoản, KHÔNG bị cắt
     // base thấp, không đóng BH → chỉ ăn ca đóng góp vào thuNhapMienThue, và bị chặn ở trần
     expect(r.mienThueKhoan).toBe(1_200_000); // phần vượt 300.000 KHÔNG được miễn
@@ -422,5 +425,55 @@ describe('TIEN_OT và TN miễn thuế gộp (P4.2c-2)', () => {
     const r = tinhDongLuong(dv, cauHinh());
     expect(r.otMienThue).toBe(0);
     expect(Number.isNaN(r.thuNhapTinhThue)).toBe(false);
+  });
+});
+
+/**
+ * Ăn ca là suất ăn của NGÀY CÓ MẶT, nên `DINH_MUC_x_CONG` nhân với số ngày
+ * làm đủ (ký hiệu `X`) chứ không phải tổng công quy đổi.
+ *
+ * Trước bản vá nó nhân với `congThuong` = `soNgayCong` của bảng công — con số
+ * đó tính P/L/NB/CT là 1 công và `1/2` là 0,5 công, nên người nghỉ phép vẫn
+ * được suất ăn. Đo trên production tháng 07/2026, NV0004 có X=22 + P=1 ⇒ ăn
+ * ca ra 50k×23 thay vì 50k×22.
+ */
+describe('DINH_MUC_x_CONG — chỉ tính ngày làm đủ', () => {
+  it('nghỉ phép KHÔNG được tính suất ăn', () => {
+    // 22 ngày X + 1 ngày P: tổng công quy đổi 23, ngày làm đủ 22.
+    const r = tinhDongLuong(
+      dauVao({ congThuong: 23, congDayDu: 22 }),
+      cauHinh(),
+    );
+    expect(r.giaTriTungKhoan.AN_CA).toBe(50_000 * 22);
+  });
+
+  it('nửa ngày KHÔNG được tính nửa suất ăn — chỉ ngày làm đủ mới có', () => {
+    // 21 ngày X + 2 ngày '1/2' → congThuong 22, congDayDu 21.
+    const r = tinhDongLuong(
+      dauVao({ congThuong: 22, congDayDu: 21 }),
+      cauHinh(),
+    );
+    expect(r.giaTriTungKhoan.AN_CA).toBe(50_000 * 21);
+  });
+
+  it('lương theo công VẪN dùng tổng công quy đổi, không đổi theo bản vá này', () => {
+    // Nghỉ phép là ngày hưởng lương — cắt nó khỏi LUONG_THEO_CONG là ăn bớt
+    // lương của người lao động. Chỉ ăn ca đổi cách đếm.
+    const r = tinhDongLuong(
+      dauVao({ base: 24_000_000, congThuong: 23, congDayDu: 22 }),
+      cauHinh(),
+    );
+    expect(r.giaTriTungKhoan.LUONG_CONG).toBe(
+      lamTronTheo((24_000_000 / 24) * 23, 1000),
+    );
+  });
+
+  it('dòng lương cũ (chưa có congDayDu) giữ nguyên cách tính cũ, không tụt về 0', () => {
+    // Tính lại một dòng lưu trước bản vá mà cho ăn ca = 0 là MẤT TIỀN im lặng
+    // trên phiếu lương thật — tệ hơn hẳn con số cũ hơi rộng tay.
+    const cu = dauVao({ congThuong: 23 });
+    delete (cu as Partial<DauVaoDongLuong>).congDayDu;
+    const r = tinhDongLuong(cu, cauHinh());
+    expect(r.giaTriTungKhoan.AN_CA).toBe(50_000 * 23);
   });
 });

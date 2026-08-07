@@ -42,7 +42,17 @@ function tinhKhoan(
         (dv.base / congChuan) * dv.congThuViec * tyLeTV;
       break;
     case 'DINH_MUC_x_CONG':
-      x = (khoan.thamSo.dinhMuc ?? 0) * dv.congThuong;
+      // Nhân với số ngày LÀM ĐỦ (ký hiệu `X`), không phải tổng công quy đổi.
+      // Đây là công thức của các khoản theo suất/ngày có mặt (ăn ca, xăng xe):
+      // `congThuong` = `soNgayCong` của bảng công tính P/L/NB/CT là 1 công và
+      // `1/2` là 0,5 công, nên người nghỉ phép vẫn được suất ăn. Đo trên
+      // production 07/2026: NV0004 có X=22 + P=1 ⇒ ăn ca ra 50k×23.
+      //
+      // `?? dv.congThuong`: dòng lương lưu TRƯỚC bản vá không có `congDayDu`.
+      // Cho về 0 là xoá trắng khoản ăn ca khi tính lại một dòng cũ — mất tiền
+      // im lặng trên phiếu lương thật, tệ hơn hẳn con số cũ hơi rộng tay.
+      // Dòng sẽ tự đúng ở lần Tổng hợp kế tiếp.
+      x = (khoan.thamSo.dinhMuc ?? 0) * (dv.congDayDu ?? dv.congThuong);
       break;
     case 'CO_DINH_THANG': {
       const soTien =

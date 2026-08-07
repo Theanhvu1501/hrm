@@ -13,6 +13,13 @@ export class DongLuong extends BaseEntity {
   @Column({ default: 0 }) congThuong: number;
   @Column({ default: 0 }) congThuViec: number;
   @Column({ default: 0 }) congKhac: number;
+  /**
+   * Số ngày làm đủ (ký hiệu `X`) — cho khoản tính theo suất/ngày có mặt.
+   * `nullable` chứ không `default: 0`: dòng lưu trước bản vá phải phân biệt
+   * được "chưa có số này" với "có mặt 0 ngày", vì nhánh fallback trong
+   * `tinhKhoan` dựa vào đúng chỗ đó để không xoá trắng khoản ăn ca.
+   */
+  @Column({ nullable: true }) congDayDu?: number;
   @Column({ default: 0 }) luongThoaThuan: number;
   @Column({ default: 0 }) mucKhaiBao: number;
   @Column({ default: 0 }) phuCapCoDinh: number;

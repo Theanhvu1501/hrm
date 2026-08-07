@@ -155,6 +155,27 @@ describe("toCreateEmployeeDto — các trường tuỳ chọn khác giữ nguyê
     expect("mucKhaiBao" in body).toBe(false);
   });
 
+  /**
+   * Lỗi thật: hồ sơ NV0004 lưu `mucKhaiBao = 0`, BE (dùng `??`) hiểu là "đã
+   * khai mức 0" ⇒ baseBHXH = 0 ⇒ không trừ BHXH dù đã tích đóng BH, và TNCN
+   * bị tính thừa. 0 phải mang đúng nghĩa "để trống".
+   */
+  it("tab Lương: mucKhaiBao = 0 được gửi như BỎ TRỐNG, không phải mức 0", () => {
+    const body = bodyThucGui(
+      toCreateEmployeeDto(values({ dongBH: true, mucKhaiBao: 0 }))
+    );
+
+    expect("mucKhaiBao" in body).toBe(false);
+  });
+
+  it("tab Lương: mucKhaiBao có số thật vẫn gửi nguyên", () => {
+    const body = bodyThucGui(
+      toCreateEmployeeDto(values({ mucKhaiBao: 8000000 }))
+    );
+
+    expect(body.mucKhaiBao).toBe(8000000);
+  });
+
   it("lọc bằng cấp / người phụ thuộc rỗng như trước", () => {
     const body = bodyThucGui(
       toCreateEmployeeDto(

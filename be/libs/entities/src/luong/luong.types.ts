@@ -103,6 +103,16 @@ export interface DauVaoDongLuong {
   congThuong: number;
   congThuViec: number;
   congKhac: number;
+  /**
+   * Số ngày LÀM ĐỦ (ký hiệu `X` trên bảng công), cho các khoản tính theo suất
+   * /ngày có mặt (`DINH_MUC_x_CONG`: ăn ca, xăng xe…).
+   *
+   * Tách khỏi `congThuong` vì hai con số trả lời hai câu khác nhau: `congThuong`
+   * là công HƯỞNG LƯƠNG (phép, lễ, nghỉ bù đều tính), còn đây là ngày người ta
+   * thực sự có mặt. Optional vì dòng lương lưu trước bản vá không có nó — xem
+   * nhánh fallback trong `tinhKhoan`.
+   */
+  congDayDu?: number;
   phuCapCoDinh: number; // từ Hồ sơ NV
   soNguoiPhuThuoc: number;
   tamUng: number;
