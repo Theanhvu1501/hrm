@@ -3,6 +3,17 @@ export type LoaiCongThuc =
   | 'LUONG_THEO_CONG' // base/congChuan × (congThuong+congKhac) + base/congChuan × congThuViec × thuViec.tyLe
   | 'DINH_MUC_x_CONG' // thamSo.dinhMuc × congThuong (vd ăn ca 50k×công)
   | 'CO_DINH_THANG' // (thamSo.soTien | phụ cấp từ hồ sơ)/congChuan × (congThuong + congThuViec×thuViec.tyLe)
+  /**
+   * Trọn gói cả tháng, KHÔNG chia theo công — cho phụ cấp gắn với việc ĐANG
+   * GIỮ VỊ TRÍ (trách nhiệm, chức vụ): nghỉ vài ngày phép không mất phụ cấp.
+   *
+   * Khác `CO_DINH_THANG` ở đúng chỗ đó: tên loại kia nghe như trọn tháng
+   * nhưng thực chất chia theo công thực tế.
+   *
+   * Cả tháng không có công nào thì trả 0 — trả phụ cấp cho người nghỉ không
+   * lương cả tháng là thứ không giải thích được với kế toán.
+   */
+  | 'TRON_THANG'
   | 'PHAN_TRAM_BASE' // thamSo.tyLe × base
   | 'NHAP_THEO_KY' // số nhập/import theo kỳ, khoá theo `ma`
   | 'TIEN_OT'; // lấy thẳng `dv.tienOt` — bảng 03-LĐTL đã tính, engine chỉ tiêu thụ

@@ -600,3 +600,99 @@ describe('giaTriKhoan — mức riêng theo người', () => {
     expect(r.giaTriTungKhoan.PHU_CAP).toBe(1_500_000);
   });
 });
+
+/**
+ * `TRON_THANG` — trả trọn gói cả tháng, KHÔNG chia theo công.
+ *
+ * Khác hẳn `CO_DINH_THANG` (tên nghe như trọn tháng nhưng thực chất chia
+ * theo công). Dùng cho phụ cấp gắn với việc ĐANG GIỮ VỊ TRÍ (trách nhiệm,
+ * chức vụ): nghỉ vài ngày phép không làm mất phụ cấp đó.
+ *
+ * Luật đã chốt: có đi làm (công > 0) thì trả đủ; cả tháng không có công nào
+ * thì không trả — người nghỉ không lương cả tháng mà vẫn nhận phụ cấp là thứ
+ * không giải thích được với kế toán.
+ */
+describe('TRON_THANG — trọn gói theo tháng', () => {
+  function chungCoTrachNhiem() {
+    const ch = cauHinh();
+    ch.khoanLuong = [
+      ...ch.khoanLuong,
+      {
+        ma: 'TRACH_NHIEM', ten: 'Phụ cấp trách nhiệm', loaiCongThuc: 'TRON_THANG',
+        thamSo: { soTien: 2_000_000 }, chiuThue: true, tranMienThue: null,
+        vaoTongThuNhap: true, vaoBHXH: false, thuTu: 12,
+      },
+    ];
+    return ch;
+  }
+
+  it('làm đủ tháng → trả đủ', () => {
+    const r = tinhDongLuong(dauVao(), chungCoTrachNhiem());
+    expect(r.giaTriTungKhoan.TRACH_NHIEM).toBe(2_000_000);
+  });
+
+  it('làm nửa tháng → VẪN trả đủ, không chia theo công', () => {
+    // Đây là toàn bộ lý do loại này tồn tại. `CO_DINH_THANG` ở cùng số liệu
+    // sẽ ra 1.000.000.
+    const r = tinhDongLuong(
+      dauVao({ congThuong: 12, congDayDu: 12 }),
+      chungCoTrachNhiem(),
+    );
+    expect(r.giaTriTungKhoan.TRACH_NHIEM).toBe(2_000_000);
+  });
+
+  it('nghỉ phép vài ngày vẫn trả đủ (phép có tính công)', () => {
+    const r = tinhDongLuong(
+      dauVao({ congThuong: 21, congDayDu: 18 }),
+      chungCoTrachNhiem(),
+    );
+    expect(r.giaTriTungKhoan.TRACH_NHIEM).toBe(2_000_000);
+  });
+
+  it('cả tháng KHÔNG có công nào → không trả', () => {
+    const r = tinhDongLuong(
+      dauVao({ congThuong: 0, congThuViec: 0, congKhac: 0, congDayDu: 0 }),
+      chungCoTrachNhiem(),
+    );
+    expect(r.giaTriTungKhoan.TRACH_NHIEM).toBe(0);
+  });
+
+  it('chỉ có công thử việc cũng được tính là có đi làm', () => {
+    const r = tinhDongLuong(
+      dauVao({ congThuong: 0, congThuViec: 10, congDayDu: 10 }),
+      chungCoTrachNhiem(),
+    );
+    expect(r.giaTriTungKhoan.TRACH_NHIEM).toBe(2_000_000);
+  });
+
+  it('đặt riêng theo người ghi đè mức chung, vẫn trọn gói', () => {
+    const r = tinhDongLuong(
+      dauVao({ congThuong: 10, congDayDu: 10, giaTriKhoan: { TRACH_NHIEM: 5_000_000 } }),
+      chungCoTrachNhiem(),
+    );
+    expect(r.giaTriTungKhoan.TRACH_NHIEM).toBe(5_000_000);
+  });
+
+  it('đặt riêng bằng 0 → không có khoản này, kể cả khi đi làm đủ', () => {
+    const r = tinhDongLuong(
+      dauVao({ giaTriKhoan: { TRACH_NHIEM: 0 } }),
+      chungCoTrachNhiem(),
+    );
+    expect(r.giaTriTungKhoan.TRACH_NHIEM).toBe(0);
+  });
+
+  it('CO_DINH_THANG vẫn chia theo công như cũ — không bị đổi hành vi', () => {
+    const ch = cauHinh();
+    ch.khoanLuong = [
+      ...ch.khoanLuong,
+      {
+        ma: 'PC_CHIA', ten: 'Phụ cấp chia công', loaiCongThuc: 'CO_DINH_THANG',
+        thamSo: { soTien: 2_400_000 }, chiuThue: true, tranMienThue: null,
+        vaoTongThuNhap: true, vaoBHXH: false, thuTu: 13,
+      },
+    ];
+
+    const r = tinhDongLuong(dauVao({ congThuong: 12, congDayDu: 12 }), ch);
+    expect(r.giaTriTungKhoan.PC_CHIA).toBe(1_200_000);
+  });
+});

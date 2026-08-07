@@ -5,6 +5,8 @@ export type LoaiCongThuc =
   | 'LUONG_THEO_CONG'
   | 'DINH_MUC_x_CONG'
   | 'CO_DINH_THANG'
+  /** Trọn gói cả tháng, KHÔNG chia theo công (phụ cấp trách nhiệm/chức vụ). */
+  | 'TRON_THANG'
   | 'PHAN_TRAM_BASE'
   | 'NHAP_THEO_KY'
   /** Lấy thẳng tổng tiền từ bảng 03-LĐTL đã chốt của kỳ (P4.2c-2). */

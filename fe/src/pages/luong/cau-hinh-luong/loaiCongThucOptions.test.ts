@@ -15,6 +15,7 @@ describe("LOAI_CONG_THUC_OPTIONS", () => {
       "LUONG_THEO_CONG",
       "DINH_MUC_x_CONG",
       "CO_DINH_THANG",
+      "TRON_THANG",
       "PHAN_TRAM_BASE",
       "NHAP_THEO_KY",
       "TIEN_OT",
