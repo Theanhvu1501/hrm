@@ -13,7 +13,18 @@ export interface KyHieuDef {
   kyHieu: string;
   nhan: string;
   soCong: number;
-  nhom: 'lam_viec' | 'nghi_huong_luong' | 'nghi_khong_luong' | 'om_bhxh';
+  /**
+   * `ngay_nghi` = ngày vốn không phải ngày làm việc (nghỉ theo lịch tuần),
+   * tách khỏi `nghi_khong_luong` — cái sau là ngày lẽ ra phải đi làm mà
+   * người ta xin nghỉ. Phải khớp union bên
+   * `be/apps/config-service/src/bang-cong/cham-cong-ky-hieu.ts`.
+   */
+  nhom:
+    | 'lam_viec'
+    | 'nghi_huong_luong'
+    | 'nghi_khong_luong'
+    | 'om_bhxh'
+    | 'ngay_nghi';
 }
 
 export interface Timesheet {

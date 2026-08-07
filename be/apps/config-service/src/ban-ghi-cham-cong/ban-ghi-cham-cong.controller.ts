@@ -95,6 +95,27 @@ export class BanGhiChamCong_Controller {
     return { success: true, data };
   }
 
+  /**
+   * Ngày nghỉ theo lịch (và ngày lễ) của CHÍNH mình trong khoảng — để lịch
+   * tuần đánh dấu ngày không phải chấm công, thay vì để chúng xám lẫn với
+   * ngày quên chấm.
+   *
+   * Tự phục vụ như `cua-toi`: phạm vi khoá bằng employeeId suy từ token.
+   * Cũng phải đặt TRƯỚC `@Get()` để không bị nuốt thành query rỗng.
+   */
+  @Get('cua-toi/ngay-nghi')
+  async ngayNghiCuaToi(
+    @Query() query: { tuNgay?: string; denNgay?: string },
+    @Req() req: any,
+  ) {
+    const data = await this.banGhi_Service.ngayNghiCuaToi(
+      req.user,
+      query.tuNgay,
+      query.denNgay,
+    );
+    return { success: true, data };
+  }
+
   // ── Quản trị ────────────────────────────────────────────────────────
   // Hàng rào là `PermissionGuard` + `@Permissions('/cham-cong/ban-ghi:...')`,
   // KHÔNG phải `AdminGuard`: `AdminGuard` chỉ cho qua khi `vaiTro` viết hoa

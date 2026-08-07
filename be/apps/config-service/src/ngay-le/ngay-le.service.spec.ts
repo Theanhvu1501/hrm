@@ -141,4 +141,69 @@ describe('NgayLe_Service', () => {
       });
     });
   });
+
+  /**
+   * Bản theo KHOẢNG của `timTheoNgay`, cho màn hình lịch tuần: hỏi từng ngày
+   * một là 7 lượt truy vấn cho mỗi lần lật tuần, trong khi cùng một tập ngày
+   * lễ được nạp đi nạp lại.
+   */
+  describe('timTheoKhoang', () => {
+    const TET = {
+      ten: 'Tết',
+      tuNgay: '2027-02-06',
+      denNgay: '2027-02-12',
+      loai: 'le',
+      isActive: true,
+    };
+
+    it('trả về tập ngày lễ giao với khoảng hỏi', async () => {
+      mockRepo.find.mockResolvedValue([TET]);
+
+      const kq = await service.timTheoKhoang('2027-02-08', '2027-02-14');
+
+      expect(kq.map((h) => h.ten)).toEqual(['Tết']);
+    });
+
+    it('loại ngày lễ không giao khoảng', async () => {
+      mockRepo.find.mockResolvedValue([TET]);
+
+      expect(await service.timTheoKhoang('2027-02-13', '2027-02-20')).toEqual(
+        [],
+      );
+      expect(await service.timTheoKhoang('2027-01-01', '2027-02-05')).toEqual(
+        [],
+      );
+    });
+
+    it('chạm biên vẫn tính là giao (một đầu trùng nhau)', async () => {
+      mockRepo.find.mockResolvedValue([TET]);
+
+      expect(
+        await service.timTheoKhoang('2027-02-12', '2027-02-20'),
+      ).toHaveLength(1);
+      expect(
+        await service.timTheoKhoang('2027-01-01', '2027-02-06'),
+      ).toHaveLength(1);
+    });
+
+    it('quét đủ các năm liên quan, kể cả kỳ nghỉ vắt qua năm mới', async () => {
+      mockRepo.find.mockResolvedValue([]);
+
+      // Tuần 28/12/2026 → 03/01/2027: phải quét cả 2025 (kỳ nghỉ bắt đầu
+      // năm trước lấn sang), 2026 và 2027. Cùng lý do đã ghi ở timTheoNgay.
+      await service.timTheoKhoang('2026-12-28', '2027-01-03');
+
+      expect(mockRepo.find).toHaveBeenCalledWith({
+        where: { nam: In([2025, 2026, 2027]), isActive: true },
+      });
+    });
+
+    it('một lượt truy vấn duy nhất cho cả khoảng', async () => {
+      mockRepo.find.mockResolvedValue([TET]);
+
+      await service.timTheoKhoang('2027-02-01', '2027-02-28');
+
+      expect(mockRepo.find).toHaveBeenCalledTimes(1);
+    });
+  });
 });

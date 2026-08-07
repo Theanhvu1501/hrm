@@ -96,6 +96,30 @@ export class NgayLe_Service {
     return khop ?? null;
   }
 
+  /**
+   * Mọi ngày lễ GIAO với khoảng [tuNgay, denNgay] — bản theo khoảng của
+   * `timTheoNgay`, dùng cho màn hình lịch tuần. Hỏi từng ngày một là 7 lượt
+   * truy vấn mỗi lần lật tuần, nạp đi nạp lại cùng một tập ngày lễ.
+   *
+   * Quét từ `năm(tuNgay) - 1` tới `năm(denNgay)` vì cùng lý do đã ghi ở
+   * `timTheoNgay`: cột `nam` suy từ `tuNgay` của kỳ nghỉ, nên kỳ vắt qua năm
+   * mới mang năm cũ.
+   */
+  async timTheoKhoang(tuNgay: string, denNgay: string): Promise<Holiday[]> {
+    const namDau = Number(tuNgay.slice(0, 4)) - 1;
+    const namCuoi = Number(denNgay.slice(0, 4));
+    const cacNam: number[] = [];
+    for (let n = namDau; n <= namCuoi; n += 1) cacNam.push(n);
+
+    const ds = await this.repo.find({
+      where: { nam: In(cacNam), isActive: true },
+    });
+
+    // Hai khoảng giao nhau khi mỗi khoảng bắt đầu trước khi khoảng kia kết
+    // thúc — chạm biên vẫn tính là giao.
+    return ds.filter((h) => h.tuNgay <= denNgay && tuNgay <= h.denNgay);
+  }
+
   async update(id: string, dto: UpdateNgayLeDto): Promise<Holiday> {
     const item = await this.findOne(id);
     const tuNgay = dto.tuNgay ?? item.tuNgay;

@@ -116,6 +116,9 @@ beforeEach(() => {
   // trạng thái của nút chấm công, không quan tâm lịch tuần — mock để không
   // tạo request thật (và không log lỗi network) trên mỗi test.
   vi.spyOn(attendanceRecordService, 'cuaToi').mockResolvedValue([]);
+  // napTuan gọi song song cả hai; thiếu mock này là Promise.all reject và
+  // nhánh catch dọn sạch lịch tuần — mọi test về màu chấm sẽ thấy toàn xám.
+  vi.spyOn(attendanceRecordService, 'ngayNghiCuaToi').mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -559,6 +562,35 @@ describe('Chấm công của tôi — ba ô trạng thái và lịch tuần', ()
       expect((cham[0] as HTMLElement).style.background).toBe('var(--emp-accent)'),
     );
     expect((cham[1] as HTMLElement).style.background).toBe('var(--emp-danger)');
+  });
+
+  /**
+   * Ngày nghỉ theo lịch trước đây xám y hệt ngày quên chấm, nên nhân viên
+   * không có cách nào biết hôm đó mình có phải chấm công hay không.
+   */
+  it('ngày nghỉ theo lịch hiện chữ N thay cho chấm, và KHÔNG còn xám', async () => {
+    const dauTuan = dauTuanCua(homNayVN());
+    const ngay = bayNgayTu(dauTuan);
+
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+    vi.spyOn(attendanceRecordService, 'cuaToi').mockResolvedValue([]);
+    vi.spyOn(attendanceRecordService, 'ngayNghiCuaToi').mockResolvedValue([
+      { ngay: ngay[5], loai: 'nghi' },
+      { ngay: ngay[6], loai: 'le' },
+    ]);
+
+    const { container } = render(<ChamCongCuaToiPage />);
+
+    await waitFor(() => expect(screen.getByText(/Chấm công/)).toBeTruthy());
+
+    // Hai ngày cuối đổi từ chấm tròn sang chữ ⇒ chỉ còn 5 chấm.
+    await waitFor(() =>
+      expect(container.querySelectorAll('.rounded-full.mx-auto')).toHaveLength(5),
+    );
+    const o = container.querySelectorAll('.grid.grid-cols-7 > button');
+    expect(o[5].textContent).toContain('N');
+    expect(o[6].textContent).toContain('L');
+    expect(o[5].getAttribute('title')).toBe('Ngày nghỉ — không cần chấm công');
   });
 });
 

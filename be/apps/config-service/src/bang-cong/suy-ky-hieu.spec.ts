@@ -106,9 +106,9 @@ describe('suyKyHieuNgay — bảng ưu tiên', () => {
   });
 
   // 2026-08-02 là Chủ nhật.
-  it('dòng 2: ngày ngoài lịch làm việc → trống, KHÔNG đếm là chưa xử lý', () => {
+  it('dòng 2: ngày ngoài lịch làm việc → N, KHÔNG đếm là chưa xử lý', () => {
     const kq = suyKyHieuNgay(nen({ ngay: '2026-08-02' }));
-    expect(kq.kyHieu).toBeNull();
+    expect(kq.kyHieu).toBe('N');
     expect(kq.chuaXuLy).toBe(false);
   });
 
@@ -128,9 +128,9 @@ describe('suyKyHieuNgay — bảng ưu tiên', () => {
   // Lễ rơi vào Chủ nhật của người làm T2–T7: dòng 2 (ngoài lịch làm việc)
   // phải thắng dòng 3 (ngày lễ) — người vốn đã nghỉ hôm đó thì không có thêm
   // một công nghỉ lễ nào để mà cộng.
-  it('lễ rơi vào ngày ngoài lịch làm việc → vẫn trống, không phải L', () => {
+  it('lễ rơi vào ngày ngoài lịch làm việc → N, không phải L', () => {
     const kq = suyKyHieuNgay(nen({ ngay: '2026-08-02', laNgayLe: true }));
-    expect(kq.kyHieu).toBeNull();
+    expect(kq.kyHieu).toBe('N');
     expect(kq.chuaXuLy).toBe(false);
   });
 
@@ -256,15 +256,21 @@ describe('ngày ngoài lịch làm việc trong tuần', () => {
     coBanGhiNgoaiVung: false,
   };
 
-  it('không có gì thì để trống, không cảnh báo, không chặn chốt', () => {
+  it('không có gì thì điền N, không cảnh báo, không chặn chốt', () => {
     const kq = suyKyHieuNgay({ ...nen });
-    expect(kq.kyHieu).toBeNull();
+    // Trước đây để trống — trùng hệt với ô "HR chưa điền", nên nhìn lưới
+    // không phân biệt được ngày nghỉ với ngày bị bỏ sót. N nói rõ "hôm đó
+    // không phải ngày làm việc", và vẫn 0 công nên lương không đổi.
+    expect(kq.kyHieu).toBe('N');
     expect(kq.canhBao).toEqual([]);
     expect(kq.chuaXuLy).toBe(false);
   });
 
   it('CÓ chấm công thì cảnh báo LAM_NGOAI_LICH_TUAN nhưng vẫn không chặn chốt', () => {
     const kq = suyKyHieuNgay({ ...nen, coChamVao: true, coChamRa: true });
+    // CỐ Ý không điền N ở đây: giờ làm hôm đó đi vào cột làm thêm, ghi
+    // "ngày nghỉ" lên đúng ngày người ta có mặt là nói dối trên chứng từ
+    // tính lương. Ô trống + cảnh báo để HR tự quyết.
     expect(kq.kyHieu).toBeNull();
     // toStrictEqual — xem giải thích ở test tương tự trong describe trên.
     expect(kq.canhBao).toStrictEqual([MA_CANH_BAO.LAM_NGOAI_LICH_TUAN]);
@@ -281,7 +287,9 @@ describe('ngày ngoài lịch làm việc trong tuần', () => {
       ...nen,
       donNghi: { loaiDon: 'nghi_phep', loaiNghi: 'phep_nam', laNuaNgay: false },
     });
-    expect(kq.kyHieu).toBeNull();
+    // N chứ không phải P: hôm đó vốn đã nghỉ theo lịch, không tiêu ngày phép
+    // nào (`luat-don.ts` cũng loại nó khỏi `soNgayNghi`).
+    expect(kq.kyHieu).toBe('N');
     expect(kq.canhBao).toEqual([]);
     expect(kq.chuaXuLy).toBe(false);
   });
@@ -289,5 +297,44 @@ describe('ngày ngoài lịch làm việc trong tuần', () => {
   it('lịch undefined (chưa cấu hình gì) giữ nguyên hành vi cũ: T7 vẫn là ngày làm việc', () => {
     const kq = suyKyHieuNgay({ ...nen, ngayLamViecTrongTuan: undefined, coChamVao: true, coChamRa: true });
     expect(kq.kyHieu).toBe('X');
+  });
+
+  it('chưa cấu hình lịch thì KHÔNG có ô N nào — mọi ngày vẫn là ngày làm việc', () => {
+    // Chốt chặn quan trọng nhất của thay đổi này: hiểu ngược "lịch rỗng =
+    // không ngày nào làm việc" sẽ điền N cho cả 31 ngày của mọi nhân viên ở
+    // những tenant chưa cấu hình lịch tuần.
+    const kq = suyKyHieuNgay({ ...nen, ngayLamViecTrongTuan: undefined });
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(true);
+    expect(kq.canhBao).toStrictEqual([MA_CANH_BAO.CHUA_XU_LY]);
+  });
+
+  it('lịch rỗng [] cũng vậy — không ngày nào biến thành N', () => {
+    const kq = suyKyHieuNgay({ ...nen, ngayLamViecTrongTuan: [] });
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(true);
+  });
+
+  it('ngày lễ rơi vào cuối tuần → N (ngoài lịch thắng), không phải L', () => {
+    // Dòng 2 đứng TRƯỚC dòng 3 trong bảng ưu tiên. Hôm đó vốn đã nghỉ nên
+    // không có công nghỉ lễ nào bị mất: cả N lẫn L đều không thêm giờ làm,
+    // và L = 1 công ở đây sẽ tặng thêm một ngày công cho ngày vốn nghỉ.
+    const kq = suyKyHieuNgay({ ...nen, laNgayLe: true });
+    expect(kq.kyHieu).toBe('N');
+    expect(kq.chuaXuLy).toBe(false);
+  });
+
+  it('ngoài khoảng làm việc (trước ngày vào làm) vẫn để TRỐNG, không phải N', () => {
+    // Người chưa vào công ty thì nói "hôm đó họ nghỉ theo lịch công ty" là
+    // bịa — dòng 1 phải thắng dòng 2.
+    const kq = suyKyHieuNgay({ ...nen, ngayVaoLam: '2026-09-01' });
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(false);
+  });
+
+  it('ngoài khoảng làm việc (sau ngày nghỉ việc) vẫn để TRỐNG, không phải N', () => {
+    const kq = suyKyHieuNgay({ ...nen, ngayLamViecCuoi: '2026-07-31' });
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(false);
   });
 });

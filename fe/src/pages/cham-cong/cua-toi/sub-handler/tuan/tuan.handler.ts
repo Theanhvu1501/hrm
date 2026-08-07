@@ -20,14 +20,24 @@ export class TuanHandler extends CSubHanlder {
     this.setState("dangTaiTuan", true);
 
     try {
-      const banGhi = await attendanceRecordService.cuaToi(ngay[0], ngay[6]);
+      // Hai lời gọi song song: chúng độc lập nhau, xếp hàng nối tiếp là bắt
+      // người dùng chờ gấp đôi mỗi lần lật tuần.
+      const [banGhi, ngayNghi] = await Promise.all([
+        attendanceRecordService.cuaToi(ngay[0], ngay[6]),
+        attendanceRecordService.ngayNghiCuaToi(ngay[0], ngay[6]),
+      ]);
       this.setState("banGhiTuan", banGhi);
+      this.setState("ngayNghiTuan", ngayNghi);
     } catch (error) {
       // Lịch tuần là thông tin phụ trợ. Hỏng nó KHÔNG được phép chặn nút
       // chấm công — đó mới là việc người dùng đến đây để làm. Dọn về rỗng
       // (lịch hiện toàn chấm xám) và ghi log, không đổi `trangThai`.
+      //
+      // Dọn CẢ hai: giữ lại danh sách ngày nghỉ của tuần trước trong khi bản
+      // ghi đã rỗng là dán chữ N vào những ngày sai của tuần mới.
       console.error("Tải lịch tuần lỗi:", error);
       this.setState("banGhiTuan", []);
+      this.setState("ngayNghiTuan", []);
     } finally {
       this.setState("dangTaiTuan", false);
     }
