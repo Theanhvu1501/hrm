@@ -511,6 +511,158 @@ describe('ThietBiChamCong_Service', () => {
     });
   });
 
+  /**
+   * `kichHoatLai` là đường DUY NHẤT mở khoá một máy đã bị chặn — cố ý tách
+   * khỏi `duyet()` (vẫn giữ nguyên luật "chỉ nhận cho_duyet" và các test
+   * Important 3 ở trên) để vết audit phân biệt được "duyệt máy mới" với "mở
+   * lại máy từng bị khoá".
+   */
+  describe('kichHoatLai', () => {
+    it('thu_hoi → da_duyet, ghi người thực hiện và mốc thời gian', async () => {
+      mockRepo.findOne.mockResolvedValue({
+        _id: 'dev-row-1',
+        deviceId: 'dev-A',
+        employeeId: 'emp-1',
+        trangThai: 'thu_hoi',
+        lyDoThuHoi: 'Nghi chấm hộ',
+      });
+      mockRepo.find.mockResolvedValue([]);
+
+      const ket_qua = await service.kichHoatLai(
+        '507f1f77bcf86cd799439011',
+        'HR Lan',
+      );
+
+      expect(ket_qua.trangThai).toBe('da_duyet');
+      expect(mockRepo.save).toHaveBeenCalledTimes(1);
+      expect(mockRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceId: 'dev-A',
+          trangThai: 'da_duyet',
+          nguoiDuyet: 'HR Lan',
+          lanDuyet: expect.any(String),
+        }),
+      );
+    });
+
+    it('GIỮ lyDoThuHoi sau khi mở lại — đó là dấu vết duy nhất của lần khoá', async () => {
+      mockRepo.findOne.mockResolvedValue({
+        _id: 'dev-row-1',
+        deviceId: 'dev-A',
+        employeeId: 'emp-1',
+        trangThai: 'thu_hoi',
+        lyDoThuHoi: 'Nghi chấm hộ',
+      });
+      mockRepo.find.mockResolvedValue([]);
+
+      const ket_qua = await service.kichHoatLai(
+        '507f1f77bcf86cd799439011',
+        'HR Lan',
+      );
+
+      // Xoá trắng là mất luôn lý do máy này từng bị chặn; một dòng da_duyet
+      // mà vẫn còn lyDoThuHoi chính là dấu "đã từng bị khoá và được mở lại".
+      expect(ket_qua.lyDoThuHoi).toBe('Nghi chấm hộ');
+    });
+
+    it('tu_choi cũng mở lại được', async () => {
+      mockRepo.findOne.mockResolvedValue({
+        _id: 'dev-row-1',
+        deviceId: 'dev-A',
+        employeeId: 'emp-1',
+        trangThai: 'tu_choi',
+      });
+      mockRepo.find.mockResolvedValue([]);
+
+      const ket_qua = await service.kichHoatLai(
+        '507f1f77bcf86cd799439011',
+        'HR Lan',
+      );
+
+      expect(ket_qua.trangThai).toBe('da_duyet');
+    });
+
+    it('thu hồi máy đang dùng của nhân viên trong CÙNG thao tác', async () => {
+      const may_cu = {
+        _id: 'dev-row-1',
+        deviceId: 'dev-A',
+        employeeId: 'emp-1',
+        trangThai: 'da_duyet',
+      };
+      const may_mo_lai = {
+        _id: 'dev-row-2',
+        deviceId: 'dev-B',
+        employeeId: 'emp-1',
+        trangThai: 'thu_hoi',
+      };
+      mockRepo.findOne.mockResolvedValue(may_mo_lai);
+      mockRepo.find.mockResolvedValue([may_cu, may_mo_lai]);
+
+      await service.kichHoatLai('507f1f77bcf86cd799439012', 'HR Lan');
+
+      // Bất biến 1 nhân viên = 1 máy: để hai dòng cùng da_duyet thì
+      // `kiemTraThietBi` ném DU_LIEU_BAT_NHAT và NV mất sạch đường chấm công.
+      expect(mockRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deviceId: 'dev-A',
+          trangThai: 'thu_hoi',
+          lyDoThuHoi: 'Tự động thu hồi khi kích hoạt lại thiết bị khác',
+        }),
+      );
+      expect(mockRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'dev-B', trangThai: 'da_duyet' }),
+      );
+      // Đúng 2 lượt ghi — máy cũ + máy mở lại, không lây sang dòng nào khác.
+      expect(mockRepo.save).toHaveBeenCalledTimes(2);
+    });
+
+    it('không thu hồi nhầm chính dòng đang mở lại khi nó đã da_duyet ở lượt find', async () => {
+      const may_mo_lai = {
+        _id: 'dev-row-2',
+        deviceId: 'dev-B',
+        employeeId: 'emp-1',
+        trangThai: 'thu_hoi',
+      };
+      mockRepo.findOne.mockResolvedValue(may_mo_lai);
+      // Dòng khác NHƯNG cùng deviceId (dữ liệu cũ trước khi có unique index).
+      mockRepo.find.mockResolvedValue([
+        {
+          _id: 'dev-row-9',
+          deviceId: 'dev-B',
+          employeeId: 'emp-1',
+          trangThai: 'da_duyet',
+        },
+        may_mo_lai,
+      ]);
+
+      await service.kichHoatLai('507f1f77bcf86cd799439012', 'HR Lan');
+
+      expect(mockRepo.save).not.toHaveBeenCalledWith(
+        expect.objectContaining({ trangThai: 'thu_hoi' }),
+      );
+      expect(mockRepo.save).toHaveBeenCalledTimes(1);
+    });
+
+    it.each(['cho_duyet', 'da_duyet'])(
+      'chặn khi dòng đang ở trạng thái %s — không phải máy bị khoá',
+      async (trangThai) => {
+        mockRepo.findOne.mockResolvedValue({
+          _id: 'dev-row-1',
+          deviceId: 'dev-A',
+          employeeId: 'emp-1',
+          trangThai,
+        });
+
+        const code = await batMaLoi(() =>
+          service.kichHoatLai('507f1f77bcf86cd799439011', 'HR Lan'),
+        );
+
+        expect(code).toBe(MA_LOI_THIET_BI.TRANG_THAI_KHONG_HOP_LE);
+        expect(mockRepo.save).not.toHaveBeenCalled();
+      },
+    );
+  });
+
   describe('findOne', () => {
     it('chỉ lấy dòng còn isActive để duyệt/từ chối/thu hồi', async () => {
       mockRepo.findOne.mockResolvedValue({
@@ -544,6 +696,7 @@ describe('ThietBiChamCong_Controller — vết audit người thực hiện', ()
       duyet: jest.fn().mockResolvedValue({}),
       tuChoi: jest.fn().mockResolvedValue({}),
       thuHoi: jest.fn().mockResolvedValue({}),
+      kichHoatLai: jest.fn().mockResolvedValue({}),
       findAll: jest.fn().mockResolvedValue([]),
       cuaToi: jest.fn().mockResolvedValue([]),
     };
@@ -573,5 +726,25 @@ describe('ThietBiChamCong_Controller — vết audit người thực hiện', ()
       controller.thuHoi('507f1f77bcf86cd799439011', {}, { user: {} }),
     ).rejects.toThrow();
     expect(mockService.thuHoi).not.toHaveBeenCalled();
+  });
+
+  // Mở khoá một máy từng bị chặn là thao tác nhạy cảm nhất trong module này —
+  // không biết ai bấm thì không truy vết được vụ chấm hộ nào cả.
+  it('kich-hoat-lai chặn khi không xác định được người thực hiện', async () => {
+    await expect(
+      controller.kichHoatLai('507f1f77bcf86cd799439011', { user: {} }),
+    ).rejects.toThrow();
+    expect(mockService.kichHoatLai).not.toHaveBeenCalled();
+  });
+
+  it('kich-hoat-lai truyền đúng người thực hiện xuống service', async () => {
+    await controller.kichHoatLai('507f1f77bcf86cd799439011', {
+      user: { email: 'lan@hr.vn' },
+    });
+
+    expect(mockService.kichHoatLai).toHaveBeenCalledWith(
+      '507f1f77bcf86cd799439011',
+      'lan@hr.vn',
+    );
   });
 });

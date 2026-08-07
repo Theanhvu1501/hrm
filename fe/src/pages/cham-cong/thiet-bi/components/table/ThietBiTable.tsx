@@ -9,6 +9,7 @@ import {
   TRANG_THAI_TAG_COLOR,
   TAB_OPTIONS,
   labelFor,
+  choPhepKichHoatLai,
 } from "../../constants";
 import "./ThietBiTable.state";
 
@@ -64,6 +65,22 @@ export function ThietBiTable() {
         </Tag>
       ),
     },
+    // Cột này là dấu vết vì sao máy từng bị chặn — HR cần đọc TRƯỚC khi bấm
+    // mở lại. Trên tab "Đang dùng" nó còn cho biết máy đang chạy này từng bị
+    // khoá (BE cố ý không xoá `lyDoThuHoi` khi kích hoạt lại). Ẩn ở tab "Chờ
+    // duyệt" vì dòng chưa từng bị khoá, cột luôn rỗng.
+    ...(tab === "cho_duyet"
+      ? []
+      : [
+          {
+            title: "Lý do khoá",
+            dataIndex: "lyDoThuHoi",
+            key: "lyDoThuHoi",
+            ellipsis: true,
+            render: (v?: string) =>
+              v || <span className="text-muted-foreground">—</span>,
+          } as ColumnsType<EmployeeDevice>[number],
+        ]),
     {
       title: "Hành động",
       key: "thaoTac",
@@ -115,6 +132,23 @@ export function ThietBiTable() {
               >
                 <Button size="small" danger>
                   Thu hồi
+                </Button>
+              </Popconfirm>
+            )}
+            {choPhepKichHoatLai(r.trangThai) && (
+              <Popconfirm
+                title="Kích hoạt lại thiết bị này?"
+                description={`Máy này sẽ chấm công được ngay. Thiết bị khác (nếu có) đang dùng của ${
+                  r.employeeName ?? "nhân viên"
+                } sẽ bị thu hồi — mỗi nhân viên chỉ dùng được một máy.`}
+                okText="Kích hoạt lại"
+                cancelText="Huỷ"
+                onConfirm={() =>
+                  handler.executeEvent("kichHoatLaiThietBi", { id: r.id })
+                }
+              >
+                <Button type="primary" size="small">
+                  Kích hoạt lại
                 </Button>
               </Popconfirm>
             )}
