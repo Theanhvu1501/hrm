@@ -108,6 +108,22 @@ export class ThietBiChamCong_Controller {
     return { success: true, data };
   }
 
+  // Mở khoá máy đã bị thu hồi/từ chối. Route RIÊNG chứ không nới lỏng
+  // `duyet()`: `duyet()` giữ luật "chỉ nhận cho_duyet", còn đây là đường duy
+  // nhất hồi sinh một thiết bị nên vết audit tách bạch được "duyệt máy mới"
+  // với "mở lại máy từng bị khoá". Cùng quyền `:them` với duyệt — cả hai đều
+  // là mở khoá chấm công, tách quyền mới chỉ thêm một bước cấp quyền dễ quên.
+  @Post(':id/kich-hoat-lai')
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/thiet-bi:them')
+  async kichHoatLai(@Param('id') id: string, @Req() req: any) {
+    const data = await this.thietBi_Service.kichHoatLai(
+      id,
+      this.nguoiThucHien(req),
+    );
+    return { success: true, data };
+  }
+
   // Thu hồi là thao tác khoá chấm công — để hở thì bất kỳ ai cũng khoá được
   // cả công ty bằng vài request.
   @Post(':id/thu-hoi')

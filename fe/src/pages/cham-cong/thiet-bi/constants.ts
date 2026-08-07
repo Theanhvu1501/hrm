@@ -35,6 +35,16 @@ export const TAB_OPTIONS = [
   { value: "tu_choi", label: "Đã từ chối" },
 ] as const;
 
+/**
+ * Trạng thái mà HR mở khoá lại được — phải khớp đúng luật của `kichHoatLai()`
+ * bên `be/apps/config-service/src/thiet-bi-cham-cong/thiet-bi-cham-cong.service.ts`.
+ * Lệch một bên là hiện nút ở dòng bấm vào chắc chắn lỗi, hoặc mất nút ở đúng
+ * dòng cần mở.
+ */
+export function choPhepKichHoatLai(trangThai?: string): boolean {
+  return trangThai === "thu_hoi" || trangThai === "tu_choi";
+}
+
 export function labelFor(
   options: ReadonlyArray<{ value: string; label: string }>,
   value?: string

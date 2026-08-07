@@ -306,4 +306,61 @@ export class ThietBiChamCong_Service {
     item.lyDoThuHoi = lyDo;
     return this.repo.save(item);
   }
+
+  /**
+   * Mở khoá một máy đã bị `thu_hoi`/`tu_choi` để nhân viên chấm công lại được.
+   *
+   * Trước đây không có đường nào làm việc này: `duyet()` chỉ nhận `cho_duyet`,
+   * còn `kiemTraThietBi()` gặp dòng bị khoá là chặn luôn chứ không tạo dòng
+   * chờ duyệt mới. Cộng với unique index `(tenantId, employeeId, deviceId)`,
+   * một máy bị thu hồi là vĩnh viễn không dùng lại được — kể cả HR cũng không
+   * sửa được, trong khi chính thông báo lỗi lại hứa "Liên hệ HR nếu cần dùng
+   * lại". Thu hồi phần lớn là thao tác tạm (nhân viên đổi máy rồi quay lại,
+   * hoặc HR bấm nhầm), nên phải có đường quay về.
+   *
+   * CỐ Ý là route riêng chứ không nới lỏng `duyet()`: `duyet()` giữ nguyên luật
+   * "chỉ nhận cho_duyet" (xem chú thích ở đó — nới ra là hồi sinh im lặng máy
+   * vừa bị khoá vì chấm hộ), còn đây là đường DUY NHẤT mở khoá, nên đọc log là
+   * biết ngay ai đã mở lại máy nào.
+   *
+   * `lyDoThuHoi` được GIỮ NGUYÊN, không xoá: một dòng `da_duyet` mà vẫn còn lý
+   * do thu hồi chính là dấu vết "máy này từng bị khoá và đã được mở lại". Xoá
+   * đi là mất luôn thứ cần nhất khi truy vết chấm hộ.
+   */
+  async kichHoatLai(
+    id: string,
+    nguoiThucHien: string,
+  ): Promise<EmployeeDevice> {
+    const item = await this.findOne(id);
+
+    if (item.trangThai !== 'thu_hoi' && item.trangThai !== 'tu_choi') {
+      this.nem(
+        MA_LOI_THIET_BI.TRANG_THAI_KHONG_HOP_LE,
+        `Chỉ kích hoạt lại được thiết bị đã bị thu hồi hoặc từ chối. Thiết bị này đang ở trạng thái "${item.trangThai}".`,
+      );
+    }
+
+    // Cùng bất biến "1 nhân viên = 1 máy" như `duyet()`: để hai dòng cùng
+    // `da_duyet` thì `kiemTraThietBi` ném DU_LIEU_BAT_NHAT và nhân viên mất
+    // sạch đường chấm công trên MỌI máy — tệ hơn hẳn tình trạng ban đầu.
+    const dsCuaNv = await this.repo.find({
+      where: { employeeId: item.employeeId, isActive: true },
+    });
+
+    for (const cu of dsCuaNv) {
+      if (cu.trangThai !== 'da_duyet') continue;
+      // Bỏ qua theo `deviceId` chứ không theo `_id`: dữ liệu cũ (trước unique
+      // index) có thể có nhiều dòng cùng một máy, thu hồi chúng là tự tay khoá
+      // lại đúng cái máy vừa mở.
+      if (cu.deviceId === item.deviceId) continue;
+      cu.trangThai = 'thu_hoi';
+      cu.lyDoThuHoi = 'Tự động thu hồi khi kích hoạt lại thiết bị khác';
+      await this.repo.save(cu);
+    }
+
+    item.trangThai = 'da_duyet';
+    item.nguoiDuyet = nguoiThucHien;
+    item.lanDuyet = new Date().toISOString();
+    return this.repo.save(item);
+  }
 }

@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { TRANG_THAI_OPTIONS, TAB_OPTIONS, labelFor } from "./constants";
+import {
+  TRANG_THAI_OPTIONS,
+  TAB_OPTIONS,
+  labelFor,
+  choPhepKichHoatLai,
+} from "./constants";
 
 describe("labelFor", () => {
   it("trả về đúng nhãn tiếng Việt khớp value", () => {
@@ -21,5 +26,29 @@ describe("labelFor", () => {
   it("trả về '-' khi value rỗng hoặc undefined", () => {
     expect(labelFor(TRANG_THAI_OPTIONS, undefined)).toBe("-");
     expect(labelFor(TRANG_THAI_OPTIONS, "")).toBe("-");
+  });
+});
+
+/**
+ * Điều kiện hiện nút "Kích hoạt lại" phải khớp đúng luật BE trong
+ * `kichHoatLai()` (chỉ nhận thu_hoi/tu_choi). Lệch một bên là HR bấm được
+ * một nút chắc chắn lỗi, hoặc mất nút ở đúng dòng cần mở.
+ */
+describe("choPhepKichHoatLai", () => {
+  it("cho phép với máy đã thu hồi và đã từ chối", () => {
+    expect(choPhepKichHoatLai("thu_hoi")).toBe(true);
+    expect(choPhepKichHoatLai("tu_choi")).toBe(true);
+  });
+
+  it("không cho phép với máy đang chờ duyệt hoặc đang dùng", () => {
+    // cho_duyet đã có nút Duyệt/Từ chối; da_duyet đang chạy bình thường —
+    // hiện thêm nút mở khoá ở đây chỉ tổ gây nhầm.
+    expect(choPhepKichHoatLai("cho_duyet")).toBe(false);
+    expect(choPhepKichHoatLai("da_duyet")).toBe(false);
+  });
+
+  it("không cho phép với trạng thái lạ hoặc thiếu", () => {
+    expect(choPhepKichHoatLai("trang_thai_la")).toBe(false);
+    expect(choPhepKichHoatLai(undefined)).toBe(false);
   });
 });

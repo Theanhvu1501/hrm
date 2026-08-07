@@ -56,6 +56,18 @@ class EmployeeDeviceService extends ServiceBase {
     return this.transform(res);
   }
 
+  /**
+   * Mở khoá lại máy đã bị thu hồi/từ chối. Route riêng chứ không gọi lại
+   * `duyet()`: BE cố ý giữ `duyet()` chỉ nhận dòng `cho_duyet`.
+   */
+  async kichHoatLai(id: string): Promise<EmployeeDevice> {
+    const res = await this.post<Record<string, unknown>>(
+      {},
+      { endpoint: `/${id}/kich-hoat-lai` },
+    );
+    return this.transform(res);
+  }
+
   async thuHoi(id: string, lyDo?: string): Promise<EmployeeDevice> {
     const res = await this.post<Record<string, unknown>>(
       { lyDo },

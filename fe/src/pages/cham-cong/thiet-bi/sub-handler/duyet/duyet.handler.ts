@@ -55,9 +55,30 @@ export class DuyetHandler extends CSubHanlder {
     }
   }
 
+  @HandlerDecorator("kichHoatLaiThietBi")
+  async kichHoatLaiThietBi(params: { id: string }): Promise<void> {
+    try {
+      await employeeDeviceService.kichHoatLai(params.id);
+      // thu_hoi/tu_choi -> da_duyet: dòng rời khỏi tab đang xem, giống ba
+      // thao tác kia. BE đã thu hồi máy da_duyet cũ (nếu có) trong CÙNG
+      // thao tác để giữ luật 1 nhân viên = 1 máy.
+      this.boKhoiDanhSachDangXem(params.id);
+      message.success(
+        "Đã kích hoạt lại thiết bị. Thiết bị khác (nếu có) của nhân viên đã bị thu hồi."
+      );
+    } catch (error) {
+      console.error("Kích hoạt lại thiết bị lỗi:", error);
+      // BE chỉ mở khoá được dòng thu_hoi/tu_choi — nếu dòng vừa bị người khác
+      // đổi trạng thái thì message cụ thể đó phải hiện nguyên văn.
+      message.error(apiErrorMessage(error, "Kích hoạt lại thiết bị thất bại"));
+      await this.taiLaiSauLoi();
+    }
+  }
+
   /**
-   * Cả ba thao tác đều đưa dòng RA KHỎI tab đang xem (cho_duyet -> da_duyet
-   * hoặc tu_choi; da_duyet -> thu_hoi) nên xoá khỏi danh sách cục bộ là đúng,
+   * Cả bốn thao tác đều đưa dòng RA KHỎI tab đang xem (cho_duyet -> da_duyet
+   * hoặc tu_choi; da_duyet -> thu_hoi; thu_hoi/tu_choi -> da_duyet) nên xoá
+   * khỏi danh sách cục bộ là đúng,
    * không phải cập nhật trạng thái tại chỗ — tránh hiện nhầm dòng đã đổi
    * trạng thái trong đúng tab đang lọc theo trạng thái cũ.
    */

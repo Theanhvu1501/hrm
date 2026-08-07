@@ -25,15 +25,20 @@ import { ThietBiChamCong_Controller } from './thiet-bi-cham-cong.controller';
 const proto = ThietBiChamCong_Controller.prototype as any;
 
 /**
- * Route quản trị: động từ HTTP và quyền BẮT BUỘC. duyet/tuChoi/thuHoi là
- * `@Post` nên nhận `:them` theo đúng bảng ánh xạ động-từ→quyền dùng chung cho
- * cả 7 controller — không tự chế quyền riêng cho module này.
+ * Route quản trị: động từ HTTP và quyền BẮT BUỘC. duyet/tuChoi/thuHoi/
+ * kichHoatLai là `@Post` nên nhận `:them` theo đúng bảng ánh xạ động-từ→quyền
+ * dùng chung cho cả 7 controller — không tự chế quyền riêng cho module này.
+ *
+ * `kichHoatLai` dùng CHUNG `:them` với `duyet`: cả hai đều là "mở khoá một máy
+ * chấm công", nên tách quyền riêng chỉ thêm một bước cấp quyền dễ quên lúc
+ * deploy (màn hình 403) mà không chặn thêm rủi ro nào.
  */
 const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['findAll', RequestMethod.GET, '/cham-cong/thiet-bi:xem'],
   ['duyet', RequestMethod.POST, '/cham-cong/thiet-bi:them'],
   ['tuChoi', RequestMethod.POST, '/cham-cong/thiet-bi:them'],
   ['thuHoi', RequestMethod.POST, '/cham-cong/thiet-bi:them'],
+  ['kichHoatLai', RequestMethod.POST, '/cham-cong/thiet-bi:them'],
 ];
 
 /** Route tự phục vụ: cố ý KHÔNG nhận quyền theo vai trò. */
@@ -83,7 +88,7 @@ describe('ThietBiChamCong_Controller — thứ tự route', () => {
   it('cua-toi khai TRƯỚC mọi route dùng ":id"', () => {
     const ten = Object.getOwnPropertyNames(proto);
     expect(Reflect.getMetadata(PATH_METADATA, proto.cuaToi)).toBe('cua-toi');
-    for (const dungId of ['duyet', 'tuChoi', 'thuHoi']) {
+    for (const dungId of ['duyet', 'tuChoi', 'thuHoi', 'kichHoatLai']) {
       expect(ten.indexOf('cuaToi')).toBeLessThan(ten.indexOf(dungId));
     }
   });
