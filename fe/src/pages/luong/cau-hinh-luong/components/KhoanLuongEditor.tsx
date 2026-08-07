@@ -12,8 +12,12 @@ import "../CauHinhLuongPage.state";
 
 export const LOAI_CONG_THUC_OPTIONS: { value: LoaiCongThuc; label: string }[] = [
   { value: "LUONG_THEO_CONG", label: "Lương theo công" },
-  { value: "DINH_MUC_x_CONG", label: "Định mức x Công" },
-  { value: "CO_DINH_THANG", label: "Cố định hàng tháng" },
+  { value: "DINH_MUC_x_CONG", label: "Định mức × ngày công" },
+  // Nhãn cũ là "Cố định hàng tháng" — SAI lệch với thứ nó làm: công thức này
+  // chia số tiền theo công thực tế, nên người nghỉ nửa tháng bị cắt nửa phụ
+  // cấp mà nhãn không hề báo trước. Muốn trả nguyên tháng thì dùng TRON_THANG.
+  { value: "CO_DINH_THANG", label: "Theo tháng — chia theo công" },
+  { value: "TRON_THANG", label: "Trọn gói theo tháng (không chia công)" },
   { value: "PHAN_TRAM_BASE", label: "% theo lương cơ sở" },
   { value: "NHAP_THEO_KY", label: "Nhập tay theo kỳ" },
   // Lấy thẳng tổng tiền từ bảng 03-LĐTL ĐÃ CHỐT của kỳ — không có tham số,
@@ -155,6 +159,17 @@ export function KhoanLuongEditor({ canEdit }: KhoanLuongEditorProps) {
                 onChange={(v) => capNhatThamSo(index, { dinhMuc: v ?? 0 })}
               />
             );
+          case "TRON_THANG":
+            return (
+              <InputNumber
+                className="w-full"
+                min={0}
+                value={record.thamSo.soTien}
+                placeholder="Số tiền / tháng"
+                disabled={!canEdit}
+                onChange={(v) => capNhatThamSo(index, { soTien: v ?? 0 })}
+              />
+            );
           case "PHAN_TRAM_BASE":
             return (
               <InputNumber
@@ -212,7 +227,8 @@ export function KhoanLuongEditor({ canEdit }: KhoanLuongEditorProps) {
       render: (_: unknown, record: KhoanLuong, index: number) => {
         const duocPhep =
           record.loaiCongThuc === "CO_DINH_THANG" ||
-          record.loaiCongThuc === "DINH_MUC_x_CONG";
+          record.loaiCongThuc === "DINH_MUC_x_CONG" ||
+          record.loaiCongThuc === "TRON_THANG";
         if (!duocPhep) {
           return <span className="text-muted-foreground text-xs">—</span>;
         }

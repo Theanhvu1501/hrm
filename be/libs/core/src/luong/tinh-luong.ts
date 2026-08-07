@@ -93,6 +93,15 @@ function tinhKhoan(
         (dv.congThuong + dv.congThuViec * tyLeTV);
       break;
     }
+    case 'TRON_THANG': {
+      // "Có đi làm hay không" đọc trên TỔNG CÔNG (gồm cả phép, lễ, nghỉ bù),
+      // không phải số ngày có mặt: nghỉ phép là ngày hưởng lương, người ta
+      // vẫn đang giữ vị trí đó. Nghỉ KHÔNG lương thì `soNgayCong` không cộng,
+      // nên cả tháng nghỉ không lương sẽ ra 0 — đúng ranh giới đã chốt.
+      const coDiLam = dv.congThuong + dv.congThuViec + dv.congKhac > 0;
+      x = coDiLam ? rieng ?? khoan.thamSo.soTien ?? 0 : 0;
+      break;
+    }
     case 'PHAN_TRAM_BASE':
       x = (khoan.thamSo.tyLe ?? 0) * dv.base;
       break;
