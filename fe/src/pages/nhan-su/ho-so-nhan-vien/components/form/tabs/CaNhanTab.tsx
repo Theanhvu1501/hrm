@@ -50,21 +50,56 @@ export function CaNhanTab() {
           <div className="text-red-500 text-xs mt-1">{errors.cccd.message}</div>
         )}
       </Col>
+      {/* Hai ô này in thẳng lên hợp đồng lao động. Thiếu thì bản in để trống
+          và HR phải điền tay mỗi lần in — modal In có cảnh báo trước. */}
       <Col span={12} className="mt-3">
-        <FieldLabel>Ngày sinh</FieldLabel>
+        <FieldLabel required>Ngày cấp CCCD</FieldLabel>
         <Controller
-          name="ngaySinh"
+          name="ngayCapCccd"
           control={control}
+          rules={{ required: "Vui lòng nhập ngày cấp CCCD" }}
           render={({ field }) => (
             <Input {...field} type="date" className="w-full" />
           )}
         />
+        {errors.ngayCapCccd && (
+          <div className="text-red-500 text-xs mt-1">{errors.ngayCapCccd.message}</div>
+        )}
       </Col>
       <Col span={12} className="mt-3">
-        <FieldLabel>Giới tính</FieldLabel>
+        <FieldLabel required>Nơi cấp CCCD</FieldLabel>
+        <Controller
+          name="noiCapCccd"
+          control={control}
+          rules={{ required: "Vui lòng nhập nơi cấp CCCD" }}
+          render={({ field }) => (
+            <Input {...field} placeholder="Cục Cảnh sát QLHC về TTXH" />
+          )}
+        />
+        {errors.noiCapCccd && (
+          <div className="text-red-500 text-xs mt-1">{errors.noiCapCccd.message}</div>
+        )}
+      </Col>
+      <Col span={12} className="mt-3">
+        <FieldLabel required>Ngày sinh</FieldLabel>
+        <Controller
+          name="ngaySinh"
+          control={control}
+          rules={{ required: "Vui lòng nhập ngày sinh" }}
+          render={({ field }) => (
+            <Input {...field} type="date" className="w-full" />
+          )}
+        />
+        {errors.ngaySinh && (
+          <div className="text-red-500 text-xs mt-1">{errors.ngaySinh.message}</div>
+        )}
+      </Col>
+      <Col span={12} className="mt-3">
+        <FieldLabel required>Giới tính</FieldLabel>
         <Controller
           name="gioiTinh"
           control={control}
+          rules={{ required: "Vui lòng chọn giới tính" }}
           render={({ field }) => (
             <Select
               {...field}
@@ -78,42 +113,61 @@ export function CaNhanTab() {
             />
           )}
         />
+        {errors.gioiTinh && (
+          <div className="text-red-500 text-xs mt-1">{errors.gioiTinh.message}</div>
+        )}
       </Col>
       <Col span={12} className="mt-3">
-        <FieldLabel>Mã số thuế</FieldLabel>
+        <FieldLabel required>Mã số thuế</FieldLabel>
         <Controller
           name="mst"
           control={control}
+          rules={{ required: "Vui lòng nhập mã số thuế" }}
           render={({ field }) => <Input {...field} placeholder="Nhập MST" />}
         />
+        {errors.mst && (
+          <div className="text-red-500 text-xs mt-1">{errors.mst.message}</div>
+        )}
       </Col>
       <Col span={12} className="mt-3">
-        <FieldLabel>Số điện thoại</FieldLabel>
+        <FieldLabel required>Số điện thoại</FieldLabel>
         <Controller
           name="soDienThoai"
           control={control}
+          rules={{ required: "Vui lòng nhập số điện thoại" }}
           render={({ field }) => (
             <Input {...field} placeholder="Nhập số điện thoại" />
           )}
         />
+        {errors.soDienThoai && (
+          <div className="text-red-500 text-xs mt-1">{errors.soDienThoai.message}</div>
+        )}
       </Col>
       <Col span={12} className="mt-3">
-        <FieldLabel>Email</FieldLabel>
+        <FieldLabel required>Email</FieldLabel>
         <Controller
           name="email"
           control={control}
+          rules={{ required: "Vui lòng nhập email" }}
           render={({ field }) => <Input {...field} placeholder="Nhập email" />}
         />
+        {errors.email && (
+          <div className="text-red-500 text-xs mt-1">{errors.email.message}</div>
+        )}
       </Col>
       <Col span={24} className="mt-3">
-        <FieldLabel>Địa chỉ</FieldLabel>
+        <FieldLabel required>Địa chỉ</FieldLabel>
         <Controller
           name="diaChi"
           control={control}
+          rules={{ required: "Vui lòng nhập địa chỉ" }}
           render={({ field }) => (
             <Input.TextArea {...field} rows={2} placeholder="Nhập địa chỉ" />
           )}
         />
+        {errors.diaChi && (
+          <div className="text-red-500 text-xs mt-1">{errors.diaChi.message}</div>
+        )}
       </Col>
     </Row>
   );

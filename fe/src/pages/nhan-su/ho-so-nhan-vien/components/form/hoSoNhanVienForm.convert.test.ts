@@ -172,6 +172,25 @@ describe("toCreateEmployeeDto — các trường tuỳ chọn khác giữ nguyê
    * Mức riêng theo khoản. Điểm dễ sai nhất: ô để trống và ô điền 0 là HAI
    * câu trả lời khác nhau — "theo công ty" và "người này không có khoản đó".
    */
+  it("gửi ngày cấp / nơi cấp CCCD, xoá trắng được (gửi chuỗi rỗng)", () => {
+    // Hai trường này in thẳng lên hợp đồng. Gửi `undefined` khi xoá ô thì BE
+    // (Object.assign) giữ nguyên giá trị cũ — HR sửa sai rồi xoá sẽ không xoá
+    // được, đúng lớp lỗi đã ghi ở QUY TẮC CHUNG đầu file convert.
+    const co = bodyThucGui(
+      toCreateEmployeeDto(
+        values({ ngayCapCccd: "2021-03-15", noiCapCccd: "Cục CS QLHC" })
+      )
+    );
+    expect(co.ngayCapCccd).toBe("2021-03-15");
+    expect(co.noiCapCccd).toBe("Cục CS QLHC");
+
+    const trong = bodyThucGui(
+      toCreateEmployeeDto(values({ ngayCapCccd: "", noiCapCccd: "" }))
+    );
+    expect(trong.ngayCapCccd).toBe("");
+    expect(trong.noiCapCccd).toBe("");
+  });
+
   it("tab Lương: giaTriKhoan bỏ ô trống nhưng GIỮ số 0", () => {
     const body = bodyThucGui(
       toCreateEmployeeDto(

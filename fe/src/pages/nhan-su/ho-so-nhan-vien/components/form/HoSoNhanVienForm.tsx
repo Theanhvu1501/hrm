@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Modal, Tabs, Button } from "antd";
+import { useEffect, useState } from "react";
+import { Modal, Tabs, Button, message } from "antd";
 import { FormProvider, useForm } from "react-hook-form";
 import {
   useHoSoNhanVienHandler,
@@ -19,6 +19,8 @@ import "./HoSoNhanVienForm.state";
 const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   hoTen: "",
   cccd: "",
+  ngayCapCccd: "",
+  noiCapCccd: "",
   ngaySinh: "",
   gioiTinh: undefined,
   mst: "",
@@ -65,6 +67,8 @@ export function toFormValues(employee: Employee | null): HoSoNhanVienFormValues 
   return {
     hoTen: employee.hoTen || "",
     cccd: employee.cccd || "",
+    ngayCapCccd: employee.ngayCapCccd || "",
+    noiCapCccd: employee.noiCapCccd || "",
     ngaySinh: employee.ngaySinh || "",
     gioiTinh: employee.gioiTinh,
     mst: employee.mst || "",
@@ -115,6 +119,7 @@ export function HoSoNhanVienForm() {
     defaultValues: DEFAULT_VALUES,
   });
   const { handleSubmit, reset } = methods;
+  const [tabDangMo, setTabDangMo] = useState("ca-nhan");
 
   const isEditing = !!editingEmployee;
 
@@ -139,6 +144,34 @@ export function HoSoNhanVienForm() {
     } else {
       handler.executeEvent("createEmployee", dto);
     }
+  };
+
+  /**
+   * Trường nào nằm ở tab nào — để nhảy tới đúng tab khi validate hỏng.
+   *
+   * `<Tabs>` của antd chỉ render pane ĐANG MỞ, nên một ô bắt buộc bỏ trống ở
+   * tab khác sẽ không có trong DOM: react-hook-form không focus được, thông
+   * báo đỏ cũng không ai thấy, và người dùng chỉ thấy bấm "Lưu" mà không có
+   * gì xảy ra. Đây là lý do bảng này tồn tại.
+   */
+  const TAB_CUA_TRUONG: Record<string, string> = {
+    hoTen: "ca-nhan",
+    cccd: "ca-nhan",
+    ngayCapCccd: "ca-nhan",
+    noiCapCccd: "ca-nhan",
+    ngaySinh: "ca-nhan",
+    gioiTinh: "ca-nhan",
+    mst: "ca-nhan",
+    soDienThoai: "ca-nhan",
+    email: "ca-nhan",
+    diaChi: "ca-nhan",
+  };
+
+  const khiThieuTruong = (loi: Record<string, unknown>) => {
+    const truongDau = Object.keys(loi)[0];
+    const tab = TAB_CUA_TRUONG[truongDau];
+    if (tab) setTabDangMo(tab);
+    message.error("Còn trường bắt buộc chưa điền — xem các ô báo đỏ.");
   };
 
   const items = [
@@ -168,14 +201,18 @@ export function HoSoNhanVienForm() {
           key="submit"
           type="primary"
           loading={saving}
-          onClick={handleSubmit(onSubmit)}
+          onClick={handleSubmit(onSubmit, khiThieuTruong)}
         >
           {isEditing ? "Cập nhật" : "Thêm"}
         </Button>,
       ]}
     >
       <FormProvider {...methods}>
-        <Tabs items={items} />
+        <Tabs
+          items={items}
+          activeKey={tabDangMo}
+          onChange={setTabDangMo}
+        />
       </FormProvider>
     </Modal>
   );

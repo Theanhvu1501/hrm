@@ -28,6 +28,10 @@ export function toCreateEmployeeDto(
   return {
     hoTen: values.hoTen,
     cccd: values.cccd,
+    // Chuỗi rỗng chứ KHÔNG `undefined` — xem QUY TẮC CHUNG ở đầu file: gửi
+    // `undefined` là "giữ nguyên giá trị cũ", nên xoá trắng ô sẽ không có tác dụng.
+    ngayCapCccd: values.ngayCapCccd || "",
+    noiCapCccd: values.noiCapCccd || "",
     ngaySinh: values.ngaySinh || undefined,
     gioiTinh: values.gioiTinh || undefined,
     mst: values.mst || undefined,

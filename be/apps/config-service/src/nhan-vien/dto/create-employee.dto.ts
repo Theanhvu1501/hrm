@@ -52,6 +52,16 @@ export class CreateEmployeeDto {
   @IsNotEmpty({ message: 'CCCD không được để trống' })
   cccd: string;
 
+  // Hai trường này in thẳng lên hợp đồng lao động. Optional vì hồ sơ cũ
+  // chưa có, và HR có thể chưa cầm bản CCCD lúc tạo hồ sơ.
+  @IsOptional()
+  @IsString()
+  ngayCapCccd?: string;
+
+  @IsOptional()
+  @IsString()
+  noiCapCccd?: string;
+
   @IsOptional()
   @IsString()
   ngaySinh?: string;

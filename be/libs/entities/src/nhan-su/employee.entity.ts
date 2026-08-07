@@ -13,6 +13,9 @@ export class Employee extends BaseEntity {
   @Column({ nullable: true }) ngaySinh?: string;
   @Column({ nullable: true }) gioiTinh?: string;       // nam|nu|khac
   @Column() cccd: string;
+  /** Ngày cấp CCCD, "YYYY-MM-DD". In lên hợp đồng lao động ({{ngayCapCccd}}). */
+  @Column({ nullable: true }) ngayCapCccd?: string;
+  @Column({ nullable: true }) noiCapCccd?: string;
   @Column({ nullable: true }) mst?: string;
   @Column({ nullable: true }) soDienThoai?: string;
   @Column({ nullable: true }) email?: string;

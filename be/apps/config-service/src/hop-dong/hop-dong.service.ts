@@ -454,6 +454,8 @@ export class HopDong_Service {
         ngaySinh: employee.ngaySinh,
         gioiTinh: employee.gioiTinh,
         cccd: employee.cccd,
+        ngayCapCccd: employee.ngayCapCccd,
+        noiCapCccd: employee.noiCapCccd,
         diaChi: employee.diaChi,
         soDienThoai: employee.soDienThoai,
         chucDanh: employee.chucDanh,

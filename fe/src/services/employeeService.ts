@@ -26,6 +26,9 @@ export interface Employee {
   ngaySinh?: string;
   gioiTinh?: string;
   cccd: string;
+  /** Ngày cấp CCCD "YYYY-MM-DD" — in lên hợp đồng lao động. */
+  ngayCapCccd?: string;
+  noiCapCccd?: string;
   mst?: string;
   soDienThoai?: string;
   email?: string;
@@ -82,6 +85,8 @@ export interface EmployeeFilter {
 export interface CreateEmployeeDto {
   hoTen: string;
   cccd: string;
+  ngayCapCccd?: string;
+  noiCapCccd?: string;
   ngaySinh?: string;
   gioiTinh?: string;
   mst?: string;
@@ -162,6 +167,8 @@ class EmployeeService extends ServiceBase {
       ngaySinh: x.ngaySinh as string | undefined,
       gioiTinh: x.gioiTinh as string | undefined,
       cccd: x.cccd as string,
+      ngayCapCccd: x.ngayCapCccd as string | undefined,
+      noiCapCccd: x.noiCapCccd as string | undefined,
       mst: x.mst as string | undefined,
       soDienThoai: x.soDienThoai as string | undefined,
       email: x.email as string | undefined,
