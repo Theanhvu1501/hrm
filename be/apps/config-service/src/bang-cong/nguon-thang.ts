@@ -139,24 +139,81 @@ export function gomTheoNgay(
   return map;
 }
 
-/** Đếm số LƯỢT đi muộn / về sớm theo nhân viên, từ chính các bản ghi. */
+/**
+ * Số NGÀY đi muộn / về sớm theo nhân viên.
+ *
+ * Mỗi ngày công chỉ tính TỐI ĐA một lần muộn và một lần sớm, quyết định bởi
+ * lượt VÀO ĐẦU TIÊN và lượt RA CUỐI CÙNG của ngày đó.
+ *
+ * Vì sao không đếm theo từng bản ghi như trước: người dùng bấm nhiều lần cho
+ * chắc, và mỗi lượt bấm mang `soPhutDiMuon`/`soPhutVeSom` riêng của chính nó.
+ * Đo trên production 2026-08-05 thấy hai ca thật:
+ *
+ *  - Bấm ra 16:58 → 16:59 → 17:00 (ca tan 17:00). Về ĐÚNG GIỜ, nhưng hai lượt
+ *    đầu mang sớm 2p và 1p ⇒ cách cũ đếm thành 2 lần về sớm trong MỘT ngày.
+ *  - Vào 08:00 rồi bấm lại 09:00; ra 15:00 rồi ra lại 22:00. Người ta đến
+ *    đúng giờ và về muộn, nhưng cách cũ đếm 1 lần muộn + 1 lần sớm.
+ *
+ * Tức là việc bấm thừa bị biến thành vi phạm kỷ luật không có thật.
+ *
+ * `soPhutDiMuon`/`soPhutVeSom` trên từng bản ghi vẫn giữ nguyên — chúng là sự
+ * thật về CHÍNH lượt bấm đó và màn Bản ghi chấm công cần chúng để đối chiếu.
+ * Sai sót nằm ở cách GOM, nên chỉ sửa ở đây.
+ */
 export function demMuonSom(
   records: AttendanceRecord[],
 ): Map<string, { diMuon: number; veSom: number }> {
   const map = new Map<string, { diMuon: number; veSom: number }>();
+  // Khoá: `employeeId|ngay`. Gom theo NGÀY CÔNG (`bg.ngay`) chứ không theo
+  // ngày lịch của `thoiDiem`: ca qua đêm cho lượt ra thừa hưởng `ngay` của
+  // lượt vào đang mở, nên hai nửa một phiên phải nằm chung một nhóm.
+  const theoNgay = new Map<string, AttendanceRecord[]>();
 
   for (const bg of records) {
     if (bg.isActive === false) continue;
-    let dem = map.get(bg.employeeId);
-    if (!dem) {
-      dem = { diMuon: 0, veSom: 0 };
-      map.set(bg.employeeId, dem);
-    }
-    if ((bg.soPhutDiMuon ?? 0) > 0) dem.diMuon += 1;
-    if ((bg.soPhutVeSom ?? 0) > 0) dem.veSom += 1;
+
+    // Giữ nguyên hành vi cũ: mọi nhân viên xuất hiện trong dữ liệu đều có mặt
+    // trong map, kể cả khi không vi phạm gì.
+    if (!map.has(bg.employeeId)) map.set(bg.employeeId, { diMuon: 0, veSom: 0 });
+
+    const khoa = `${bg.employeeId}|${bg.ngay}`;
+    const nhom = theoNgay.get(khoa);
+    if (nhom) nhom.push(bg);
+    else theoNgay.set(khoa, [bg]);
+  }
+
+  for (const [khoa, nhom] of theoNgay) {
+    const employeeId = khoa.slice(0, khoa.lastIndexOf('|'));
+    const dem = map.get(employeeId)!;
+    const xep = xepTheoThoiDiem(nhom);
+
+    const vaoDau = xep.find((b) => b.loai === 'vao');
+    if ((vaoDau?.soPhutDiMuon ?? 0) > 0) dem.diMuon += 1;
+
+    const raCuoi = [...xep].reverse().find((b) => b.loai === 'ra');
+    if ((raCuoi?.soPhutVeSom ?? 0) > 0) dem.veSom += 1;
   }
 
   return map;
+}
+
+/**
+ * Xếp các lượt bấm của MỘT ngày công theo thời gian.
+ *
+ * Chỉ xếp khi MỌI bản ghi trong nhóm đều có `thoiDiem` đọc được. Thiếu dù một
+ * cái (dữ liệu cũ, hoặc HR nhập bù) thì giữ nguyên thứ tự mảng — đó là thứ tự
+ * truy vấn trả về, thường đã đúng thời gian. Trộn "có mốc" với "không mốc"
+ * bằng cách gán 0 cho cái thiếu sẽ đẩy nó lên đầu và biến nó thành "lượt vào
+ * đầu tiên" một cách tuỳ tiện.
+ */
+function xepTheoThoiDiem(nhom: AttendanceRecord[]): AttendanceRecord[] {
+  const moc = nhom.map((b) => (b.thoiDiem ? Date.parse(b.thoiDiem) : NaN));
+  if (moc.some((t) => Number.isNaN(t))) return nhom;
+
+  return nhom
+    .map((b, i) => ({ b, t: moc[i] }))
+    .sort((x, y) => x.t - y.t)
+    .map(({ b }) => b);
 }
 
 /** Tổng giờ OT đã duyệt trong tháng, theo nhân viên. */

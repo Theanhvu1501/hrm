@@ -201,6 +201,89 @@ describe('demMuonSom', () => {
   it('input rỗng → map rỗng', () => {
     expect(demMuonSom([]).size).toBe(0);
   });
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Hai ca dưới đây lấy nguyên từ dữ liệu THẬT trên production 2026-08-05.
+  // Người dùng bấm nhiều lần "cho chắc", và cách đếm cũ (mỗi bản ghi một
+  // lượt) biến việc bấm thừa thành vi phạm kỷ luật không có thật.
+  // ──────────────────────────────────────────────────────────────────────
+
+  it('bấm RA nhiều lần: chỉ lượt CUỐI quyết định về sớm', () => {
+    // Vũ Duy Mạnh 2026-08-03, ca 08:00–17:00: bấm ra ba lần, lần cuối 17:00
+    // là ĐÚNG GIỜ. Cách đếm cũ ra veSom = 2.
+    const map = demMuonSom([
+      banGhi({ loai: 'vao', thoiDiem: '2026-08-03T01:25:00Z', soPhutDiMuon: 25 }),
+      banGhi({ loai: 'ra', thoiDiem: '2026-08-03T09:58:00Z', soPhutVeSom: 2 }),
+      banGhi({ loai: 'ra', thoiDiem: '2026-08-03T09:59:00Z', soPhutVeSom: 1 }),
+      banGhi({ loai: 'ra', thoiDiem: '2026-08-03T10:00:00Z', soPhutVeSom: 0 }),
+    ]);
+    expect(map.get(NV1)).toEqual({ diMuon: 1, veSom: 0 });
+  });
+
+  it('bấm VÀO nhiều lần: chỉ lượt ĐẦU quyết định đi muộn', () => {
+    // Đào Thị Kiều Oanh 2026-07-21: vào 08:00 (đúng giờ) rồi bấm lại 09:00;
+    // ra 15:00 rồi ra lại 22:00. Thực tế: không muộn, không sớm.
+    // Cách đếm cũ ra { diMuon: 1, veSom: 1 }.
+    const map = demMuonSom([
+      banGhi({ ngay: '2026-07-21', loai: 'vao', thoiDiem: '2026-07-21T01:00:00Z', soPhutDiMuon: 0 }),
+      banGhi({ ngay: '2026-07-21', loai: 'vao', thoiDiem: '2026-07-21T02:00:00Z', soPhutDiMuon: 60 }),
+      banGhi({ ngay: '2026-07-21', loai: 'ra', thoiDiem: '2026-07-21T08:00:00Z', soPhutVeSom: 120 }),
+      banGhi({ ngay: '2026-07-21', loai: 'ra', thoiDiem: '2026-07-21T15:00:00Z', soPhutVeSom: 0 }),
+    ]);
+    expect(map.get(NV1)).toEqual({ diMuon: 0, veSom: 0 });
+  });
+
+  it('một ngày chỉ tính tối đa MỘT lần muộn và MỘT lần sớm', () => {
+    const map = demMuonSom([
+      banGhi({ loai: 'vao', thoiDiem: '2026-08-03T02:00:00Z', soPhutDiMuon: 60 }),
+      banGhi({ loai: 'ra', thoiDiem: '2026-08-03T08:00:00Z', soPhutVeSom: 60 }),
+    ]);
+    expect(map.get(NV1)).toEqual({ diMuon: 1, veSom: 1 });
+  });
+
+  it('mỗi NGÀY đếm riêng — muộn hai ngày là hai lượt', () => {
+    const map = demMuonSom([
+      banGhi({ ngay: '2026-08-03', loai: 'vao', thoiDiem: '2026-08-03T02:00:00Z', soPhutDiMuon: 10 }),
+      banGhi({ ngay: '2026-08-04', loai: 'vao', thoiDiem: '2026-08-04T02:00:00Z', soPhutDiMuon: 5 }),
+    ]);
+    expect(map.get(NV1)).toEqual({ diMuon: 2, veSom: 0 });
+  });
+
+  it('bản ghi tới không đúng thứ tự vẫn xếp theo thoiDiem, không theo thứ tự mảng', () => {
+    const map = demMuonSom([
+      banGhi({ loai: 'ra', thoiDiem: '2026-08-03T10:00:00Z', soPhutVeSom: 0 }),
+      banGhi({ loai: 'vao', thoiDiem: '2026-08-03T01:00:00Z', soPhutDiMuon: 0 }),
+      banGhi({ loai: 'ra', thoiDiem: '2026-08-03T09:00:00Z', soPhutVeSom: 60 }),
+    ]);
+    expect(map.get(NV1)).toEqual({ diMuon: 0, veSom: 0 });
+  });
+
+  it('dữ liệu cũ thiếu thoiDiem: giữ thứ tự mảng, không ném', () => {
+    const map = demMuonSom([
+      banGhi({ loai: 'vao', soPhutDiMuon: 15 }),
+      banGhi({ loai: 'ra', soPhutVeSom: 30 }),
+      banGhi({ loai: 'ra', soPhutVeSom: 0 }),
+    ]);
+    expect(map.get(NV1)).toEqual({ diMuon: 1, veSom: 0 });
+  });
+
+  it('bản ghi isActive=false bị bỏ qua kể cả khi là lượt cuối', () => {
+    const map = demMuonSom([
+      banGhi({ loai: 'ra', thoiDiem: '2026-08-03T09:00:00Z', soPhutVeSom: 60 }),
+      banGhi({ loai: 'ra', thoiDiem: '2026-08-03T10:00:00Z', soPhutVeSom: 0, isActive: false }),
+    ]);
+    expect(map.get(NV1)).toEqual({ diMuon: 0, veSom: 1 });
+  });
+
+  it('hai nhân viên cùng ngày không lẫn vào nhau', () => {
+    const map = demMuonSom([
+      banGhi({ loai: 'vao', thoiDiem: '2026-08-03T02:00:00Z', soPhutDiMuon: 30 }),
+      banGhi({ employeeId: NV2, loai: 'vao', thoiDiem: '2026-08-03T01:00:00Z', soPhutDiMuon: 0 }),
+      banGhi({ employeeId: NV2, loai: 'ra', thoiDiem: '2026-08-03T09:00:00Z', soPhutVeSom: 45 }),
+    ]);
+    expect(map.get(NV1)).toEqual({ diMuon: 1, veSom: 0 });
+    expect(map.get(NV2)).toEqual({ diMuon: 0, veSom: 1 });
+  });
 });
 
 describe('tongGioOt', () => {
