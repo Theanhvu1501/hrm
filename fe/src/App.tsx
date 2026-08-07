@@ -44,6 +44,7 @@ import {
   BanGhiPage,
   CauHinhChamCongPage,
   ChamCongCuaToiPage,
+  BaoCaoNhanSuPage,
   TrangChuTheoQuyen,
   TaiKhoanPage,
   DangNhapChamCongPage,
@@ -170,6 +171,21 @@ const App = () => (
                     element={
                       <ProtectedRoute requiredPermission="/luong/bang-luong:xem">
                         <QuyetToanTncnPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                </Route>
+
+                {/* Báo cáo — bản demo, số liệu mẫu trong FE, chưa có endpoint
+                    riêng nên dùng lại quyền của hồ sơ nhân viên (xem
+                    routePermissions.ts để biết vì sao không khai module quyền
+                    mới). */}
+                <Route path="bao-cao">
+                  <Route
+                    path="nhan-su"
+                    element={
+                      <ProtectedRoute requiredPermission="/nhan-su/ho-so-nhan-vien:xem">
+                        <BaoCaoNhanSuPage />
                       </ProtectedRoute>
                     }
                   />

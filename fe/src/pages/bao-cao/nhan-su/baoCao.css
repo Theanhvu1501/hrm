@@ -1,0 +1,57 @@
+/**
+ * Biến màu của màn Báo cáo nhân sự.
+ *
+ * Khai ở đây chứ không ghi hex thẳng vào JSX vì recharts vẽ ra SVG và SVG nhận
+ * `fill="var(--...)"` bình thường — nhờ vậy nút bật/tắt dark mode của
+ * MainLayout (gắn class `.dark` lên <html>) đổi được màu biểu đồ mà không cần
+ * một dòng JS nào.
+ *
+ * Ba màu chuỗi đã chạy qua bộ kiểm tra của skill `dataviz` (`--pairs all`) và
+ * PASS cả 5 check ở cả hai chế độ. ĐỪNG sửa hex mà không chạy lại validator:
+ * teal thương hiệu gốc #1f7769 chính là một hex đã TRƯỢT (sàn chroma — nó đọc
+ * ra màu xám khi in đen trắng hoặc với người mù màu).
+ */
+
+.bao-cao-nhan-su {
+  --bc-series-1: #0a9480;
+  --bc-series-2: #eb6834;
+  --bc-series-3: #2a78d6;
+  --bc-grid: rgba(15, 23, 42, 0.08);
+  --bc-text-muted: #6b7280;
+  --bc-tot: #15803d;
+  --bc-xau: #b91c1c;
+}
+
+.dark .bao-cao-nhan-su {
+  --bc-series-1: #0fa88f;
+  --bc-series-2: #d95926;
+  --bc-series-3: #3987e5;
+  --bc-grid: rgba(255, 255, 255, 0.14);
+  --bc-text-muted: #9ca3af;
+  --bc-tot: #4ade80;
+  --bc-xau: #f87171;
+}
+
+/* Nhãn số trực tiếp trên mark: kênh nhận dạng thứ hai bên cạnh màu, và là
+   "relief" bắt buộc nếu sau này có ai đổi sang một màu tương phản thấp hơn. */
+.bao-cao-nhan-su .recharts-label-list text {
+  fill: var(--bc-text-muted);
+  font-size: 11px;
+}
+
+.bao-cao-nhan-su .recharts-cartesian-axis-tick text {
+  fill: var(--bc-text-muted);
+  font-size: 11px;
+}
+
+/* Bỏ viền focus mặc định của recharts khi rê chuột qua vùng vẽ. */
+.bao-cao-nhan-su .recharts-surface {
+  outline: none;
+}
+
+@media print {
+  /* In ra để kẹp vào hồ sơ họp: bỏ nền xám và cắt bóng cho đỡ tốn mực. */
+  .bao-cao-nhan-su .bc-the {
+    box-shadow: none;
+  }
+}

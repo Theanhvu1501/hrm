@@ -117,6 +117,11 @@ export const ChamCongCuaToiPage = loadable(
   { fallback: <PageLoader /> }
 );
 
+// Báo cáo
+export const BaoCaoNhanSuPage = loadable(() => import('./bao-cao/nhan-su/BaoCaoNhanSuPage'), {
+  fallback: <PageLoader />
+});
+
 // Vỏ nhân viên (/toi)
 export const TaiKhoanPage = loadable(() => import('./toi/TaiKhoanPage'), {
   fallback: <PageLoader />
