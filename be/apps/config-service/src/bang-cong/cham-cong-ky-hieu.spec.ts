@@ -14,6 +14,17 @@ describe('KY_HIEU_CHAM_CONG', () => {
     expect(soCongCuaKyHieu('NB')).toBe(1);
   });
 
+  it('có ký hiệu N (ngày nghỉ theo lịch) KHÔNG tính công', () => {
+    const n = KY_HIEU_CHAM_CONG.find((k) => k.kyHieu === 'N');
+    expect(n).toBeDefined();
+    expect(n!.nhom).toBe('ngay_nghi');
+    // 0 công là điều kiện sống còn: `soNgayCong` cộng thẳng
+    // `soCongCuaKyHieu` của mọi ô, nên N khác 0 sẽ cộng thêm công cho mỗi
+    // cuối tuần của mỗi người — sai lương toàn công ty ngay tháng đầu.
+    expect(n!.soCong).toBe(0);
+    expect(soCongCuaKyHieu('N')).toBe(0);
+  });
+
   it('không đổi số công của các ký hiệu đã có', () => {
     expect(soCongCuaKyHieu('X')).toBe(1);
     expect(soCongCuaKyHieu('1/2')).toBe(0.5);

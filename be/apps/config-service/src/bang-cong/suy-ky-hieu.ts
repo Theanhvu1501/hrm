@@ -179,7 +179,16 @@ export function suyKyHieuNgay(input: SuyKyHieuInput): SuyKyHieuKetQua {
         chuaXuLy: false,
       };
     }
-    return khongTinh();
+    // Không ai đi làm hôm đó → điền N. Trước đây để trống, mà ô trống trùng
+    // hệt với ô "HR chưa điền": nhìn lưới không phân biệt được ngày nghỉ với
+    // ngày bị bỏ sót, và nhân viên xem lịch cũng không biết ngày đó mình có
+    // phải chấm công không. N = 0 công nên không đồng lương nào đổi.
+    //
+    // Chỉ ở nhánh NÀY, không phải trong `khongTinh()`: hai dòng gọi
+    // `khongTinh()` phía trên là ngoài KHOẢNG làm việc (trước ngày vào làm,
+    // sau ngày nghỉ việc) — người đó chưa hoặc không còn thuộc công ty, nói
+    // "hôm đó họ nghỉ theo lịch" là bịa.
+    return { kyHieu: 'N', canhBao: [], chuaXuLy: false };
   }
 
   const canhBao: string[] = [];

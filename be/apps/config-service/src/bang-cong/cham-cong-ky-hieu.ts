@@ -2,7 +2,19 @@ export interface KyHieuDef {
   kyHieu: string;
   nhan: string;
   soCong: number;
-  nhom: 'lam_viec' | 'nghi_huong_luong' | 'nghi_khong_luong' | 'om_bhxh';
+  nhom:
+    | 'lam_viec'
+    | 'nghi_huong_luong'
+    | 'nghi_khong_luong'
+    | 'om_bhxh'
+    /**
+     * Ngày vốn không phải ngày làm việc (nghỉ theo lịch tuần). Nhóm RIÊNG,
+     * không gộp vào `nghi_khong_luong`: nghỉ không lương là ngày lẽ ra phải
+     * đi làm mà người ta xin nghỉ, còn đây là ngày công ty không yêu cầu ai
+     * đi làm. Gộp lại là thống kê "ngày nghỉ không lương" của mọi nhân viên
+     * phồng lên bằng số cuối tuần trong tháng.
+     */
+    | 'ngay_nghi';
 }
 
 export const KY_HIEU_CHAM_CONG: KyHieuDef[] = [
@@ -19,6 +31,7 @@ export const KY_HIEU_CHAM_CONG: KyHieuDef[] = [
     soCong: 0,
     nhom: 'nghi_khong_luong',
   },
+  { kyHieu: 'N', nhan: 'Ngày nghỉ theo lịch', soCong: 0, nhom: 'ngay_nghi' },
 ];
 
 export function soCongCuaKyHieu(k?: string): number {

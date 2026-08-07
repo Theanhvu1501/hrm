@@ -6,6 +6,8 @@ import {
   gomTheoNgay,
   mauChamNgay,
   nhanTuan,
+  oLichNgay,
+  trangThaiTheoNgay,
 } from './lichTuan';
 import { AttendanceRecord } from '@/services/attendanceRecordService';
 
@@ -94,6 +96,69 @@ describe('mauChamNgay', () => {
   it('không có bản ghi → xám, kể cả ngày quá khứ', () => {
     expect(mauChamNgay([])).toBe('xam');
     expect(mauChamNgay(undefined)).toBe('xam');
+  });
+});
+
+/**
+ * Ô một ngày trên lịch tuần, sau khi backend cấp được danh sách ngày nghỉ.
+ * Xám giờ thu hẹp đúng về nghĩa "ngày làm việc mà không có bản ghi nào" —
+ * tức là QUÊN CHẤM — thay vì gộp chung cả ngày nghỉ và ngày lễ như trước.
+ */
+describe('oLichNgay', () => {
+  it('ngày nghỉ theo lịch → xanh kèm chữ N', () => {
+    // Xanh chứ không phải màu thứ tư: màu xanh trả lời câu "ngày này còn
+    // việc gì phải làm không?", mà ngày nghỉ câu trả lời là không — y hệt
+    // ngày đã chấm đủ. Chữ N giữ phần "vì sao không cần làm gì".
+    expect(oLichNgay(undefined, 'nghi')).toEqual({ mau: 'xanh', kyHieu: 'N' });
+    expect(oLichNgay([], 'nghi')).toEqual({ mau: 'xanh', kyHieu: 'N' });
+  });
+
+  it('ngày lễ → xanh kèm chữ L, khớp ký hiệu bảng công', () => {
+    expect(oLichNgay([], 'le')).toEqual({ mau: 'xanh', kyHieu: 'L' });
+  });
+
+  it('đi làm ngày nghỉ → hiện theo BẢN GHI thật, không đè N', () => {
+    // Công sức đi làm thứ Bảy không được biến mất khỏi lịch chỉ vì hôm đó
+    // được xếp là ngày nghỉ.
+    expect(
+      oLichNgay([banGhi('2026-07-25', 'vao'), banGhi('2026-07-25', 'ra')], 'nghi')
+    ).toEqual({ mau: 'xanh', kyHieu: null });
+    expect(oLichNgay([banGhi('2026-07-25', 'vao')], 'nghi')).toEqual({
+      mau: 'do',
+      kyHieu: null,
+    });
+  });
+
+  it('ngày làm việc giữ nguyên hành vi cũ', () => {
+    expect(
+      oLichNgay([banGhi('2026-07-20', 'vao'), banGhi('2026-07-20', 'ra')], undefined)
+    ).toEqual({ mau: 'xanh', kyHieu: null });
+    expect(oLichNgay([banGhi('2026-07-20', 'vao')], undefined)).toEqual({
+      mau: 'do',
+      kyHieu: null,
+    });
+  });
+
+  it('ngày làm việc không có bản ghi → XÁM, đây mới là ngày quên chấm', () => {
+    expect(oLichNgay(undefined, undefined)).toEqual({ mau: 'xam', kyHieu: null });
+    expect(oLichNgay([], undefined)).toEqual({ mau: 'xam', kyHieu: null });
+  });
+});
+
+describe('trangThaiTheoNgay', () => {
+  it('dựng map ngay -> loai từ danh sách backend trả về', () => {
+    const kq = trangThaiTheoNgay([
+      { ngay: '2026-07-25', loai: 'nghi' },
+      { ngay: '2026-07-22', loai: 'le' },
+    ]);
+
+    expect(kq['2026-07-25']).toBe('nghi');
+    expect(kq['2026-07-22']).toBe('le');
+    expect(kq['2026-07-20']).toBeUndefined();
+  });
+
+  it('danh sách rỗng (lỗi mạng, chưa cấu hình lịch) → map rỗng, lịch về hành vi cũ', () => {
+    expect(trangThaiTheoNgay([])).toEqual({});
   });
 });
 

@@ -1185,6 +1185,106 @@ describe('BanGhiChamCong_Service', () => {
     });
   });
 
+  /**
+   * Lịch tuần trên màn hình nhân viên chỉ đọc BẢN GHI, nên ngày nghỉ, ngày
+   * lễ và ngày quên chấm hoàn toàn đều xám như nhau — không phân biệt được
+   * "hôm nay không phải chấm" với "hôm nay quên chấm". Endpoint này trả về
+   * đúng những ngày KHÔNG phải đi làm trong khoảng, để màn hình đánh dấu.
+   *
+   * Luật thừa kế 3 tầng (lịch riêng NV → lịch công ty → chưa cấu hình) nằm ở
+   * `lichTuanApDung` phía BE, cố ý không đẩy sang FE: FE tự đoán là đẻ ra
+   * tầng thứ tư lệch với bảng công.
+   */
+  describe('ngayNghiCuaToi', () => {
+    beforeEach(() => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV);
+      ngayLe.timTheoKhoang = jest.fn().mockResolvedValue([]);
+    });
+
+    it('đánh dấu ngày ngoài lịch tuần của NV là nghỉ', async () => {
+      // NV khai riêng T2–T6. Tuần 20/07 (T2) → 26/07 (CN) ⇒ nghỉ T7 25 và CN 26.
+      const kq = await service.ngayNghiCuaToi(USER, '2026-07-20', '2026-07-26');
+
+      expect(kq).toEqual([
+        { ngay: '2026-07-25', loai: 'nghi' },
+        { ngay: '2026-07-26', loai: 'nghi' },
+      ]);
+    });
+
+    it('dùng lịch CHUNG của công ty khi NV không khai riêng', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue({
+        ...NV,
+        ngayLamViecTrongTuan: undefined,
+      });
+      cauHinhChamCong.lichTuanChung.mockResolvedValue([1, 2, 3, 4, 5, 6]);
+
+      const kq = await service.ngayNghiCuaToi(USER, '2026-07-20', '2026-07-26');
+
+      // T2–T7 ⇒ chỉ CN 26 là nghỉ.
+      expect(kq).toEqual([{ ngay: '2026-07-26', loai: 'nghi' }]);
+    });
+
+    it('chưa cấu hình lịch ở cả hai tầng → KHÔNG ngày nào là ngày nghỉ', async () => {
+      // Cùng quy ước với `laNgayLamViec` bên suy-ky-hieu: lịch rỗng nghĩa là
+      // CHƯA CẤU HÌNH, không phải "nghỉ cả tuần". Hiểu ngược là màn hình báo
+      // nhân viên khỏi chấm công suốt cả tháng.
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue({
+        ...NV,
+        ngayLamViecTrongTuan: undefined,
+      });
+      cauHinhChamCong.lichTuanChung.mockResolvedValue(undefined);
+
+      const kq = await service.ngayNghiCuaToi(USER, '2026-07-20', '2026-07-26');
+
+      expect(kq).toEqual([]);
+    });
+
+    it('ngày lễ được đánh dấu loai=le, kể cả khi rơi vào ngày làm việc', async () => {
+      ngayLe.timTheoKhoang.mockResolvedValue([
+        { ten: 'Quốc khánh', tuNgay: '2026-07-22', denNgay: '2026-07-23' },
+      ]);
+
+      const kq = await service.ngayNghiCuaToi(USER, '2026-07-20', '2026-07-26');
+
+      expect(kq).toEqual([
+        { ngay: '2026-07-22', loai: 'le' },
+        { ngay: '2026-07-23', loai: 'le' },
+        { ngay: '2026-07-25', loai: 'nghi' },
+        { ngay: '2026-07-26', loai: 'nghi' },
+      ]);
+    });
+
+    it('lễ rơi trúng ngày nghỉ theo lịch thì vẫn chỉ một dòng, ưu tiên nghi', async () => {
+      // Cùng thứ tự ưu tiên với bảng công (dòng 2 thắng dòng 3): hôm đó vốn
+      // đã nghỉ nên không có công nghỉ lễ nào để mà nói thêm.
+      ngayLe.timTheoKhoang.mockResolvedValue([
+        { ten: 'Tết', tuNgay: '2026-07-25', denNgay: '2026-07-26' },
+      ]);
+
+      const kq = await service.ngayNghiCuaToi(USER, '2026-07-20', '2026-07-26');
+
+      expect(kq).toEqual([
+        { ngay: '2026-07-25', loai: 'nghi' },
+        { ngay: '2026-07-26', loai: 'nghi' },
+      ]);
+    });
+
+    it('áp dụng cùng bộ chặn khoảng ngày với cuaToi', async () => {
+      await expect(
+        service.ngayNghiCuaToi(USER, undefined, '2026-07-27'),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.ngayNghiCuaToi(USER, '21/07/2026', '2026-07-27'),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.ngayNghiCuaToi(USER, '2026-07-27', '2026-07-21'),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.ngayNghiCuaToi(USER, '2026-07-01', '2026-08-01'),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   describe('chặn chấm công ngoài bán kính', () => {
     const NV_KHONG_CO_CO: any = { ...NV, choPhepChamNgoaiVung: false };
     const NV_CO_CO: any = { ...NV, choPhepChamNgoaiVung: true };

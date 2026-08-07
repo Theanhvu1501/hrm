@@ -42,7 +42,16 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
  * khoá bằng `employeeId` suy từ `req.user`, không bao giờ đọc từ body.
  */
 const DUONG_DAN_TU_PHUC_VU_RIENG = ['check-in', 'check-out', 'hom-nay'];
-const ROUTE_TU_PHUC_VU = ['checkIn', 'checkOut', 'homNay', 'cuaToi'];
+const ROUTE_TU_PHUC_VU = [
+  'checkIn',
+  'checkOut',
+  'homNay',
+  'cuaToi',
+  // Lịch nghỉ của CHÍNH mình, để màn hình đánh dấu ngày không phải chấm.
+  // Cùng lý do tự phục vụ như `cuaToi`: phạm vi khoá bằng employeeId suy từ
+  // token, bắt HR gán quyền là nhân viên mới không xem được lịch của mình.
+  'ngayNghiCuaToi',
+];
 
 describe('BanGhiChamCong_Controller — phân quyền', () => {
   it('class gắn JwtGuard cho toàn bộ route', () => {

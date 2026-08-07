@@ -586,11 +586,15 @@ export class BanGhiChamCong_Service {
    * bên dưới vẫn giữ nguyên nghĩa "toàn tenant, chỉ quản trị"; đừng gộp hai
    * đường này lại.
    */
-  async cuaToi(
-    user: { id: string },
+  /**
+   * Bộ chặn dùng chung cho mọi endpoint tự phục vụ nhận khoảng ngày. Tách
+   * ra để `cuaToi` và `ngayNghiCuaToi` không thể lệch trần tra cứu — lệch
+   * là mở đúng cánh cửa mà trần này sinh ra để đóng, chỉ ở một endpoint.
+   */
+  private kiemTraKhoangTraCuu(
     tuNgay?: string,
     denNgay?: string,
-  ): Promise<AttendanceRecord[]> {
+  ): { tuNgay: string; denNgay: string } {
     if (!tuNgay || !denNgay) {
       throw new BadRequestException('Thiếu khoảng ngày tra cứu (tuNgay, denNgay)');
     }
@@ -605,6 +609,15 @@ export class BanGhiChamCong_Service {
         `Khoảng tra cứu tối đa ${SO_NGAY_TOI_DA_TRA_CUU} ngày`,
       );
     }
+    return { tuNgay, denNgay };
+  }
+
+  async cuaToi(
+    user: { id: string },
+    tuNgay?: string,
+    denNgay?: string,
+  ): Promise<AttendanceRecord[]> {
+    this.kiemTraKhoangTraCuu(tuNgay, denNgay);
 
     const emp = await this.nhanVien_Service.resolveEmployeeFromUser(user);
     const employeeId = String((emp as any)._id);
@@ -618,6 +631,59 @@ export class BanGhiChamCong_Service {
       },
       order: { thoiDiem: 'ASC' },
     } as any);
+  }
+
+  /**
+   * Những ngày trong khoảng mà nhân viên KHÔNG phải đi làm.
+   *
+   * Lịch tuần trên màn hình nhân viên chỉ đọc bản ghi, nên ngày nghỉ, ngày
+   * lễ và ngày quên chấm hoàn toàn đều xám như nhau — không ai phân biệt
+   * được "hôm nay không phải chấm" với "hôm nay quên chấm". Có danh sách này
+   * thì xám thu hẹp đúng về nghĩa "ngày làm việc mà không có bản ghi nào".
+   *
+   * Luật ở BE chứ không FE: quy tắc thừa kế 3 tầng (lịch riêng NV → lịch
+   * công ty → chưa cấu hình) nằm trong `lichTuanApDung`, dùng chung với bảng
+   * công, quỹ phép và đơn từ. Để FE tự suy là đẻ ra tầng thứ tư, và màn hình
+   * nhân viên sẽ nói khác bảng công về cùng một ngày.
+   *
+   * Chỉ trả ngày NGHỈ, không trả cả khoảng: ngày làm việc là phần bù, FE tự
+   * suy được, và tuần nào cũng gửi 7 dòng thì 5 dòng là thừa.
+   */
+  async ngayNghiCuaToi(
+    user: { id: string },
+    tuNgayVao?: string,
+    denNgayVao?: string,
+  ): Promise<Array<{ ngay: string; loai: 'nghi' | 'le' }>> {
+    const { tuNgay, denNgay } = this.kiemTraKhoangTraCuu(tuNgayVao, denNgayVao);
+
+    const emp = await this.nhanVien_Service.resolveEmployeeFromUser(user);
+    const lich = lichTuanApDung(
+      emp,
+      await this.cauHinhChamCong_Service.lichTuanChung(),
+    );
+    const dsLe = await this.ngayLe_Service.timTheoKhoang(tuNgay, denNgay);
+
+    const kq: Array<{ ngay: string; loai: 'nghi' | 'le' }> = [];
+    for (let ngay = tuNgay; ngay <= denNgay; ngay = ngayKeTiep(ngay)) {
+      // Lịch rỗng/undefined = CHƯA CẤU HÌNH ⇒ mọi ngày đều là ngày làm việc.
+      // Cùng quy ước với `laNgayLamViec` bên `suy-ky-hieu.ts`; hiểu ngược lại
+      // là màn hình báo nhân viên khỏi chấm công suốt cả tháng.
+      const ngoaiLich =
+        !!lich && lich.length > 0 && !lich.includes(thuTrongTuanCuaNgay(ngay));
+
+      // `nghi` thắng `le` khi trùng, cùng thứ tự ưu tiên với bảng công (dòng
+      // 2 thắng dòng 3): hôm đó vốn đã nghỉ nên không có công nghỉ lễ nào để
+      // nói thêm.
+      if (ngoaiLich) {
+        kq.push({ ngay, loai: 'nghi' });
+        continue;
+      }
+      if (dsLe.some((h) => h.tuNgay <= ngay && ngay <= h.denNgay)) {
+        kq.push({ ngay, loai: 'le' });
+      }
+    }
+
+    return kq;
   }
 
   async findAll(filter?: BanGhiFilter): Promise<AttendanceRecord[]> {

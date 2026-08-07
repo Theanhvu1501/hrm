@@ -77,6 +77,19 @@ export interface DiaDiemChamCongTom {
   banKinh?: number;
 }
 
+/**
+ * Vì sao một ngày không phải đi làm: `nghi` = ngoài lịch làm việc trong
+ * tuần, `le` = ngày lễ. Khi trùng nhau backend trả `nghi` — cùng thứ tự ưu
+ * tiên với bảng công, vì hôm đó vốn đã nghỉ nên không có công nghỉ lễ nào
+ * để nói thêm.
+ */
+export type LoaiNgay = 'nghi' | 'le';
+
+export interface NgayNghi {
+  ngay: string;
+  loai: LoaiNgay;
+}
+
 export interface TrangThaiHomNay {
   /** Ngày lịch hôm nay theo giờ VN. */
   ngay: string;
@@ -175,6 +188,23 @@ class AttendanceRecordService extends ServiceBase {
       params: { tuNgay, denNgay },
     });
     return res.map(this.transform);
+  }
+
+  /**
+   * Những ngày trong khoảng mà mình KHÔNG phải đi làm — để lịch tuần đánh
+   * dấu thay vì để chúng xám lẫn với ngày quên chấm.
+   *
+   * Chỉ trả ngày nghỉ; ngày làm việc là phần bù, không nằm trong danh sách.
+   */
+  async ngayNghiCuaToi(tuNgay: string, denNgay: string): Promise<NgayNghi[]> {
+    const res = await super.get<Array<Record<string, unknown>>>({
+      endpoint: '/cua-toi/ngay-nghi',
+      params: { tuNgay, denNgay },
+    });
+    return res.map((x) => ({
+      ngay: x.ngay as string,
+      loai: x.loai as LoaiNgay,
+    }));
   }
 
   async checkIn(dto: ChamCongDto): Promise<AttendanceRecord> {
