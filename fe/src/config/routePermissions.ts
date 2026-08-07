@@ -13,6 +13,10 @@ export const routePermissions: Record<string, string> = {
   '/luong/quyet-toan-tncn': '/luong/bang-luong:xem',
   '/nhan-su/ho-so-nhan-vien': '/nhan-su/ho-so-nhan-vien:xem',
   '/nhan-su/hop-dong-lao-dong': '/nhan-su/hop-dong-lao-dong:xem',
+  // Mẫu in dùng CHUNG bộ quyền với hợp đồng — soạn mẫu là cấu hình cách in
+  // hợp đồng, không phải một tài nguyên nghiệp vụ riêng. Khai module quyền
+  // mới sẽ bắt chạy `ops/grant-quyen-module-moi.ts` lúc deploy, quên là 403.
+  '/nhan-su/mau-in-hop-dong': '/nhan-su/hop-dong-lao-dong:xem',
   '/nhan-su/qua-trinh-cong-tac': '/nhan-su/qua-trinh-cong-tac:xem',
   '/nhan-su/thoi-viec': '/nhan-su/thoi-viec:xem',
   '/cham-cong/ca-lam-viec': '/cham-cong/ca-lam-viec:xem',

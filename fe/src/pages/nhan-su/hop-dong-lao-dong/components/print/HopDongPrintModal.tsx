@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
-import { Modal, Button, Alert, Spin } from "antd";
-import { PrinterOutlined } from "@ant-design/icons";
+import { Modal, Button, Alert, Select, Spin } from "antd";
+import { FileExcelOutlined, PrinterOutlined } from "@ant-design/icons";
 import { apiErrorMessage } from "@/config/api";
-import { hopDongTemplateService } from "@/services/hopDongTemplateService";
+import {
+  hopDongTemplateService,
+  type MauInHopDong,
+} from "@/services/hopDongTemplateService";
 import { printHopDong } from "../../lib/printHopDong";
+import { xuatHopDongRaExcel } from "../../lib/hopDongSangExcel";
 
 interface Props {
   open: boolean;
@@ -27,6 +31,35 @@ export function HopDongPrintModal({ open, contractId, contractLabel, onClose }: 
   const [html, setHtml] = useState("");
   const [canhBao, setCanhBao] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [dsMau, setDsMau] = useState<MauInHopDong[]>([]);
+  /** Mẫu đang chọn. `null` = chưa biết (chưa nạp xong) → để BE tự chọn mẫu đầu. */
+  const [mauInId, setMauInId] = useState<string | null>(null);
+
+  // Nạp danh sách mẫu một lần mỗi lần mở modal. Tách khỏi effect render bên
+  // dưới để đổi mẫu chỉ render lại, không tải lại cả danh sách.
+  useEffect(() => {
+    if (!open) return;
+
+    let cancelled = false;
+    hopDongTemplateService
+      .dsMauIn()
+      .then((ds) => {
+        if (cancelled) return;
+        setDsMau(ds);
+        // Chọn sẵn mẫu đầu — đúng mẫu BE dùng khi không truyền mauInId, nên
+        // dropdown không nói khác thứ đang hiện trong khung xem trước.
+        setMauInId((truoc) => truoc ?? ds[0]?.id ?? null);
+      })
+      .catch(() => {
+        // Không chặn in: thiếu danh sách thì mất quyền CHỌN mẫu, còn bản in
+        // vẫn ra bằng mẫu mặc định của BE.
+        if (!cancelled) setDsMau([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open || !contractId) return;
@@ -35,7 +68,7 @@ export function HopDongPrintModal({ open, contractId, contractLabel, onClose }: 
     setLoading(true);
     setError(null);
     hopDongTemplateService
-      .render(contractId)
+      .render(contractId, mauInId ?? undefined)
       .then((result) => {
         if (cancelled) return;
         setHtml(result.html);
@@ -52,10 +85,18 @@ export function HopDongPrintModal({ open, contractId, contractLabel, onClose }: 
     return () => {
       cancelled = true;
     };
-  }, [open, contractId]);
+  }, [open, contractId, mauInId]);
 
   const handlePrint = () => {
     printHopDong(html, contractLabel);
+  };
+
+  const handleXuatExcel = () => {
+    const tenMau = dsMau.find((m) => m.id === mauInId)?.ten;
+    // Tên file mang cả số hợp đồng lẫn tên mẫu: in một hợp đồng ra nhiều dạng
+    // là chuyện thường ở đây, thiếu tên mẫu thì các file đè tên nhau.
+    const ten = [contractLabel ?? "Hop dong", tenMau].filter(Boolean).join(" - ");
+    xuatHopDongRaExcel(html, ten);
   };
 
   return (
@@ -68,6 +109,14 @@ export function HopDongPrintModal({ open, contractId, contractLabel, onClose }: 
       footer={[
         <Button key="close" onClick={onClose}>
           Đóng
+        </Button>,
+        <Button
+          key="excel"
+          icon={<FileExcelOutlined />}
+          disabled={loading || !!error || !html}
+          onClick={handleXuatExcel}
+        >
+          Xuất Excel
         </Button>,
         <Button
           key="print"
@@ -87,6 +136,19 @@ export function HopDongPrintModal({ open, contractId, contractLabel, onClose }: 
       )}
 
       {!loading && error && <Alert type="error" showIcon message={error} />}
+
+      {dsMau.length > 1 && (
+        <div className="mb-3 flex items-center gap-2">
+          <span className="shrink-0 text-sm">Mẫu in:</span>
+          <Select
+            className="min-w-64"
+            value={mauInId ?? undefined}
+            onChange={setMauInId}
+            options={dsMau.map((m) => ({ value: m.id, label: m.ten }))}
+            disabled={loading}
+          />
+        </div>
+      )}
 
       {!loading && !error && (
         <div className="space-y-3">

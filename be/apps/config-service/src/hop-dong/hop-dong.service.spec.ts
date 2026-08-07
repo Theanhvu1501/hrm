@@ -2,7 +2,14 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { HopDong_Service } from './hop-dong.service';
-import { LaborContract, ContractCounter, PhieuTemplate, TenantAppConfig, Employee } from '@app/entities';
+import {
+  LaborContract,
+  ContractCounter,
+  PhieuTemplate,
+  LaborContractTemplate,
+  TenantAppConfig,
+  Employee,
+} from '@app/entities';
 import { TenantContextService } from '@app/core';
 import { DEFAULT_HOP_DONG_HTML } from './lib/hopDongRender';
 
@@ -26,6 +33,13 @@ describe('HopDong_Service', () => {
   let mockMongoCounterRepo: { findOneAndUpdate: jest.Mock };
   let mockTenantContext: { getCurrentTenantId: jest.Mock };
   let mockMauInRepo: {
+    findOne: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    remove: jest.Mock;
+  };
+  let mockMauInMoiRepo: {
+    find: jest.Mock;
     findOne: jest.Mock;
     create: jest.Mock;
     save: jest.Mock;
@@ -92,6 +106,16 @@ describe('HopDong_Service', () => {
       remove: jest.fn().mockResolvedValue(undefined),
     };
 
+    // Bảng mẫu in MỚI (nhiều mẫu/tenant). `mockMauInRepo` phía trên là bảng
+    // `phieu_template` CŨ — giờ chỉ còn được đọc một lần lúc di trú.
+    mockMauInMoiRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn((v) => v),
+      save: jest.fn((v) => Promise.resolve({ ...v, _id: v._id ?? 'mau-id' })),
+      remove: jest.fn().mockResolvedValue(undefined),
+    };
+
     mockCongTyRepo = {
       findOne: jest.fn().mockResolvedValue(null),
       create: jest.fn((v) => v),
@@ -108,6 +132,10 @@ describe('HopDong_Service', () => {
         { provide: getRepositoryToken(LaborContract), useValue: mockContractRepo },
         { provide: getRepositoryToken(ContractCounter), useValue: mockCounterRepo },
         { provide: getRepositoryToken(PhieuTemplate), useValue: mockMauInRepo },
+        {
+          provide: getRepositoryToken(LaborContractTemplate),
+          useValue: mockMauInMoiRepo,
+        },
         { provide: getRepositoryToken(TenantAppConfig), useValue: mockCongTyRepo },
         { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
         { provide: TenantContextService, useValue: mockTenantContext },
@@ -348,91 +376,224 @@ describe('HopDong_Service', () => {
   });
 
   // ──────────────────────────────────────────────────────────────────────────
-  // getMauIn / upsertMauIn / removeMauIn — mẫu in HĐLĐ (tái dùng PhieuTemplate)
+  // Mẫu in HĐLĐ — NHIỀU mẫu/tenant, bảng riêng `hop_dong_mau_in`.
+  // Cùng một hợp đồng có thể cần in ra nhiều dạng, nên mẫu do người in chọn
+  // tại chỗ chứ không gắn cứng vào loại hợp đồng.
   // ──────────────────────────────────────────────────────────────────────────
-  describe('getMauIn', () => {
-    it('chưa cấu hình (repo trả null) → trả mẫu mặc định, isCustom=false', async () => {
-      const result = await service.getMauIn();
+  describe('dsMauIn', () => {
+    it('trả danh sách mẫu đang có', async () => {
+      mockMauInMoiRepo.find.mockResolvedValue([
+        { _id: 'm1', ten: 'Thử việc', html: '<p>A</p>', isActive: true },
+        { _id: 'm2', ten: 'Chính thức', html: '<p>B</p>', isActive: true },
+      ]);
 
-      expect(result.isCustom).toBe(false);
-      expect(result.html).toBe(DEFAULT_HOP_DONG_HTML);
-      expect(mockMauInRepo.findOne).toHaveBeenCalledWith({
-        where: { loai: 'HOP_DONG_LAO_DONG' },
-      });
+      const kq = await service.dsMauIn();
+
+      expect(kq.map((m) => m.ten)).toEqual(['Thử việc', 'Chính thức']);
+      // Không kéo cả mẫu đã xoá mềm về màn danh sách.
+      expect(mockMauInMoiRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ isActive: true }) }),
+      );
     });
 
-    it('đã cấu hình → trả mẫu riêng của tenant, isCustom=true', async () => {
-      mockMauInRepo.findOne.mockResolvedValueOnce({ loai: 'HOP_DONG_LAO_DONG', html: '<p>Mẫu riêng</p>' });
+    /**
+     * Di trú: mẫu hợp đồng trước đây nằm ở `phieu_template` dạng 1 dòng/
+     * tenant. Tenant nào đã bỏ công soạn mẫu riêng thì công sức đó phải theo
+     * sang bảng mới, không bắt họ dán lại.
+     */
+    it('bảng mới rỗng + có mẫu cũ ở phieu_template → tạo sẵn 1 mẫu từ HTML cũ', async () => {
+      mockMauInMoiRepo.find.mockResolvedValueOnce([]);
+      mockMauInRepo.findOne.mockResolvedValueOnce({
+        loai: 'HOP_DONG_LAO_DONG',
+        html: '<p>Mẫu tenant tự soạn</p>',
+      });
 
-      const result = await service.getMauIn();
+      const kq = await service.dsMauIn();
 
-      expect(result.isCustom).toBe(true);
-      expect(result.html).toBe('<p>Mẫu riêng</p>');
+      expect(mockMauInMoiRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ html: '<p>Mẫu tenant tự soạn</p>' }),
+      );
+      expect(kq).toHaveLength(1);
+      expect(kq[0].html).toBe('<p>Mẫu tenant tự soạn</p>');
+    });
+
+    it('bảng mới rỗng + chưa từng soạn mẫu → tạo sẵn mẫu chuẩn dựng sẵn', async () => {
+      mockMauInMoiRepo.find.mockResolvedValueOnce([]);
+
+      const kq = await service.dsMauIn();
+
+      expect(kq).toHaveLength(1);
+      expect(kq[0].html).toBe(DEFAULT_HOP_DONG_HTML);
+    });
+
+    it('đã có mẫu thì KHÔNG đọc bảng cũ nữa (di trú chỉ chạy một lần)', async () => {
+      mockMauInMoiRepo.find.mockResolvedValue([
+        { _id: 'm1', ten: 'Thử việc', html: '<p>A</p>', isActive: true },
+      ]);
+
+      await service.dsMauIn();
+
+      expect(mockMauInRepo.findOne).not.toHaveBeenCalled();
+      expect(mockMauInMoiRepo.save).not.toHaveBeenCalled();
     });
   });
 
-  describe('upsertMauIn', () => {
-    it('tạo mới khi chưa có bản ghi', async () => {
-      const result = await service.upsertMauIn('<p>Mẫu mới</p>');
+  describe('themMauIn', () => {
+    it('lưu mẫu mới kèm tên', async () => {
+      const kq = await service.themMauIn({ ten: 'Dịch vụ', html: '<p>Mẫu</p>' });
 
-      expect(result.html).toBe('<p>Mẫu mới</p>');
-      expect(mockMauInRepo.create).toHaveBeenCalledWith({
-        loai: 'HOP_DONG_LAO_DONG',
-        html: '<p>Mẫu mới</p>',
-      });
-      expect(mockMauInRepo.save).toHaveBeenCalled();
-    });
-
-    it('cập nhật bản ghi cũ khi đã tồn tại', async () => {
-      const existing = { loai: 'HOP_DONG_LAO_DONG', html: '<p>Cũ</p>' };
-      mockMauInRepo.findOne.mockResolvedValueOnce(existing);
-
-      await service.upsertMauIn('<p>Mới</p>');
-
-      expect(mockMauInRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ html: '<p>Mới</p>' }),
+      expect(mockMauInMoiRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ ten: 'Dịch vụ', html: '<p>Mẫu</p>', isActive: true }),
       );
-      expect(mockMauInRepo.create).not.toHaveBeenCalled();
+      expect(kq.ten).toBe('Dịch vụ');
     });
 
-    it('lọc bỏ thẻ <script> khỏi HTML trước khi lưu (chặn XSS từ mẫu tenant tự soạn)', async () => {
-      await service.upsertMauIn('<p>ok</p><script>alert(1)</script>');
+    it('lọc bỏ thẻ <script> trước khi lưu (chặn XSS từ mẫu tenant tự soạn)', async () => {
+      await service.themMauIn({ ten: 'X', html: '<p>ok</p><script>alert(1)</script>' });
 
-      expect(mockMauInRepo.create).toHaveBeenCalledWith(
+      expect(mockMauInMoiRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ html: expect.not.stringContaining('<script') }),
       );
     });
 
-    it('lọc payload XSS thật (onerror qua "/", không phải khoảng trắng) — regex cũ để lọt, sanitize-html thì không', async () => {
-      await service.upsertMauIn('<img src=x/onerror=alert(1)>');
+    it('lọc payload XSS thật (onerror qua "/", không phải khoảng trắng)', async () => {
+      await service.themMauIn({ ten: 'X', html: '<img src=x/onerror=alert(1)>' });
 
-      expect(mockMauInRepo.create).toHaveBeenCalledWith(
+      expect(mockMauInMoiRepo.create).toHaveBeenCalledWith(
         expect.objectContaining({ html: expect.not.stringContaining('onerror') }),
       );
     });
 
-    it('ném BadRequestException khi mẫu dùng token không tồn tại (lỗi gõ), KHÔNG lưu gì (review Important #7)', async () => {
-      await expect(service.upsertMauIn('<p>Lương: {{mucLuongg}}</p>')).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(mockMauInRepo.findOne).not.toHaveBeenCalled();
-      expect(mockMauInRepo.save).not.toHaveBeenCalled();
+    it('token gõ sai → BadRequest, KHÔNG lưu gì', async () => {
+      // Âm thầm in trống vì lỗi gõ tệ hơn hẳn báo lỗi ngay lúc lưu.
+      await expect(
+        service.themMauIn({ ten: 'X', html: '<p>Lương: {{mucLuongg}}</p>' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockMauInMoiRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('tên rỗng → BadRequest', async () => {
+      // Danh sách toàn dòng không tên thì chọn mẫu lúc in thành đoán mò.
+      await expect(
+        service.themMauIn({ ten: '   ', html: '<p>ok</p>' }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('removeMauIn', () => {
-    it('xoá bản ghi khi tồn tại (khôi phục mặc định)', async () => {
-      const existing = { loai: 'HOP_DONG_LAO_DONG', html: '<p>Cũ</p>' };
-      mockMauInRepo.findOne.mockResolvedValueOnce(existing);
+  describe('suaMauIn', () => {
+    it('đổi tên và nội dung của đúng mẫu chỉ định', async () => {
+      mockMauInMoiRepo.findOne.mockResolvedValue({
+        _id: 'm1',
+        ten: 'Cũ',
+        html: '<p>Cũ</p>',
+        isActive: true,
+      });
 
-      await service.removeMauIn();
+      await service.suaMauIn('507f1f77bcf86cd799439011', {
+        ten: 'Mới',
+        html: '<p>Mới</p>',
+      });
 
-      expect(mockMauInRepo.remove).toHaveBeenCalledWith(existing);
+      expect(mockMauInMoiRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ ten: 'Mới', html: '<p>Mới</p>' }),
+      );
     });
 
-    it('không lỗi khi chưa có bản ghi để xoá', async () => {
-      await expect(service.removeMauIn()).resolves.toBeUndefined();
-      expect(mockMauInRepo.remove).not.toHaveBeenCalled();
+    it('không tìm thấy mẫu → NotFound', async () => {
+      mockMauInMoiRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.suaMauIn('507f1f77bcf86cd799439011', { ten: 'X' }),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('token gõ sai → BadRequest, KHÔNG ghi đè mẫu đang dùng được', async () => {
+      mockMauInMoiRepo.findOne.mockResolvedValue({
+        _id: 'm1',
+        ten: 'Cũ',
+        html: '<p>Cũ</p>',
+        isActive: true,
+      });
+
+      await expect(
+        service.suaMauIn('507f1f77bcf86cd799439011', { html: '<p>{{saiBet}}</p>' }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockMauInMoiRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('xoaMauIn', () => {
+    it('xoá mẫu chỉ định', async () => {
+      const mau = { _id: 'm1', ten: 'X', html: '<p>X</p>', isActive: true };
+      mockMauInMoiRepo.findOne.mockResolvedValue(mau);
+
+      await service.xoaMauIn('507f1f77bcf86cd799439011');
+
+      expect(mockMauInMoiRepo.remove).toHaveBeenCalledWith(mau);
+    });
+
+    it('không tìm thấy → NotFound', async () => {
+      mockMauInMoiRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.xoaMauIn('507f1f77bcf86cd799439011')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('xoá được cả mẫu CUỐI CÙNG — in vẫn rơi về mẫu chuẩn dựng sẵn', async () => {
+      // Chặn "không cho xoá mẫu cuối" chỉ đẻ ra một trạng thái kẹt mà không
+      // bảo vệ được gì: `mauInDeRender` đã có nhánh rơi về DEFAULT.
+      const mau = { _id: 'm1', ten: 'X', html: '<p>X</p>', isActive: true };
+      mockMauInMoiRepo.findOne.mockResolvedValue(mau);
+      mockMauInMoiRepo.find.mockResolvedValue([mau]);
+
+      await expect(
+        service.xoaMauIn('507f1f77bcf86cd799439011'),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('mauInDeRender', () => {
+    it('có mauInId → dùng đúng mẫu đó', async () => {
+      mockMauInMoiRepo.findOne.mockResolvedValue({
+        _id: 'm2',
+        ten: 'Dịch vụ',
+        html: '<p>Mẫu dịch vụ</p>',
+        isActive: true,
+      });
+
+      const html = await service.mauInDeRender('507f1f77bcf86cd799439011');
+
+      expect(html).toBe('<p>Mẫu dịch vụ</p>');
+    });
+
+    it('mauInId trỏ vào mẫu không tồn tại → NotFound, KHÔNG lặng lẽ in mẫu khác', async () => {
+      // In nhầm mẫu mà không báo là thứ chỉ phát hiện ra sau khi đã ký.
+      mockMauInMoiRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.mauInDeRender('507f1f77bcf86cd799439011'),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('không truyền mauInId → lấy mẫu đầu tiên trong danh sách', async () => {
+      mockMauInMoiRepo.find.mockResolvedValue([
+        { _id: 'm1', ten: 'A', html: '<p>Đầu tiên</p>', isActive: true },
+        { _id: 'm2', ten: 'B', html: '<p>Thứ hai</p>', isActive: true },
+      ]);
+
+      const html = await service.mauInDeRender();
+
+      expect(html).toBe('<p>Đầu tiên</p>');
+    });
+
+    it('không còn mẫu nào → mẫu chuẩn dựng sẵn, in vẫn chạy', async () => {
+      mockMauInMoiRepo.find.mockResolvedValue([]);
+      mockMauInRepo.findOne.mockResolvedValue(null);
+
+      const html = await service.mauInDeRender();
+
+      expect(html).toBe(DEFAULT_HOP_DONG_HTML);
     });
   });
 
