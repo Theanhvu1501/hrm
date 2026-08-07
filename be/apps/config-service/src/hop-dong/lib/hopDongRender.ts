@@ -35,6 +35,9 @@ export interface HopDongRenderEmployee {
   ngaySinh?: string;
   gioiTinh?: string; // nam|nu|khac
   cccd?: string;
+  /** Ngày cấp CCCD, dạng "YYYY-MM-DD" — in ra "DD/MM/YYYY". */
+  ngayCapCccd?: string;
+  noiCapCccd?: string;
   diaChi?: string;
   soDienThoai?: string;
   /** Chức danh HIỆN TẠI của nhân viên — chỉ dùng làm fallback khi hợp đồng chưa có contract.chucDanh (hợp đồng tạo trước khi có cột này). */
@@ -269,6 +272,8 @@ export function buildHopDongPlaceholders(input: HopDongRenderInput): Record<stri
     ngaySinh: v(fmtDate(employee.ngaySinh)),
     gioiTinh: v(employee.gioiTinh ? GIOI_TINH_LABEL[employee.gioiTinh] ?? employee.gioiTinh : ''),
     soCCCD: v(employee.cccd),
+    ngayCapCccd: v(fmtDate(employee.ngayCapCccd)),
+    noiCapCccd: v(employee.noiCapCccd),
     diaChiNLD: v(employee.diaChi),
     soDienThoaiNLD: v(employee.soDienThoai),
     chucDanh: v(chucDanh),
@@ -291,7 +296,8 @@ export const HOP_DONG_TOKENS = [
   'soHopDong', 'ngayLapNgay', 'ngayLapThang', 'ngayLapNam',
   'tenCongTy', 'diaChiCongTy', 'maSoThueCongTy', 'nguoiDaiDien', 'chucVuNguoiDaiDien',
   'thanhPhoKy', 'maHopDongMau',
-  'hoTenNLD', 'ngaySinh', 'gioiTinh', 'soCCCD', 'diaChiNLD', 'soDienThoaiNLD', 'chucDanh',
+  'hoTenNLD', 'ngaySinh', 'gioiTinh', 'soCCCD', 'ngayCapCccd', 'noiCapCccd',
+  'diaChiNLD', 'soDienThoaiNLD', 'chucDanh',
   'dieu1_1', 'dieu1_2', 'mucLuong', 'phuCapText',
 ] as const;
 
@@ -321,10 +327,14 @@ function buildCanhBao(input: HopDongRenderInput, template: string): string[] {
   const canhBao: string[] = [];
   const { contract, employee, congTy } = input;
 
-  // Employee entity chưa có cột ngày cấp/nơi cấp CCCD — chỉ cảnh báo nếu mẫu
-  // đang dùng còn thật sự in đoạn CCCD (heuristic tìm chữ "CCCD" trong mẫu).
-  if (template.includes('CCCD')) {
-    canhBao.push('Chưa có trường "Ngày cấp / Nơi cấp CCCD" trong hồ sơ nhân viên — điền tay trên bản in.');
+  // Hồ sơ nay CÓ hai cột này, nên chỉ cảnh báo khi chúng thật sự trống — và
+  // chỉ khi mẫu đang dùng còn in đoạn CCCD (tenant tự soạn mẫu bỏ hẳn đoạn
+  // đó thì không còn gì để cảnh báo).
+  //
+  // Thiếu MỘT trong hai cũng cảnh báo: bản in vẫn hở một chỗ, mà một chỗ
+  // trống trên hợp đồng đem đi ký thì cũng phải sửa tay như hở cả hai.
+  if (template.includes('CCCD') && (!employee.ngayCapCccd || !employee.noiCapCccd)) {
+    canhBao.push('Hồ sơ nhân viên chưa có Ngày cấp / Nơi cấp CCCD — điền vào hồ sơ, hoặc điền tay trên bản in.');
   }
 
   if (
@@ -419,7 +429,7 @@ export const DEFAULT_HOP_DONG_HTML = `
 <p class="bold">NGƯỜI LAO ĐỘNG:</p>
 <p>Họ và tên: {{hoTenNLD}}</p>
 <p>Ngày sinh: {{ngaySinh}} &nbsp;&nbsp;&nbsp; Giới tính: {{gioiTinh}}</p>
-<p>Số CCCD: {{soCCCD}} &nbsp;&nbsp;&nbsp; Ngày cấp: ……/……/……….. &nbsp;&nbsp;&nbsp; Nơi cấp: ………………………</p>
+<p>Số CCCD: {{soCCCD}} &nbsp;&nbsp;&nbsp; Ngày cấp: {{ngayCapCccd}} &nbsp;&nbsp;&nbsp; Nơi cấp: {{noiCapCccd}}</p>
 <p>Địa chỉ thường trú: {{diaChiNLD}}</p>
 <p>Điện thoại: {{soDienThoaiNLD}}</p>
 

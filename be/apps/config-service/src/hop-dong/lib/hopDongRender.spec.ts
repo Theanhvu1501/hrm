@@ -28,6 +28,8 @@ function fullInput(overrides?: Partial<HopDongRenderInput>): HopDongRenderInput 
       ngaySinh: '1998-05-20',
       gioiTinh: 'nam',
       cccd: '001098012345',
+      ngayCapCccd: '2021-03-15',
+      noiCapCccd: 'Cục Cảnh sát QLHC về TTXH',
       diaChi: '12 Láng Hạ, Đống Đa, Hà Nội',
       soDienThoai: '0912345678',
       chucDanh: 'Trợ lý',
@@ -299,14 +301,58 @@ describe('renderHopDongHtml', () => {
     expect(canhBao.some((c) => c.toLowerCase().includes('công ty'))).toBe(true);
   });
 
-  it('cảnh báo thiếu ngày cấp/nơi cấp CCCD khi mẫu đang dùng còn nhắc tới CCCD (mẫu mặc định có)', () => {
-    const { canhBao } = renderHopDongHtml(DEFAULT_HOP_DONG_HTML, fullInput());
+  it('điền được ngày cấp / nơi cấp CCCD từ hồ sơ, KHÔNG còn cảnh báo', () => {
+    // Trước bản này Employee không có hai cột đó nên bản in để "……/……/……"
+    // và cảnh báo bắt HR điền tay mỗi lần in.
+    const { html, canhBao } = renderHopDongHtml(DEFAULT_HOP_DONG_HTML, fullInput());
+
+    expect(html).toContain('15/03/2021');
+    expect(html).toContain('Cục Cảnh sát QLHC về TTXH');
+    expect(canhBao.some((c) => c.includes('CCCD'))).toBe(false);
+  });
+
+  it('vẫn cảnh báo khi hồ sơ CHƯA điền ngày cấp/nơi cấp và mẫu còn nhắc tới CCCD', () => {
+    const { canhBao } = renderHopDongHtml(
+      DEFAULT_HOP_DONG_HTML,
+      fullInput({
+        employee: {
+          ...fullInput().employee,
+          ngayCapCccd: undefined,
+          noiCapCccd: undefined,
+        },
+      }),
+    );
+    expect(canhBao.some((c) => c.includes('CCCD'))).toBe(true);
+  });
+
+  it('thiếu MỘT trong hai cũng cảnh báo — bản in vẫn hở một chỗ', () => {
+    const { canhBao } = renderHopDongHtml(
+      DEFAULT_HOP_DONG_HTML,
+      fullInput({
+        employee: { ...fullInput().employee, noiCapCccd: undefined },
+      }),
+    );
     expect(canhBao.some((c) => c.includes('CCCD'))).toBe(true);
   });
 
   it('KHÔNG cảnh báo CCCD nếu mẫu riêng của tenant đã bỏ hẳn đoạn CCCD (review Minor)', () => {
-    const { canhBao } = renderHopDongHtml('<p>{{hoTenNLD}}</p>', fullInput());
+    const { canhBao } = renderHopDongHtml(
+      '<p>{{hoTenNLD}}</p>',
+      fullInput({
+        employee: {
+          ...fullInput().employee,
+          ngayCapCccd: undefined,
+          noiCapCccd: undefined,
+        },
+      }),
+    );
     expect(canhBao.some((c) => c.includes('CCCD'))).toBe(false);
+  });
+
+  it('token mới nằm trong danh sách hợp lệ — mẫu tenant dùng chúng phải lưu được', () => {
+    // `upsertMauIn`/`themMauIn` từ chối token lạ, quên khai ở HOP_DONG_TOKENS
+    // là tenant không lưu nổi mẫu có hai token này.
+    expect(timTokenLaCuaMauIn('<p>{{ngayCapCccd}} {{noiCapCccd}}</p>')).toEqual([]);
   });
 
   it('cảnh báo khi hợp đồng chưa có mức lương (review Important #5)', () => {

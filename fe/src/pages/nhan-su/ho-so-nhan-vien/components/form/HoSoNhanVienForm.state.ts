@@ -4,6 +4,8 @@ import { BangCap, Employee, NguoiPhuThuoc } from "@/services/employeeService";
 export interface HoSoNhanVienFormValues {
   hoTen: string;
   cccd: string;
+  ngayCapCccd?: string;
+  noiCapCccd?: string;
   ngaySinh?: string;
   gioiTinh?: string;
   mst?: string;
