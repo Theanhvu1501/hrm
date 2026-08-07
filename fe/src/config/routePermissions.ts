@@ -12,6 +12,13 @@ export const routePermissions: Record<string, string> = {
   '/luong/bang-luong-them-gio': '/luong/bang-luong:xem',
   '/luong/quyet-toan-tncn': '/luong/bang-luong:xem',
   '/nhan-su/ho-so-nhan-vien': '/nhan-su/ho-so-nhan-vien:xem',
+  // Báo cáo nhân sự dùng CHUNG quyền với hồ sơ nhân viên: nó chỉ tổng hợp lại
+  // chính dữ liệu đó, và khai một module quyền mới sẽ bắt phải chạy
+  // `ops/grant-quyen-module-moi.ts` lúc deploy — quên là màn hình 403 với tất
+  // cả mọi người. Cùng tiền lệ với '/nhan-su/mau-in-hop-dong'. Khi nào báo cáo
+  // có endpoint BE riêng thì tách thành '/bao-cao/nhan-su:xem' và nhớ bổ sung
+  // vào script grant.
+  '/bao-cao/nhan-su': '/nhan-su/ho-so-nhan-vien:xem',
   '/nhan-su/hop-dong-lao-dong': '/nhan-su/hop-dong-lao-dong:xem',
   // Mẫu in dùng CHUNG bộ quyền với hợp đồng — soạn mẫu là cấu hình cách in
   // hợp đồng, không phải một tài nguyên nghiệp vụ riêng. Khai module quyền

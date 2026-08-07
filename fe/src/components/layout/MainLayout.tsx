@@ -37,6 +37,7 @@ import {
   AuditOutlined,
   CheckCircleOutlined,
   DollarOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
@@ -184,6 +185,11 @@ const MainLayout: React.FC = () => {
 
   const canViewBangLuong = hasPermission('/luong/bang-luong:xem') || user?.isSuperAdmin;
 
+  // Báo cáo nhân sự chỉ tổng hợp lại dữ liệu hồ sơ nhân viên nên đi chung
+  // quyền với nó — xem routePermissions.ts để biết vì sao không khai module
+  // quyền riêng.
+  const canViewBaoCaoNhanSu = canViewHoSoNhanVien;
+
   // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" + section "CHẤM CÔNG" (Phase 2+), thêm dần theo module.
   const siderMenuItems: MenuItem[] = [
     {
@@ -309,6 +315,18 @@ const MainLayout: React.FC = () => {
           key: "/luong/quyet-toan-tncn",
           icon: <DollarOutlined />,
           label: "Quyết toán TNCN",
+        },
+      ],
+    }] : []),
+    ...(canViewBaoCaoNhanSu ? [{
+      key: "bao-cao-group",
+      type: "group" as const,
+      label: "BÁO CÁO",
+      children: [
+        {
+          key: "/bao-cao/nhan-su",
+          icon: <BarChartOutlined />,
+          label: "Báo cáo nhân sự",
         },
       ],
     }] : []),
