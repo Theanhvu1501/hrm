@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal, Button, Input, Select, InputNumber, Row, Col } from "antd";
 import { Controller, useForm } from "react-hook-form";
 import {
@@ -7,6 +7,11 @@ import {
 } from "../../HopDongLaoDongHandlerContext";
 import { CreateLaborContractDto, LaborContract } from "@/services/laborContractService";
 import { Employee } from "@/services/employeeService";
+import {
+  cauHinhLuongService,
+  type CauHinhLuong,
+} from "@/services/cauHinhLuongService";
+import { mucLuongInTrenHopDong } from "../../lib/mucLuongHopDong";
 import {
   LOAI_HOP_DONG_OPTIONS,
   TRANG_THAI_OPTIONS,
@@ -110,6 +115,17 @@ export function HopDongLaoDongForm() {
     [employeeList]
   );
 
+  // Mức khai báo mặc định của công ty, dùng khi hồ sơ nhân viên chưa khai.
+  const [chungLuong, setChungLuong] = useState<CauHinhLuong | null>(null);
+  useEffect(() => {
+    cauHinhLuongService
+      .get()
+      .then(setChungLuong)
+      // Hỏng cấu hình KHÔNG được chặn việc tạo hợp đồng: mất gợi ý thôi, HR
+      // vẫn gõ tay được.
+      .catch(() => setChungLuong(null));
+  }, []);
+
   const handleCancel = () => {
     handler.executeEvent("closeForm", {});
   };
@@ -117,6 +133,12 @@ export function HopDongLaoDongForm() {
   const handleEmployeeChange = (employeeId: string) => {
     const employee = employeeList.find((e) => e.id === employeeId);
     setValue("employeeId", employeeId);
+    // Hợp đồng lao động ghi MỨC KHAI BÁO (số đăng ký BHXH), không phải lương
+    // thoả thuận. Trước bản này ô "Mức lương" là trường tự do nên quy tắc đó
+    // chỉ nằm trong đầu người nhập — và trên production đã có hợp đồng in
+    // đúng lương thoả thuận. Điền sẵn ở đây; HR vẫn sửa đè được.
+    const goiY = mucLuongInTrenHopDong(employee, chungLuong?.mucKhaiBaoMacDinh);
+    if (goiY !== undefined) setValue("mucLuong", goiY);
     // Denormalize employeeName/employeeCode/chucDanh ngay khi chọn nhân
     // viên, để BE lưu kèm hợp đồng. chucDanh đặc biệt quan trọng: đây là
     // SNAPSHOT tại thời điểm ký — in lại hợp đồng cũ sau này phải ra đúng
@@ -262,7 +284,7 @@ export function HopDongLaoDongForm() {
           />
         </Col>
         <Col span={12} className="mt-3">
-          <FieldLabel>Mức lương</FieldLabel>
+          <FieldLabel>Mức lương khai báo</FieldLabel>
           <Controller
             name="mucLuong"
             control={control}
@@ -278,6 +300,12 @@ export function HopDongLaoDongForm() {
               />
             )}
           />
+          {/* Nhãn "Mức lương" trống trơn chính là lý do trên production có
+              hợp đồng in đúng lương thoả thuận. Nói thẳng đây là số nào. */}
+          <div className="mt-1 text-xs text-muted-foreground">
+            Số ghi trên hợp đồng và đăng ký BHXH — không phải lương thực nhận.
+            Tự điền theo hồ sơ khi chọn nhân viên, sửa được nếu cần.
+          </div>
         </Col>
         <Col span={12} className="mt-3">
           <FieldLabel>Phụ cấp</FieldLabel>
