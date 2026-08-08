@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EmploymentHistory, Employee } from '@app/entities';
+import { PhongBanService } from '../phong-ban/phong-ban.service';
 import {
   CreateQuaTrinhCongTacDto,
   UpdateQuaTrinhCongTacDto,
@@ -22,6 +23,7 @@ export class QuaTrinhCongTac_Service {
     private readonly repo: Repository<EmploymentHistory>,
     @InjectRepository(Employee)
     private readonly employeeRepo: Repository<Employee>,
+    private readonly phongBanService: PhongBanService,
   ) {}
 
   private async findEmployee(employeeId: string): Promise<Employee> {
@@ -37,8 +39,20 @@ export class QuaTrinhCongTac_Service {
     return emp;
   }
 
-  async create(dto: CreateQuaTrinhCongTacDto): Promise<EmploymentHistory> {
+  async create(
+    dto: CreateQuaTrinhCongTacDto,
+    token: string,
+  ): Promise<EmploymentHistory> {
     const emp = await this.findEmployee(dto.employeeId);
+
+    // Lịch sử điều chuyển lưu TÊN phòng tại thời điểm đó, không lưu id: đổi tên
+    // hay xóa phòng về sau không được phép viết lại quá khứ.
+    const danhMuc = await this.phongBanService.list(token);
+    const tenCua = (id?: string | null) =>
+      id ? (danhMuc.find((d) => d.id === id)?.tenPhong ?? null) : undefined;
+
+    const phongBanCu = tenCua(emp.departmentId);
+    const phongBanMoi = tenCua(dto.departmentIdMoi);
 
     // Snapshot the employee's CURRENT values before we mutate anything, so
     // the history record captures the true "before" state of this change.
@@ -48,8 +62,8 @@ export class QuaTrinhCongTac_Service {
       employeeCode: emp.employeeId,
       loaiThayDoi: dto.loaiThayDoi,
       ngayHieuLuc: dto.ngayHieuLuc,
-      phongBanCu: emp.phongBan,
-      phongBanMoi: dto.phongBanMoi,
+      phongBanCu,
+      phongBanMoi,
       chucDanhCu: emp.chucDanh,
       chucDanhMoi: dto.chucDanhMoi,
       trangThaiCu: emp.trangThai,
@@ -67,7 +81,7 @@ export class QuaTrinhCongTac_Service {
     // the employee record — everything else is left untouched. mucLuong is
     // decision-info only (Employee has no salary field), so it is NEVER
     // written back to the employee.
-    emp.phongBan = dto.phongBanMoi ?? emp.phongBan;
+    if (dto.departmentIdMoi) emp.departmentId = dto.departmentIdMoi;
     emp.chucDanh = dto.chucDanhMoi ?? emp.chucDanh;
     emp.trangThai = dto.trangThaiMoi ?? emp.trangThai;
     await this.employeeRepo.save(emp);

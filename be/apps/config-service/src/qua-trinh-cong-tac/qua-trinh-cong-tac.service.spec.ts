@@ -1,137 +1,187 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { QuaTrinhCongTac_Service } from './qua-trinh-cong-tac.service';
-import { EmploymentHistory, Employee } from '@app/entities';
+
+const EMP_ID = '507f1f77bcf86cd799439011';
+
+/** Danh mục phòng ban trả về từ identity qua PhongBanService.list(token). */
+const DANH_MUC = [
+  { id: 'd1', maPhong: 'KT', tenPhong: 'Kế toán', parentId: null, path: [], thuTu: 0 },
+  { id: 'd2', maPhong: 'NS', tenPhong: 'Nhân sự', parentId: null, path: [], thuTu: 1 },
+];
+
+/**
+ * Khởi tạo service bằng cách gọi constructor trực tiếp (không qua
+ * Nest TestingModule) — service chỉ có 3 phụ thuộc đơn giản, tự mock đủ.
+ */
+function makeService(emp: any) {
+  const empRepo = {
+    findOne: jest.fn().mockResolvedValue(emp),
+    save: jest.fn(async (e: any) => e),
+  };
+  const histRepo = {
+    create: jest.fn((d: any) => d),
+    save: jest.fn(async (d: any) => ({
+      ...d,
+      _id: d._id ?? 'generated-history-id',
+    })),
+    find: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
+  };
+  const phongBan = { list: jest.fn().mockResolvedValue(DANH_MUC) };
+  const svc = new QuaTrinhCongTac_Service(
+    histRepo as any,
+    empRepo as any,
+    phongBan as any,
+  );
+  return { svc, empRepo, histRepo, phongBan };
+}
 
 describe('QuaTrinhCongTac_Service', () => {
-  let service: QuaTrinhCongTac_Service;
-  let mockHistoryRepo: {
-    find: jest.Mock;
-    findOne: jest.Mock;
-    create: jest.Mock;
-    save: jest.Mock;
-  };
-  let mockEmployeeRepo: {
-    find: jest.Mock;
-    findOne: jest.Mock;
-    save: jest.Mock;
-  };
-
-  const EMP_ID = '507f1f77bcf86cd799439011';
-
-  beforeEach(async () => {
-    mockHistoryRepo = {
-      find: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn().mockResolvedValue(null),
-      create: jest.fn((v) => v),
-      save: jest.fn((v) =>
-        Promise.resolve({ ...v, _id: v._id ?? 'generated-history-id' }),
-      ),
-    };
-
-    mockEmployeeRepo = {
-      find: jest.fn().mockResolvedValue([]),
-      findOne: jest.fn().mockResolvedValue(null),
-      save: jest.fn((v) => Promise.resolve(v)),
-    };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        QuaTrinhCongTac_Service,
-        {
-          provide: getRepositoryToken(EmploymentHistory),
-          useValue: mockHistoryRepo,
-        },
-        { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
-      ],
-    }).compile();
-
-    service = module.get<QuaTrinhCongTac_Service>(QuaTrinhCongTac_Service);
-  });
-
   // ──────────────────────────────────────────────────────────────────────────
-  // create — snapshot + apply
+  // create — điều chuyển phòng ban: chọn id, lịch sử chụp TÊN tại thời điểm đó
   // ──────────────────────────────────────────────────────────────────────────
-  describe('create — điều chuyển (snapshot phòng ban cũ, apply phòng ban mới)', () => {
-    it('snapshots the employee current phongBan into phongBanCu, records phongBanMoi from dto, and applies phongBanMoi onto the employee', async () => {
-      const employee = {
+  describe('create — điều chuyển phòng ban', () => {
+    it('lưu lịch sử bằng TÊN phòng, cập nhật departmentId của nhân viên', async () => {
+      const emp: any = {
         _id: EMP_ID,
         employeeId: 'NV0001',
-        hoTen: 'Nguyen Van A',
-        phongBan: 'Phong Ke Toan',
+        hoTen: 'Lan',
+        departmentId: 'd1',
         chucDanh: 'Nhan vien',
         trangThai: 'dang_lam_viec',
       };
-      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+      const { svc, empRepo, histRepo, phongBan } = makeService(emp);
 
-      const result = await service.create({
-        employeeId: EMP_ID,
-        loaiThayDoi: 'dieu_chuyen',
-        ngayHieuLuc: '2026-08-01',
-        phongBanMoi: 'Phong Nhan Su',
-      } as any);
-
-      expect(result.phongBanCu).toBe('Phong Ke Toan');
-      expect(result.phongBanMoi).toBe('Phong Nhan Su');
-      expect(result.employeeName).toBe('Nguyen Van A');
-      expect(result.employeeCode).toBe('NV0001');
-
-      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
-        expect.objectContaining({ phongBan: 'Phong Nhan Su' }),
+      await svc.create(
+        {
+          employeeId: EMP_ID,
+          loaiThayDoi: 'dieu_chuyen',
+          ngayHieuLuc: '2026-08-01',
+          departmentIdMoi: 'd2',
+        } as any,
+        'Bearer abc',
       );
+
+      expect(phongBan.list).toHaveBeenCalledWith('Bearer abc');
+      const hist = histRepo.save.mock.calls[0][0];
+      expect(hist.phongBanCu).toBe('Kế toán'); // tên tại thời điểm điều chuyển
+      expect(hist.phongBanMoi).toBe('Nhân sự');
+      expect(emp.departmentId).toBe('d2');
+      expect(empRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ departmentId: 'd2' }),
+      );
+    });
+
+    it('không truyền departmentIdMoi thì giữ nguyên phòng của nhân viên', async () => {
+      const emp: any = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Lan',
+        departmentId: 'd1',
+        chucDanh: 'Nhan vien',
+        trangThai: 'dang_lam_viec',
+      };
+      const { svc, histRepo } = makeService(emp);
+
+      await svc.create(
+        {
+          employeeId: EMP_ID,
+          loaiThayDoi: 'bo_nhiem',
+          ngayHieuLuc: '2026-08-01',
+        } as any,
+        'Bearer abc',
+      );
+
+      expect(emp.departmentId).toBe('d1');
+      expect(histRepo.save.mock.calls[0][0].phongBanMoi).toBeUndefined();
+    });
+
+    it('id phòng mới không có trong danh mục thì tên là null, không ném lỗi', async () => {
+      const emp: any = {
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Lan',
+        departmentId: 'd1',
+        chucDanh: 'Nhan vien',
+        trangThai: 'dang_lam_viec',
+      };
+      const { svc, histRepo } = makeService(emp);
+
+      await svc.create(
+        {
+          employeeId: EMP_ID,
+          loaiThayDoi: 'dieu_chuyen',
+          ngayHieuLuc: '2026-08-01',
+          departmentIdMoi: 'd-la',
+        } as any,
+        'Bearer abc',
+      );
+
+      expect(histRepo.save.mock.calls[0][0].phongBanMoi).toBeNull();
     });
   });
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // create — đổi trạng thái
+  // ──────────────────────────────────────────────────────────────────────────
   describe('create — đổi trạng thái', () => {
     it('updates the employee trangThai to trangThaiMoi', async () => {
-      const employee = {
+      const emp: any = {
         _id: EMP_ID,
         employeeId: 'NV0002',
         hoTen: 'Tran Thi B',
-        phongBan: 'Phong Kinh Doanh',
+        departmentId: 'd1',
         chucDanh: 'Truong phong',
         trangThai: 'dang_lam_viec',
       };
-      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+      const { svc, empRepo } = makeService(emp);
 
-      const result = await service.create({
-        employeeId: EMP_ID,
-        loaiThayDoi: 'doi_trang_thai',
-        ngayHieuLuc: '2026-08-01',
-        trangThaiMoi: 'tam_nghi',
-      } as any);
+      const result = await svc.create(
+        {
+          employeeId: EMP_ID,
+          loaiThayDoi: 'doi_trang_thai',
+          ngayHieuLuc: '2026-08-01',
+          trangThaiMoi: 'tam_nghi',
+        } as any,
+        'Bearer abc',
+      );
 
       expect(result.trangThaiCu).toBe('dang_lam_viec');
       expect(result.trangThaiMoi).toBe('tam_nghi');
-      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+      expect(empRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ trangThai: 'tam_nghi' }),
       );
     });
   });
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // create — chỉ apply các trường có trong dto
+  // ──────────────────────────────────────────────────────────────────────────
   describe('create — chỉ apply các trường có trong dto', () => {
-    it('leaves phongBan and trangThai unchanged when only chucDanhMoi is provided', async () => {
-      const employee = {
+    it('leaves departmentId and trangThai unchanged when only chucDanhMoi is provided', async () => {
+      const emp: any = {
         _id: EMP_ID,
         employeeId: 'NV0003',
         hoTen: 'Le Van C',
-        phongBan: 'Phong Ky Thuat',
+        departmentId: 'd1',
         chucDanh: 'Nhan vien',
         trangThai: 'dang_lam_viec',
       };
-      mockEmployeeRepo.findOne.mockResolvedValue(employee);
+      const { svc, empRepo } = makeService(emp);
 
-      await service.create({
-        employeeId: EMP_ID,
-        loaiThayDoi: 'bo_nhiem',
-        ngayHieuLuc: '2026-08-01',
-        chucDanhMoi: 'Truong phong',
-      } as any);
+      await svc.create(
+        {
+          employeeId: EMP_ID,
+          loaiThayDoi: 'bo_nhiem',
+          ngayHieuLuc: '2026-08-01',
+          chucDanhMoi: 'Truong phong',
+        } as any,
+        'Bearer abc',
+      );
 
-      expect(mockEmployeeRepo.save).toHaveBeenCalledWith(
+      expect(empRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({
-          phongBan: 'Phong Ky Thuat',
+          departmentId: 'd1',
           trangThai: 'dang_lam_viec',
           chucDanh: 'Truong phong',
         }),
@@ -139,19 +189,25 @@ describe('QuaTrinhCongTac_Service', () => {
     });
   });
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // create — employeeId không tồn tại
+  // ──────────────────────────────────────────────────────────────────────────
   describe('create — employeeId không tồn tại', () => {
     it('throws NotFoundException when the employee cannot be found', async () => {
-      mockEmployeeRepo.findOne.mockResolvedValue(null);
+      const { svc, histRepo } = makeService(null);
 
       await expect(
-        service.create({
-          employeeId: '507f1f77bcf86cd799439099',
-          loaiThayDoi: 'dieu_chuyen',
-          ngayHieuLuc: '2026-08-01',
-        } as any),
+        svc.create(
+          {
+            employeeId: '507f1f77bcf86cd799439099',
+            loaiThayDoi: 'dieu_chuyen',
+            ngayHieuLuc: '2026-08-01',
+          } as any,
+          'Bearer abc',
+        ),
       ).rejects.toThrow(NotFoundException);
 
-      expect(mockHistoryRepo.save).not.toHaveBeenCalled();
+      expect(histRepo.save).not.toHaveBeenCalled();
     });
   });
 
@@ -160,6 +216,7 @@ describe('QuaTrinhCongTac_Service', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('findAll', () => {
     it('filters by employeeId and returns records sorted newest ngayHieuLuc first', async () => {
+      const { svc, histRepo } = makeService(null);
       const list = [
         {
           _id: '1',
@@ -174,11 +231,11 @@ describe('QuaTrinhCongTac_Service', () => {
           isActive: true,
         },
       ];
-      mockHistoryRepo.find.mockResolvedValue(list);
+      histRepo.find.mockResolvedValue(list);
 
-      const result = await service.findAll({ employeeId: EMP_ID });
+      const result = await svc.findAll({ employeeId: EMP_ID });
 
-      expect(mockHistoryRepo.find).toHaveBeenCalledWith({
+      expect(histRepo.find).toHaveBeenCalledWith({
         where: { isActive: true, employeeId: EMP_ID },
       });
       expect(result[0].ngayHieuLuc).toBe('2026-06-01');
@@ -186,17 +243,21 @@ describe('QuaTrinhCongTac_Service', () => {
     });
 
     it('defaults isActive filter to true', async () => {
-      await service.findAll();
+      const { svc, histRepo } = makeService(null);
 
-      expect(mockHistoryRepo.find).toHaveBeenCalledWith({
+      await svc.findAll();
+
+      expect(histRepo.find).toHaveBeenCalledWith({
         where: { isActive: true },
       });
     });
 
     it('filters by loaiThayDoi', async () => {
-      await service.findAll({ loaiThayDoi: 'tang_luong' });
+      const { svc, histRepo } = makeService(null);
 
-      expect(mockHistoryRepo.find).toHaveBeenCalledWith({
+      await svc.findAll({ loaiThayDoi: 'tang_luong' });
+
+      expect(histRepo.find).toHaveBeenCalledWith({
         where: { isActive: true, loaiThayDoi: 'tang_luong' },
       });
     });
@@ -207,13 +268,14 @@ describe('QuaTrinhCongTac_Service', () => {
   // ──────────────────────────────────────────────────────────────────────────
   describe('remove', () => {
     it('sets isActive=false instead of hard deleting', async () => {
+      const { svc, histRepo } = makeService(null);
       const id = '507f1f77bcf86cd799439099';
       const existing = { _id: id, employeeId: EMP_ID, isActive: true };
-      mockHistoryRepo.findOne.mockResolvedValue(existing);
+      histRepo.findOne.mockResolvedValue(existing);
 
-      await service.remove(id);
+      await svc.remove(id);
 
-      expect(mockHistoryRepo.save).toHaveBeenCalledWith(
+      expect(histRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ isActive: false }),
       );
     });

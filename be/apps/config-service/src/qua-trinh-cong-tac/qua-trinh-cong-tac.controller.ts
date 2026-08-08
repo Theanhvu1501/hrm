@@ -15,7 +15,7 @@ import {
   CreateQuaTrinhCongTacDto,
   UpdateQuaTrinhCongTacDto,
 } from './dto';
-import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
+import { AuthToken, JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 
 /**
  * Quá trình công tác là lịch sử chức danh/phòng ban/mức lương theo thời gian
@@ -56,8 +56,11 @@ export class QuaTrinhCongTac_Controller {
   @Post()
   @UseGuards(PermissionGuard)
   @Permissions('/nhan-su/qua-trinh-cong-tac:them')
-  async create(@Body() body: CreateQuaTrinhCongTacDto) {
-    const data = await this.quaTrinhCongTac_Service.create(body);
+  async create(
+    @Body() body: CreateQuaTrinhCongTacDto,
+    @AuthToken() token: string,
+  ) {
+    const data = await this.quaTrinhCongTac_Service.create(body, token);
     return { success: true, data };
   }
 
