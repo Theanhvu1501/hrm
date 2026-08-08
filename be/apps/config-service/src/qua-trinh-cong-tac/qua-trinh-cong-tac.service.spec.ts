@@ -66,6 +66,11 @@ describe('QuaTrinhCongTac_Service', () => {
       const hist = histRepo.save.mock.calls[0][0];
       expect(hist.phongBanCu).toBe('Kế toán'); // tên tại thời điểm điều chuyển
       expect(hist.phongBanMoi).toBe('Nhân sự');
+      // Denormalized identity of the employee onto the history record — a
+      // future refactor that drops entity.employeeName/employeeCode should
+      // fail here, not silently ship.
+      expect(hist.employeeName).toBe('Lan');
+      expect(hist.employeeCode).toBe('NV0001');
       expect(emp.departmentId).toBe('d2');
       expect(empRepo.save).toHaveBeenCalledWith(
         expect.objectContaining({ departmentId: 'd2' }),
@@ -118,6 +123,41 @@ describe('QuaTrinhCongTac_Service', () => {
       );
 
       expect(histRepo.save.mock.calls[0][0].phongBanMoi).toBeNull();
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // create — bản ghi không đụng tới phòng ban: KHÔNG được phụ thuộc identity
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('create — không liên quan phòng ban', () => {
+    it('nhân viên chưa có departmentId và dto không có departmentIdMoi thì không gọi danh mục identity', async () => {
+      const emp: any = {
+        _id: EMP_ID,
+        employeeId: 'NV0004',
+        hoTen: 'Pham Thi D',
+        // Chưa có phòng ban (nhân viên mới) — departmentId cố ý bỏ trống.
+        chucDanh: 'Nhan vien',
+        trangThai: 'dang_lam_viec',
+      };
+      const { svc, empRepo, histRepo, phongBan } = makeService(emp);
+
+      const result = await svc.create(
+        {
+          employeeId: EMP_ID,
+          loaiThayDoi: 'tang_luong',
+          ngayHieuLuc: '2026-08-01',
+          mucLuongMoi: 15000000,
+        } as any,
+        'Bearer abc',
+      );
+
+      // Một bản ghi tăng lương không đụng phòng ban không được phép thất bại
+      // chỉ vì identity đang down — nên không gọi list() ở đây.
+      expect(phongBan.list).not.toHaveBeenCalled();
+      expect(result.phongBanCu).toBeUndefined();
+      expect(result.phongBanMoi).toBeUndefined();
+      expect(histRepo.save).toHaveBeenCalled();
+      expect(empRepo.save).toHaveBeenCalled();
     });
   });
 

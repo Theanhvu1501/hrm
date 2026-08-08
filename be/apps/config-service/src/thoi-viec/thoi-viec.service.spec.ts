@@ -157,7 +157,7 @@ describe('ThoiViec_Service', () => {
         _id: EMP_ID,
         employeeId: 'NV0001',
         hoTen: 'Nguyen Van A',
-        phongBan: 'Phong Ke Toan',
+        departmentId: 'd1',
         chucDanh: 'Nhan vien',
         trangThai: 'dang_lam_viec',
       };

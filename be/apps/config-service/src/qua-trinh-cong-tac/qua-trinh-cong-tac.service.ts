@@ -47,7 +47,13 @@ export class QuaTrinhCongTac_Service {
 
     // Lịch sử điều chuyển lưu TÊN phòng tại thời điểm đó, không lưu id: đổi tên
     // hay xóa phòng về sau không được phép viết lại quá khứ.
-    const danhMuc = await this.phongBanService.list(token);
+    //
+    // Chỉ gọi danh mục khi THỰC SỰ cần tra tên (nhân viên đang có phòng, hoặc
+    // dto có phòng mới) — bản ghi tang_luong/bo_nhiem/doi_trang_thai/danh_gia
+    // không đụng tới phòng ban thì không được phép phụ thuộc identity còn
+    // sống hay không (identity lỗi = list() ném lỗi, xem PhongBanService).
+    const canTraTen = Boolean(emp.departmentId) || Boolean(dto.departmentIdMoi);
+    const danhMuc = canTraTen ? await this.phongBanService.list(token) : [];
     const tenCua = (id?: string | null) =>
       id ? (danhMuc.find((d) => d.id === id)?.tenPhong ?? null) : undefined;
 
