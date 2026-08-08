@@ -911,7 +911,7 @@ describe('BanGhiChamCong_Service', () => {
     it('trả toàn bộ địa điểm đang bật, giữ nguyên tên trường banKinh', async () => {
       nhanVien.resolveEmployeeFromUser.mockResolvedValue({
         ...NV,
-        phongBan: 'Phòng Kỹ thuật',
+        departmentId: 'dept-ky-thuat',
       });
       shiftRepo.findOne.mockResolvedValue(CA);
       recordRepo.find.mockResolvedValue([]);
@@ -927,7 +927,7 @@ describe('BanGhiChamCong_Service', () => {
         { id: 'loc-1', ten: 'Văn phòng HN', loai: 'gps', banKinh: 100 },
         { id: 'loc-2', ten: 'Chi nhánh HCM', loai: 'wifi', banKinh: undefined },
       ]);
-      expect(kq.phongBan).toBe('Phòng Kỹ thuật');
+      expect(kq.departmentId).toBe('dept-ky-thuat');
     });
 
     it('chỉ lấy địa điểm isActive — địa điểm đã tắt không được hiện lên màn hình nhân viên', async () => {

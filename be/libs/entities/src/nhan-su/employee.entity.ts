@@ -20,7 +20,13 @@ export class Employee extends BaseEntity {
   @Column({ nullable: true }) soDienThoai?: string;
   @Column({ nullable: true }) email?: string;
   @Column({ nullable: true }) diaChi?: string;
-  @Column({ nullable: true }) phongBan?: string;
+  /**
+   * Phòng ban — id trỏ tới danh mục của identity-service (`departments._id`).
+   * hrm KHÔNG sở hữu danh mục này; lấy tên qua `GET /phong-ban`.
+   * Trước đây là chuỗi tự do `phongBan`, đã di trú (xem
+   * scripts/migrations/migrate-phongban-to-departmentid.ts).
+   */
+  @Column({ nullable: true }) departmentId?: string | null;
   @Column({ nullable: true }) chucDanh?: string;
   @Column({ nullable: true }) ngayVaoLam?: string;
   /**

@@ -14,7 +14,7 @@ import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 
 export interface EmployeeFilter {
   hoTen?: string;
-  phongBan?: string;
+  departmentId?: string;
   trangThai?: string;
   // Query-string values arrive as strings (e.g. `?isActive=false`), so this
   // must accept the raw string form as well as a real boolean.
@@ -172,7 +172,7 @@ export class NhanVien_Service {
     };
 
     if (filter?.hoTen) where.hoTen = filter.hoTen;
-    if (filter?.phongBan) where.phongBan = filter.phongBan;
+    if (filter?.departmentId) where.departmentId = filter.departmentId;
     if (filter?.trangThai) where.trangThai = filter.trangThai;
 
     return this.repo.find({ where });
