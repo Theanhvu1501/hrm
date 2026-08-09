@@ -12,12 +12,20 @@ import { HoSoChamCongProvider } from '@/contexts/HoSoChamCongContext';
 const mockAuth = vi.fn();
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => mockAuth() }));
 
+vi.mock('@/hooks/usePhongBanOptions', () => ({
+  usePhongBanOptions: () => ({
+    options: [{ value: 'd1', label: 'Phòng Kỹ thuật' }],
+    tenTheoId: (id?: string | null) => (id === 'd1' ? 'Phòng Kỹ thuật' : '—'),
+    loading: false,
+  }),
+}));
+
 function homNayMau() {
   return {
     ngay: '2026-07-23',
     ngayCong: '2026-07-23',
     nhanVien: { id: 'e1', hoTen: 'Nguyễn Văn Hải', employeeCode: 'NV0001' },
-    phongBan: 'Phòng Kỹ thuật',
+    departmentId: 'd1',
     ca: null,
     diaDiem: [],
     soCong: 0,

@@ -109,7 +109,9 @@ export interface TrangThaiHomNay {
   } | null;
   hanhDongKeTiep: 'vao' | 'ra';
   banGhi: AttendanceRecord[];
-  phongBan?: string;
+  /** id phòng ban trong danh mục identity-service — trước đây là tên
+   *  (`phongBan`), BE nay trả id để FE tự tra tên qua `usePhongBanOptions`. */
+  departmentId?: string | null;
   diaDiem: DiaDiemChamCongTom[];
   /**
    * Số công của `ngayCong`. `null` KHÁC `0`: `null` là "đã vào, đang chờ
@@ -166,7 +168,7 @@ class AttendanceRecordService extends ServiceBase {
       ca: res.ca ?? null,
       hanhDongKeTiep: res.hanhDongKeTiep,
       banGhi: (res.banGhi ?? []).map(this.transform),
-      phongBan: res.phongBan,
+      departmentId: res.departmentId,
       diaDiem: (res.diaDiem ?? []) as DiaDiemChamCongTom[],
       // CHỈ `undefined` mới lùi về 0 — đó là backend cũ chưa có trường này.
       // `null` là giá trị thật backend gửi cho trạng thái "đã vào, chờ ra",

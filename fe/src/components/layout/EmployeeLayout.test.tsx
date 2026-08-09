@@ -16,6 +16,14 @@ vi.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
+vi.mock('@/hooks/usePhongBanOptions', () => ({
+  usePhongBanOptions: () => ({
+    options: [{ value: 'd1', label: 'Phòng Kỹ thuật' }],
+    tenTheoId: (id?: string | null) => (id === 'd1' ? 'Phòng Kỹ thuật' : '—'),
+    loading: false,
+  }),
+}));
+
 // Cùng hình dạng homNayMau() dùng ở ChamCongCuaToiPage.render.test.tsx và
 // TaiKhoanPage.test.tsx — không tự bịa hình dạng thứ ba.
 function homNayMau(over: Partial<TrangThaiHomNay> = {}): TrangThaiHomNay {
@@ -23,7 +31,7 @@ function homNayMau(over: Partial<TrangThaiHomNay> = {}): TrangThaiHomNay {
     ngay: '2026-07-23',
     ngayCong: '2026-07-23',
     nhanVien: { id: 'e1', hoTen: 'Nguyễn Văn Hải', employeeCode: 'NV0001' },
-    phongBan: 'Phòng Kỹ thuật',
+    departmentId: 'd1',
     ca: null,
     diaDiem: [],
     soCong: 0,
@@ -88,7 +96,7 @@ describe('EmployeeLayout', () => {
 
   it('header hiện phòng ban', async () => {
     vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
-      homNayMau({ phongBan: 'Phòng Kỹ thuật' })
+      homNayMau({ departmentId: 'd1' })
     );
     ve('/toi/cham-cong');
     await waitFor(() => expect(screen.getByText('Phòng Kỹ thuật')).toBeTruthy());
@@ -96,7 +104,7 @@ describe('EmployeeLayout', () => {
 
   it('thiếu phòng ban thì không hiện dòng rỗng', async () => {
     vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
-      homNayMau({ phongBan: undefined })
+      homNayMau({ departmentId: undefined })
     );
     ve('/toi/cham-cong');
     // 'Nguyễn Văn Hải' hiện sẵn ngay từ AuthContext (không cần chờ
