@@ -109,12 +109,12 @@ describe('attendanceRecordService.cuaToi', () => {
 describe('attendanceRecordService.homNay', () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it('đọc soCong, phongBan và diaDiem từ backend', async () => {
+  it('đọc soCong, departmentId và diaDiem từ backend', async () => {
     gia({
       ngay: '2026-07-23',
       ngayCong: '2026-07-23',
       nhanVien: { id: 'e1', hoTen: 'Nguyễn Văn Hải', employeeCode: 'NV0001' },
-      phongBan: 'Phòng Kỹ thuật',
+      departmentId: 'd1',
       ca: null,
       diaDiem: [{ id: 'l1', ten: 'Văn phòng HN', loai: 'gps', banKinh: 100 }],
       soCong: 1,
@@ -125,7 +125,7 @@ describe('attendanceRecordService.homNay', () => {
     const kq = await attendanceRecordService.homNay();
 
     expect(kq.soCong).toBe(1);
-    expect(kq.phongBan).toBe('Phòng Kỹ thuật');
+    expect(kq.departmentId).toBe('d1');
     expect(kq.diaDiem).toEqual([
       { id: 'l1', ten: 'Văn phòng HN', loai: 'gps', banKinh: 100 },
     ]);
@@ -148,7 +148,7 @@ describe('attendanceRecordService.homNay', () => {
 
     expect(kq.soCong).toBe(0);
     expect(kq.diaDiem).toEqual([]);
-    expect(kq.phongBan).toBeUndefined();
+    expect(kq.departmentId).toBeUndefined();
   });
 
   /**

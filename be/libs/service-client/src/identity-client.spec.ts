@@ -293,4 +293,13 @@ describe('IdentityClient', () => {
       });
     });
   });
+
+  describe('listDepartments', () => {
+    it('calls GET /api/me/departments with Authorization header', async () => {
+      await client.listDepartments(token);
+      expect(requestSpy).toHaveBeenCalledWith('identity', 'GET', '/api/me/departments', {
+        headers: { Authorization: token },
+      });
+    });
+  });
 });

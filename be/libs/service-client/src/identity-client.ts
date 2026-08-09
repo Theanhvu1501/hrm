@@ -232,4 +232,13 @@ export class IdentityClient extends BaseServiceClient {
       body: { tenantId },
     });
   }
+
+  // -------- Departments (phòng ban) --------
+
+  /** Danh mục phòng ban của công ty trong token. identity lấy tenantId từ token. */
+  listDepartments(token: string): Promise<ServiceResponse<any>> {
+    return this.request('identity', 'GET', '/api/me/departments', {
+      headers: this.authed(token),
+    });
+  }
 }

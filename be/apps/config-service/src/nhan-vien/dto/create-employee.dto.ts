@@ -88,7 +88,7 @@ export class CreateEmployeeDto {
 
   @IsOptional()
   @IsString()
-  phongBan?: string;
+  departmentId?: string;
 
   @IsOptional()
   @IsString()

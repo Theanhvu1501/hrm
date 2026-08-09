@@ -7,6 +7,7 @@ import {
   EmployeeDevice,
 } from "@/services/employeeDeviceService";
 import { useHoSoChamCong } from "@/contexts/HoSoChamCongContext";
+import { usePhongBanOptions } from "@/hooks/usePhongBanOptions";
 
 const NHAN_TRANG_THAI: Record<string, { nhan: string; mau: string }> = {
   cho_duyet: { nhan: "Chờ duyệt", mau: "gold" },
@@ -28,6 +29,7 @@ export default function TaiKhoanPage() {
   // (HoSoChamCongProvider, xem EmployeeLayout.tsx) và chia sẻ cho cả header
   // lẫn màn hình này — bỏ lời gọi /hom-nay riêng của trang này (Task 7).
   const { hoSo: homNay, chuaLienKet, dangTai } = useHoSoChamCong();
+  const { tenTheoId } = usePhongBanOptions();
   // Rớt mạng, 500, hay token hết hạn KHÔNG phải là "chưa gắn hồ sơ" — chỉ
   // 404 (chuaLienKet) mới có nghĩa đó. Suy lại đúng 3 nhánh cũ (đang tải /
   // chưa liên kết / lỗi khác) từ 3 cờ mà context phơi ra, không tự thêm
@@ -115,7 +117,10 @@ export default function TaiKhoanPage() {
           </div>
         ) : (
           <div className="mt-1 text-[13px] text-[color:var(--emp-text-phu)]">
-            {[homNay?.phongBan, homNay?.nhanVien.employeeCode]
+            {[
+              homNay?.departmentId ? tenTheoId(homNay.departmentId) : undefined,
+              homNay?.nhanVien.employeeCode,
+            ]
               .filter(Boolean)
               .join(" · ")}
           </div>

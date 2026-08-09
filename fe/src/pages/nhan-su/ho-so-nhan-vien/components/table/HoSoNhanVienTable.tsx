@@ -7,6 +7,7 @@ import {
   useHoSoNhanVienState,
 } from "../../HoSoNhanVienHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { usePhongBanOptions } from "@/hooks/usePhongBanOptions";
 import { Employee } from "@/services/employeeService";
 import {
   LOAI_HOP_DONG_OPTIONS,
@@ -23,6 +24,7 @@ export function HoSoNhanVienTable() {
   const { canCreate, canEdit, canDelete } = usePagePermission(
     "/nhan-su/ho-so-nhan-vien"
   );
+  const { tenTheoId } = usePhongBanOptions();
 
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
@@ -64,9 +66,10 @@ export function HoSoNhanVienTable() {
     },
     {
       title: "Phòng ban",
-      dataIndex: "phongBan",
-      key: "phongBan",
+      dataIndex: "departmentId",
+      key: "departmentId",
       width: 160,
+      render: (id?: string | null) => tenTheoId(id),
     },
     {
       title: "Chức danh",

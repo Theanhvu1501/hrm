@@ -545,7 +545,7 @@ export class BanGhiChamCong_Service {
         hoTen: emp.hoTen,
         employeeCode: emp.employeeId,
       },
-      phongBan: emp.phongBan,
+      departmentId: emp.departmentId ?? null,
       ca: ca
         ? {
             id: String((ca as any)._id),

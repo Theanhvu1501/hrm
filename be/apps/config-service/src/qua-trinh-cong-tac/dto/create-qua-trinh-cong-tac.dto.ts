@@ -14,9 +14,10 @@ export class CreateQuaTrinhCongTacDto {
   @IsNotEmpty({ message: 'Ngày hiệu lực không được để trống' })
   ngayHieuLuc: string;
 
+  /** id phòng ban mới trong danh mục identity. Lịch sử vẫn lưu TÊN, không lưu id. */
   @IsOptional()
   @IsString()
-  phongBanMoi?: string;
+  departmentIdMoi?: string;
 
   @IsOptional()
   @IsString()

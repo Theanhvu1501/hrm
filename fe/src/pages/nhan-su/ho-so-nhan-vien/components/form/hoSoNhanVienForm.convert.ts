@@ -38,7 +38,7 @@ export function toCreateEmployeeDto(
     soDienThoai: values.soDienThoai || undefined,
     email: values.email || undefined,
     diaChi: values.diaChi || undefined,
-    phongBan: values.phongBan || undefined,
+    departmentId: values.departmentId || undefined,
     chucDanh: values.chucDanh || undefined,
     ngayVaoLam: values.ngayVaoLam || undefined,
     // Cùng cách xử lý như `ngayVaoLam`: chuỗi rỗng ("chưa nhập") không được

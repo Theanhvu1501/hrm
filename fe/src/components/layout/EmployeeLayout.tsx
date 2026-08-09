@@ -12,6 +12,7 @@ import {
   HoSoChamCongProvider,
   useHoSoChamCong,
 } from '@/contexts/HoSoChamCongContext';
+import { usePhongBanOptions } from '@/hooks/usePhongBanOptions';
 import './employee-shell.css';
 
 const TAB = [
@@ -72,6 +73,7 @@ export default function EmployeeLayout() {
 function EmployeeShell() {
   const { user, currentTenant } = useAuth();
   const { hoSo } = useHoSoChamCong();
+  const { tenTheoId } = usePhongBanOptions();
 
   return (
     <div className="emp-shell mx-auto w-full max-w-[480px]">
@@ -97,12 +99,12 @@ function EmployeeShell() {
             </div>
             {/* Thiếu phòng ban (chưa tải xong, chưa gắn hồ sơ, hoặc lỗi khác)
                 thì KHÔNG hiện dòng rỗng. */}
-            {hoSo?.phongBan && (
+            {hoSo?.departmentId && (
               <div
                 data-testid="header-phong-ban"
                 className="truncate text-[11px] leading-tight opacity-80"
               >
-                {hoSo.phongBan}
+                {tenTheoId(hoSo.departmentId)}
               </div>
             )}
           </div>

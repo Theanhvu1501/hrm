@@ -391,6 +391,31 @@ describe('NhanVien_Service', () => {
     });
 
     // ────────────────────────────────────────────────────────────────────────
+    // departmentId filter (Task 2) — phòng ban giờ là id trỏ danh mục của
+    // identity-service, không còn là chuỗi tên tự do.
+    // ────────────────────────────────────────────────────────────────────────
+    it('lọc theo departmentId chứ không phải chuỗi tên', async () => {
+      const list = [
+        { _id: '1', hoTen: 'Lan', departmentId: 'd1', isActive: true },
+      ];
+      mockEmployeeRepo.find.mockResolvedValue(list);
+
+      const result = await service.findAll({ departmentId: 'd1' } as any);
+
+      expect(result).toEqual(list);
+      expect(mockEmployeeRepo.find).toHaveBeenCalledWith({
+        where: { isActive: true, departmentId: 'd1' },
+      });
+    });
+
+    it('không truyền departmentId thì không thêm điều kiện đó', async () => {
+      await service.findAll({} as any);
+
+      const where = mockEmployeeRepo.find.mock.calls[0][0].where;
+      expect(where).not.toHaveProperty('departmentId');
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
     // isActive query coercion (Fix 2) — HTTP query params arrive as strings,
     // not booleans, so the string "false" must not be treated as truthy.
     // ────────────────────────────────────────────────────────────────────────
