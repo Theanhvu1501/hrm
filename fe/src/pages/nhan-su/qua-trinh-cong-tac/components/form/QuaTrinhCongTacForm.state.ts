@@ -5,7 +5,7 @@ export interface QuaTrinhCongTacFormValues {
   employeeId: string;
   loaiThayDoi: string;
   ngayHieuLuc: string;
-  phongBanMoi?: string;
+  departmentIdMoi?: string;
   chucDanhMoi?: string;
   trangThaiMoi?: string;
   mucLuongMoi?: number;

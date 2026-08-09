@@ -31,7 +31,10 @@ export interface CreateEmploymentHistoryDto {
   employeeId: string;
   loaiThayDoi: string;
   ngayHieuLuc: string;
-  phongBanMoi?: string;
+  /** id phòng ban mới trong danh mục identity. Lịch sử (`phongBanCu`/
+   *  `phongBanMoi` trên `EmploymentHistory`) vẫn lưu TÊN, không lưu id — BE
+   *  tự tra tên tại thời điểm ghi nhận (xem `qua-trinh-cong-tac.service.ts`). */
+  departmentIdMoi?: string;
   chucDanhMoi?: string;
   trangThaiMoi?: string;
   mucLuongMoi?: number;

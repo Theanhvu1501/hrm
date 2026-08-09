@@ -17,13 +17,14 @@ import {
   labelFor,
 } from "../../constants";
 import { QuaTrinhCongTacFormValues } from "./QuaTrinhCongTacForm.state";
+import { usePhongBanOptions } from "@/hooks/usePhongBanOptions";
 import "./QuaTrinhCongTacForm.state";
 
 const DEFAULT_VALUES: QuaTrinhCongTacFormValues = {
   employeeId: "",
   loaiThayDoi: "dieu_chuyen",
   ngayHieuLuc: "",
-  phongBanMoi: "",
+  departmentIdMoi: "",
   chucDanhMoi: "",
   trangThaiMoi: undefined,
   mucLuongMoi: undefined,
@@ -39,7 +40,9 @@ function toFormValues(record: EmploymentHistory | null): QuaTrinhCongTacFormValu
     employeeId: record.employeeId || "",
     loaiThayDoi: record.loaiThayDoi || "dieu_chuyen",
     ngayHieuLuc: record.ngayHieuLuc || "",
-    phongBanMoi: record.phongBanMoi || "",
+    // Bản ghi lịch sử chỉ lưu TÊN (`phongBanMoi`), không suy ngược ra id
+    // được — sửa một bản ghi cũ thì phải chọn lại phòng từ danh mục.
+    departmentIdMoi: "",
     chucDanhMoi: record.chucDanhMoi || "",
     trangThaiMoi: record.trangThaiMoi || undefined,
     mucLuongMoi: record.mucLuongMoi,
@@ -73,6 +76,7 @@ export function QuaTrinhCongTacForm() {
   );
   const [saving] = useQuaTrinhCongTacState("saving", false);
   const [employeeList] = useQuaTrinhCongTacState("employeeList", [] as Employee[]);
+  const { options: phongBanOptions, tenTheoId, loading: dangTaiPhongBan } = usePhongBanOptions();
 
   const {
     control,
@@ -120,11 +124,11 @@ export function QuaTrinhCongTacForm() {
     if (!employee) return null;
 
     return {
-      phongBan: employee.phongBan,
+      phongBan: tenTheoId(employee.departmentId),
       chucDanh: employee.chucDanh,
       trangThai: employee.trangThai,
     };
-  }, [isEditing, editingHistory, employeeList, selectedEmployeeId]);
+  }, [isEditing, editingHistory, employeeList, selectedEmployeeId, tenTheoId]);
 
   const handleCancel = () => {
     handler.executeEvent("closeForm", {});
@@ -135,7 +139,7 @@ export function QuaTrinhCongTacForm() {
       employeeId: values.employeeId,
       loaiThayDoi: values.loaiThayDoi,
       ngayHieuLuc: values.ngayHieuLuc,
-      phongBanMoi: values.phongBanMoi || undefined,
+      departmentIdMoi: values.departmentIdMoi || undefined,
       chucDanhMoi: values.chucDanhMoi || undefined,
       trangThaiMoi: values.trangThaiMoi || undefined,
       mucLuongMoi: values.mucLuongMoi,
@@ -253,10 +257,19 @@ export function QuaTrinhCongTacForm() {
         <Col span={12} className="mt-3">
           <FieldLabel>Phòng ban mới</FieldLabel>
           <Controller
-            name="phongBanMoi"
+            name="departmentIdMoi"
             control={control}
             render={({ field }) => (
-              <Input {...field} placeholder="Nhập phòng ban mới (nếu có)" />
+              <Select
+                {...field}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                loading={dangTaiPhongBan}
+                placeholder="Chọn phòng ban mới"
+                options={phongBanOptions}
+                className="w-full"
+              />
             )}
           />
         </Col>
