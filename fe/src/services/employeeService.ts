@@ -33,7 +33,9 @@ export interface Employee {
   soDienThoai?: string;
   email?: string;
   diaChi?: string;
-  phongBan?: string;
+  /** id phòng ban trong danh mục identity-service. Trước đây là chuỗi tự do
+   *  `phongBan`, đã di trú (xem `be/scripts/migrations/migrate-phongban-to-departmentid.ts`). */
+  departmentId?: string;
   chucDanh?: string;
   ngayVaoLam?: string;
   // Mốc "lên chính thức" — khoá mở quỹ phép năm (Task 7 BE), KHÔNG phải căn
@@ -77,7 +79,7 @@ export interface CauHinhLuongRieng {
 
 export interface EmployeeFilter {
   hoTen?: string;
-  phongBan?: string;
+  departmentId?: string;
   trangThai?: string;
   isActive?: boolean | string;
 }
@@ -93,7 +95,7 @@ export interface CreateEmployeeDto {
   soDienThoai?: string;
   email?: string;
   diaChi?: string;
-  phongBan?: string;
+  departmentId?: string;
   chucDanh?: string;
   ngayVaoLam?: string;
   ngayChinhThuc?: string;
@@ -173,7 +175,7 @@ class EmployeeService extends ServiceBase {
       soDienThoai: x.soDienThoai as string | undefined,
       email: x.email as string | undefined,
       diaChi: x.diaChi as string | undefined,
-      phongBan: x.phongBan as string | undefined,
+      departmentId: x.departmentId as string | undefined,
       chucDanh: x.chucDanh as string | undefined,
       ngayVaoLam: x.ngayVaoLam as string | undefined,
       ngayChinhThuc: x.ngayChinhThuc as string | undefined,

@@ -2,18 +2,31 @@ import { Controller, useFormContext } from "react-hook-form";
 import { Input, Select, Row, Col } from "antd";
 import { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
 import { LOAI_HOP_DONG_OPTIONS, TRANG_THAI_OPTIONS } from "../../../constants";
+import { usePhongBanOptions } from "@/hooks/usePhongBanOptions";
 
 export function CongViecTab() {
   const { control } = useFormContext<HoSoNhanVienFormValues>();
+  const { options, loading } = usePhongBanOptions();
 
   return (
     <Row gutter={16}>
       <Col span={12}>
         <label className="block mb-1 text-sm font-medium">Phòng ban</label>
         <Controller
-          name="phongBan"
+          name="departmentId"
           control={control}
-          render={({ field }) => <Input {...field} placeholder="Nhập phòng ban" />}
+          render={({ field }) => (
+            <Select
+              {...field}
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={loading}
+              placeholder="Chọn phòng ban"
+              options={options}
+              className="w-full"
+            />
+          )}
         />
       </Col>
       <Col span={12}>

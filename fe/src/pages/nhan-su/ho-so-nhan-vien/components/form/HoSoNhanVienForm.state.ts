@@ -14,7 +14,7 @@ export interface HoSoNhanVienFormValues {
   diaChi?: string;
   bangCap: BangCap[];
   nguoiPhuThuoc: NguoiPhuThuoc[];
-  phongBan?: string;
+  departmentId?: string;
   chucDanh?: string;
   ngayVaoLam?: string;
   // Mốc "lên chính thức" — khoá mở quỹ phép năm (BE Task 7). KHÔNG dùng để
