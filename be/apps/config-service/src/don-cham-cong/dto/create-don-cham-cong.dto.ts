@@ -5,7 +5,10 @@ export class CreateDonChamCongDto {
   @IsNotEmpty({ message: 'Nhân viên không được để trống' })
   employeeId: string;
 
-  @IsIn(['giai_trinh', 'lam_them_gio', 'nghi_phep', 'nghi_bu'], {
+  // `lam_online` = làm việc ở nhà. Ngày có đơn này đã duyệt thì chấm công BỎ
+  // đối chiếu vị trí (ban-ghi-cham-cong.service.ts) và bảng công ra ký hiệu
+  // `OL` — 1 công, không tiền ăn ca.
+  @IsIn(['giai_trinh', 'lam_them_gio', 'nghi_phep', 'nghi_bu', 'lam_online'], {
     message: 'Loại đơn không hợp lệ',
   })
   loaiDon: string;
@@ -21,7 +24,9 @@ export class CreateDonChamCongDto {
   denNgay?: string;
 
   // ca_ngay|sang|chieu — chỉ có ý nghĩa khi đơn đúng 1 ngày (tuNgay = denNgay),
-  // xem tinhSoNgayNghi() trong luat-don.ts.
+  // xem tinhSoNgayNghi() trong luat-don.ts. Đơn `lam_online` cũng dùng trường
+  // này, nhưng CHỈ để hiển thị: nửa buổi online vẫn ra `OL` = 1 công và cũng
+  // không có tiền ăn ca, y hệt online trọn ngày.
   @IsOptional()
   @IsIn(['ca_ngay', 'sang', 'chieu'], { message: 'Buổi không hợp lệ' })
   buoi?: string;

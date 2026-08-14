@@ -284,6 +284,24 @@ export class DonChamCong_Service {
       return { ...gopPhanBoOt(phanBoOt), phanBoOt };
     }
 
+    // Đơn làm online KHÔNG snapshot gì (không trừ quỹ, không sinh tiền) nên
+    // rơi thẳng ra `{}` ở cuối hàm. Nhưng vẫn phải chặn khoảng ngày bất
+    // thường: bảng công trải cờ online ra từng ngày trong khoảng, nên một đơn
+    // chọn nhầm năm sẽ quét vài nghìn vòng lặp mỗi lần Tổng hợp. Dùng CHUNG
+    // trần với đơn nghỉ — cùng một lớp lỗi nhập liệu, không cần con số thứ hai.
+    if (dto.loaiDon === 'lam_online') {
+      const soNgay = this.cacNgayTrongKhoang(
+        dto.ngay,
+        dto.denNgay ?? dto.ngay,
+      ).length;
+      if (soNgay > GIOI_HAN_NGAY_NGHI) {
+        throw new BadRequestException(
+          `Khoảng làm online không được vượt quá ${GIOI_HAN_NGAY_NGHI} ngày`,
+        );
+      }
+      return {};
+    }
+
     if (dto.loaiDon === 'nghi_phep' || dto.loaiDon === 'nghi_bu') {
       const tuNgay = dto.ngay;
       const denNgay = dto.denNgay ?? dto.ngay;

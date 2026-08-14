@@ -42,10 +42,17 @@ describe.each([
   ['UpdateDonChamCongDto', UpdateDonChamCongDto],
 ] as const)('%s — ràng buộc validate', (tenDto, DtoClass) => {
   // ──────────────────────────────────────────────────────────────────────────
-  // loaiDon: @IsIn(['giai_trinh', 'lam_them_gio', 'nghi_phep', 'nghi_bu'])
+  // loaiDon: @IsIn(['giai_trinh', 'lam_them_gio', 'nghi_phep', 'nghi_bu',
+  //                  'lam_online'])
   // ──────────────────────────────────────────────────────────────────────────
   describe('loaiDon', () => {
-    it.each(['giai_trinh', 'lam_them_gio', 'nghi_phep', 'nghi_bu'])(
+    it.each([
+      'giai_trinh',
+      'lam_them_gio',
+      'nghi_phep',
+      'nghi_bu',
+      'lam_online',
+    ])(
       "chấp nhận loaiDon = '%s'",
       async (loaiHopLe) => {
         const dto = plainToInstance(DtoClass, {

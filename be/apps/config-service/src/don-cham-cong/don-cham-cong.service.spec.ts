@@ -406,6 +406,59 @@ describe('DonChamCong_Service', () => {
     });
   });
 
+  describe('create — lam_online (làm việc ở nhà)', () => {
+    beforeEach(() => {
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Nguyen Van A',
+        ngayLamViecTrongTuan: T2_DEN_T6,
+      });
+    });
+
+    // Đơn online không trừ quỹ, không sinh tiền ⇒ không snapshot gì cả. Nếu
+    // sau này ai đó cho nó rơi vào nhánh nghi_phep thì nó sẽ âm thầm TRỪ PHÉP
+    // của người xin làm online — test này chặn đúng chỗ đó.
+    it('không snapshot số ngày nghỉ / giờ OT / quỹ nào', async () => {
+      const result = await service.create({
+        employeeId: EMP_ID,
+        loaiDon: 'lam_online',
+        ngay: '2026-08-10',
+        denNgay: '2026-08-12',
+        lyDo: 'Làm ở nhà',
+      } as any);
+
+      expect(result.soNgayNghi).toBeUndefined();
+      expect(result.soGioNghiBu).toBeUndefined();
+      expect(result.soGioOt).toBeUndefined();
+      expect(result.phanBoQuy).toBeUndefined();
+    });
+
+    it('giữ nguyên khoảng ngày và buổi trên đơn nửa buổi', async () => {
+      const result = await service.create({
+        employeeId: EMP_ID,
+        loaiDon: 'lam_online',
+        ngay: '2026-08-10',
+        denNgay: '2026-08-10',
+        buoi: 'sang',
+      } as any);
+
+      expect(result.buoi).toBe('sang');
+      expect(result.denNgay).toBe('2026-08-10');
+    });
+
+    it('từ chối khoảng dài bất thường (chọn nhầm năm)', async () => {
+      await expect(
+        service.create({
+          employeeId: EMP_ID,
+          loaiDon: 'lam_online',
+          ngay: '2026-08-10',
+          denNgay: '2027-08-10',
+        } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
   describe('create — employeeId không tồn tại', () => {
     it('throws NotFoundException', async () => {
       mockEmployeeRepo.findOne.mockResolvedValue(null);

@@ -50,3 +50,49 @@ describe('TaoDonCuaToiDto', () => {
     },
   );
 });
+
+/**
+ * Đơn làm online đi qua ĐÚNG DTO này khi nhân viên tự nộp. `TaoDonCuaToiDto`
+ * là `OmitType(CreateDonChamCongDto, …)` nên nó thừa hưởng `@IsIn` của
+ * `loaiDon` — test này khoá điều đó lại: nới loại đơn ở lớp cha mà quên lớp
+ * con (hoặc ngược lại, ai đó chép một `@IsIn` thứ hai vào đây) đều phải đỏ.
+ */
+describe('TaoDonCuaToiDto — đơn làm online', () => {
+  it('nhận đơn làm online nhiều ngày', async () => {
+    const dto = plainToInstance(TaoDonCuaToiDto, {
+      loaiDon: 'lam_online',
+      ngay: '2026-08-10',
+      denNgay: '2026-08-12',
+      lyDo: 'Làm ở nhà',
+    });
+
+    const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
+
+    expect(errors).toStrictEqual([]);
+  });
+
+  it('nhận đơn làm online nửa buổi', async () => {
+    const dto = plainToInstance(TaoDonCuaToiDto, {
+      loaiDon: 'lam_online',
+      ngay: '2026-08-10',
+      denNgay: '2026-08-10',
+      buoi: 'sang',
+      lyDo: 'Sáng ở nhà, chiều lên văn phòng',
+    });
+
+    const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
+
+    expect(errors).toStrictEqual([]);
+  });
+
+  it("vẫn từ chối loại đơn lạ ('wfh')", async () => {
+    const dto = plainToInstance(TaoDonCuaToiDto, {
+      loaiDon: 'wfh',
+      ngay: '2026-08-10',
+    });
+
+    const errors = await validate(dto, TUY_CHON_KHOP_MAIN);
+
+    expect(timDoiLoiTruong(errors, 'loaiDon')).toBeDefined();
+  });
+});
