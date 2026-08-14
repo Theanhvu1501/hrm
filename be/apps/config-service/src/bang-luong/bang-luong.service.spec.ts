@@ -1289,6 +1289,43 @@ describe('BangLuong_Service', () => {
       expect(row.thucTe.giaTriTungKhoan.AN_CA).toBe(50_000 * 22);
     });
 
+    // Chủ sản phẩm chốt 2026-08-14: ngày làm online KHÔNG có tiền ăn trưa.
+    // Không có một dòng code nào trong bang-luong phục vụ luật đó — nó đúng
+    // hoàn toàn nhờ `demNgayLamDu()` chỉ đếm ô `X`, nên test này là chỗ duy
+    // nhất neo luật lại. Ai đó "sửa cho tiện" bằng cách cho OL vào cùng rổ
+    // với X sẽ phải đi qua đây.
+    it('ngày OL (làm online) KHÔNG được suất ăn ca, nhưng vẫn ăn đủ công lương', async () => {
+      mockEmployeeRepo.find.mockResolvedValue([
+        {
+          _id: EMP1,
+          employeeId: 'NV0001',
+          hoTen: 'Nguyen Van A',
+          luongThoaThuan: 15_000_000,
+          mucKhaiBao: 5_500_000,
+          isActive: true,
+        },
+      ]);
+      // 20 ngày ở văn phòng + 2 ngày làm ở nhà ⇒ 22 công, nhưng chỉ 20 suất ăn.
+      timesheetStore = [
+        {
+          thang: '2026-07',
+          employeeId: EMP1,
+          soNgayCong: 22,
+          chiTietNgay: [
+            ...Array.from({ length: 20 }, (_, i) => ({ ngay: i + 1, kyHieu: 'X' })),
+            { ngay: 21, kyHieu: 'OL' },
+            { ngay: 22, kyHieu: 'OL' },
+          ],
+        },
+      ];
+
+      const [row] = await service.tongHop('2026-07');
+
+      expect(row.congThuong).toBe(22);
+      expect(row.congDayDu).toBe(20);
+      expect(row.thucTe.giaTriTungKhoan.AN_CA).toBe(50_000 * 20);
+    });
+
     it('bảng công chưa có chiTietNgay (dữ liệu cũ) → congDayDu rơi về tổng công, không về 0', async () => {
       // Ăn ca tụt về 0 vì thiếu dữ liệu chi tiết là mất tiền im lặng trên
       // phiếu lương thật; con số cũ hơi rộng tay còn đỡ hơn.
