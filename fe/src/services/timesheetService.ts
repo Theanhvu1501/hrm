@@ -38,6 +38,8 @@ export interface Timesheet {
   soNgayNghiPhep?: number;
   soNgayNghiKhongLuong?: number;
   soNgayOm?: number;
+  /** Số ô `OL` — ngày làm online. Đã nằm trong `soNgayCong`, đếm riêng để hiển thị. */
+  soNgayCongOnline?: number;
   soGioLamThem?: number;
   soLanDiMuon?: number;
   soLanVeSom?: number;
@@ -149,6 +151,7 @@ class TimesheetService extends ServiceBase {
       soNgayNghiPhep: (x.soNgayNghiPhep as number) ?? 0,
       soNgayNghiKhongLuong: (x.soNgayNghiKhongLuong as number) ?? 0,
       soNgayOm: (x.soNgayOm as number) ?? 0,
+      soNgayCongOnline: (x.soNgayCongOnline as number) ?? 0,
       soGioLamThem: (x.soGioLamThem as number) ?? 0,
       soLanDiMuon: (x.soLanDiMuon as number) ?? 0,
       soLanVeSom: (x.soLanVeSom as number) ?? 0,

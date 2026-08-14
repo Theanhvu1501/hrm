@@ -328,6 +328,34 @@ describe('BangCong_Service', () => {
 
       expect(result.soNgayCong).toBe(20.5);
     });
+
+    // Ngày làm online: vẫn 1 công (lương chính đủ) nhưng đếm riêng, vì bảng
+    // lương chỉ phát suất ăn ca cho ô `X` — xem `demNgayLamDu()`.
+    it('đếm riêng soNgayCongOnline từ ô OL, và OL vẫn cộng 1 công vào soNgayCong', async () => {
+      const id = '507f1f77bcf86cd799439035';
+      mockTimesheetRepo.findOne.mockResolvedValue({
+        _id: id,
+        thang: '2026-08',
+        employeeId: EMP1,
+        chiTietNgay: [{ ngay: 1, kyHieu: 'X' }],
+        soNgayCong: 1,
+        trangThai: 'nhap',
+        isActive: true,
+      });
+
+      const result = await service.update(id, {
+        chiTietNgay: [
+          { ngay: 1, kyHieu: 'X' },
+          { ngay: 2, kyHieu: 'X' },
+          { ngay: 3, kyHieu: 'OL' },
+          { ngay: 4, kyHieu: 'OL' },
+          { ngay: 5, kyHieu: 'P' },
+        ],
+      });
+
+      expect(result.soNgayCongOnline).toBe(2);
+      expect(result.soNgayCong).toBe(5);
+    });
   });
 
   describe('findOne — không tồn tại', () => {

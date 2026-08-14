@@ -96,6 +96,8 @@ export class BangCong_Service {
    * Recomputes the derived/aggregate fields from `chiTietNgay`:
    * - soNgayCong = Σ soCongCuaKyHieu(cell.kyHieu)
    * - soNgayNghiPhep / soNgayNghiKhongLuong / soNgayOm = counts of P/KL/O cells
+   * - soNgayCongOnline = count of OL cells (đã nằm trong soNgayCong, đếm riêng
+   *   để màn bảng công và báo cáo nhìn ra ngày làm ở nhà)
    * Mutates `ts` in place; caller is responsible for persisting it.
    */
   private recompute(ts: Timesheet): void {
@@ -108,6 +110,7 @@ export class BangCong_Service {
     ts.soNgayNghiPhep = cells.filter((c) => c.kyHieu === 'P').length;
     ts.soNgayNghiKhongLuong = cells.filter((c) => c.kyHieu === 'KL').length;
     ts.soNgayOm = cells.filter((c) => c.kyHieu === 'O').length;
+    ts.soNgayCongOnline = cells.filter((c) => c.kyHieu === 'OL').length;
   }
 
   /**

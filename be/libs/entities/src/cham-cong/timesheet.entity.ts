@@ -25,6 +25,14 @@ export class Timesheet extends BaseEntity {
   @Column({ default: 0 }) soNgayNghiKhongLuong: number; // computed: count of 'KL'
   @Column({ default: 0 }) soNgayOm: number; // computed: count of 'O'
   /**
+   * computed: count of 'OL' — ngày làm việc online.
+   *
+   * ĐÃ nằm trong `soNgayCong` (OL = 1 công), đếm riêng chỉ để hiển thị và để
+   * đối chiếu tiền ăn ca: bảng lương phát suất ăn theo số ô `X`, nên
+   * `soNgayCong - soNgayCongOnline` là phần có thể được ăn ca.
+   */
+  @Column({ default: 0 }) soNgayCongOnline: number;
+  /**
    * Số ô rơi vào "ngày làm việc nhưng không có căn cứ nào" — tính ra, không
    * nhập tay. `> 0` thì chặn chốt: chốt một bảng công còn ô trống là chốt một
    * kỳ lương thiếu ngày mà không ai biết.

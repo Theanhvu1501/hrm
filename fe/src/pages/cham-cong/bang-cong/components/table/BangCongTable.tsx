@@ -141,6 +141,17 @@ export function BangCongTable() {
         render: (value?: number) => value ?? 0,
       },
       {
+        // Đã nằm trong "Tổng công" — cột này chỉ trả lời "trong đó bao nhiêu
+        // ngày làm ở nhà", vì ngày online không được tính tiền ăn ca.
+        title: "Online",
+        dataIndex: "soNgayCongOnline",
+        key: "soNgayCongOnline",
+        width: 80,
+        fixed: "right",
+        align: "center",
+        render: (value?: number) => value ?? 0,
+      },
+      {
         title: "Ốm",
         dataIndex: "soNgayOm",
         key: "soNgayOm",
