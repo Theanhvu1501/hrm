@@ -67,8 +67,9 @@ ký hiệu mà mọi nơi tính tiền phải học thuộc, đổi lại không
 | `buoi` (`ca_ngay\|sang\|chieu`) | Chỉ có nghĩa khi `ngay === denNgay` — đúng luật đã áp cho đơn nghỉ |
 | `lyDo` | Lý do |
 
-Sửa: `@IsIn` của `loaiDon` ở `create-don-cham-cong.dto.ts` **và** `tao-don-cua-toi.dto.ts` (hai
-DTO, hai đường nộp — HR nộp hộ và nhân viên tự nộp).
+Sửa **một** chỗ: `@IsIn` của `loaiDon` ở `create-don-cham-cong.dto.ts`. `TaoDonCuaToiDto`
+(đường nhân viên tự nộp) là `OmitType(CreateDonChamCongDto, ['employeeId','trangThai','nguoiDuyet'])`
+nên thừa hưởng luôn validator này — không có bản chép thứ hai để quên.
 
 **Không** snapshot số liệu gì lúc tạo đơn (khác `nghi_phep`/`lam_them_gio`): đơn online không trừ
 quỹ, không sinh tiền. `tinhCacTruongSnapshot()` bỏ qua loại này.
@@ -157,7 +158,7 @@ Form HR nộp hộ (`donChamCongForm.convert.ts`) tự đúng nhờ đọc chung
 | Tầng | Ca phải phủ |
 |---|---|
 | `suy-ky-hieu.spec` | online + chấm vào → `OL`; online + không chấm → trống/`chua_xu_ly`; online + thiếu chấm ra → `OL` + `thieu_gio_ra`; online đụng đơn nghỉ → đơn nghỉ thắng; online vào ngày lễ → `L`; online ngoài lịch tuần → không đổi |
-| DTO (2 file) | `lam_online` hợp lệ ở cả hai đường nộp; loại lạ vẫn 400 |
+| DTO | `lam_online` hợp lệ ở cả hai đường nộp (HR nộp hộ + `cua-toi`); loại lạ vẫn 400 |
 | `ban-ghi-cham-cong.service.spec` | ngoài vùng + có đơn online duyệt → cho qua, `laOnline=true`, `ngoaiVung=false`, `locationId` rỗng; ngoài vùng + đơn **chờ duyệt** → vẫn 403; ngoài vùng + không đơn → vẫn 403; đơn online không nới giờ (đi muộn vẫn tính) |
 | `bang-cong.service.spec` | `soNgayCongOnline` đếm đúng; `soNgayCong` cộng `OL` = 1 |
 | `bang-luong.service.spec` | Tháng có `OL` → ăn ca **không** đếm ngày đó; `congThuong` vẫn đủ |
@@ -168,7 +169,7 @@ Form HR nộp hộ (`donChamCongForm.convert.ts`) tự đúng nhờ đọc chung
 - **Cột mới `laOnline` / `soNgayCongOnline`**: đều `default: false/0`, dữ liệu cũ đọc ra đúng nghĩa
   ("không phải online", "0 ngày online"). Không cần migration.
 - **`forbidNonWhitelisted`**: thêm loại đơn không thêm trường ⇒ không đụng lớp lỗi 400-cả-form đã
-  gặp trước đây. Nhưng vẫn phải sửa **cả hai** DTO, quên một cái là một đường nộp bị 400.
+  gặp trước đây.
 - **Không phát sinh quyền mới**: nằm trong module đơn từ đã grant ⇒ **không** phải chạy lại
   `ops/grant-quyen-module-moi.ts` khi deploy.
 - **Bảng công đã chốt** không bị ảnh hưởng: ô do HR sửa mang `nguon='hr_sua'`, máy không đụng.
