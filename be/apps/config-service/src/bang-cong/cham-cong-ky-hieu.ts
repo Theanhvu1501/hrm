@@ -24,6 +24,21 @@ export const KY_HIEU_CHAM_CONG: KyHieuDef[] = [
   { kyHieu: 'L', nhan: 'Nghỉ lễ/Tết', soCong: 1, nhom: 'nghi_huong_luong' },
   { kyHieu: 'NB', nhan: 'Nghỉ bù', soCong: 1, nhom: 'nghi_huong_luong' },
   { kyHieu: 'CT', nhan: 'Công tác', soCong: 1, nhom: 'lam_viec' },
+  /**
+   * Làm việc online (ở nhà) theo đơn `lam_online` đã duyệt.
+   *
+   * 1 công như `X` nên lương chính và phép năm theo công thực tế
+   * (`quy-phep.service.ts` đọc `soNgayCong`) không đổi. Nhưng cố ý là một ký
+   * hiệu RIÊNG chứ không phải `X`: `demNgayLamDu()` bên bảng lương chỉ đếm ô
+   * `X` để ra số suất ăn ca, nên tách ký hiệu chính là cách ngày online không
+   * được tính tiền ăn trưa — chủ sản phẩm chốt 2026-08-14.
+   *
+   * Nửa buổi online dùng CHUNG ký hiệu này: nửa buổi vẫn là làm cả ngày (chỉ
+   * khác chỗ ngồi) nên vẫn 1 công, và cũng không có suất ăn. Thêm một ký hiệu
+   * nửa buổi riêng chỉ để hiển thị là bắt mọi nơi tính tiền học thuộc thêm
+   * một ngoại lệ mà không đổi một đồng nào — buổi đã nằm trên đơn rồi.
+   */
+  { kyHieu: 'OL', nhan: 'Làm online', soCong: 1, nhom: 'lam_viec' },
   { kyHieu: 'O', nhan: 'Nghỉ ốm (BHXH)', soCong: 0, nhom: 'om_bhxh' },
   {
     kyHieu: 'KL',

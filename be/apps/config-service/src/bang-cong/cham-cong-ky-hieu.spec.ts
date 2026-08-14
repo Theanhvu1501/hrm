@@ -25,6 +25,17 @@ describe('KY_HIEU_CHAM_CONG', () => {
     expect(soCongCuaKyHieu('N')).toBe(0);
   });
 
+  it('có ký hiệu OL (làm online) tính 1 công, nhóm làm việc', () => {
+    const ol = KY_HIEU_CHAM_CONG.find((k) => k.kyHieu === 'OL');
+    expect(ol).toStrictEqual({
+      kyHieu: 'OL',
+      nhan: 'Làm online',
+      soCong: 1,
+      nhom: 'lam_viec',
+    });
+    expect(soCongCuaKyHieu('OL')).toBe(1);
+  });
+
   it('không đổi số công của các ký hiệu đã có', () => {
     expect(soCongCuaKyHieu('X')).toBe(1);
     expect(soCongCuaKyHieu('1/2')).toBe(0.5);
