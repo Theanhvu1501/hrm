@@ -1616,5 +1616,20 @@ describe('BanGhiChamCong_Service', () => {
       expect(kq.laOnline).toBe(false);
       expect(requestRepo.find).not.toHaveBeenCalled();
     });
+    it('homNay trả laOnline=true khi ngày công có đơn online đã duyệt', async () => {
+      requestRepo.find.mockResolvedValue([donOnline()]);
+
+      const kq: any = await service.homNay(USER);
+
+      expect(kq.laOnline).toBe(true);
+    });
+
+    it('homNay trả laOnline=false khi không có đơn', async () => {
+      requestRepo.find.mockResolvedValue([]);
+
+      const kq: any = await service.homNay(USER);
+
+      expect(kq.laOnline).toBe(false);
+    });
   });
 });

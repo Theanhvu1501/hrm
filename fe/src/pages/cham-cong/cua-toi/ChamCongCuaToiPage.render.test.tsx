@@ -857,3 +857,29 @@ describe('Chấm công của tôi — kết quả hiện trong dialog (không ph
     expect(screen.getByRole('button', { name: /Kiểm tra lại/ })).toBeTruthy();
   });
 });
+
+/**
+ * Ngày làm online: người dùng phải BIẾT TRƯỚC là hôm nay bấm ở đâu cũng được,
+ * thay vì tự phát hiện bằng cách thử. Băng này chỉ dựa vào `laOnline` do
+ * backend trả — FE không tự suy từ danh sách đơn.
+ */
+describe('băng thông báo ngày làm online', () => {
+  it('hiện băng khi hôm nay có đơn online đã duyệt', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(
+      homNayMau({ laOnline: true }),
+    );
+
+    render(<ChamCongCuaToiPage />);
+
+    expect(await screen.findByText(/hôm nay bạn làm online/i)).toBeTruthy();
+  });
+
+  it('không hiện băng khi không có đơn online', async () => {
+    vi.spyOn(attendanceRecordService, 'homNay').mockResolvedValue(homNayMau());
+
+    render(<ChamCongCuaToiPage />);
+
+    await screen.findByRole('button', { name: /chấm công/i });
+    expect(screen.queryByText(/hôm nay bạn làm online/i)).toBeNull();
+  });
+});

@@ -190,6 +190,21 @@ export function NutCham() {
         này nghĩa là "hỏng"). Mọi máy trạng thái (tải/chặn/lỗi) vẫn ở NutCham,
         Hero chỉ là màn hình chính khi đã sẵn sàng chấm.
       */}
+      {/*
+        Ngày làm online: nói TRƯỚC khi người ta bấm. Không có băng này thì
+        người đang ở nhà phải tự đoán xem mình có chấm được không, và cách
+        duy nhất để biết là bấm thử.
+      */}
+      {homNay.laOnline && (
+        <Alert
+          className="mb-3"
+          type="info"
+          showIcon
+          message="Hôm nay bạn làm online"
+          description="Cứ bấm chấm công ở bất kỳ đâu — hôm nay hệ thống không kiểm tra vị trí. Giờ vào/ra vẫn tính như ngày thường."
+        />
+      )}
+
       <Hero
         homNay={homNay}
         laVao={laVao}

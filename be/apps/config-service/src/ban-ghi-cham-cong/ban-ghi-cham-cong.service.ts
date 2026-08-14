@@ -592,9 +592,19 @@ export class BanGhiChamCong_Service {
       where: { isActive: true },
     });
 
+    // Hỏi theo `ngayCong` (không phải `ngay`) để ca qua đêm nói cùng một câu
+    // chuyện với `banGhi`/`hanhDongKeTiep` ngay bên dưới.
+    const laOnline = await this.coDonOnlineDaDuyet(employeeId, ngayCong);
+
     return {
       ngay,
       ngayCong,
+      /**
+       * Ngày công này có đơn làm online đã duyệt ⇒ chấm công BỎ đối chiếu vị
+       * trí. Màn hình nhân viên đọc cờ này để nói trước cho người ta biết,
+       * thay vì để họ tự phát hiện bằng cách bấm thử rồi thấy không bị chặn.
+       */
+      laOnline,
       nhanVien: {
         id: employeeId,
         hoTen: emp.hoTen,

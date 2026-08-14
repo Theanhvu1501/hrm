@@ -118,6 +118,13 @@ export interface TrangThaiHomNay {
    * ra" (màn hình hiện "—"), `0` là "chưa có gì để tính".
    */
   soCong: number | null;
+  /**
+   * Ngày công này có đơn `lam_online` đã duyệt ⇒ chấm công KHÔNG đối chiếu vị
+   * trí. Backend quyết định (`BanGhiChamCong_Service.homNay()`), FE chỉ hiển
+   * thị — không tự suy từ danh sách đơn, vì hai nơi suy hai kiểu là cách màn
+   * hình nói một đằng còn API làm một nẻo.
+   */
+  laOnline?: boolean;
 }
 
 export interface ChamCongDto {
@@ -175,6 +182,8 @@ class AttendanceRecordService extends ServiceBase {
       // phải đi thẳng qua để màn hình hiện "—" thay vì "Chưa tính". Dùng
       // `?? 0` ở đây sẽ nuốt mất `null` vì `??` không phân biệt hai thứ.
       soCong: res.soCong === undefined ? 0 : res.soCong,
+      // Backend cũ chưa có trường này → coi như không phải ngày online.
+      laOnline: res.laOnline === true,
     };
   }
 
