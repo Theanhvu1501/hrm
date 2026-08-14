@@ -18,8 +18,11 @@ import { dauTuanCua, bayNgayTu, dichTuan } from "@/pages/cham-cong/cua-toi/lichT
  * theo ngày, không phải việc của lịch tháng này).
  */
 
-/** Ký hiệu hiện trên ô ngày cho hai loại nghỉ có đơn — không dùng cho giải trình/OT. */
-export type KyHieuNghi = "P" | "B";
+/**
+ * Ký hiệu hiện trên ô ngày: hai loại nghỉ có đơn, và ngày làm online. Không
+ * dùng cho giải trình/OT (hai loại đó không đổi số công của ngày).
+ */
+export type KyHieuNghi = "P" | "B" | "OL";
 
 const KY_HIEU_THEO_LOAI_DON: Record<"nghi_phep" | "nghi_bu", KyHieuNghi> = {
   nghi_phep: "P",
@@ -111,11 +114,29 @@ function donNghiPhuNgay(
 }
 
 /**
+ * Ngày có đơn `lam_online` ĐÃ DUYỆT phủ lên hay không.
+ *
+ * Tách khỏi `donNghiPhuNgay` chứ không nới nó ra: đơn online là ngày LÀM, và
+ * nó KHÔNG quyết định số công như đơn nghỉ — số công vẫn suy từ chấm công.
+ */
+function coDonOnlinePhuNgay(ngay: string, don: AttendanceRequest[]): boolean {
+  return don.some((d) => {
+    if (d.trangThai !== "da_duyet") return false;
+    if (d.loaiDon !== "lam_online") return false;
+    const denNgay = d.denNgay ?? d.ngay;
+    return ngay >= d.ngay && ngay <= denNgay;
+  });
+}
+
+/**
  * Tính dữ liệu hiển thị cho MỘT ngày trong lịch tháng.
  *
  * Luật, theo đúng thứ tự ưu tiên:
  * 1. Có đơn nghỉ phép/nghỉ bù ĐÃ DUYỆT phủ ngày đó → công theo đơn (`buoi`),
  *    kèm ký hiệu P/B.
+ * 1b. Có đơn LÀM ONLINE đã duyệt VÀ có chấm công → ký hiệu OL, công vẫn suy
+ *    từ chấm công (đơn online không tự phát công — cùng luật với backend
+ *    `suy-ky-hieu.ts`).
  * 2. Ngày HÔM NAY (so với `homNay`) → công lấy từ `congHomNay` (đã tính sẵn
  *    bởi `/hom-nay`, MỚI hơn dải bản ghi cả tháng vốn chỉ nạp lại khi đổi
  *    tháng — giữ đúng lý do `duLieuNgay()` ở lịch tuần làm vậy).
@@ -152,14 +173,22 @@ export function tinhONgay(
   if (donNghi) {
     cong = donNghi.buoi === "sang" || donNghi.buoi === "chieu" ? 0.5 : 1;
     kyHieu = KY_HIEU_THEO_LOAI_DON[donNghi.loaiDon as "nghi_phep" | "nghi_bu"];
-  } else if (laHomNay) {
-    cong = congHomNay;
   } else {
-    cong = suySoCong(banGhiNgay);
+    cong = laHomNay ? congHomNay : suySoCong(banGhiNgay);
+    // Chỉ gắn OL khi ngày đó THẬT SỰ có công: `cong === 0` là ngày có đơn mà
+    // không ai chấm — gắn ký hiệu vào đó là nói người ta đã làm online trong
+    // khi bảng công của HR đang để trống ô đó chờ xử lý.
+    if (cong !== 0 && coDonOnlinePhuNgay(ngay, donDaDuyet)) {
+      kyHieu = "OL";
+    }
   }
 
   let hienThi: string;
-  if (kyHieu) {
+  if (kyHieu === "OL") {
+    // OL đi theo công suy từ chấm công, nên phải qua đúng luật hiển thị của
+    // ngày thường: `null` (đã vào, chưa ra) là '•', không phải '0.5'.
+    hienThi = cong === null ? "•" : String(cong);
+  } else if (kyHieu) {
     hienThi = cong === 1 ? "1" : "0.5";
   } else if (laTuongLai && cong === 0) {
     hienThi = "";

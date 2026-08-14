@@ -297,3 +297,78 @@ describe("tinhONgay — đơn nghỉ phép/nghỉ bù đã duyệt", () => {
     expect(oOt.cong).toBe(0);
   });
 });
+
+/**
+ * Ngày làm online phải nhìn ra được ngay trên lịch của nhân viên — nếu không
+ * thì ô đó trông y hệt một ngày lên văn phòng, trong khi nó không có tiền ăn.
+ *
+ * Luật giống hệt backend `suy-ky-hieu.ts`: đơn online KHÔNG tự phát công,
+ * phải có chấm công thì mới là một ngày công online.
+ */
+describe("tinhONgay — ngày làm online", () => {
+  const donOnline = (over: Partial<AttendanceRequest> = {}) =>
+    don({
+      loaiDon: "lam_online",
+      ngay: "2026-07-06",
+      denNgay: "2026-07-08",
+      ...over,
+    });
+
+  it("có đơn online + chấm đủ vào/ra → ký hiệu OL, 1 công", () => {
+    const o = tinhONgay(
+      "2026-07-07",
+      [banGhi("2026-07-07", "vao"), banGhi("2026-07-07", "ra")],
+      [donOnline()],
+      "2026-07-20",
+      null,
+    );
+
+    expect(o.kyHieu).toBe("OL");
+    expect(o.cong).toBe(1);
+    expect(o.hienThi).toBe("1");
+  });
+
+  it("có đơn online nhưng KHÔNG chấm công → không gắn OL", () => {
+    const o = tinhONgay("2026-07-07", [], [donOnline()], "2026-07-20", null);
+
+    expect(o.kyHieu).toBeUndefined();
+    expect(o.cong).toBe(0);
+  });
+
+  it("đơn online chưa duyệt → không gắn OL", () => {
+    const o = tinhONgay(
+      "2026-07-07",
+      [banGhi("2026-07-07", "vao"), banGhi("2026-07-07", "ra")],
+      [donOnline({ trangThai: "cho_duyet" })],
+      "2026-07-20",
+      null,
+    );
+
+    expect(o.kyHieu).toBeUndefined();
+  });
+
+  it("ngày ngoài khoảng của đơn → không gắn OL", () => {
+    const o = tinhONgay(
+      "2026-07-09",
+      [banGhi("2026-07-09", "vao"), banGhi("2026-07-09", "ra")],
+      [donOnline()],
+      "2026-07-20",
+      null,
+    );
+
+    expect(o.kyHieu).toBeUndefined();
+  });
+
+  // Đơn nghỉ thắng đơn online — cùng thứ tự ưu tiên với backend.
+  it("trùng ngày với đơn nghỉ phép → P thắng", () => {
+    const o = tinhONgay(
+      "2026-07-07",
+      [banGhi("2026-07-07", "vao"), banGhi("2026-07-07", "ra")],
+      [donOnline(), don({ ngay: "2026-07-07", denNgay: "2026-07-07" })],
+      "2026-07-20",
+      null,
+    );
+
+    expect(o.kyHieu).toBe("P");
+  });
+});
