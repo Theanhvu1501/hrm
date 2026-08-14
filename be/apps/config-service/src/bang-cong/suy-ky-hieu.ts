@@ -61,6 +61,15 @@ export interface SuyKyHieuInput {
   ngayLamViecTrongTuan?: number[]; // 0=CN … 6=T7
   laNgayLe: boolean;
   donNghi?: DonNghiCuaNgay | null;
+  /**
+   * Ngày này được phủ bởi một đơn `lam_online` đã duyệt.
+   *
+   * CỐ Ý không nhét vào `donNghi`: đơn nghỉ nói "hôm đó không làm", đơn online
+   * nói "hôm đó CÓ làm, chỉ khác chỗ ngồi". Gộp chung thì `coBangChung()`,
+   * `kyHieuCuaDon()` và cả thang ưu tiên đều phải phân biệt lại bằng `loaiDon`
+   * ở từng chỗ đọc — ba cơ hội để quên.
+   */
+  coDonOnline?: boolean;
   coChamVao: boolean;
   coChamRa: boolean;
   coBanGhiNgoaiVung: boolean;
@@ -135,7 +144,9 @@ function khongTinh(): SuyKyHieuKetQua {
  * nguyên đúng lớp lỗi mà cảnh báo này sinh ra để diệt, chỉ hẹp hơn.
  */
 function coBangChung(input: SuyKyHieuInput): boolean {
-  return input.coChamVao || input.coChamRa || !!input.donNghi;
+  return (
+    input.coChamVao || input.coChamRa || !!input.donNghi || !!input.coDonOnline
+  );
 }
 
 export function suyKyHieuNgay(input: SuyKyHieuInput): SuyKyHieuKetQua {
@@ -206,6 +217,21 @@ export function suyKyHieuNgay(input: SuyKyHieuInput): SuyKyHieuKetQua {
   if (input.donNghi) {
     if (input.coChamVao) canhBao.push(MA_CANH_BAO.DON_VA_CHAM_CONG);
     return { kyHieu: kyHieuCuaDon(input.donNghi), canhBao, chuaXuLy: false };
+  }
+
+  // Dòng 4.5: đơn làm online đã duyệt + CÓ chấm công → OL (1 công, không ăn ca).
+  //
+  // `coChamVao` là điều kiện BẮT BUỘC, không phải phòng hờ: chủ sản phẩm chốt
+  // "vẫn phải chấm công như bình thường". Cho đơn tự phát công là biến đơn
+  // online thành một dạng nghỉ hưởng lương — duyệt xong là khỏi làm, không ai
+  // biết. Thiếu chấm vào thì rơi tiếp xuống dòng 6 (trống + chưa xử lý) để HR
+  // nhìn thấy, y hệt một ngày đi làm mà quên bấm.
+  //
+  // Đứng SAU đơn nghỉ (dòng 4): trùng ngày thì cái nghỉ thắng — nó đã qua một
+  // người duyệt và nó là cái quyết định tiền.
+  if (input.coDonOnline && input.coChamVao) {
+    if (!input.coChamRa) canhBao.push(MA_CANH_BAO.THIEU_GIO_RA);
+    return { kyHieu: 'OL', canhBao, chuaXuLy: false };
   }
 
   // Dòng 5: có mặt là có công.

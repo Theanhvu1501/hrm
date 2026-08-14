@@ -338,3 +338,84 @@ describe('ngày ngoài lịch làm việc trong tuần', () => {
     expect(kq.chuaXuLy).toBe(false);
   });
 });
+
+/**
+ * Đơn làm online (P: 2026-08-14). Bậc mới nằm GIỮA "đơn nghỉ đã duyệt" và
+ * "có chấm vào = X", nên phải chứng minh cả hai phía: cái gì thắng nó và cái
+ * gì nó thắng.
+ */
+describe('suyKyHieuNgay — đơn làm online', () => {
+  function online(ghiDe: Partial<SuyKyHieuInput> = {}): SuyKyHieuInput {
+    return {
+      ngay: '2026-08-05',
+      ngayVaoLam: '2020-01-01',
+      ngayLamViecTrongTuan: T2_T7,
+      laNgayLe: false,
+      coDonOnline: true,
+      coChamVao: false,
+      coChamRa: false,
+      coBanGhiNgoaiVung: false,
+      ...ghiDe,
+    };
+  }
+
+  it('có đơn online + chấm đủ vào/ra → OL, không cảnh báo', () => {
+    const kq = suyKyHieuNgay(online({ coChamVao: true, coChamRa: true }));
+    expect(kq.kyHieu).toBe('OL');
+    expect(kq.canhBao).toStrictEqual([]);
+    expect(kq.chuaXuLy).toBe(false);
+  });
+
+  // Điểm nghiệp vụ chủ sản phẩm chốt: "vẫn phải chấm công như bình thường".
+  // Đơn online KHÔNG tự phát công — duyệt xong mà không bấm thì vẫn là một ô
+  // HR phải xử lý, y hệt ngày đi làm mà quên chấm.
+  it('có đơn online nhưng KHÔNG chấm công → ô trống, chưa xử lý', () => {
+    const kq = suyKyHieuNgay(online());
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(true);
+    expect(kq.canhBao).toContain(MA_CANH_BAO.CHUA_XU_LY);
+  });
+
+  it('chấm vào mà quên chấm ra → vẫn OL, kèm cảnh báo thiếu giờ ra', () => {
+    const kq = suyKyHieuNgay(online({ coChamVao: true }));
+    expect(kq.kyHieu).toBe('OL');
+    expect(kq.canhBao).toContain(MA_CANH_BAO.THIEU_GIO_RA);
+  });
+
+  it('đơn nghỉ thắng đơn online khi trùng ngày', () => {
+    const kq = suyKyHieuNgay(
+      online({
+        coChamVao: true,
+        donNghi: { loaiDon: 'nghi_phep', loaiNghi: 'phep_nam', laNuaNgay: false },
+      }),
+    );
+    expect(kq.kyHieu).toBe('P');
+  });
+
+  it('ngày lễ thắng đơn online', () => {
+    const kq = suyKyHieuNgay(online({ coChamVao: true, laNgayLe: true }));
+    expect(kq.kyHieu).toBe('L');
+  });
+
+  it('đơn online vào ngày ngoài lịch tuần không thành OL', () => {
+    // 2026-08-09 là Chủ nhật, lịch T2–T7.
+    const kq = suyKyHieuNgay(online({ ngay: '2026-08-09', coChamVao: true }));
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.canhBao).toContain(MA_CANH_BAO.LAM_NGOAI_LICH_TUAN);
+  });
+
+  it('không có đơn online → vẫn X như cũ', () => {
+    const kq = suyKyHieuNgay(online({ coDonOnline: false, coChamVao: true, coChamRa: true }));
+    expect(kq.kyHieu).toBe('X');
+  });
+
+  // Đơn online là BẰNG CHỨNG: ngày rơi ngoài khoảng làm việc mà có đơn online
+  // thì đó là mâu thuẫn dữ liệu, phải la lên chứ không nuốt im lặng — cùng
+  // luật đã áp cho chấm công và đơn nghỉ.
+  it('đơn online sau ngày nghỉ việc → cảnh báo, đếm là chưa xử lý', () => {
+    const kq = suyKyHieuNgay(online({ ngayLamViecCuoi: '2026-07-31' }));
+    expect(kq.kyHieu).toBeNull();
+    expect(kq.chuaXuLy).toBe(true);
+    expect(kq.canhBao).toContain(MA_CANH_BAO.SAU_NGAY_NGHI_VIEC);
+  });
+});
