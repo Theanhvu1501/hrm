@@ -328,3 +328,49 @@ describe('tongGioOt', () => {
     expect(map.get(NV1)).toBe(1.5);
   });
 });
+
+/**
+ * Đơn `lam_online` đi CHUNG một vòng lặp với đơn nghỉ nhưng đổ vào một cờ
+ * khác (`coDonOnline`), vì nó là ngày LÀM chứ không phải ngày nghỉ.
+ */
+describe('gomTheoNgay — đơn làm online', () => {
+  function donOnline(ghiDe: Record<string, any> = {}) {
+    return don({ loaiDon: 'lam_online', loaiNghi: undefined, ...ghiDe });
+  }
+
+  it('trải cờ coDonOnline ra từng ngày trong khoảng', () => {
+    const map = gomTheoNgay(
+      [],
+      [donOnline({ ngay: '2026-08-10', denNgay: '2026-08-12' })],
+      '2026-08',
+    );
+    for (const ngay of ['2026-08-10', '2026-08-11', '2026-08-12']) {
+      expect(map.get(NV1)!.get(ngay)!.coDonOnline).toBe(true);
+    }
+    expect(map.get(NV1)!.get('2026-08-13')?.coDonOnline ?? false).toBe(false);
+  });
+
+  it('đơn một ngày (denNgay rỗng) vẫn phủ đúng ngày đó', () => {
+    const map = gomTheoNgay([], [donOnline({ ngay: '2026-08-10' })], '2026-08');
+    expect(map.get(NV1)!.get('2026-08-10')!.coDonOnline).toBe(true);
+  });
+
+  it('KHÔNG nhận đơn còn chờ duyệt', () => {
+    const map = gomTheoNgay([], [donOnline({ trangThai: 'cho_duyet' })], '2026-08');
+    expect(map.get(NV1)?.get('2026-08-05')?.coDonOnline ?? false).toBe(false);
+  });
+
+  it('KHÔNG nhận đơn đã huỷ', () => {
+    const map = gomTheoNgay([], [donOnline({ isActive: false })], '2026-08');
+    expect(map.get(NV1)?.get('2026-08-05')?.coDonOnline ?? false).toBe(false);
+  });
+
+  // Nửa buổi online vẫn là 1 công OL không ăn ca, nên `buoi` KHÔNG được biến
+  // thành nửa công ở đây — khác hẳn đơn nghỉ.
+  it('nửa buổi online không đụng gì tới donNghi', () => {
+    const map = gomTheoNgay([], [donOnline({ buoi: 'sang' })], '2026-08');
+    const o = map.get(NV1)!.get('2026-08-05')!;
+    expect(o.coDonOnline).toBe(true);
+    expect(o.donNghi).toBeNull();
+  });
+});

@@ -58,10 +58,18 @@ export interface DuLieuNgay {
   coChamRa: boolean;
   coBanGhiNgoaiVung: boolean;
   donNghi: DonNghiCuaNgay | null;
+  /** Ngày được phủ bởi đơn `lam_online` đã duyệt — xem `SuyKyHieuInput`. */
+  coDonOnline: boolean;
 }
 
 function oTrong(): DuLieuNgay {
-  return { coChamVao: false, coChamRa: false, coBanGhiNgoaiVung: false, donNghi: null };
+  return {
+    coChamVao: false,
+    coChamRa: false,
+    coBanGhiNgoaiVung: false,
+    donNghi: null,
+    coDonOnline: false,
+  };
 }
 
 function layO(
@@ -110,6 +118,22 @@ export function gomTheoNgay(
   for (const don of requests) {
     if (don.isActive === false) continue;
     if (don.trangThai !== 'da_duyet') continue;
+
+    // Đơn làm online: ngày LÀM, không phải ngày nghỉ ⇒ đổ vào cờ riêng chứ
+    // không vào `donNghi`. Nửa buổi (`buoi`) CỐ Ý không đọc ở đây: nửa buổi
+    // online vẫn ra `OL` = 1 công không ăn ca, y hệt online trọn ngày (chủ
+    // sản phẩm chốt 2026-08-14) — buổi chỉ để hiển thị trên đơn.
+    if (don.loaiDon === 'lam_online') {
+      if (!don.ngay) continue;
+      const denOnline = don.denNgay || don.ngay;
+      for (let t = moc(don.ngay); t <= moc(denOnline); t += MOT_NGAY_MS) {
+        const ngay = chuoiNgay(t);
+        if (!ngay.startsWith(thang)) continue;
+        layO(map, don.employeeId, ngay).coDonOnline = true;
+      }
+      continue;
+    }
+
     if (!LOAI_DON_NGHI.has(don.loaiDon)) continue;
     // Nghỉ bù LẺ GIỜ không sinh ký hiệu: người đó vẫn đi làm hôm ấy, chỉ vắng
     // vài tiếng, và quỹ giờ làm thêm đã gánh phần vắng đó. Ngày vẫn ra `X` từ
