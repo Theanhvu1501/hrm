@@ -4,6 +4,7 @@ import {
   FieldTimeOutlined,
   CoffeeOutlined,
   RetweetOutlined,
+  LaptopOutlined,
 } from "@ant-design/icons";
 import { AttendanceRequestType } from "@/services/attendanceRequestService";
 
@@ -16,7 +17,7 @@ import { AttendanceRequestType } from "@/services/attendanceRequestService";
  * bên quản trị. Nhãn chữ vẫn lấy từ `LOAI_DON_OPTIONS` để một chỗ đổi chữ là
  * đổi cả hai màn.
  *
- * Bốn màu chọn theo bảng màu hệ thống của iOS (blue/orange/green/purple) để
+ * Màu chọn theo bảng màu hệ thống của iOS (blue/orange/green/purple/teal) để
  * mỗi loại đơn có một danh tính màu ổn định, người dùng nhận ra bằng màu trước
  * khi đọc chữ.
  */
@@ -45,5 +46,11 @@ export const MAT_HINH_LOAI: Record<AttendanceRequestType, MatHinhLoai> = {
   nghi_bu: {
     icon: <RetweetOutlined />,
     gradient: "linear-gradient(135deg, #d07bf5, #af52de)",
+  },
+  // Làm online: máy tính xách tay → teal. Màu thứ năm của bảng màu iOS, chưa
+  // loại nào dùng, nên không bị nhầm với bốn ô còn lại khi liếc nhanh.
+  lam_online: {
+    icon: <LaptopOutlined />,
+    gradient: "linear-gradient(135deg, #5ac8fa, #32ade6)",
   },
 };

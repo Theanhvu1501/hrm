@@ -92,3 +92,23 @@ describe("dongPhu — số backend tự tính", () => {
     expect(dongPhu(don({ loaiDon: "giai_trinh" }))).toBe("");
   });
 });
+
+describe("dongPhu — đơn làm online", () => {
+  it("đơn nửa buổi hiện tên buổi", () => {
+    expect(
+      dongPhu(don({ loaiDon: "lam_online", ngay: "2026-08-10", denNgay: "2026-08-10", buoi: "sang" })),
+    ).toBe("Buổi sáng");
+  });
+
+  it("đơn trọn ngày không hiện gì thừa", () => {
+    expect(
+      dongPhu(don({ loaiDon: "lam_online", ngay: "2026-08-10", denNgay: "2026-08-12", buoi: "ca_ngay" })),
+    ).toBe("");
+  });
+
+  // Đơn online không có giờ OT, không có số ngày nghỉ — rơi vào nhánh OT sẽ
+  // hiện "0 giờ OT" trên một cái đơn không liên quan gì tới làm thêm.
+  it("không hiện giờ OT", () => {
+    expect(dongPhu(don({ loaiDon: "lam_online", soGioOt: 0 } as any))).not.toContain("OT");
+  });
+});

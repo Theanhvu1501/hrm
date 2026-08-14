@@ -36,7 +36,13 @@ export function khoangNgay(don: AttendanceRequest): string {
 export function dongPhu(don: AttendanceRequest): string {
   const phan: string[] = [];
 
-  if (don.loaiDon === "nghi_phep" || don.loaiDon === "nghi_bu") {
+  // Đơn online: chỉ có buổi. Để rơi xuống nhánh OT bên dưới thì một cái đơn
+  // xin làm ở nhà sẽ hiện "0 giờ OT" — số thật, sai ngữ cảnh.
+  if (don.loaiDon === "lam_online") {
+    if (don.buoi && don.buoi !== "ca_ngay") {
+      phan.push(labelFor(BUOI_OPTIONS, don.buoi));
+    }
+  } else if (don.loaiDon === "nghi_phep" || don.loaiDon === "nghi_bu") {
     if (don.buoi && don.buoi !== "ca_ngay") {
       phan.push(labelFor(BUOI_OPTIONS, don.buoi));
     }

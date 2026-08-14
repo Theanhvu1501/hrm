@@ -6,7 +6,10 @@ export type AttendanceRequestType =
   | 'giai_trinh'
   | 'lam_them_gio'
   | 'nghi_phep'
-  | 'nghi_bu';
+  | 'nghi_bu'
+  // Làm việc online (ở nhà). Ngày có đơn này đã duyệt thì chấm công bỏ đối
+  // chiếu vị trí, và bảng công ra ký hiệu `OL` — 1 công, không tiền ăn ca.
+  | 'lam_online';
 export type AttendanceRequestStatus = 'cho_duyet' | 'da_duyet' | 'tu_choi';
 
 /** ca_ngay|sang|chieu — chỉ có ý nghĩa khi đơn nghỉ phép đúng một ngày. */

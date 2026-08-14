@@ -39,6 +39,11 @@ export const TRUONG_THEO_LOAI: Record<
   lam_them_gio: ["ngay", "gioTu", "gioDen", "lyDo"],
   nghi_phep: ["ngay", "denNgay", "buoi", "loaiNghi", "lyDo"],
   nghi_bu: ["ngay", "denNgay", "buoi", "lyDo"],
+  // Đơn online mượn đúng hình dạng của đơn nghỉ theo ngày (khoảng ngày + nửa
+  // buổi), chỉ KHÔNG có `loaiNghi`: đây là ngày LÀM, không phải ngày nghỉ —
+  // cho chọn loại nghỉ ở đây là mở đường trừ nhầm quỹ phép của chính người
+  // đang xin đi làm.
+  lam_online: ["ngay", "denNgay", "buoi", "lyDo"],
 };
 
 /**
@@ -56,9 +61,20 @@ export interface DonDangSoan {
   kieuNghi?: string;
 }
 
-/** Đơn nghỉ đúng MỘT ngày mới có khái niệm nửa buổi. */
+/**
+ * Đúng MỘT ngày mới có khái niệm nửa buổi.
+ *
+ * `lam_online` cũng có nửa buổi (sáng ở nhà, chiều lên văn phòng), nhưng nửa
+ * buổi online KHÔNG làm đổi số công: ngày đó vẫn là `OL` = 1 công và vẫn
+ * không có tiền ăn ca. Buổi chỉ để quản lý biết người ta ở đâu lúc nào.
+ */
 export function hienBuoi(v: DonDangSoan): boolean {
-  if (v.loaiDon !== "nghi_phep" && v.loaiDon !== "nghi_bu") return false;
+  if (
+    v.loaiDon !== "nghi_phep" &&
+    v.loaiDon !== "nghi_bu" &&
+    v.loaiDon !== "lam_online"
+  )
+    return false;
   // denNgay rỗng nghĩa là người dùng chưa chọn ngày kết thúc → coi như đúng
   // một ngày (đó cũng là cách form gửi lên: denNgay = ngay).
   return !v.denNgay || v.denNgay === v.ngay;

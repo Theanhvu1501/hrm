@@ -147,3 +147,17 @@ describe("soLieuDon — cột số liệu HR nhìn TRƯỚC KHI duyệt", () => 
     );
   });
 });
+
+describe("soLieuDon — đơn làm online", () => {
+  it("nửa buổi hiện tên buổi", () => {
+    expect(
+      soLieuDon({ loaiDon: "lam_online", ngay: "2026-08-10", buoi: "chieu" } as any),
+    ).toBe("Buổi chiều");
+  });
+
+  it("trọn ngày hiện 'Cả ngày', kể cả khi đơn không khai buoi", () => {
+    expect(
+      soLieuDon({ loaiDon: "lam_online", ngay: "2026-08-10" } as any),
+    ).toBe("Cả ngày");
+  });
+});

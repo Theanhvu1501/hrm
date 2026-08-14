@@ -1,5 +1,6 @@
 import { AttendanceRequest } from "@/services/attendanceRequestService";
 import { hienTruong } from "./truongTheoLoaiDon";
+import { BUOI_OPTIONS, labelFor } from "./constants";
 
 /**
  * Ba ô văn bản của bảng đơn HR (`/cham-cong/don-tu`) mà người duyệt đọc
@@ -63,6 +64,15 @@ export function soLieuDon(don: AttendanceRequest): string {
   if (don.loaiDon === "nghi_phep" || don.loaiDon === "nghi_bu") {
     if (don.soNgayNghi === undefined) return "-";
     return `${don.soNgayNghi} ngày nghỉ`;
+  }
+
+  // Đơn online không có số nào backend tính sẵn (nó không trừ quỹ, không sinh
+  // tiền). Thứ người duyệt cần biết là trọn ngày hay nửa buổi — khoảng ngày đã
+  // nằm ở cột "Ngày" rồi. KHÔNG tự đếm số ngày trong khoảng ở đây: đếm ngày
+  // lịch sẽ tính cả cuối tuần và ngày lễ, ra một con số trông như số ngày công
+  // nhưng không phải.
+  if (don.loaiDon === "lam_online") {
+    return labelFor(BUOI_OPTIONS, don.buoi || "ca_ngay");
   }
 
   if (don.loaiDon === "lam_them_gio") {

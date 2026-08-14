@@ -3,6 +3,7 @@ export const LOAI_DON_OPTIONS = [
   { value: "lam_them_gio", label: "Làm thêm giờ" },
   { value: "nghi_phep", label: "Nghỉ phép" },
   { value: "nghi_bu", label: "Nghỉ bù" },
+  { value: "lam_online", label: "Làm online" },
 ] as const;
 
 // Chỉ dùng khi loaiDon là nghi_phep/nghi_bu — khớp @IsIn của trường loaiNghi
