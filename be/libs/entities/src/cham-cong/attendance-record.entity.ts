@@ -31,6 +31,15 @@ export class AttendanceRecord extends BaseEntity {
   @Column({ nullable: true }) doChinhXacMet?: number;
   @Column({ nullable: true }) khoangCachMet?: number;
   @Column({ default: false }) ngoaiVung: boolean;
+  /**
+   * Lượt bấm này thuộc một ngày có đơn `lam_online` đã duyệt ⇒ đã BỎ đối
+   * chiếu địa điểm.
+   *
+   * `ngoaiVung` của bản ghi như vậy luôn `false`, và `locationId`/`locationTen`
+   * bỏ trống: ngày đó không có vùng nào để mà nằm ngoài. Toạ độ, IP, thiết bị
+   * vẫn được ghi đầy đủ — bỏ KIỂM vị trí không phải bỏ GHI vị trí.
+   */
+  @Column({ default: false }) laOnline: boolean;
   @Column({ nullable: true }) ipAddress?: string;
 
   @Column({ nullable: true }) deviceId?: string;

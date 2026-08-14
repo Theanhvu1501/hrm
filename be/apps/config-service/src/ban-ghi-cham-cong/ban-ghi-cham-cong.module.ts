@@ -1,5 +1,10 @@
 import { Module } from '@nestjs/common';
-import { AttendanceRecord, WorkShift, AttendanceLocation } from '@app/entities';
+import {
+  AttendanceRecord,
+  WorkShift,
+  AttendanceLocation,
+  AttendanceRequest,
+} from '@app/entities';
 import { DatabaseModule } from '@app/database';
 import { NhanVien_Module } from '../nhan-vien/nhan-vien.module';
 import { ThietBiChamCong_Module } from '../thiet-bi-cham-cong/thiet-bi-cham-cong.module';
@@ -15,6 +20,9 @@ import { ChamCongRules_Service } from './cham-cong-rules.service';
       AttendanceRecord,
       WorkShift,
       AttendanceLocation,
+      // Đơn `lam_online` mở khoá đối chiếu vị trí theo ngày — xem
+      // BanGhiChamCong_Service.coDonOnlineDaDuyet().
+      AttendanceRequest,
     ]),
     NhanVien_Module,
     ThietBiChamCong_Module,

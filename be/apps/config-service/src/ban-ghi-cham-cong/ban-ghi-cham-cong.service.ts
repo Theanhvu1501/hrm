@@ -11,6 +11,7 @@ import {
   AttendanceRecord,
   WorkShift,
   AttendanceLocation,
+  AttendanceRequest,
   Employee,
 } from '@app/entities';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
@@ -85,6 +86,10 @@ export class BanGhiChamCong_Service {
     private readonly shiftRepo: Repository<WorkShift>,
     @InjectRepository(AttendanceLocation)
     private readonly locationRepo: Repository<AttendanceLocation>,
+    // Chỉ để tra đơn `lam_online` của đúng ngày đang chấm — xem
+    // coDonOnlineDaDuyet(). Không dùng cho việc gì khác.
+    @InjectRepository(AttendanceRequest)
+    private readonly requestRepo: Repository<AttendanceRequest>,
     private readonly nhanVien_Service: NhanVien_Service,
     private readonly thietBi_Service: ThietBiChamCong_Service,
     private readonly ngayLe_Service: NgayLe_Service,
@@ -92,6 +97,40 @@ export class BanGhiChamCong_Service {
     // (P4.5) lịch tuần mức công ty — dùng làm đáy khi NV không khai riêng.
     private readonly cauHinhChamCong_Service: CauHinhChamCong_Service,
   ) {}
+
+  /**
+   * Ngày `ngay` của nhân viên này có đơn làm online ĐÃ DUYỆT phủ lên không.
+   *
+   * Lọc khoảng bằng so sánh chuỗi "YYYY-MM-DD" trong bộ nhớ chứ không dựng
+   * `Between` trên hai cột: đơn đúng một ngày để `denNgay` rỗng, mà truy vấn
+   * khoảng trên cột rỗng sẽ trượt đúng những đơn phổ biến nhất. Số đơn online
+   * đã duyệt của MỘT người là hàng chục, không phải hàng vạn.
+   *
+   * `ngay` ở đây là NGÀY CÔNG của bản ghi, không phải ngày lịch: lượt ra của
+   * ca qua đêm thừa hưởng `ngay` của lượt vào, nên ca đêm bắt đầu trong ngày
+   * online vẫn được mở khoá lúc bấm ra vào sáng hôm sau.
+   */
+  private async coDonOnlineDaDuyet(
+    employeeId: string,
+    ngay: string,
+  ): Promise<boolean> {
+    const don = await this.requestRepo.find({
+      where: { employeeId, loaiDon: 'lam_online' },
+    });
+
+    // TOÀN BỘ luật "đơn nào có hiệu lực" nằm ở đây, không chẻ đôi giữa mệnh
+    // đề `where` và vòng lọc: chẻ ra thì đọc code phải ghép hai mảnh mới biết
+    // đơn chờ duyệt có mở khoá hay không, và test nào mock repo (mock không
+    // hiểu `where`) sẽ xanh/đỏ vì lý do không liên quan tới luật.
+    return don.some(
+      (d) =>
+        d.trangThai === 'da_duyet' &&
+        d.isActive !== false &&
+        !!d.ngay &&
+        ngay >= d.ngay &&
+        ngay <= (d.denNgay || d.ngay),
+    );
+  }
 
   async checkIn(
     user: { id: string },
@@ -229,6 +268,16 @@ export class BanGhiChamCong_Service {
       laNgayNghi,
     });
 
+    // Ngày có đơn làm online đã duyệt thì BỎ đối chiếu vị trí.
+    //
+    // Hỏi CHỈ KHI đã ngoài vùng: lượt chấm bình thường (tuyệt đại đa số) không
+    // phải trả thêm một truy vấn nào. Đặt cạnh `choPhepChamNgoaiVung` vì cùng
+    // một loại ngoại lệ, khác nhau ở phạm vi — cờ kia mở vĩnh viễn cho một
+    // người và do HR bật tay, cái này mở đúng những ngày đã có người duyệt.
+    const laOnline = kq.ngoaiVung
+      ? await this.coDonOnlineDaDuyet(employeeId, ngay)
+      : false;
+
     // Ngoài bán kính thì CHẶN, trừ người được HR cấp phép riêng.
     //
     // Đây là đảo ngược mặc định cũ (cho qua, gắn cờ để HR xem lại): giữ cách
@@ -239,7 +288,7 @@ export class BanGhiChamCong_Service {
     // cách 480m" thì hành động được, còn "ngoài khu vực cho phép" thì không.
     // Và chặn TRƯỚC khi ghi: chặn mà vẫn ghi thì bảng công có bản ghi ma
     // trong khi nhân viên tưởng mình chưa chấm.
-    if (kq.ngoaiVung && emp.choPhepChamNgoaiVung !== true) {
+    if (kq.ngoaiVung && emp.choPhepChamNgoaiVung !== true && !laOnline) {
       // khoangCachMet chỉ có trên nhánh GPS (xem
       // ChamCongRules_Service.doiChieuGps): khớp wifi/QR trả thẳng
       // { ngoaiVung: true } không kèm khoảng cách, vì hai phương thức đó
@@ -282,14 +331,20 @@ export class BanGhiChamCong_Service {
         caGioBatDau: caBanGhi?.gioBatDau,
         caGioKetThuc: caBanGhi?.gioKetThuc,
         laCaQuaDem: caBanGhi?.laCaQuaDem ?? false,
-        locationId: kq.locationId,
-        locationTen: kq.locationTen,
+        // Ngày online không gắn với địa điểm nào — gán một địa điểm "gần
+        // nhất" vào đây là bịa ra chỗ ngồi cho người đang ở nhà.
+        locationId: laOnline ? undefined : kq.locationId,
+        locationTen: laOnline ? undefined : kq.locationTen,
         phuongThuc: dto.phuongThuc,
         latitude: dto.latitude,
         longitude: dto.longitude,
         doChinhXacMet: dto.doChinhXacMet,
         khoangCachMet: kq.khoangCachMet,
-        ngoaiVung: kq.ngoaiVung,
+        // Giữ `true` cho ngày online là bắt `suy-ky-hieu` đẻ cảnh báo
+        // NGOAI_VUNG cho MỌI ngày online của MỌI người — một cảnh báo luôn
+        // bật là một cảnh báo không ai đọc.
+        ngoaiVung: laOnline ? false : kq.ngoaiVung,
+        laOnline,
         // Lưu bản đã chuẩn hoá: báo cáo đọc `::ffff:…` không ra nghĩa gì,
         // và giá trị lưu phải chính là giá trị đã dùng để đối chiếu.
         ipAddress: ip,

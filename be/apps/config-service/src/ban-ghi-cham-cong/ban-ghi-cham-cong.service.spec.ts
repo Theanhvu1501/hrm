@@ -11,7 +11,12 @@ import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { ThietBiChamCong_Service } from '../thiet-bi-cham-cong/thiet-bi-cham-cong.service';
 import { NgayLe_Service } from '../ngay-le/ngay-le.service';
 import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
-import { AttendanceRecord, WorkShift, AttendanceLocation } from '@app/entities';
+import {
+  AttendanceRecord,
+  WorkShift,
+  AttendanceLocation,
+  AttendanceRequest,
+} from '@app/entities';
 
 const USER = { id: 'sso-1', email: 'hai@cty.vn' };
 
@@ -78,6 +83,8 @@ describe('BanGhiChamCong_Service', () => {
   let thietBi: any;
   let ngayLe: any;
   let cauHinhChamCong: any;
+  /** Đơn từ — chỉ được hỏi tới khi lượt bấm rơi ra ngoài vùng. */
+  let requestRepo: any;
 
   beforeEach(async () => {
     recordRepo = {
@@ -92,6 +99,7 @@ describe('BanGhiChamCong_Service', () => {
       ),
     };
     shiftRepo = { findOne: jest.fn().mockResolvedValue(CA) };
+    requestRepo = { find: jest.fn().mockResolvedValue([]) };
     // Khớp đúng phuongThuc/maQr của DTO mặc định bên dưới ('qr'/'MA-QR') —
     // đây là tình huống thật của một nhân viên bình thường đang đứng trong
     // vùng được phép, KHÔNG phải một cách né guard chặn ngoài bán kính. Test
@@ -128,6 +136,10 @@ describe('BanGhiChamCong_Service', () => {
         ChamCongRules_Service,
         { provide: getRepositoryToken(AttendanceRecord), useValue: recordRepo },
         { provide: getRepositoryToken(WorkShift), useValue: shiftRepo },
+        {
+          provide: getRepositoryToken(AttendanceRequest),
+          useValue: requestRepo,
+        },
         {
           provide: getRepositoryToken(AttendanceLocation),
           useValue: locationRepo,
@@ -1439,6 +1451,170 @@ describe('BanGhiChamCong_Service', () => {
       expect(arg.where.ngay.$lte).toBe('2026-07-31');
       // Không tự thêm tenantId — repository proxy lo việc đó.
       expect(arg.where.tenantId).toBeUndefined();
+    });
+  });
+  /**
+   * Ngày làm online (2026-08-14). Đơn `lam_online` đã duyệt mở khoá ĐÚNG
+   * những ngày nó phủ — đứng cạnh `choPhepChamNgoaiVung` nhưng hẹp hơn hẳn:
+   * cờ kia mở vĩnh viễn cho một người và do HR bật tay, cái này mở theo ngày
+   * và đã qua một người duyệt.
+   */
+  describe('chấm công ngày làm online', () => {
+    const NV_KHONG_CO_CO: any = { ...NV, choPhepChamNgoaiVung: false };
+    const XA = { latitude: 10.0, longitude: 106.0, doChinhXacMet: 5 };
+    const DIA_DIEM_GPS = {
+      _id: 'l1',
+      ten: 'VP',
+      loai: 'gps',
+      latitude: 21.0,
+      longitude: 105.8,
+      banKinh: 100,
+      isActive: true,
+    };
+
+    function donOnline(ghiDe: Record<string, any> = {}) {
+      return {
+        employeeId: 'emp-1',
+        loaiDon: 'lam_online',
+        trangThai: 'da_duyet',
+        isActive: true,
+        ngay: homNayVN(),
+        denNgay: homNayVN(),
+        ...ghiDe,
+      };
+    }
+
+    beforeEach(() => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV_KHONG_CO_CO);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.findOne.mockResolvedValue(null);
+      recordRepo.save.mockImplementation((v: any) => Promise.resolve(v));
+      locationRepo.find.mockResolvedValue([DIA_DIEM_GPS]);
+    });
+
+    it('ngoài vùng + có đơn online đã duyệt → cho chấm, laOnline=true', async () => {
+      requestRepo.find.mockResolvedValue([donOnline()]);
+
+      const kq = await service.checkIn(USER, {
+        deviceId: 'd1',
+        phuongThuc: 'gps',
+        ...XA,
+      });
+
+      expect(kq.laOnline).toBe(true);
+      // Ngày online không có vùng nào để mà nằm ngoài. Giữ cờ ở đây là bắt
+      // suy-ky-hieu đẻ cảnh báo NGOAI_VUNG cho mọi ngày online của mọi người.
+      expect(kq.ngoaiVung).toBe(false);
+      expect(kq.locationId).toBeUndefined();
+      expect(kq.locationTen).toBeUndefined();
+    });
+
+    it('bỏ KIỂM vị trí nhưng vẫn GHI vị trí và thiết bị', async () => {
+      requestRepo.find.mockResolvedValue([donOnline()]);
+
+      const kq = await service.checkIn(USER, {
+        deviceId: 'd1',
+        phuongThuc: 'gps',
+        ...XA,
+      });
+
+      expect(kq.latitude).toBe(XA.latitude);
+      expect(kq.longitude).toBe(XA.longitude);
+      expect(kq.deviceId).toBe('d1');
+    });
+
+    it('đơn online nhiều ngày phủ cả ngày hôm nay', async () => {
+      requestRepo.find.mockResolvedValue([
+        donOnline({ ngay: '2020-01-01', denNgay: '2099-12-31' }),
+      ]);
+
+      const kq = await service.checkIn(USER, {
+        deviceId: 'd1',
+        phuongThuc: 'gps',
+        ...XA,
+      });
+
+      expect(kq.laOnline).toBe(true);
+    });
+
+    it('đơn còn CHỜ DUYỆT → vẫn bị chặn 403', async () => {
+      requestRepo.find.mockResolvedValue([donOnline({ trangThai: 'cho_duyet' })]);
+
+      await expect(
+        service.checkIn(USER, { deviceId: 'd1', phuongThuc: 'gps', ...XA }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'NGOAI_BAN_KINH_CHO_PHEP' }),
+      });
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('đơn đã huỷ (isActive=false) → vẫn bị chặn 403', async () => {
+      requestRepo.find.mockResolvedValue([donOnline({ isActive: false })]);
+
+      await expect(
+        service.checkIn(USER, { deviceId: 'd1', phuongThuc: 'gps', ...XA }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'NGOAI_BAN_KINH_CHO_PHEP' }),
+      });
+    });
+
+    it('đơn online của NGÀY KHÁC → vẫn bị chặn 403', async () => {
+      requestRepo.find.mockResolvedValue([
+        donOnline({ ngay: '2020-01-01', denNgay: '2020-01-02' }),
+      ]);
+
+      await expect(
+        service.checkIn(USER, { deviceId: 'd1', phuongThuc: 'gps', ...XA }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'NGOAI_BAN_KINH_CHO_PHEP' }),
+      });
+    });
+
+    it('không có đơn nào → vẫn bị chặn 403 như cũ', async () => {
+      requestRepo.find.mockResolvedValue([]);
+
+      await expect(
+        service.checkIn(USER, { deviceId: 'd1', phuongThuc: 'gps', ...XA }),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'NGOAI_BAN_KINH_CHO_PHEP' }),
+      });
+    });
+
+    // Đơn online nới VỊ TRÍ, không nới GIỜ GIẤC.
+    it('vẫn tính đi muộn như ngày ở văn phòng', async () => {
+      requestRepo.find.mockResolvedValue([donOnline()]);
+      const rules = (service as any).rules;
+      jest.spyOn(rules, 'tinhKetQua').mockReturnValue({
+        ngoaiVung: true,
+        soPhutDiMuon: 15,
+        soPhutVeSom: 0,
+      });
+
+      const kq = await service.checkIn(USER, {
+        deviceId: 'd1',
+        phuongThuc: 'gps',
+        ...XA,
+      });
+
+      expect(kq.laOnline).toBe(true);
+      expect(kq.soPhutDiMuon).toBe(15);
+    });
+
+    // Trong vùng thì không cần hỏi đơn — một truy vấn tiết kiệm được trên
+    // MỌI lượt chấm công bình thường của toàn công ty.
+    it('trong bán kính thì KHÔNG hỏi tới đơn online', async () => {
+      requestRepo.find.mockResolvedValue([]);
+
+      const kq = await service.checkIn(USER, {
+        deviceId: 'd1',
+        phuongThuc: 'gps',
+        latitude: 21.0,
+        longitude: 105.8,
+        doChinhXacMet: 5,
+      });
+
+      expect(kq.laOnline).toBe(false);
+      expect(requestRepo.find).not.toHaveBeenCalled();
     });
   });
 });
