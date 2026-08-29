@@ -54,10 +54,10 @@ export function isIdentityConfigured(): boolean {
   return !!IDENTITY_URL;
 }
 
-// Phải khớp appId đã đăng ký ở Identity portal (app "Kế toán").
+// Phải khớp appId đã đăng ký ở Identity portal (app "Nhân sự").
 const APP_ID = 'nhan-su';
 
-/** appId của app hiện tại (Kế toán). */
+/** appId của app hiện tại (Nhân sự). */
 export const CURRENT_APP_ID = APP_ID;
 
 export interface IdentityApp {
