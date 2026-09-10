@@ -1,26 +1,13 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Modal, Button, Typography } from 'antd';
-import {
-  AppstoreOutlined,
-  CalculatorOutlined,
-  CheckSquareOutlined,
-  CheckCircleFilled,
-  TeamOutlined,
-} from '@ant-design/icons';
+import { useEffect, useState } from 'react';
+import { Modal, Button } from 'antd';
 import { identityApps, decodeApps, CURRENT_APP_ID, type IdentityApp } from '@/services/identitySession';
 import { getAuthToken } from '@/services/base/service-base';
 import { useAuth } from '@/contexts/AuthContext';
+import { IconLuoiApp } from '@/components/icons/IconLuoiApp';
+import { ManChonUngDung } from './ManChonUngDung';
 
-// Tên app hiện tại (Nhân sự).
+// Tên app hiện tại.
 const APP_NAME = 'Nhân sự';
-
-// Màu + icon theo app — KHỚP portal Identity (AppPicker).
-const APP_STYLE: Record<string, { bg: string; icon: ReactNode }> = {
-  'ke-toan': { bg: '#1f7769', icon: <CalculatorOutlined /> },
-  'giao-viec': { bg: '#2f6fed', icon: <CheckSquareOutlined /> },
-  'nhan-su': { bg: '#7c3aed', icon: <TeamOutlined /> },
-};
-const PALETTE = ['#e8453c', '#2f6fed', '#1f7769', '#f59e0b', '#7c3aed', '#0ea5e9'];
 
 export function AppSwitcher() {
   const [apps, setApps] = useState<IdentityApp[]>([]);
@@ -57,129 +44,40 @@ export function AppSwitcher() {
 
   return (
     <>
+      {/* Chỉ còn icon — tên app đã bỏ theo tài liệu cải tiến 08.08.26 để nhường
+          chỗ cho hàng lọc; tên vẫn hiện ở tooltip. */}
       <Button
         type="text"
         onClick={() => setOpen(true)}
-        aria-label="Chuyển ứng dụng"
-        className="!flex items-center gap-2 !text-foreground"
+        aria-label={`Chuyển ứng dụng (đang dùng ${currentName})`}
+        title={currentName}
+        className="!flex items-center !text-foreground"
       >
-        <AppstoreOutlined style={{ fontSize: 16 }} />
-        <span className="hidden sm:inline font-medium max-w-[160px] truncate">
-          {currentName}
-        </span>
+        <IconLuoiApp size={18} />
       </Button>
 
       <Modal
         open={open}
         onCancel={() => setOpen(false)}
         footer={null}
-        width={480}
+        width={560}
         centered
         destroyOnHidden
+        // Bản vẽ có nút X tròn riêng trong ManChonUngDung; để antd vẽ thêm nút
+        // đóng của nó nữa thì màn hiện HAI dấu X chồng nhau.
+        closable={false}
       >
-        <div className="pt-2 pb-1 text-center">
-          <Typography.Title level={4} style={{ margin: '0 0 4px', fontWeight: 700 }}>
-            Chọn ứng dụng
-          </Typography.Title>
-          <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-            Chọn một ứng dụng để tiếp tục
-          </Typography.Text>
-        </div>
-
-        <div className="flex flex-wrap justify-center gap-9 py-8">
-          {list.map((a, i) => {
-            const st = APP_STYLE[a.appId] ?? {
-              bg: PALETTE[i % PALETTE.length],
-              icon: <AppstoreOutlined />,
-            };
-            const isCurrent = a.appId === CURRENT_APP_ID;
-            const enabled = isEnabled(a.appId);
-            return (
-              <div
-                key={a.appId}
-                onClick={() => switchTo(a)}
-                title={!enabled ? 'Ứng dụng chưa được bật cho công ty này' : undefined}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  width: 84,
-                  cursor: isCurrent ? 'default' : enabled ? 'pointer' : 'not-allowed',
-                  opacity: enabled ? 1 : 0.4,
-                }}
-                onMouseEnter={(e) => {
-                  if (isCurrent || !enabled) return;
-                  const t = e.currentTarget.firstElementChild as HTMLElement;
-                  if (t) {
-                    t.style.transform = 'translateY(-4px)';
-                    t.style.boxShadow = '0 12px 28px rgba(0,0,0,0.20)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  const t = e.currentTarget.firstElementChild as HTMLElement;
-                  if (t) {
-                    t.style.transform = 'none';
-                    t.style.boxShadow = '0 4px 14px rgba(0,0,0,0.14)';
-                  }
-                }}
-              >
-                <div
-                  style={{
-                    position: 'relative',
-                    width: 72,
-                    height: 72,
-                    borderRadius: 22,
-                    background: enabled ? st.bg : '#94a3b8',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    fontSize: 30,
-                    boxShadow: '0 4px 14px rgba(0,0,0,0.14)',
-                    transition: 'transform 0.18s, box-shadow 0.18s',
-                    outline: isCurrent ? '3px solid hsl(var(--primary))' : 'none',
-                    outlineOffset: 2,
-                    filter: enabled ? 'none' : 'grayscale(1)',
-                  }}
-                >
-                  {a.iconUrl ? (
-                    <img
-                      src={a.iconUrl}
-                      alt=""
-                      style={{ width: 40, height: 40, objectFit: 'contain' }}
-                    />
-                  ) : (
-                    st.icon
-                  )}
-                  {isCurrent && (
-                    <CheckCircleFilled
-                      style={{
-                        position: 'absolute',
-                        right: -6,
-                        top: -6,
-                        color: 'hsl(var(--primary))',
-                        fontSize: 20,
-                        background: '#fff',
-                        borderRadius: '50%',
-                      }}
-                    />
-                  )}
-                </div>
-                <span
-                  style={{ marginTop: 10, textAlign: 'center', fontSize: 13, lineHeight: 1.3 }}
-                  className="text-muted-foreground"
-                >
-                  {a.name}
-                </span>
-                {isCurrent ? (
-                  <span className="text-[11px] text-primary font-medium">Đang dùng</span>
-                ) : !enabled ? (
-                  <span className="text-[11px] text-muted-foreground">Chưa bật</span>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
+        <ManChonUngDung
+          danhSach={list}
+          appHienTai={CURRENT_APP_ID}
+          daBat={isEnabled}
+          tenCongTy={currentTenant?.tenantName}
+          onChon={(appId) => {
+            const app = list.find((a) => a.appId === appId);
+            if (app) switchTo(app);
+          }}
+          onDong={() => setOpen(false)}
+        />
       </Modal>
     </>
   );

@@ -46,6 +46,9 @@ interface AuthContextType {
   user: NguoiDung | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** Đang đăng xuất và SẮP điều hướng đi — giữ màn chờ, đừng render
+   *  màn đăng nhập cục bộ trong khoảng hở đó. */
+  isLoggingOut: boolean;
   needsTenantSelection: boolean;
   availableTenants: TenantInfo[];
   currentTenant: TenantInfo | null;
@@ -78,6 +81,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<NguoiDung | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [availableTenants, setAvailableTenants] = useState<TenantInfo[]>([]);
   const [currentTenant, setCurrentTenantState] = useState<TenantInfo | null>(null);
   const [needsTenantSelection, setNeedsTenantSelection] = useState(false);
@@ -299,6 +303,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
+      // Bật cờ TRƯỚC khi dọn state: dọn xong là React vẽ lại ngay, trong khi
+      // việc rời trang còn chờ `await fetch(...)` — khoảng hở đó đủ để
+      // ProtectedRoute đá sang /login và màn đăng nhập cục bộ loé lên (đăng
+      // xuất nháy hai lần). Chỉ bật khi thật sự sắp điều hướng đi.
+      const identityUrlSom = import.meta.env.VITE_IDENTITY_URL as string | undefined;
+      if (dichDen ?? identityUrlSom) setIsLoggingOut(true);
+
       setUser(null);
       setCurrentTenantState(null);
       setAvailableTenants([]);
@@ -448,6 +459,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         isAuthenticated: !!user,
         isLoading,
+        isLoggingOut,
         needsTenantSelection,
         availableTenants,
         currentTenant,

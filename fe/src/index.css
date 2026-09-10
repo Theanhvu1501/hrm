@@ -1,24 +1,37 @@
+/* @import PHẢI đứng đầu file — đặt sau @tailwind thì trình duyệt bỏ qua và
+   font Inter không bao giờ được tải (chữ rơi về font hệ thống). */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 /* Design system theo giao diện tham khảo - Clean & Modern */
 
 @layer base {
   :root {
-    /* Main backgrounds */
-    --background: 220 20% 97%;
-    --foreground: 222 47% 11%;
+    /* ---------------------------------------------------------------
+     * BÍ DANH TOKEN: mỗi cặp dưới đây là MỘT màu mang hai tên.
+     * Tên mới (--ink, --ink-2, --red, --green, --amber, --blue) là tên
+     * chuẩn của bảng màu; tên cũ (--foreground, --muted-foreground,
+     * --destructive, --success, --warning, --info) được GIỮ LẠI vì
+     * Tailwind phơi chúng thành class có tên (text-muted-foreground,
+     * bg-muted, text-foreground, text-destructive…) và đang được dùng
+     * ~140 chỗ trong src/. Hai bộ PHẢI luôn cùng giá trị — nếu sửa một
+     * bên thì sửa cả bên kia (src/index.css.test.ts canh việc này).
+     * --------------------------------------------------------------- */
+    /* Main backgrounds — nền trang #F5F5F7 */
+    --background: 240 11% 96.5%; /* #F5F5F7 */
+    --foreground: 240 4% 12%; /* = --ink */
 
     /* Cards - White with subtle shadow */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 240 4% 12%; /* = --ink */
 
     /* Popovers/Modals */
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 240 4% 12%; /* = --ink */
 
     /* Primary - Teal thương hiệu MasterCEO (#1f7769) */
     --primary: 170 59% 29%;
@@ -29,43 +42,47 @@
 
     /* Secondary - Light gray/blue tint */
     --secondary: 220 14% 96%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary-foreground: 240 4% 12%; /* = --ink */
 
     /* Muted - Subtle backgrounds */
     --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted-foreground: 240 2% 44%; /* = --ink-2 */
 
     /* Accent */
     --accent: 170 59% 29%;
     --accent-foreground: 0 0% 100%;
 
     /* Destructive */
-    --destructive: 0 84% 60%;
+    --destructive: 4 71% 50%; /* = --red */
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders */
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
+    /* Borders — viền #E5E5EA */
+    --border: 240 9% 91%;
+    --input: 240 9% 91%;
     --ring: 170 59% 29%;
 
-    --radius: 0px;
+    /* Bo góc: nút & ô nhập 7px · thẻ & bảng 9px · modal 14px */
+    --radius: 0.4375rem;
+    --radius-card: 9px;
+    --radius-modal: 14px;
 
-    /* Sidebar - Deep teal thương hiệu, active = gold logo */
-    --sidebar-background: 172 45% 15%;
-    --sidebar-foreground: 170 25% 90%;
-    --sidebar-primary: 41 42% 51%;
-    --sidebar-primary-foreground: 172 45% 13%;
-    --sidebar-accent: 171 40% 22%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 171 38% 24%;
-    --sidebar-ring: 41 42% 51%;
+    /* Sidebar tông sáng — rail #EFEFF2, panel #FAFAFA (07-design-system.png) */
+    --sidebar-background: 240 11% 94%;
+    --sidebar-panel: 0 0% 98%;
+    --sidebar-foreground: 240 3% 12%;
+    --sidebar-primary: 170 59% 29%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 6% 90%;
+    --sidebar-accent-foreground: 240 3% 12%;
+    --sidebar-border: 240 11% 91%;
+    --sidebar-ring: 170 59% 29%;
 
     /* Custom semantic colors */
-    --success: 142 71% 45%;
+    --success: 148 65% 35%; /* = --green */
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
+    --warning: 36 100% 35%; /* = --amber */
     --warning-foreground: 0 0% 100%;
-    --info: 199 89% 48%;
+    --info: 211 100% 50%; /* = --blue */
     --info-foreground: 0 0% 100%;
 
     /* Page header gradient - Hero section */
@@ -75,45 +92,120 @@
     /* Card shadows */
     --shadow-card: 0 1px 3px 0 hsl(220 13% 91% / 0.5), 0 1px 2px -1px hsl(220 13% 91% / 0.5);
     --shadow-card-hover: 0 10px 15px -3px hsl(220 13% 91% / 0.3), 0 4px 6px -4px hsl(220 13% 91% / 0.3);
+
+    /* Thang chữ — #1D1D1F / #6E6E73 / #8A8A8F */
+    --ink: 240 4% 12%;
+    --ink-2: 240 2% 44%;
+    /* Bậc "chữ mờ" phải trùng ĐÚNG colorTextTertiary khai trong App.tsx
+       (#8A8A8F): cùng một vai trò mà hai sắc xám khác nhau thì chữ mờ của
+       antd và chữ mờ của Tailwind đặt cạnh nhau sẽ lệch tông. Giá trị cũ
+       240 2% 60% ra #98989D — chính mã đã bị loại vì chỉ đạt 2.87:1. */
+    --ink-3: 240 2% 55%; /* #8A8A8F */
+
+    /* Link, mã chứng từ — #007AFF / #E8F2FF */
+    --blue: 211 100% 50%;
+    --blue-soft: 214 100% 95.5%; /* #E8F2FF */
+
+    /* Tăng / giảm / cảnh báo — #1F9254 / #D93025 / #B26A00 */
+    --green: 148 65% 35%;
+    --red: 4 71% 50%;
+    --amber: 36 100% 35%;
+
+    /* ------------------------------------------------------------------
+     * BẢN "MỰC" của bốn màu trên: dùng làm MÀU CHỮ trên nền pill nhạt cùng
+     * tông (StatusPill). Bản gốc chỉ đạt ~3.4–4.0:1 ở cỡ chữ 10.5px — dưới
+     * ngưỡng 4.5:1 của WCAG AA cho chữ thường. Hạ độ sáng (không hạ alpha:
+     * alpha chỉ làm chữ nhạt thêm) để mỗi tông đạt ≥4.5:1 trên chính nền
+     * pill của nó, đo cả trên card trắng lẫn nền trang #F5F5F7.
+     *   green-ink 4.91 · amber-ink 4.93 · red-ink 4.87 · blue-ink 4.91
+     * ------------------------------------------------------------------ */
+    --green-ink: 148 65% 28%; /* #197644 */
+    --amber-ink: 36 100% 29%; /* #945900 */
+    --red-ink: 4 71% 44%; /* #C02B21 */
+    --blue-ink: 211 100% 41%; /* #0065D1 */
+
+    /* Biểu đồ — #F2994A / #1F3864 / #C9A227 */
+    --chart-orange: 28 87% 62%;
+    --chart-navy: 220 51% 26%;
+    --chart-gold: 45.5 67.5% 47%; /* #C9A227 */
   }
 
   .dark {
     --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    --foreground: 0 0% 96%; /* = --ink (dark) */
 
     --card: 217 33% 17%;
-    --card-foreground: 210 40% 98%;
+    --card-foreground: 0 0% 96%; /* = --ink (dark) */
 
     --popover: 217 33% 17%;
-    --popover-foreground: 210 40% 98%;
+    --popover-foreground: 0 0% 96%; /* = --ink (dark) */
 
     --primary: 170 59% 29%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary-foreground: 0 0% 96%; /* = --ink (dark) */
 
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
+    /* Thang bề mặt bản tối PHẢI tách bậc: trước đây --card, --muted và --border
+       cùng là 217 33% 17% nên viền `.action-icon-btn` vô hình, StatusPill tông
+       xám mất hình dạng và zebra bảng biến mất hẳn. Thứ tự sáng dần:
+       background 11% → card 17% → muted 23% → border 34%.
+       Tương phản: card/background 1.21 · muted/card 1.23 · border/card 1.87. */
+    --muted: 217 30% 23%;
+    --muted-foreground: 240 3% 70%; /* = --ink-2 (dark) */
 
     --accent: 217 33% 17%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 4 71% 62%; /* = --red (dark) */
+    /* Nền đỏ bản tối SÁNG hơn bản sáng (#E36259 so với #C4281A), nên chữ gần
+       trắng chỉ còn 3.25:1. Đổi sang màu tối gần đen (= --ink bản sáng,
+       #1D1D20) đạt 4.93:1 trên #E36259 — vẫn giữ --destructive = --red. */
+    --destructive-foreground: 240 4% 12%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
+    --border: 217 24% 34%;
+    --input: 217 24% 34%;
     --ring: 170 59% 29%;
 
-    --sidebar-background: 173 48% 11%;
-    --sidebar-foreground: 170 25% 90%;
-    --sidebar-primary: 41 42% 51%;
-    --sidebar-primary-foreground: 173 48% 10%;
-    --sidebar-accent: 171 40% 18%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 171 38% 18%;
-    --sidebar-ring: 41 42% 51%;
+    --sidebar-background: 240 5% 12%;
+    --sidebar-panel: 240 5% 15%;
+    --sidebar-foreground: 0 0% 92%;
+    --sidebar-primary: 170 59% 29%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 5% 20%;
+    --sidebar-accent-foreground: 0 0% 92%;
+    --sidebar-border: 240 5% 22%;
+    --sidebar-ring: 170 59% 29%;
+
+    /* Thang chữ + thang màu bản tối (--radius* khai một lần ở :root) */
+    --ink: 0 0% 96%;
+    --ink-2: 240 3% 70%;
+    --ink-3: 240 3% 52%;
+    --blue: 211 100% 62%;
+    --blue-soft: 213 40% 22%;
+    --green: 148 50% 48%;
+    --red: 4 71% 62%;
+    --amber: 36 80% 55%;
+
+    /* Bản "mực" ở nền tối đi NGƯỢC chiều: phải SÁNG hơn nền pill, không tối
+       hơn. green/amber đã đủ nên giữ nguyên giá trị; red/blue phải nâng.
+       green-ink 4.79 · amber-ink 5.39 · red-ink 4.93 · blue-ink 4.82 */
+    --green-ink: 148 50% 48%;
+    --amber-ink: 36 80% 55%;
+    --red-ink: 4 71% 70%;
+    --blue-ink: 211 100% 66%;
+    --chart-orange: 28 87% 62%;
+    --chart-navy: 220 45% 55%;
+    --chart-gold: 45 71% 55%;
+
+    /* Bí danh bản tối của --green / --amber / --blue (xem chú thích ở :root).
+       Trước đây ba token này không có bản tối nên rơi về giá trị :root. */
+    --success: 148 50% 48%; /* = --green (dark) */
+    --success-foreground: 0 0% 100%;
+    --warning: 36 80% 55%; /* = --amber (dark) */
+    --warning-foreground: 0 0% 100%;
+    --info: 211 100% 62%; /* = --blue (dark) */
+    --info-foreground: 0 0% 100%;
   }
 }
 
@@ -132,70 +224,9 @@
 /* Ant Design Customizations */
 /* ========================= */
 
-/* Layout & Sider */
+/* Layout */
 .ant-layout {
   background: hsl(var(--background)) !important;
-}
-
-.ant-layout-sider {
-  background: hsl(var(--sidebar-background)) !important;
-}
-
-.ant-layout-sider-children {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-}
-
-/* Menu - Dark sidebar theme */
-.ant-menu-dark {
-  background: transparent !important;
-}
-
-.ant-menu-dark .ant-menu-item {
-  color: hsl(var(--sidebar-foreground) / 0.7) !important;
-  margin: 2px 6px !important;
-  border-radius: 0 !important;
-  transition: all 0.2s ease !important;
-  height: 36px !important;
-  line-height: 36px !important;
-}
-
-.ant-menu-dark .ant-menu-item:hover {
-  color: hsl(var(--sidebar-foreground)) !important;
-  background-color: hsl(var(--sidebar-accent)) !important;
-}
-
-.ant-menu-dark .ant-menu-item-selected {
-  background-color: hsl(var(--brand-gold)) !important;
-  color: hsl(var(--sidebar-primary-foreground)) !important;
-  font-weight: 700 !important;
-}
-
-.ant-menu-dark .ant-menu-item-selected .anticon {
-  color: hsl(var(--sidebar-primary-foreground)) !important;
-}
-
-.ant-menu-dark .ant-menu-submenu-title {
-  color: hsl(var(--sidebar-foreground) / 0.7) !important;
-  margin: 2px 6px !important;
-  border-radius: 0 !important;
-  height: 36px !important;
-  line-height: 36px !important;
-}
-
-.ant-menu-dark .ant-menu-submenu-title:hover {
-  color: hsl(var(--sidebar-foreground)) !important;
-  background-color: hsl(var(--sidebar-accent)) !important;
-}
-
-.ant-menu-dark .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: hsl(var(--brand-gold)) !important;
-}
-
-.ant-menu-dark .ant-menu-submenu-selected > .ant-menu-submenu-title .anticon {
-  color: hsl(var(--brand-gold)) !important;
 }
 
 /* Badge đếm dùng accent gold thương hiệu (chữ navy cho dễ đọc) */
@@ -207,98 +238,9 @@
   font-weight: 600 !important;
 }
 
-.ant-menu-dark .ant-menu-sub {
-  background: transparent !important;
-}
-
-.ant-menu-dark .ant-menu-sub .ant-menu-item {
-  height: 32px !important;
-  line-height: 32px !important;
-  padding-left: 40px !important;
-}
-
-/* Compact menu class */
-.compact-menu .ant-menu-item,
-.compact-menu .ant-menu-submenu-title {
-  font-size: 13px !important;
-}
-
-.compact-menu .ant-menu-item .anticon,
-.compact-menu .ant-menu-submenu-title .anticon {
-  font-size: 14px !important;
-}
-
-/* Popup submenu khi sidebar collapse - FIX mờ */
-.ant-menu-dark.ant-menu-inline-collapsed .ant-menu-submenu-popup,
-.ant-menu-submenu-popup .ant-menu-dark,
-.ant-menu-submenu-popup .ant-menu {
-  background: hsl(var(--sidebar-background)) !important;
-  border-radius: var(--radius) !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.3) !important;
-}
-
-.ant-menu-submenu-popup .ant-menu-item {
-  color: hsl(var(--sidebar-foreground) / 0.8) !important;
-  margin: 4px 8px !important;
-  padding-left: 12px !important;
-  border-radius: calc(var(--radius) * 0.5) !important;
-}
-
-.ant-menu-submenu-popup .ant-menu-item:hover {
-  color: hsl(var(--sidebar-foreground)) !important;
-  background-color: hsl(var(--sidebar-accent)) !important;
-}
-
-.ant-menu-submenu-popup .ant-menu-item-selected {
-  background-color: hsl(var(--brand-gold)) !important;
-  color: hsl(var(--sidebar-primary-foreground)) !important;
-  font-weight: 700 !important;
-}
-
-.ant-menu-submenu-popup .ant-menu-submenu-title {
-  color: hsl(var(--sidebar-foreground) / 0.8) !important;
-  padding-left: 12px !important;
-}
-
-/* Fix popup submenu padding khi collapsed */
-.ant-menu-submenu-popup .ant-menu-vertical,
-.ant-menu-submenu-popup .ant-menu-vertical-left {
-  padding: 4px 0 !important;
-}
-
-.ant-menu-submenu-popup .ant-menu-vertical .ant-menu-item,
-.ant-menu-submenu-popup .ant-menu-vertical-left .ant-menu-item {
-  padding-left: 16px !important;
-  padding-right: 16px !important;
-  margin: 2px 8px !important;
-  height: 32px !important;
-  line-height: 32px !important;
-}
-
-.ant-menu-submenu-popup .ant-menu-vertical .ant-menu-item .anticon,
-.ant-menu-submenu-popup .ant-menu-vertical-left .ant-menu-item .anticon {
-  margin-right: 8px !important;
-}
-
-/* Fix submenu title trong popup */
-.ant-menu-submenu-popup .ant-menu-title-content {
-  margin-left: 0 !important;
-}
-
-/* Tooltip popup title styling */
-.ant-menu-inline-collapsed-tooltip {
-  max-width: none !important;
-}
-
-.ant-menu-inline-collapsed-tooltip .ant-tooltip-inner {
-  background: hsl(var(--sidebar-background)) !important;
-  color: hsl(var(--sidebar-foreground)) !important;
-  font-weight: 500 !important;
-}
-
 /* Cards */
 .ant-card {
-  border-radius: var(--radius) !important;
+  border-radius: var(--radius-card) !important;
   border: 1px solid hsl(var(--border)) !important;
   box-shadow: 0 1px 3px 0 hsl(220 13% 91% / 0.3) !important;
   transition: box-shadow 0.2s ease, transform 0.2s ease !important;
@@ -319,8 +261,12 @@
 }
 
 /* Buttons */
+/* border-radius để ConfigProvider (App.tsx) quyết: borderRadius 7 ·
+   borderRadiusSM 6 · borderRadiusXS 4. Trước đây rule này ép 7px
+   !important cho MỌI cỡ, vừa vô hiệu hoá borderRadiusSM/XS (482 chỗ
+   size="small"), vừa bo lại cả góc trong của Space.Compact /
+   Button.Group vốn phải phẳng. */
 .ant-btn {
-  border-radius: var(--radius) !important;
   font-weight: 500 !important;
   transition: all 0.2s ease !important;
 }
@@ -348,11 +294,12 @@
 }
 
 /* Inputs */
+/* border-radius bỏ theo cùng lý do với .ant-btn: để antd phân cỡ và
+   giữ góc phẳng cho input group (addonBefore/addonAfter). */
 .ant-input,
 .ant-input-affix-wrapper,
 .ant-select-selector,
 .ant-picker {
-  border-radius: var(--radius) !important;
   border-color: hsl(var(--border)) !important;
 }
 
@@ -374,7 +321,7 @@
 
 /* Tables */
 .ant-table {
-  border-radius: var(--radius) !important;
+  border-radius: var(--radius-card) !important;
 }
 
 .ant-table-thead > tr > th {
@@ -391,13 +338,35 @@
   border-bottom: 1px solid hsl(var(--border)) !important;
 }
 
+/* Màu hover PHẢI đục. Cột ghim (fixed) của antd nằm đè lên các cột cuộn phía sau nó,
+   nền trong suốt sẽ để lộ chữ của cột bên dưới khi cuộn ngang. Pha sẵn 4% primary lên
+   nền thẻ thay vì dùng alpha; hsl(var(--muted)) là dự phòng cho trình duyệt cũ. */
 .ant-table-tbody > tr:hover > td {
-  background-color: hsl(var(--primary) / 0.04) !important;
+  background-color: hsl(var(--muted)) !important;
+  background-color: color-mix(in srgb, hsl(var(--primary)) 4%, hsl(var(--card))) !important;
+}
+
+/* Bảng dùng prop `sticky`: antd vẽ một thanh cuộn ngang GIẢ dính đáy khung cuộn, nằm
+   ĐÈ lên các dòng cuối và để opacity 0.65 → chữ dưới lộ lên trông như bị đè chồng.
+   Cho nó đục hẳn để đọc ra là thanh cuộn, không phải chữ nhòe. */
+.ant-table-sticky-scroll {
+  opacity: 1 !important;
+  background: hsl(var(--card)) !important;
+  border-top: 1px solid hsl(var(--border)) !important;
+}
+
+.ant-table-sticky-scroll-bar {
+  background-color: hsl(var(--muted-foreground) / 0.45) !important;
+}
+
+.ant-table-sticky-scroll-bar:hover,
+.ant-table-sticky-scroll-bar-active {
+  background-color: hsl(var(--muted-foreground) / 0.7) !important;
 }
 
 /* Modals */
 .ant-modal-content {
-  border-radius: calc(var(--radius) * 1.5) !important;
+  border-radius: var(--radius-modal) !important;
   overflow: hidden !important;
 }
 
@@ -418,8 +387,10 @@
 }
 
 /* Tags / Badges */
+/* KHÔNG đặt border-radius ở đây: calc(var(--radius) * 0.5) ra 3.5px —
+   một giá trị không có trong thang {4, 6, 7, 9, 14} — và đè
+   borderRadiusSM: 6 khai trong ConfigProvider (App.tsx). Để antd quyết. */
 .ant-tag {
-  border-radius: calc(var(--radius) * 0.5) !important;
   font-weight: 500 !important;
 }
 
@@ -442,8 +413,8 @@
   padding: 8px !important;
 }
 
+/* Cũng bỏ border-radius vì lý do như .ant-tag ở trên. */
 .ant-dropdown-menu-item {
-  border-radius: calc(var(--radius) * 0.5) !important;
   padding: 8px 12px !important;
 }
 
@@ -586,77 +557,6 @@
   animation: introHeader 1.5s ease-in-out forwards;
 }
 
-/* Sidebar tooltip for collapsed state */
-.sidebar-collapsed .ant-menu-item .ant-menu-title-content,
-.sidebar-collapsed .ant-menu-submenu-title .ant-menu-title-content {
-  opacity: 0;
-  width: 0;
-}
-
-/* ========================= */
-/* New Sidebar Styles        */
-/* ========================= */
-
-/* Sidebar scroll container */
-.sidebar-scroll {
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: hsl(var(--sidebar-accent)) transparent;
-}
-
-.sidebar-scroll::-webkit-scrollbar {
-  width: 4px;
-}
-
-.sidebar-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.sidebar-scroll::-webkit-scrollbar-thumb {
-  background: hsl(var(--sidebar-accent));
-  border-radius: 0;
-}
-
-.sidebar-scroll::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--sidebar-foreground) / 0.3);
-}
-
-/* Sidebar section styling */
-.sidebar-section {
-  margin-bottom: 4px;
-}
-
-.sidebar-section-header {
-  padding: 12px 16px 6px 16px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sidebar-section-title {
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: hsl(var(--sidebar-foreground) / 0.5);
-}
-
-/* Menu section label (numbers 1-5) */
-.menu-section-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  font-size: 10px;
-  font-weight: 700;
-  color: hsl(var(--sidebar-foreground) / 0.6);
-  background: hsl(var(--sidebar-accent));
-  border-radius: 0;
-  margin-right: 4px;
-}
-
 /* ========================= */
 /* Coming Soon Menu Styles   */
 /* ========================= */
@@ -697,10 +597,10 @@
   display: inline-block;
   width: 6px;
   height: 6px;
-  background: hsl(38 92% 50%);
+  background: hsl(var(--amber));
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 0 4px hsl(38 92% 50% / 0.5);
+  box-shadow: 0 0 4px hsl(var(--amber) / 0.5);
 }
 
 /* Old badge style - keep for reference */
@@ -712,149 +612,13 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: hsl(38 92% 50%);
-  background: hsl(38 92% 50% / 0.15);
-  border: 1px solid hsl(38 92% 50% / 0.3);
+  color: hsl(var(--amber));
+  background: hsl(var(--amber) / 0.15);
+  border: 1px solid hsl(var(--amber) / 0.3);
   border-radius: 0;
   white-space: nowrap;
   flex-shrink: 0;
   line-height: 14px;
-}
-
-/* Hide badge/dot in collapsed state */
-.sidebar-collapsed .coming-soon-badge,
-.sidebar-collapsed .coming-soon-dot {
-  display: none;
-}
-
-/* Submenu coming soon items */
-.ant-menu-sub .menu-item-coming-soon {
-  color: hsl(var(--sidebar-foreground) / 0.4) !important;
-}
-
-.ant-menu-sub .menu-item-coming-soon:hover {
-  color: hsl(var(--sidebar-foreground) / 0.6) !important;
-  background: hsl(var(--sidebar-accent) / 0.5) !important;
-}
-
-/* Sidebar menu compact styling */
-.sidebar-menu .ant-menu-item-group-title {
-  padding: 8px 12px 4px 12px !important;
-  font-size: 10px !important;
-  font-weight: 700 !important;
-  text-transform: uppercase !important;
-  letter-spacing: 0.08em !important;
-  color: hsl(var(--sidebar-foreground) / 0.4) !important;
-}
-
-.sidebar-menu .ant-menu-item {
-  margin: 2px 8px !important;
-  padding-left: 12px !important;
-  border-radius: 0 !important;
-  height: 34px !important;
-  line-height: 34px !important;
-  font-size: 13px !important;
-}
-
-.sidebar-menu .ant-menu-submenu-title {
-  margin: 2px 8px !important;
-  padding-left: 12px !important;
-  border-radius: 0 !important;
-  height: 34px !important;
-  line-height: 34px !important;
-  font-size: 13px !important;
-}
-
-.sidebar-menu .ant-menu-sub .ant-menu-item {
-  height: 32px !important;
-  line-height: 32px !important;
-  padding-left: 36px !important;
-  font-size: 12px !important;
-}
-
-.sidebar-menu .ant-menu-sub .ant-menu-submenu-title {
-  height: 32px !important;
-  line-height: 32px !important;
-  padding-left: 36px !important;
-  font-size: 12px !important;
-}
-
-/* Third level menu items */
-.sidebar-menu .ant-menu-sub .ant-menu-sub .ant-menu-item {
-  padding-left: 52px !important;
-  font-size: 12px !important;
-}
-
-/* Menu icons */
-.sidebar-menu .ant-menu-item .anticon,
-.sidebar-menu .ant-menu-submenu-title .anticon {
-  font-size: 14px !important;
-  min-width: 14px !important;
-}
-
-/* Selected state enhancement */
-.sidebar-menu .ant-menu-item-selected {
-  background: linear-gradient(135deg, hsl(var(--brand-gold)), hsl(var(--brand-gold) / 0.9)) !important;
-  box-shadow: 0 2px 8px hsl(var(--brand-gold) / 0.35) !important;
-  color: hsl(var(--sidebar-primary-foreground)) !important;
-}
-
-.sidebar-menu .ant-menu-item-selected .ant-menu-title-content,
-.sidebar-menu .ant-menu-item-selected .anticon {
-  color: hsl(var(--sidebar-primary-foreground)) !important;
-  font-weight: 700 !important;
-}
-
-/* Hover state */
-.sidebar-menu .ant-menu-item:not(.ant-menu-item-selected):hover,
-.sidebar-menu .ant-menu-submenu-title:hover {
-  background: hsl(var(--sidebar-accent)) !important;
-}
-
-/* Active submenu styling */
-.sidebar-menu .ant-menu-submenu-selected > .ant-menu-submenu-title {
-  color: hsl(var(--brand-gold)) !important;
-  font-weight: 600 !important;
-}
-
-/* Submenu arrow */
-.sidebar-menu .ant-menu-submenu-arrow {
-  color: hsl(var(--sidebar-foreground) / 0.5) !important;
-}
-
-.sidebar-menu .ant-menu-submenu-title:hover .ant-menu-submenu-arrow {
-  color: hsl(var(--sidebar-foreground)) !important;
-}
-
-/* Group items - hide the group label icon area */
-.sidebar-menu .ant-menu-item-group > .ant-menu-item-group-title {
-  display: flex;
-  align-items: center;
-}
-
-/* Collapsed state - hide section headers */
-.sidebar-collapsed .sidebar-section-header {
-  display: none;
-}
-
-/* Collapsed menu adjustments */
-.sidebar-collapsed .sidebar-menu .ant-menu-item {
-  margin: 2px 4px !important;
-  padding: 0 !important;
-  display: flex;
-  justify-content: center;
-}
-
-.sidebar-collapsed .sidebar-menu .ant-menu-submenu-title {
-  margin: 2px 4px !important;
-  padding: 0 !important;
-  display: flex;
-  justify-content: center;
-}
-
-/* Hide group titles when collapsed */
-.sidebar-collapsed .ant-menu-item-group-title {
-  display: none !important;
 }
 
 /* ========================= */
@@ -1043,6 +807,234 @@
   }
 }
 
+/* Bảng tổng hợp công nợ — dòng TỔNG CỘNG ghim (Table.Summary fixed="top").
+   Summary mặc định nền trong suốt nên khi ghim sẽ nhìn xuyên qua dữ liệu cuộn
+   bên dưới → phải tô nền đặc. */
+.cong-no-total-row > td.ant-table-cell {
+  background: #e6f7ff !important;
+  font-weight: 700;
+}
+
+.dark .cong-no-total-row > td.ant-table-cell {
+  background: #111d2c !important;
+}
+
+/* Bảng cây danh mục — dòng NHÓM (thu gọn được). Cùng nền trắng và cùng cỡ chữ
+   với dòng con thì tiêu đề nhóm chìm nghỉm, người dùng không nhìn ra chỗ nào
+   bấm thu/mở. Chọn thẳng `> td` chứ không phải `tr`: nền của antd nằm ở ô, tô
+   lên hàng sẽ bị ô che mất. Đặt SAU luật hover (cùng độ ưu tiên, thắng nhờ
+   đứng sau) để rê chuột qua vẫn giữ nền nhóm, không nhấp nháy sang xám. */
+.ant-table-tbody > tr.hang-nhom-cay > td {
+  background: #e6f7ff !important;
+  font-weight: 600;
+}
+
+.dark .ant-table-tbody > tr.hang-nhom-cay > td {
+  background: #111d2c !important;
+}
+
+/* Hàng lọc trên cùng của "Dữ liệu tổng hợp" */
+.nkc-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  /* Hàng này gánh cả bộ lọc lẫn toàn bộ nút lệnh của bảng → màn hẹp thì xuống dòng
+     chứ không được tràn ngang. */
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 5px 8px;
+  background: var(--xl-bar);
+  border: 1px solid var(--xl-bar-border);
+  border-bottom: none;
+  flex-shrink: 0;
+}
+
+.nkc-filter-bar__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.nkc-filter-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Nút lệnh của bảng do EntryListTab bắn lên (portal) — giữ dáng phẳng như ribbon. */
+.nkc-filter-bar__slot {
+  display: flex;
+  align-items: center;
+}
+
+.nkc-filter-bar__slot .ant-btn-default {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #333;
+}
+
+.nkc-filter-bar__slot .ant-btn-default:hover:not(:disabled) {
+  background: #ededeb !important;
+  border-color: var(--xl-bar-border) !important;
+  color: var(--xl-green-dark) !important;
+}
+
+.dark .nkc-filter-bar__slot .ant-btn-default {
+  color: hsl(var(--foreground));
+}
+
+.dark .nkc-filter-bar__slot .ant-btn-default:hover:not(:disabled) {
+  background: hsl(var(--accent)) !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Hàng số liệu tổng quan — 8 thẻ đứng riêng một hàng ngay trên bảng.
+   Thẻ nào cũng 2 dòng: trên theo SỐ LƯỢNG bút toán, dưới theo GIÁ TRỊ. */
+.nkc-stats {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Hẹp hơn màn laptop thì 8 thẻ một dòng bắt đầu cắt mất nhãn → xuống 2 dòng 4 thẻ. */
+@media (max-width: 1280px) {
+  .nkc-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px) {
+  .nkc-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.nkc-stat {
+  min-width: 0;
+  padding: 3px 8px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-left-width: 3px;
+  border-radius: 4px;
+}
+
+.nkc-stat--total {
+  border-left-color: #1677ff;
+}
+
+.nkc-stat--hopLe {
+  border-left-color: #52c41a;
+}
+
+.nkc-stat--chuaHopLe {
+  border-left-color: #fa8c16;
+}
+
+.nkc-stat--khongHopLe {
+  border-left-color: #ff4d4f;
+}
+
+.nkc-stat--chuaKiemSoat {
+  border-left-color: #8c8c8c;
+}
+
+.nkc-stat__label {
+  font-size: 10px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  /* 8 thẻ trên 1 dòng → khung hẹp, nhãn dài phải cắt chứ không được đội cao thẻ. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nkc-stat__value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.nkc-stat--hopLe .nkc-stat__value {
+  color: #389e0d;
+}
+
+.nkc-stat--chuaHopLe .nkc-stat__value {
+  color: #d46b08;
+}
+
+.nkc-stat--khongHopLe .nkc-stat__value {
+  color: #cf1322;
+}
+
+.nkc-stat--chuaKiemSoat .nkc-stat__value {
+  color: #595959;
+}
+
+.nkc-stat__sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dark .nkc-filter-bar {
+  background: #1f1f1f;
+  border-color: #303030;
+}
+
+.dark .nkc-stat {
+  background: #141414;
+  border-color: #303030;
+}
+
+.dark .nkc-stat__value {
+  color: #e5e7eb;
+}
+
+.dark .nkc-stat--hopLe .nkc-stat__value {
+  color: #73d13d;
+}
+
+.dark .nkc-stat--chuaHopLe .nkc-stat__value {
+  color: #ffa940;
+}
+
+.dark .nkc-stat--khongHopLe .nkc-stat__value {
+  color: #ff7875;
+}
+
+.dark .nkc-stat--chuaKiemSoat .nkc-stat__value {
+  color: #bfbfbf;
+}
+
+/* Cột "Chức năng" — nút lệnh chính + mũi tên mở các lệnh còn lại.
+   Dùng chung cho Dữ liệu tổng hợp và Bán hàng; ép gọn cho vừa ô hẹp. */
+.row-action-menu .ant-btn {
+  padding-inline: 4px;
+  font-size: 12px;
+}
+
+.row-action-menu .ant-btn .anticon {
+  margin-inline-end: 2px;
+}
+
+/* Mũi tên đứng sát nhãn, không cần khoảng đệm của icon đứng trước chữ */
+.row-action-menu .ant-dropdown-trigger .anticon {
+  margin-inline-end: 0;
+}
+
 /* Excel container */
 .excel-container {
   flex: 1;
@@ -1114,16 +1106,72 @@
   overflow: hidden;
 }
 
-/* Excel toolbar */
+/* ── Lớp da Excel ────────────────────────────────────────────────────────────
+   Người dùng chính là kế toán quen Excel, nên thanh lệnh và bảng mượn đúng
+   ngôn ngữ của Excel: dải lệnh nền Office, nhóm lệnh ngăn bằng gạch dọc,
+   lưới ô xám nhạt đều, máng số thứ tự dòng, xanh Excel cho hành động chính. */
+:root {
+  --xl-green: #217346;
+  --xl-green-dark: #1a5c38;
+  --xl-green-tint: #e8f2ec;
+  --xl-bar: #faf9f8;
+  --xl-bar-border: #e1dfdd;
+  --xl-grid: #dcdcdc;
+  --xl-head: #f0f0f0;
+  --xl-head-border: #c6c6c6;
+}
+
+/* Thanh lệnh của bảng (Office command bar) */
 .excel-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 8px;
-  background: #fafafa;
-  border-bottom: 1px solid #e8e8e8;
+  gap: 10px;
+  padding: 5px 8px;
+  background: var(--xl-bar);
+  border-bottom: 1px solid var(--xl-bar-border);
   flex-shrink: 0;
 }
+
+/* Hàng chỉ chứa 8 thẻ số liệu — thẻ tự giãn hết chiều ngang, không cần chia 2 cụm */
+.excel-toolbar--stats {
+  display: block;
+  padding: 4px 6px;
+}
+
+/* Gạch dọc ngăn nhóm lệnh — đúng cách Excel chia nhóm trên ribbon */
+.xl-cmd-sep {
+  align-self: stretch;
+  width: 1px;
+  margin: 2px 2px;
+  background: var(--xl-bar-border);
+}
+
+/* Nút lệnh: phẳng, chỉ nổi lên khi rê chuột — giống nút trên ribbon */
+.excel-toolbar .ant-btn-default {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #333;
+}
+
+.excel-toolbar .ant-btn-default:hover:not(:disabled) {
+  background: #ededeb !important;
+  border-color: var(--xl-bar-border) !important;
+  color: var(--xl-green-dark) !important;
+}
+
+/* Hành động chính mang xanh Excel */
+.nkc-filter-bar .ant-btn-primary {
+  background: var(--xl-green);
+  border-color: var(--xl-green);
+}
+
+.nkc-filter-bar .ant-btn-primary:hover:not(:disabled) {
+  background: var(--xl-green-dark) !important;
+  border-color: var(--xl-green-dark) !important;
+}
+
 
 /* Excel table styling */
 .excel-table {
@@ -1221,14 +1269,19 @@
 
 .excel-table .ant-table-thead > tr > th {
   background: #f0f0f0 !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   font-size: 11px !important;
   padding: 6px 8px !important;
   text-transform: none !important;
   letter-spacing: normal !important;
-  border-bottom: 1px solid #d9d9d9 !important;
-  border-right: 1px solid #e8e8e8 !important;
-  white-space: nowrap;
+  color: #1f1f1f;
+  /* Viền header đậm hơn viền ô — Excel phân định rõ vùng tiêu đề cột */
+  border-bottom: 1px solid var(--xl-head-border) !important;
+  border-right: 1px solid var(--xl-head-border) !important;
+  /* Tiêu đề dài cũng xuống dòng — cột hẹp không còn nuốt mất chữ */
+  white-space: normal;
+  line-height: 1.35;
+  vertical-align: middle;
 }
 
 .excel-table .ant-table-thead > tr > th:last-child {
@@ -1238,34 +1291,47 @@
 .excel-table .ant-table-tbody > tr > td {
   padding: 4px 8px !important;
   font-size: 12px !important;
-  border-bottom: 1px solid #e8e8e8 !important;
-  border-right: 1px solid #f0f0f0 !important;
+  /* Lưới ô xám đều cả hai chiều — bảng tính không có đường đậm đường nhạt */
+  border-bottom: 1px solid var(--xl-grid) !important;
+  border-right: 1px solid var(--xl-grid) !important;
+  /* Ô nhiều dòng canh giữa theo chiều dọc — dễ soi ngang giữa các cột */
   vertical-align: middle;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+/* Chữ số thẳng cột như Excel (mọi chữ số cùng bề rộng) */
+.excel-table .ant-table-tbody > tr > td,
+.excel-table .ant-table-summary > tr > td {
+  font-variant-numeric: tabular-nums;
 }
 
 .excel-table .ant-table-tbody > tr > td:last-child {
   border-right: none !important;
 }
 
-.excel-table .ant-table-tbody > tr:hover > td {
-  background-color: #e6f7ff !important;
+/* Rê chuột / dòng đã tick: xanh Excel nhạt, không phải xanh dương mặc định của antd */
+.excel-table .ant-table-tbody > tr:hover > td,
+.excel-table .ant-table-tbody > tr:nth-child(even):hover > td {
+  background-color: var(--xl-green-tint) !important;
 }
 
 .excel-table .ant-table-tbody > tr:nth-child(even) > td {
   background-color: #fafafa;
 }
 
-.excel-table .ant-table-tbody > tr:nth-child(even):hover > td {
-  background-color: #e6f7ff !important;
+.excel-table .ant-table-tbody > tr.ant-table-row-selected > td {
+  background-color: #d6eade !important;
 }
 
-/* Excel cell text */
+/* Excel cell text — xuống dòng thay vì cắt cụt bằng "...".
+   `overflow-wrap: anywhere` để chuỗi dài không dấu cách (số chứng từ, mã) cũng ngắt được. */
 .excel-cell-text {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 /* Excel tag */
@@ -2305,4 +2371,489 @@ body.col-resizing .ant-table * {
 .kqkd-row-bold > td {
   font-weight: 600 !important;
   background: #fafafa !important;
+}
+
+/* ===== Bảng màu biểu đồ tròn "Tỷ trọng" =====
+   Sáu hue tách bạch thay cho dải xanh-navy/vàng cũ — dải cũ có tới ba sắc xanh
+   và ba sắc vàng, lát nhỏ chìm hẳn vào nhau. Bộ này đã chạy qua validator:
+   đạt cả dải sáng, ngưỡng chroma, tách màu cho người mù màu (ΔE nhỏ nhất 9.1
+   sáng / 8.4 tối) và ngưỡng phân biệt mắt thường (19.6 / 19.3).
+   Bậc màu chế độ tối là bậc RIÊNG cho nền tối, không phải lật ngược màu sáng. */
+:root {
+  --viz-1: #2a78d6; /* lam */
+  --viz-2: #eb6834; /* cam */
+  --viz-3: #1baf7a; /* ngọc */
+  --viz-4: #eda100; /* vàng */
+  --viz-5: #e87ba4; /* hồng */
+  --viz-6: #008300; /* lục */
+  --viz-khac: #84847d; /* xám — "Khác" luôn lùi lại, không tranh chỗ với nhóm thật */
+}
+
+.dark {
+  --viz-1: #3987e5;
+  --viz-2: #d95926;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #d55181;
+  --viz-6: #008300;
+  --viz-khac: #9c9c95;
+}
+
+/* ===== Bảng kế hoạch hai cấp (Bán hàng / Nhân sự) ===== */
+/* Hàng TỔNG CỘNG ghim đầu bảng — nền đậm hơn hàng nhóm để phân biệt hai mức. */
+.kh-hang-tong > td {
+  background: hsl(var(--primary) / 0.1) !important;
+  font-weight: 600;
+}
+
+.kh-hang-nhom > td {
+  background: hsl(var(--muted)) !important;
+  font-weight: 600;
+}
+
+/* Dòng lệch mục tiêu năm — đỏ nhạt, thay cho cột CHÊNH LỆCH đã gỡ. Chỉ tô dòng
+   CHI TIẾT (xem `rowClassName`); số lệch cụ thể nằm ở tooltip ô CẢ NĂM. */
+.kh-hang-lech > td {
+  background: #fff1f0 !important;
+}
+
+.excel-table .kh-hang-lech:hover > td {
+  background: #ffe3e0 !important;
+}
+
+/* Dòng đang gõ dở hoặc mới thêm — vàng nhạt để thấy ngay cái gì chưa lưu. */
+.kh-hang-nhap > td {
+  background: #fffbe6 !important;
+}
+
+.excel-table .kh-hang-nhap:hover > td {
+  background: #fff3bf !important;
+}
+
+/* --- Quy chuẩn màu theo CẤP THÔNG TIN của bảng kế hoạch ---
+   Nguyên tắc bắt buộc: cùng cấp = cùng màu. Không nhạt dần theo từng cột riêng
+   lẻ — người đọc phải nhận ra ranh giới giữa Năm / Quý / Tháng bằng thị giác,
+   chứ không phải bằng cách đọc tiêu đề từng cột.
+
+   Hàng TỔNG CỘNG / hàng nhóm / hàng đang gõ dở đặt !important nên vẫn thắng
+   được nền cấp cột ở phần thân bảng — đúng ý: cấp HÀNG quan trọng hơn cấp CỘT. */
+/* ĐỤC, không dùng alpha — ô tiêu đề của cột ghim cũng nằm đè lên phần header
+   đang cuộn, hệt như ô dữ liệu. Nền gốc của `th` trong .excel-table là #f0f0f0
+   nên pha lên đúng màu đó thì tiêu đề vùng ghim và vùng cuộn cùng tông. */
+.kh-bang th.kh-cot-chinh {
+  background: hsl(var(--muted)) !important;
+  background: color-mix(in srgb, hsl(var(--primary)) 14%, #f0f0f0) !important;
+}
+
+.kh-bang th.kh-cot-nam {
+  background: hsl(var(--muted)) !important;
+  background: color-mix(in srgb, hsl(var(--primary)) 22%, #f0f0f0) !important;
+}
+
+.kh-bang th.kh-cot-quy {
+  background: hsl(var(--muted)) !important;
+  background: color-mix(in srgb, hsl(var(--primary)) 10%, #f0f0f0) !important;
+}
+
+.kh-bang th.kh-cot-thang {
+  background: hsl(var(--muted)) !important;
+  background: color-mix(in srgb, hsl(var(--primary)) 4%, #f0f0f0) !important;
+}
+
+/* Thân bảng: chỉ hai cột cấp năm được nhấn, để mắt bám được cột quan trọng nhất
+   khi kéo ngang qua 16 cột số. */
+.kh-bang td.kh-cot-nam {
+  background: hsl(var(--muted));
+  background: color-mix(in srgb, hsl(var(--primary)) 6%, hsl(var(--card)));
+  font-variant-numeric: tabular-nums;
+}
+
+.kh-bang td.kh-cot-quy,
+.kh-bang td.kh-cot-thang {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Năm dòng tổng hợp của bảng Dòng tiền (Tồn đầu/cuối kỳ, Thu, Chi, Thặng dư):
+   in đậm và đổ màu khác hẳn dòng nhóm, vì chúng là kết quả tính chứ không phải
+   một nhóm dữ liệu người dùng gõ vào. */
+.kh-hang-tong-hop > td {
+  background: hsl(var(--primary) / 0.16) !important;
+  font-weight: 700;
+}
+
+/* Dòng phụ Số dư của bảng Nguồn vốn — số suy ra, lùi lại một bậc thị giác so
+   với dòng chi tiết sinh ra nó. */
+.kh-hang-so-du > td {
+  background: hsl(var(--muted) / 0.5) !important;
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Dòng DOANH THU HÒA VỐN cuối bảng KQKD kế hoạch — vàng để tách khỏi các dòng
+   tổng (cũng là cấp 0) ngay phía trên. */
+.kh-hang-hoa-von > td {
+  background: #fef3c7 !important;
+  font-weight: 600;
+}
+
+.excel-table .ant-table-tbody > tr.kh-hang-hoa-von:hover > td {
+  background-color: #fde68a !important;
+}
+
+.dark .kh-hang-hoa-von > td,
+.dark .excel-table .ant-table-tbody > tr.kh-hang-hoa-von > td {
+  background: rgba(250, 204, 21, 0.18) !important;
+}
+
+.dark .excel-table .ant-table-tbody > tr.kh-hang-hoa-von:hover > td {
+  background-color: rgba(250, 204, 21, 0.28) !important;
+}
+
+/* Ô nhập trong bảng: hoà vào lưới, chỉ hiện viền khi đang gõ. */
+.excel-cell-input.ant-input-number,
+.excel-cell-input.ant-input {
+  padding: 0 !important;
+  background: transparent;
+}
+
+.excel-cell-input.ant-input-number .ant-input-number-input {
+  padding: 0 !important;
+  height: 20px;
+  font-size: 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.excel-cell-input.ant-input-number:focus-within,
+.excel-cell-input.ant-input:focus {
+  outline: 2px solid var(--xl-green);
+  outline-offset: -2px;
+  background: #fff;
+}
+
+/* Bảng kế hoạch: ô GÕ ĐƯỢC phải tự lộ ra.
+   Trước đây ô nhập trong suốt y hệt ô công thức (CỘNG, %, Q1…Q4) nên nhìn cả
+   bảng không biết chỗ nào bấm vào gõ được — nay viền mảnh + nền trắng, đúng
+   quy ước ô nhập của bảng tính. */
+/* !important vì các ô này dùng variant="borderless" — AntD chủ động xoá viền. */
+.kh-bang .excel-cell-input.ant-input-number,
+.kh-bang .excel-cell-input.ant-input {
+  padding: 0 4px !important;
+  background: #fff !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 2px;
+  transition: border-color 0.15s ease;
+}
+
+.kh-bang .excel-cell-input.ant-input-number:hover,
+.kh-bang .excel-cell-input.ant-input:hover {
+  border-color: var(--xl-green) !important;
+}
+
+.dark .kh-bang .excel-cell-input.ant-input-number,
+.dark .kh-bang .excel-cell-input.ant-input {
+  background: hsl(var(--background)) !important;
+}
+
+/* ===== Cảnh báo lệch mục tiêu — đúng MỘT dòng =====
+   Bảng kế hoạch cuộn cả hai chiều: mỗi dòng chiều cao nhường cho cảnh báo là
+   một dòng dữ liệu người dùng không nhìn thấy. Nén hết mức nhưng vẫn đỏ để đập
+   vào mắt. */
+.kh-canh-bao.ant-alert {
+  padding: 3px 10px;
+  margin-bottom: 4px;
+  line-height: 1.5;
+  align-items: center;
+}
+
+.kh-canh-bao.ant-alert .ant-alert-icon {
+  margin-inline-end: 6px;
+  font-size: 13px;
+}
+
+.kh-canh-bao.ant-alert .ant-alert-content {
+  /* Một dòng thật: dài quá thì cắt bằng dấu ba chấm chứ không xuống dòng. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===== Cột ghim của bảng kế hoạch =====
+   Ô ghim phải ĐỤC — nền trong suốt thì phần bảng cuộn bên dưới hiện xuyên qua,
+   chữ chồng lên nhau.
+
+   PHẢI KHAI CẢ HAI BỘ TÊN LỚP: antd 5 dùng `...-fix-left`, antd 6 đổi sang
+   `...-fix-start`. Dự án đang ở antd 6 nên chỉ khai bộ cũ là quy tắc khớp ĐÚNG
+   KHÔNG Ô NÀO — lỗi này đã một lần lọt qua vì trông vẫn "gần đúng" trên ảnh
+   chụp. Giữ cả hai để nâng/hạ phiên bản antd không âm thầm làm hỏng lại. */
+.kh-bang .ant-table-cell-fix-left,
+.kh-bang .ant-table-cell-fix-start {
+  background: hsl(var(--background));
+}
+
+/* Tiêu đề cột ghim giữ nguyên màu theo cấp (kh-cot-*), chỉ cần đục nền. */
+.kh-bang .ant-table-thead > tr > th.ant-table-cell-fix-left,
+.kh-bang .ant-table-thead > tr > th.ant-table-cell-fix-start {
+  background-color: hsl(var(--background));
+}
+
+/* Nền theo CẤP HÀNG phải thắng nền ô ghim ở trên, nếu không hàng TỔNG / hàng
+   nhóm / hàng gõ dở mất màu ngay ở tám cột trái.
+
+   HAI DÒNG DƯỚI ĐÂY PHẢI ĐỤC HOÀN TOÀN. Trước 02/09/2026 chúng dùng thẳng
+   `hsl(var(--primary) / 0.1)` — màu TRONG MỜ. Ở vùng cuộn thì không sao (bên
+   dưới là nền bảng), nhưng ô GHIM nằm đè lên phần bảng đang cuộn, nền trong mờ
+   là số của các tháng bên ngoài hiện xuyên qua và chồng chữ lên nhãn — đúng lỗi
+   người dùng báo ở tab Dòng tiền ("kéo thanh trượt vào đến đâu vẫn thấy số của
+   bên ngoài kéo vào").
+
+   Cách giữ đúng màu mà vẫn đục: chồng lớp tint lên nền nguyên khối bằng
+   `linear-gradient` hai điểm dừng cùng màu. Kết quả hợp màu y hệt alpha trên
+   nền đó, nên vùng ghim và vùng cuộn không bị lệch tông. */
+.kh-bang .kh-hang-tong > td.ant-table-cell-fix-start,
+.kh-bang .kh-hang-tong > td.ant-table-cell-fix-left {
+  background: hsl(var(--muted)) !important;
+  background: color-mix(in srgb, hsl(var(--primary)) 10%, hsl(var(--card))) !important;
+}
+
+.kh-bang .kh-hang-nhom > td.ant-table-cell-fix-start,
+.kh-bang .kh-hang-nhom > td.ant-table-cell-fix-left {
+  background: hsl(var(--muted)) !important;
+}
+
+.kh-bang .kh-hang-tong-hop > td.ant-table-cell-fix-start,
+.kh-bang .kh-hang-tong-hop > td.ant-table-cell-fix-left {
+  background: hsl(var(--muted)) !important;
+  background: color-mix(in srgb, hsl(var(--primary)) 16%, hsl(var(--card))) !important;
+}
+
+.kh-bang .kh-hang-nhap > td.ant-table-cell-fix-start,
+.kh-bang .kh-hang-nhap > td.ant-table-cell-fix-left {
+  background: #fffbe6 !important;
+}
+
+.kh-bang .kh-hang-lech > td.ant-table-cell-fix-start,
+.kh-bang .kh-hang-lech > td.ant-table-cell-fix-left {
+  background: #fff1f0 !important;
+}
+
+/* Dòng "Số dư" của bảng Nguồn vốn — cùng bệnh trong mờ (`--muted / 0.5`), chỉ là
+   ít dòng nên chưa ai báo. Đục sẵn luôn cho khỏi quay lại lần nữa. */
+.kh-bang .kh-hang-so-du > td.ant-table-cell-fix-start,
+.kh-bang .kh-hang-so-du > td.ant-table-cell-fix-left {
+  background: hsl(var(--muted)) !important;
+  background: color-mix(in srgb, hsl(var(--muted)) 50%, hsl(var(--card))) !important;
+}
+
+/* Hàng chẵn của .excel-table có nền riêng — ô ghim phải theo cho khớp, không
+   thì cột trái trắng còn phần cuộn xám, nhìn như hai bảng khác nhau. */
+.kh-bang .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-start,
+.kh-bang .ant-table-tbody > tr:nth-child(even) > td.ant-table-cell-fix-left {
+  background-color: #fafafa;
+}
+
+.kh-bang .ant-table-tbody > tr:hover > td.ant-table-cell-fix-start,
+.kh-bang .ant-table-tbody > tr:hover > td.ant-table-cell-fix-left {
+  background-color: var(--xl-green-tint) !important;
+}
+
+/* Vạch phân cách giữa vùng ghim và vùng cuộn — không có nó thì người đọc không
+   nhận ra bảng có hai phần, tưởng bảng bị lỗi khi kéo ngang. */
+.kh-bang .ant-table-cell-fix-left-last::after,
+.kh-bang .ant-table-cell-fix-start-last::after {
+  border-inline-end: 2px solid hsl(var(--primary) / 0.35) !important;
+}
+
+/* Ô tiêu đề phải là gốc toạ độ cho tay kéo — antd không tự đặt relative. */
+/* `.co-gian-cot` là lớp đánh dấu chung cho MỌI bảng dùng `useCotCoGian`, không
+   riêng bảng kế hoạch nữa (Nhật ký chung dùng từ 02/09/2026). `.kh-bang` giữ
+   lại để khỏi phải sửa năm bảng kế hoạch. */
+.kh-bang .ant-table-thead > tr > th,
+.co-gian-cot .ant-table-thead > tr > th {
+  position: relative;
+}
+
+.kh-bang .kh-o-tieu-de,
+.co-gian-cot .kh-o-tieu-de {
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* Tay kéo giãn cột — bám mép phải ô tiêu đề, chỉ hiện rõ khi rê chuột tới. */
+.kh-bang .kh-tay-keo,
+.co-gian-cot .kh-tay-keo {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: -4px;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 2;
+  touch-action: none;
+  user-select: none;
+}
+
+.kh-bang .kh-tay-keo::after,
+.co-gian-cot .kh-tay-keo::after {
+  content: "";
+  position: absolute;
+  inset-block: 4px;
+  inset-inline-start: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background-color 0.15s ease;
+}
+
+.kh-bang .kh-tay-keo:hover::after,
+.kh-bang .kh-tay-keo.dang-keo::after,
+.co-gian-cot .kh-tay-keo:hover::after,
+.co-gian-cot .kh-tay-keo.dang-keo::after {
+  background: var(--xl-green, hsl(var(--primary)));
+}
+
+/* Nhật ký chung là bảng ĐẦU TIÊN vừa có tay kéo vừa có icon lọc trên header, mà
+   hai thứ này tranh nhau đúng mép phải ô tiêu đề. Nâng icon lọc lên trên tay kéo:
+   bấm vào icon thì ra bộ lọc, phần gutter còn lại vẫn kéo giãn được. Không có
+   dòng này thì tay kéo (z-index 2) nuốt mất một góc icon và người dùng bấm lọc
+   lại hoá ra đang kéo cột. */
+.co-gian-cot .ant-table-filter-trigger {
+  position: relative;
+  z-index: 3;
+}
+
+/* Khi đang kéo: khoá con trỏ toàn trang, nếu không rê nhanh ra ngoài ô tiêu đề
+   là con trỏ nhảy về mũi tên và người dùng tưởng đã nhả chuột. */
+body.kh-dang-keo-cot {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+/* Hàng nút biểu tượng ở đầu bảng — thêm / sửa / xoá / xuất / làm mới. */
+.action-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--ink-2));
+  transition: background-color 0.15s, color 0.15s;
+}
+.action-icon-btn:hover {
+  background: hsl(var(--muted));
+  color: hsl(var(--ink));
+}
+.action-icon-btn--danger:hover {
+  color: hsl(var(--red));
+}
+
+/* ── Dải loading của BangDuLieu ───────────────────────────────────────────
+   Thay cho spinner che bảng của antd: dữ liệu cũ ở nguyên chỗ, chỉ có dải
+   mảnh chạy trên đầu. Khi rảnh dải vẫn chiếm đúng 2px (trong suốt) để bảng
+   không nhảy lên xuống mỗi lần tải. */
+.bdl-thanh {
+  height: 2px;
+  overflow: hidden;
+  background: transparent;
+}
+
+.bdl-thanh[data-dang-tai='1']::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: 40%;
+  background: hsl(var(--primary));
+  animation: bdl-chay 1.1s ease-in-out infinite;
+}
+
+@keyframes bdl-chay {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+/* Nền tối: `--primary` CỐ Ý không đổi giữa hai chế độ (có test canh điều đó ở
+   index.css.test.ts), mà teal 29% độ sáng thì chìm hẳn vào nền tối — dải chạy
+   coi như tàng hình. Làm sáng riêng cho dải này, không đụng tới token. */
+.dark .bdl-thanh[data-dang-tai='1']::after {
+  background: hsl(170 59% 58%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bdl-thanh[data-dang-tai='1']::after {
+    width: 100%;
+    animation: none;
+    opacity: 0.55;
+  }
+}
+
+/* ── Màu nhấn của nhóm danh mục ───────────────────────────────────────────
+   Sáu màu nhấn (#1F7769, #475569…) đều là tông TỐI, đặt trên nền tối thì
+   huy hiệu "N mục" và icon nhóm gần như tàng hình. Pha thêm trắng riêng cho
+   chế độ tối; chế độ sáng giữ nguyên màu gốc của bản vẽ. */
+.mau-nhom {
+  color: var(--mau);
+}
+
+.dark .mau-nhom {
+  color: color-mix(in srgb, var(--mau) 52%, #ffffff);
+}
+
+/* ── Màn chờ MasterCeo ────────────────────────────────────────────────────
+   Dấu M thở nhẹ, dưới là đúng dải 2px của BangDuLieu (dùng lại cùng nhịp
+   `bdl-chay` để cả app chỉ có MỘT chuyển động "đang tải"). */
+.mc-cho-tho {
+  animation: mc-tho 1.6s ease-in-out infinite;
+}
+
+@keyframes mc-tho {
+  0%,
+  100% {
+    /* Đáy 0.6 chứ không thấp hơn: tụt sâu thì dấu M teal nhợt hẳn ở nền sáng
+       và chìm vào nền ở chế độ tối, trông như ảnh hỏng hơn là đang tải. */
+    opacity: 0.6;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.mc-cho-dai {
+  width: 132px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: hsl(var(--muted));
+}
+
+.mc-cho-dai::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: 40%;
+  background: hsl(var(--primary));
+  animation: bdl-chay 1.1s ease-in-out infinite;
+}
+
+.dark .mc-cho-dai::after {
+  background: hsl(170 59% 58%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc-cho-tho {
+    animation: none;
+    opacity: 1;
+  }
+
+  .mc-cho-dai::after {
+    width: 100%;
+    animation: none;
+    opacity: 0.55;
+  }
 }

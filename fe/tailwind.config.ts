@@ -50,6 +50,9 @@ export default {
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
+          // Nền cột panel 196px cạnh rail — token đã có trong index.css nhưng
+          // khối này thiếu khoá, nên chỉ dùng được qua giá trị tuỳ ý.
+          panel: "hsl(var(--sidebar-panel))",
           foreground: "hsl(var(--sidebar-foreground))",
           primary: "hsl(var(--sidebar-primary))",
           "primary-foreground": "hsl(var(--sidebar-primary-foreground))",
@@ -70,6 +73,36 @@ export default {
         info: {
           DEFAULT: "hsl(var(--info))",
           foreground: "hsl(var(--info-foreground))",
+        },
+        // Bảng màu mới (index.css). Khai dạng object lồng — KHÔNG phải chuỗi —
+        // để `extend` gộp sâu vào thang mặc định của Tailwind: text-red vẫn có
+        // mà text-red-600, bg-blue-50, bg-green-100… đang dùng 146 chỗ vẫn còn.
+        // Thang chữ — #1D1D1F / #6E6E73 / #98989D
+        ink: {
+          DEFAULT: "hsl(var(--ink))",
+          2: "hsl(var(--ink-2))",
+          3: "hsl(var(--ink-3))",
+        },
+        // Link, mã chứng từ
+        blue: {
+          DEFAULT: "hsl(var(--blue))",
+          soft: "hsl(var(--blue-soft))",
+        },
+        // Tăng / giảm / cảnh báo
+        green: {
+          DEFAULT: "hsl(var(--green))",
+        },
+        red: {
+          DEFAULT: "hsl(var(--red))",
+        },
+        amber: {
+          DEFAULT: "hsl(var(--amber))",
+        },
+        // Biểu đồ
+        chart: {
+          orange: "hsl(var(--chart-orange))",
+          navy: "hsl(var(--chart-navy))",
+          gold: "hsl(var(--chart-gold))",
         },
       },
       borderRadius: {

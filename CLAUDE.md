@@ -127,11 +127,16 @@ Read this before assuming something is broken vs. intentionally deferred.
      has matching unused service files `quyChaunService.ts`, `phieuTemplateService.ts`,
      `taiLieuService.ts`, `khoTemplateService.ts`) — none of these are imported by any active
      page.
-   - `fe/src/config/menuCatalog.ts` still lists the full **old accounting sidebar** (kế toán,
-     kho, bếp ăn, etc.), not the current stripped HR sidebar. It's not dead, though: the
-     `linh-vuc` (entitlement) screen reads it via `MENU_CATALOG` to let admins tick which
-     menu items a "lĩnh vực" can see — so today it lets admins assign menu keys that don't
-     correspond to any real route in this app. Needs a rewrite once the HR sidebar exists.
+
+## Sidebar / menu
+
+The sidebar is the shared rail + panel + flyout shell copied from `ke-toan-so`
+(`fe/src/components/layout/sidebar/`). Its data lives in `fe/src/config/menuCatalog.tsx`
+(`MENU_MODULES` = rail, `MENU_LEAVES` = panel items); visibility is filtered by permission in
+`fe/src/hooks/useVisibleMenu.ts` (`permKey` for items sharing another page's permission,
+`luonHien` for items shown to everyone). Adding a page = add a leaf there + the route in
+`App.tsx` + `routePermissions.ts`. Config screens (Vai trò / Phân quyền / Thành viên /
+Cấu hình lương) stay in the header gear menu, as in ke-toan-so.
 
 ## Spawning a new app from this base
 

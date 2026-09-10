@@ -6,6 +6,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.{test,spec}.{ts,tsx}', 'src/**/*.property.{ts,tsx}'],
+    // Bù localStorage — Node >= 22 che mất bản của jsdom. Xem vitest.setup.ts.
+    setupFiles: ['./vitest.setup.ts'],
   },
   resolve: {
     alias: {

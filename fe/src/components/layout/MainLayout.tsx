@@ -1,68 +1,45 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Layout,
-  Menu,
   Avatar,
   Dropdown,
   Button,
   Tooltip,
   Tag,
   message,
-  Drawer,
 } from "antd";
 import {
+  TeamOutlined,
   SettingOutlined,
   UserOutlined,
   LogoutOutlined,
   DownloadOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  SafetyCertificateOutlined,
   MenuOutlined,
-  CloseOutlined,
-  TeamOutlined,
-  HomeOutlined,
-  IdcardOutlined,
-  FileTextOutlined,
-  SwapOutlined,
-  UserDeleteOutlined,
-  ClockCircleOutlined,
-  EnvironmentOutlined,
-  FileDoneOutlined,
-  TableOutlined,
-  CalendarOutlined,
-  WalletOutlined,
-  FieldTimeOutlined,
-  TabletOutlined,
-  AuditOutlined,
-  CheckCircleOutlined,
+  SafetyCertificateOutlined,
   DollarOutlined,
-  BarChartOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
 import type { MenuProps } from "antd";
 import { useAuth } from "@/contexts/AuthContext";
 import { TenantSwitcher } from "./TenantSwitcher";
 import { AppSwitcher } from "./AppSwitcher";
+import { OIconApp } from "@/components/icons/OIconApp";
+import { CURRENT_APP_ID } from "@/services/identitySession";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Sidebar, MobileMenu } from "./sidebar";
+import { BE_RONG_MO } from "./sidebar/Sidebar";
 
-const { Header, Sider, Content } = Layout;
+const { Header, Content } = Layout;
 
-type MenuItem = Required<MenuProps>["items"][number];
+// Ảnh avatar thật của user được identity-service phục vụ; ?v= để bust cache khi avatar đổi.
+const IDENTITY_URL = import.meta.env.VITE_IDENTITY_URL as string | undefined;
 
 // Mobile/tablet (gồm iPad iPadOS 13+ báo là Macintosh) → hiện mục "Cài đặt ứng dụng" trong menu user.
 const IS_MOBILE_OR_TABLET =
   /android|iphone|ipod|ipad/i.test(navigator.userAgent) ||
   (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
 
-// Helper function to check if current route is a form screen (create/edit)
-const isFormScreen = (pathname: string): boolean => {
-  return pathname.includes('/tao-moi') || pathname.includes('/sua');
-};
-
 const MainLayout: React.FC = () => {
-  // Initialize collapsed based on current URL - if on form screen, start collapsed
-  const [collapsed, setCollapsed] = useState(() => isFormScreen(window.location.pathname));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("darkMode");
@@ -75,6 +52,10 @@ const MainLayout: React.FC = () => {
   const isMobile = useIsMobile();
 
   const roleInfo = currentRole ? { label: currentRole, color: 'blue' } : null;
+  const avatarUrl =
+    IDENTITY_URL && user?.id && user?.avatarUpdatedAt
+      ? `${IDENTITY_URL.replace(/\/$/, "")}/api/users/${user.id}/avatar?v=${encodeURIComponent(user.avatarUpdatedAt)}`
+      : undefined;
 
   useEffect(() => {
     if (darkMode) {
@@ -85,36 +66,19 @@ const MainLayout: React.FC = () => {
     localStorage.setItem("darkMode", JSON.stringify(darkMode));
   }, [darkMode]);
 
-  // Track previous pathname to detect navigation
-  const prevPathnameRef = useRef(location.pathname);
-
   // Close mobile menu on route change
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // Auto collapse sidebar when navigating to form screens (create/edit)
-  useEffect(() => {
-    // Skip on initial render (when prev === current)
-    if (prevPathnameRef.current !== location.pathname) {
-      if (!isMobile && !collapsed && isFormScreen(location.pathname)) {
-        setCollapsed(true);
-      }
-      prevPathnameRef.current = location.pathname;
-    }
-  }, [location.pathname, isMobile, collapsed]);
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
 
   const handleLogout = () => {
     logout();
     message.success("Đã đăng xuất thành công");
     navigate("/login");
-  };
-
-  const handleMenuClick: MenuProps["onClick"] = (e) => {
-    navigate(e.key);
-    if (isMobile) {
-      setMobileMenuOpen(false);
-    }
   };
 
   const userMenuItems: MenuProps["items"] = [
@@ -163,175 +127,6 @@ const MainLayout: React.FC = () => {
     },
   ];
 
-  const canViewHoSoNhanVien = hasPermission('/nhan-su/ho-so-nhan-vien:xem') || user?.isSuperAdmin;
-  const canViewHopDongLaoDong = hasPermission('/nhan-su/hop-dong-lao-dong:xem') || user?.isSuperAdmin;
-  const canViewQuaTrinhCongTac = hasPermission('/nhan-su/qua-trinh-cong-tac:xem') || user?.isSuperAdmin;
-  const canViewThoiViec = hasPermission('/nhan-su/thoi-viec:xem') || user?.isSuperAdmin;
-  const canViewNhanSuGroup = canViewHoSoNhanVien || canViewHopDongLaoDong || canViewQuaTrinhCongTac || canViewThoiViec;
-
-  const canViewCaLamViec = hasPermission('/cham-cong/ca-lam-viec:xem') || user?.isSuperAdmin;
-  const canViewDiaDiemChamCong = hasPermission('/cham-cong/dia-diem:xem') || user?.isSuperAdmin;
-  const canViewDonChamCong = hasPermission('/cham-cong/don-tu:xem') || user?.isSuperAdmin;
-  const canViewBangCong = hasPermission('/cham-cong/bang-cong:xem') || user?.isSuperAdmin;
-  const canViewNgayLe = hasPermission('/cham-cong/ngay-le:xem') || user?.isSuperAdmin;
-  const canViewQuyPhep = hasPermission('/cham-cong/quy-phep:xem') || user?.isSuperAdmin;
-  const canViewQuyGio = hasPermission('/cham-cong/quy-gio:xem') || user?.isSuperAdmin;
-  const canViewThietBi = hasPermission('/cham-cong/thiet-bi:xem') || user?.isSuperAdmin;
-  const canViewBanGhi = hasPermission('/cham-cong/ban-ghi:xem') || user?.isSuperAdmin;
-  const canViewCauHinhChamCong = hasPermission('/cham-cong/cau-hinh:xem') || user?.isSuperAdmin;
-  // Nhóm CHẤM CÔNG luôn hiện vì "Chấm công của tôi" là mục tự phục vụ, hiển
-  // thị vô điều kiện (xem ngay dưới). Cố ý KHÔNG gộp điều kiện quyền vào đây.
-  const canViewChamCongGroup = true;
-
-  const canViewBangLuong = hasPermission('/luong/bang-luong:xem') || user?.isSuperAdmin;
-
-  // Báo cáo nhân sự chỉ tổng hợp lại dữ liệu hồ sơ nhân viên nên đi chung
-  // quyền với nó — xem routePermissions.ts để biết vì sao không khai module
-  // quyền riêng.
-  const canViewBaoCaoNhanSu = canViewHoSoNhanVien;
-
-  // Sider: mục "Trang chủ" (P1) + section "NHÂN SỰ" + section "CHẤM CÔNG" (Phase 2+), thêm dần theo module.
-  const siderMenuItems: MenuItem[] = [
-    {
-      key: "/",
-      icon: <HomeOutlined />,
-      label: "Trang chủ",
-    },
-    ...(canViewNhanSuGroup ? [{
-      key: "nhan-su-group",
-      type: "group" as const,
-      label: "NHÂN SỰ",
-      children: [
-        ...(canViewHoSoNhanVien ? [{
-          key: "/nhan-su/ho-so-nhan-vien",
-          icon: <IdcardOutlined />,
-          label: "Hồ sơ nhân viên",
-        }] : []),
-        ...(canViewHopDongLaoDong ? [{
-          key: "/nhan-su/hop-dong-lao-dong",
-          icon: <FileTextOutlined />,
-          label: "Hợp đồng lao động",
-        }] : []),
-        ...(canViewHopDongLaoDong ? [{
-          key: "/nhan-su/mau-in-hop-dong",
-          icon: <FileTextOutlined />,
-          label: "Mẫu in hợp đồng",
-        }] : []),
-        ...(canViewQuaTrinhCongTac ? [{
-          key: "/nhan-su/qua-trinh-cong-tac",
-          icon: <SwapOutlined />,
-          label: "Quá trình công tác",
-        }] : []),
-        ...(canViewThoiViec ? [{
-          key: "/nhan-su/thoi-viec",
-          icon: <UserDeleteOutlined />,
-          label: "Thôi việc",
-        }] : []),
-      ],
-    }] : []),
-    ...(canViewChamCongGroup ? [{
-      key: "cham-cong-group",
-      type: "group" as const,
-      label: "CHẤM CÔNG",
-      children: [
-        // "Chấm công của tôi" đứng ĐẦU nhóm và hiển thị VÔ ĐIỀU KIỆN: đây là
-        // mục duy nhất mọi nhân viên dùng, mỗi ngày hai lần. Các mục còn lại
-        // chỉ HR thấy. CỐ Ý không bọc `hasPermission` — thêm điều kiện quyền
-        // vào đây là khoá đường chấm công của cả công ty, và route
-        // /cham-cong/cua-toi cũng cố ý không có trong routePermissions.ts.
-        {
-          key: "/cham-cong/cua-toi",
-          icon: <CheckCircleOutlined />,
-          label: "Chấm công của tôi",
-        },
-        ...(canViewCaLamViec ? [{
-          key: "/cham-cong/ca-lam-viec",
-          icon: <ClockCircleOutlined />,
-          label: "Cấu hình ca làm việc",
-        }] : []),
-        ...(canViewDiaDiemChamCong ? [{
-          key: "/cham-cong/dia-diem",
-          icon: <EnvironmentOutlined />,
-          label: "Địa điểm chấm công",
-        }] : []),
-        ...(canViewDonChamCong ? [{
-          key: "/cham-cong/don-tu",
-          icon: <FileDoneOutlined />,
-          label: "Đơn chấm công",
-        }] : []),
-        ...(canViewQuyPhep ? [{
-          key: "/cham-cong/quy-phep",
-          icon: <WalletOutlined />,
-          label: "Quỹ phép",
-        }] : []),
-        ...(canViewQuyGio ? [{
-          key: "/cham-cong/quy-gio",
-          icon: <FieldTimeOutlined />,
-          label: "Quỹ giờ làm thêm",
-        }] : []),
-        ...(canViewBangCong ? [{
-          key: "/cham-cong/bang-cong",
-          icon: <TableOutlined />,
-          label: "Bảng công",
-        }] : []),
-        ...(canViewNgayLe ? [{
-          key: "/cham-cong/ngay-le",
-          icon: <CalendarOutlined />,
-          label: "Ngày nghỉ lễ",
-        }] : []),
-        ...(canViewThietBi ? [{
-          key: "/cham-cong/thiet-bi",
-          icon: <TabletOutlined />,
-          label: "Thiết bị chấm công",
-        }] : []),
-        ...(canViewBanGhi ? [{
-          key: "/cham-cong/ban-ghi",
-          icon: <AuditOutlined />,
-          label: "Bản ghi chấm công",
-        }] : []),
-        ...(canViewCauHinhChamCong ? [{
-          key: "/cham-cong/cau-hinh",
-          icon: <SettingOutlined />,
-          label: "Cấu hình chấm công",
-        }] : []),
-      ],
-    }] : []),
-    ...(canViewBangLuong ? [{
-      key: "luong-group",
-      type: "group" as const,
-      label: "LƯƠNG",
-      children: [
-        {
-          key: "/luong/bang-luong-them-gio",
-          icon: <DollarOutlined />,
-          label: "Bảng lương thêm giờ",
-        },
-        {
-          key: "/luong/bang-luong",
-          icon: <DollarOutlined />,
-          label: "Bảng lương",
-        },
-        {
-          key: "/luong/quyet-toan-tncn",
-          icon: <DollarOutlined />,
-          label: "Quyết toán TNCN",
-        },
-      ],
-    }] : []),
-    ...(canViewBaoCaoNhanSu ? [{
-      key: "bao-cao-group",
-      type: "group" as const,
-      label: "BÁO CÁO",
-      children: [
-        {
-          key: "/bao-cao/nhan-su",
-          icon: <BarChartOutlined />,
-          label: "Báo cáo nhân sự",
-        },
-      ],
-    }] : []),
-  ];
-
   const canManageConfig = hasPermission('/cau-hinh/vai-tro:xem') || hasPermission('/cau-hinh/phan-quyen:xem') || hasPermission('/cau-hinh/thanh-vien:xem') || hasPermission('/luong/cau-hinh:xem') || user?.isSuperAdmin;
 
   // Settings menu items for gear icon dropdown
@@ -364,132 +159,33 @@ const MainLayout: React.FC = () => {
     ] : []),
   ];
 
-  const getSelectedKeys = () => {
-    const path = location.pathname;
-    if (path === "/") return ["/"];
-    return [path];
-  };
-
-  const siderWidth = collapsed ? 56 : 240;
-
-  // Mobile Drawer Menu
-  const MobileDrawer = () => (
-    <Drawer
-      title={
-        <div className="flex items-center gap-3">
-          <img
-            src="/logo.jpg"
-            alt="Master CEO"
-            className="w-8 h-8 rounded-lg object-cover"
-          />
-          <span className="font-semibold">Master CEO</span>
-        </div>
-      }
-      placement="left"
-      onClose={() => setMobileMenuOpen(false)}
-      open={mobileMenuOpen}
-      width={300}
-      closeIcon={<CloseOutlined />}
-      styles={{
-        body: { padding: 0, background: "hsl(var(--sidebar-background))", overflowY: "auto" },
-        header: {
-          background: "hsl(var(--sidebar-background))",
-          borderBottom: "1px solid hsl(var(--sidebar-border))",
-          color: "hsl(var(--sidebar-foreground))",
-        },
-      }}
-    >
-      <div className="sidebar-section">
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={getSelectedKeys()}
-          items={siderMenuItems}
-          onClick={handleMenuClick}
-          className="!bg-transparent border-r-0 sidebar-menu"
-        />
-      </div>
-    </Drawer>
-  );
-
   return (
     <Layout className="min-h-screen">
-      {/* Mobile Drawer */}
-      {isMobile && <MobileDrawer />}
-
-      {/* Desktop Sidebar */}
-      {!isMobile && (
-        <Sider
-          trigger={null}
-          collapsible
-          collapsed={collapsed}
-          width={240}
-          collapsedWidth={56}
-          className={`!bg-sidebar ${collapsed ? "sidebar-collapsed" : ""}`}
+      {isMobile ? (
+        <MobileMenu
+          open={mobileMenuOpen}
+          onClose={() => setMobileMenuOpen(false)}
+        />
+      ) : (
+        // Sidebar tự công bố bề rộng ra biến CSS --sidebar-w; thẻ bọc chỉ ghim
+        // nó vào mép trái, không được đoán bề rộng thay nó.
+        <div
           style={{
-            height: "100vh",
             position: "fixed",
             left: 0,
             top: 0,
-            bottom: 0,
+            height: "100vh",
             zIndex: 100,
-            display: "flex",
-            flexDirection: "column",
           }}
         >
-          {/* Logo & Collapse Button */}
-          <div className="h-12 flex items-center justify-between px-3 border-b border-sidebar-border flex-shrink-0">
-            {collapsed ? (
-              <Button
-                type="text"
-                size="small"
-                icon={<MenuUnfoldOutlined />}
-                onClick={() => setCollapsed(!collapsed)}
-                className="!text-sidebar-foreground/70 hover:!text-sidebar-foreground hover:!bg-sidebar-accent mx-auto"
-              />
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <img
-                    src="/logo.jpg"
-                    alt="Master CEO"
-                    className="w-8 h-8 rounded-lg object-cover"
-                  />
-                  <span className="text-sidebar-foreground font-semibold text-sm">
-                    Master CEO
-                  </span>
-                </div>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<MenuFoldOutlined />}
-                  onClick={() => setCollapsed(!collapsed)}
-                  className="!text-sidebar-foreground/70 hover:!text-sidebar-foreground hover:!bg-sidebar-accent"
-                />
-              </>
-            )}
-          </div>
-
-          {/* Scrollable Menu Container */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden sidebar-scroll">
-            <div className="sidebar-section">
-              <Menu
-                theme="dark"
-                mode="inline"
-                selectedKeys={getSelectedKeys()}
-                items={siderMenuItems}
-                onClick={handleMenuClick}
-                className="!bg-transparent border-r-0 sidebar-menu"
-              />
-            </div>
-          </div>
-        </Sider>
+          <Sidebar />
+        </div>
       )}
 
       {/* Main Content Area */}
       <Layout
         style={{
-          marginLeft: isMobile ? 0 : siderWidth,
+          marginLeft: isMobile ? 0 : `var(--sidebar-w, ${BE_RONG_MO}px)`,
           transition: "margin-left 0.2s ease",
           minHeight: "100vh",
         }}
@@ -514,19 +210,33 @@ const MainLayout: React.FC = () => {
                 className="!text-foreground"
               />
             )}
-            {/* Mobile Logo */}
-            {isMobile && (
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                  <span className="text-primary-foreground font-bold text-sm">
-                    KT
-                  </span>
-                </div>
-              </div>
-            )}
-            {/* App Switcher — chuyển sang Giao việc / app khác (giữ nguyên công ty) */}
+            {/* App Switcher — lưới 9 chấm, mở màn chọn ứng dụng */}
             <AppSwitcher />
+
+            {/* Nhận diện app đang mở: ô icon + tên app. Tên CÔNG TY nằm bên
+                phải header (TenantSwitcher), đừng nhầm hai thứ. Ô 28px này
+                thay luôn khối "KT" cũ trên mobile. */}
+            <div className="flex items-center gap-2">
+              <OIconApp appId={CURRENT_APP_ID} size={28} />
+              <span className="hidden sm:inline text-sm font-bold text-foreground">
+                Nhân sự
+              </span>
+            </div>
           </div>
+
+          {/* Center: Search Bar - Hide on small mobile */}
+          {/* <div className="hidden sm:flex flex-1 max-w-md mx-4 lg:mx-8">
+            <Input
+              placeholder="Tìm kiếm (Ctrl+K)..."
+              prefix={<SearchOutlined className="text-muted-foreground" />}
+              suffix={
+                <span className="hidden md:inline text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                  ⌘K
+                </span>
+              }
+              className="!bg-muted/50 w-full"
+            />
+          </div> */}
 
           {/* Right: Actions */}
           <div className="flex items-center gap-1 sm:gap-2">
@@ -559,6 +269,7 @@ const MainLayout: React.FC = () => {
                 <Avatar
                   size={24}
                   style={{ backgroundColor: roleInfo?.color || "#1890ff" }}
+                  src={avatarUrl}
                   icon={<UserOutlined />}
                 />
                 <div className="hidden md:block">

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -55,28 +56,59 @@ import {
 
 const queryClient = new QueryClient();
 
+/**
+ * Vỏ nhân viên /toi là app điện thoại: cỡ chữ 11px mật-độ-cao của khu quản trị
+ * quá nhỏ trên màn hình cầm tay. Trả cỡ chữ về mặc định antd như trước đợt
+ * đồng bộ giao diện; các token còn lại (màu, bo góc) vẫn thừa kế từ trên.
+ */
+const VoNhanVienTheme = ({ children }: { children: ReactNode }) => (
+  <ConfigProvider theme={{ token: { fontSize: 14, fontSizeSM: 12 } }}>
+    {children}
+  </ConfigProvider>
+);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ConfigProvider
       locale={viVN}
       theme={{
         token: {
-          // Màu thương hiệu MasterCEO: teal logo (gold #b6954e dùng làm accent).
+          // Màu thương hiệu MasterCEO — giữ nguyên.
           colorPrimary: '#1f7769',
-          // Đồng bộ toàn dự án: bo góc = 0 (giữ tròn cho avatar/chấm/spinner riêng).
-          borderRadius: 0,
-          borderRadiusLG: 0,
-          borderRadiusSM: 0,
-          borderRadiusXS: 0,
-          // Đợt 2: chiều cao control đồng nhất (compact).
+          // Inter (nạp ở đầu index.css). antd tự đặt font-family hệ thống lên mọi
+          // component, nên khai ở body là CHƯA đủ — thiếu dòng này thì Inter được
+          // tải về mà không chỗ nào dùng. Inter đo hẹp hơn SF/Segoe ở 8.5–11px
+          // nên nhãn rail và cột bảng không bị cắt thêm.
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+          // Bo góc theo hệ thiết kế chung với ke-toan-so (07-design-system):
+          // nút/ô nhập 7 · thẻ/bảng 9 · nhỏ 6.
+          borderRadius: 7,
+          borderRadiusLG: 9,
+          borderRadiusSM: 6,
+          borderRadiusXS: 4,
+          // Mật độ cao: nội dung bảng 11px. CHỈ cho khu quản trị — vỏ nhân viên
+          // /toi đặt lại cỡ chữ riêng (xem VoNhanVienTheme ở trên).
+          fontSize: 11,
+          // antd suy cả thang chữ từ fontSize, nên base 11 kéo fontSizeSM
+          // xuống 10 — cỡ chữ của Tag/Badge. Tiếng Việt có dấu ở 10px khó đọc,
+          // nên ghim lại 11.
+          fontSizeSM: 11,
           controlHeight: 28,
           controlHeightSM: 24,
           controlHeightLG: 36,
+          colorBorder: '#E5E5EA',
+          colorText: '#1D1D1F',
+          colorTextSecondary: '#6E6E73',
+          // antd map colorTextTertiary sang colorIcon — màu icon x-xoá, mũi tên
+          // Select, nút đóng Modal. #8A8A8F cho 3.44:1 trên nền trắng.
+          colorTextTertiary: '#8A8A8F',
+          colorBgLayout: '#F5F5F7',
         },
         components: {
-          // Card header + body padding 12px đồng bộ nhịp 12
-          // (var --ant-card-header-padding / --ant-card-body-padding).
-          Card: { headerPadding: 12, bodyPadding: 12 },
+          // Card header + body padding 12px đồng bộ nhịp 12.
+          Card: { headerPadding: 12, bodyPadding: 12, borderRadiusLG: 9 },
+          Modal: { borderRadiusLG: 14 },
+          Table: { borderRadius: 9, headerBorderRadius: 9, cellPaddingBlockSM: 3 },
         },
       }}
     >
@@ -348,7 +380,14 @@ const App = () => (
                 YeuCauDangNhapChamCong — bọc vào trong thì nó tự chuyển hướng
                 vào chính nó, thành vòng lặp vô hạn.
               */}
-              <Route path="/toi/login" element={<DangNhapChamCongPage />} />
+              <Route
+                path="/toi/login"
+                element={
+                  <VoNhanVienTheme>
+                    <DangNhapChamCongPage />
+                  </VoNhanVienTheme>
+                }
+              />
 
               {/*
                 Vỏ nhân viên. Dùng YeuCauDangNhapChamCong chứ KHÔNG dùng
@@ -362,9 +401,11 @@ const App = () => (
               <Route
                 path="/toi"
                 element={
-                  <YeuCauDangNhapChamCong>
-                    <EmployeeLayout />
-                  </YeuCauDangNhapChamCong>
+                  <VoNhanVienTheme>
+                    <YeuCauDangNhapChamCong>
+                      <EmployeeLayout />
+                    </YeuCauDangNhapChamCong>
+                  </VoNhanVienTheme>
                 }
               >
                 <Route index element={<Navigate to="cham-cong" replace />} />
