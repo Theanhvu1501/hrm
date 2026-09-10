@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Button, Empty, Table, Tag, Tooltip } from "antd";
-import { WarningOutlined } from "@ant-design/icons";
+import { PrinterOutlined, WarningOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
   useBangLuongHandler,
@@ -13,6 +13,7 @@ import { OSuaBienDong } from "./OSuaBienDong";
 import { printHtml } from "@/utils/printHtml";
 import { dungPhieuLuongHtml } from "../lib/phieuLuongHtml";
 import { useAuth } from "@/contexts/AuthContext";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import "../BangLuongPage.state";
 
 function formatTien(value?: number): string {
@@ -129,7 +130,7 @@ export function BangLuongTable() {
             <span>
               {thieuCongHoacLuong(record) && (
                 <Tooltip title="Thiếu công hoặc chưa khai báo lương thoả thuận">
-                  <WarningOutlined style={{ color: "#faad14", marginRight: 6 }} />
+                  <WarningOutlined style={{ color: "hsl(var(--amber))", marginRight: 6 }} />
                 </Tooltip>
               )}
               {value || "-"}
@@ -308,18 +309,22 @@ export function BangLuongTable() {
         ),
       },
       {
-        title: "Phiếu lương",
+        title: "Thao tác",
         key: "inPhieu",
-        width: 110,
+        width: 80,
         align: "center",
+        fixed: "right",
         render: (_: unknown, record: DongLuong) => {
           const daChot = record.trangThai === "chot";
           return (
-            <Tooltip title={daChot ? undefined : "Chốt kỳ trước khi in"}>
+            <Tooltip title={daChot ? "In phiếu lương" : "Chốt kỳ trước khi in"}>
               {/* `span` bọc ngoài: antd Tooltip không hiện trên nút disabled. */}
               <span>
                 <Button
-                  size="small"
+                  type="text"
+                  icon={<PrinterOutlined />}
+                  aria-label="In phiếu lương"
+                  className={daChot ? "text-primary" : undefined}
                   disabled={!daChot}
                   onClick={() =>
                     printHtml(
@@ -331,9 +336,7 @@ export function BangLuongTable() {
                       `Phiếu lương ${record.employeeCode ?? ""} ${record.thang}`,
                     )
                   }
-                >
-                  In
-                </Button>
+                />
               </span>
             </Tooltip>
           );
@@ -352,47 +355,67 @@ export function BangLuongTable() {
     0
   );
 
+  // Ô tổng đặt theo KHOÁ cột, không theo vị trí. Bản trước tính
+  // `colSpan = columns.length - 3` rồi xếp 3 ô tổng ở cuối; từ khi chèn cột
+  // Phí công đoàn và Phiếu lương, tổng Thuế rơi xuống cột "CP BH công ty" và cả
+  // hàng lệch hai cột. Tra theo khoá thì chèn cột thế nào cũng không lệch.
+  const tongTheoCot: Record<string, number> = {
+    thue: tongThue,
+    chiPhiBHCongTy: tongChiPhiBH,
+    thucLinh: tongThucLinh,
+  };
+  // Ô "Tổng cộng" chỉ phủ các cột ghim trái. Phủ rộng hơn thì antd ghim luôn
+  // cả ô gộp (lấy theo cột đầu) và nó đè lên số khi cuộn ngang.
+  const soCotGhimTrai = columns.filter((c) => c.fixed === "left").length;
+
   return (
-    <div style={{ overflowX: "auto" }}>
-      <Table<DongLuong>
-        columns={columns}
-        dataSource={danhSach}
-        rowKey="id"
-        loading={dangTai}
-        pagination={{ pageSize: 20 }}
-        bordered
-        size="small"
-        scroll={{ x: "max-content" }}
-        locale={{
-          emptyText: (
-            <Empty
-              description={!dangTai ? "Bấm 'Tổng hợp' để tính bảng lương tháng này" : " "}
-            />
-          ),
-        }}
-        summary={() =>
-          danhSach.length === 0 ? null : (
-            <Table.Summary fixed>
-              <Table.Summary.Row>
-                {/* colSpan phải bằng số cột TRƯỚC 3 ô tổng bên dưới — chèn
-                    thêm cột vào bảng mà quên chỗ này là lệch cả hàng tổng. */}
-                <Table.Summary.Cell index={0} colSpan={columns.length - 3}>
-                  <strong>Tổng cộng</strong>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={1} align="right">
-                  <strong>{renderTien(tongThue)}</strong>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={2} align="right">
-                  <strong>{renderTien(tongChiPhiBH)}</strong>
-                </Table.Summary.Cell>
-                <Table.Summary.Cell index={3} align="right">
-                  <strong>{renderTien(tongThucLinh)}</strong>
-                </Table.Summary.Cell>
-              </Table.Summary.Row>
-            </Table.Summary>
-          )
-        }
-      />
-    </div>
+    <BangDuLieu<DongLuong>
+      columns={columns}
+      dataSource={danhSach}
+      rowKey="id"
+      loading={dangTai}
+      // Lưới số kiểu Excel: giữ viền ô để dò hàng/cột khi đối chiếu tiền.
+      bordered
+      // Cao hơn chuẩn 285 vì có thêm hàng "Tổng cộng" ghim dưới đáy bảng.
+      buTruDoc={315}
+      pagination={{
+        defaultPageSize: 50,
+        showSizeChanger: true,
+        pageSizeOptions: ["25", "50", "100", "200"],
+        showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} nhân viên`,
+      }}
+      locale={{
+        emptyText: (
+          <Empty
+            description={!dangTai ? "Bấm 'Tổng hợp' để tính bảng lương tháng này" : " "}
+          />
+        ),
+      }}
+      summary={() =>
+        danhSach.length === 0 ? null : (
+          <Table.Summary fixed>
+            <Table.Summary.Row>
+              <Table.Summary.Cell index={0} colSpan={soCotGhimTrai}>
+                <strong>Tổng cộng</strong>
+              </Table.Summary.Cell>
+              {/* `index` phải là vị trí THẬT của cột: antd dựa vào nó để ghim
+                  ô dưới cột Thao tác (fixed right) cùng hàng với cột. */}
+              {columns.slice(soCotGhimTrai).map((cot, i) => {
+                const tong = tongTheoCot[String(cot.key)];
+                return (
+                  <Table.Summary.Cell
+                    key={String(cot.key)}
+                    index={soCotGhimTrai + i}
+                    align="right"
+                  >
+                    {tong !== undefined && <strong>{renderTien(tong)}</strong>}
+                  </Table.Summary.Cell>
+                );
+              })}
+            </Table.Summary.Row>
+          </Table.Summary>
+        )
+      }
+    />
   );
 }

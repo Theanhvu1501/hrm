@@ -1,4 +1,4 @@
-import { Table, Button, Input, Select, Checkbox, InputNumber, Space, Popconfirm } from "antd";
+import { Button, Input, Select, Checkbox, InputNumber, Space, Popconfirm, Tooltip } from "antd";
 import {
   PlusOutlined,
   DeleteOutlined,
@@ -7,6 +7,7 @@ import {
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useCauHinhLuongState } from "../CauHinhLuongHandlerContext";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import type { CauHinhLuong, KhoanLuong, LoaiCongThuc } from "@/services/cauHinhLuongService";
 import "../CauHinhLuongPage.state";
 
@@ -98,20 +99,24 @@ export function KhoanLuongEditor({ canEdit }: KhoanLuongEditorProps) {
       align: "center",
       render: (_: unknown, __: KhoanLuong, index: number) => (
         <Space size={4}>
-          <Button
-            type="text"
-            size="small"
-            icon={<ArrowUpOutlined />}
-            disabled={!canEdit || index === 0}
-            onClick={() => doiCho(index, -1)}
-          />
-          <Button
-            type="text"
-            size="small"
-            icon={<ArrowDownOutlined />}
-            disabled={!canEdit || index === list.length - 1}
-            onClick={() => doiCho(index, 1)}
-          />
+          <Tooltip title="Lên">
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowUpOutlined />}
+              disabled={!canEdit || index === 0}
+              onClick={() => doiCho(index, -1)}
+            />
+          </Tooltip>
+          <Tooltip title="Xuống">
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowDownOutlined />}
+              disabled={!canEdit || index === list.length - 1}
+              onClick={() => doiCho(index, 1)}
+            />
+          </Tooltip>
         </Space>
       ),
     },
@@ -213,7 +218,7 @@ export function KhoanLuongEditor({ canEdit }: KhoanLuongEditorProps) {
             );
           }
           default:
-            return <span className="text-muted-foreground text-xs">Không cần tham số</span>;
+            return <span className="text-[10.5px] text-muted-foreground">Không cần tham số</span>;
         }
       },
     },
@@ -230,7 +235,7 @@ export function KhoanLuongEditor({ canEdit }: KhoanLuongEditorProps) {
           record.loaiCongThuc === "DINH_MUC_x_CONG" ||
           record.loaiCongThuc === "TRON_THANG";
         if (!duocPhep) {
-          return <span className="text-muted-foreground text-xs">—</span>;
+          return <span className="text-muted-foreground">—</span>;
         }
         return (
           <Checkbox
@@ -285,14 +290,24 @@ export function KhoanLuongEditor({ canEdit }: KhoanLuongEditorProps) {
       ),
     },
     {
-      title: "",
+      title: "Thao tác",
       key: "actions",
-      width: 60,
+      width: 80,
       align: "center",
+      fixed: "right",
       render: (_: unknown, __: KhoanLuong, index: number) =>
         canEdit && (
-          <Popconfirm title="Xoá khoản lương này?" okText="Xoá" cancelText="Huỷ" onConfirm={() => xoaDong(index)}>
-            <Button type="text" danger icon={<DeleteOutlined />} />
+          <Popconfirm
+            title="Xác nhận xóa"
+            description="Bạn có chắc chắn muốn xóa khoản lương này?"
+            onConfirm={() => xoaDong(index)}
+            okText="Xóa"
+            cancelText="Hủy"
+            okButtonProps={{ danger: true }}
+          >
+            <Tooltip title="Xóa">
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Tooltip>
           </Popconfirm>
         ),
     },
@@ -305,13 +320,15 @@ export function KhoanLuongEditor({ canEdit }: KhoanLuongEditorProps) {
           Thêm khoản lương
         </Button>
       )}
-      <Table<KhoanLuong>
+      <BangDuLieu<KhoanLuong>
         columns={columns}
         dataSource={list}
         rowKey="ma"
         pagination={false}
+        // Lưới nhập liệu: mỗi ô là một ô sửa, viền ô giúp thấy ranh giới.
         bordered
-        scroll={{ x: "max-content" }}
+        // Chục khoản là nhiều — để trang cuộn, không lồng thêm vùng cuộn dọc.
+        scroll={{ y: undefined }}
       />
     </div>
   );

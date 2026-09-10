@@ -1,3 +1,4 @@
+import { Card } from 'antd';
 import type { NhomChiSo } from '../baoCao.types';
 import BieuDoNhom from './BieuDoNhom';
 import TheChiSo from './TheChiSo';
@@ -9,11 +10,11 @@ import TheChiSo from './TheChiSo';
  */
 export default function KhoiNhom({ nhom }: { nhom: NhomChiSo }) {
   return (
-    <section className="mb-8">
-      <h2 className="mb-0.5 text-base font-semibold text-[color:var(--bc-series-1)]">
+    <Card>
+      <h2 className="m-0 text-[12.5px] font-bold leading-[18px] text-[hsl(var(--ink))]">
         {nhom.soThuTu}. {nhom.ten}
       </h2>
-      <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{nhom.moTa}</p>
+      <p className="mb-3 mt-0.5 text-[10.5px] text-[hsl(var(--ink-2))]">{nhom.moTa}</p>
 
       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {nhom.chiSo.map((c) => (
@@ -28,6 +29,6 @@ export default function KhoiNhom({ nhom }: { nhom: NhomChiSo }) {
           <BieuDoNhom key={b.ma} bieuDo={b} />
         ))}
       </div>
-    </section>
+    </Card>
   );
 }

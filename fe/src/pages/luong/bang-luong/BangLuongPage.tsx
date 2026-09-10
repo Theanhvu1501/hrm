@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Empty } from "antd";
-import { SyncOutlined, ImportOutlined } from "@ant-design/icons";
+import { SyncOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import {
   BangLuongHandlerProvider,
@@ -34,34 +34,21 @@ function BangLuongPageInner() {
   };
 
   return (
-    <div className="space-y-3">
-      <ThanhKy />
-      {/* Chỉ hiện khi ĐÃ có bảng lương: import vào một kỳ chưa tổng hợp thì
-          mọi dòng đều báo "không có dòng lương trong kỳ" — mời người dùng làm
-          một việc chắc chắn hỏng. */}
-      {canEdit && danhSach.length > 0 && (
-        <div className="flex justify-end">
-          <Button icon={<ImportOutlined />} onClick={() => setMoImport(true)}>
-            Import hiệu suất / thưởng
-          </Button>
-        </div>
-      )}
+    <Card>
+      <ThanhKy onImport={() => setMoImport(true)} />
       {!dangTai && danhSach.length === 0 ? (
-        <Card>
-          <Empty description="Chưa tổng hợp bảng lương tháng này">
-            {canEdit && (
-              <Button
-                type="primary"
-                size="large"
-                icon={<SyncOutlined />}
-                loading={dangTongHop}
-                onClick={handleTongHop}
-              >
-                Tổng hợp
-              </Button>
-            )}
-          </Empty>
-        </Card>
+        <Empty description="Chưa tổng hợp bảng lương tháng này">
+          {canEdit && (
+            <Button
+              type="primary"
+              icon={<SyncOutlined />}
+              loading={dangTongHop}
+              onClick={handleTongHop}
+            >
+              Tổng hợp
+            </Button>
+          )}
+        </Empty>
       ) : (
         <BangLuongTable />
       )}
@@ -74,7 +61,7 @@ function BangLuongPageInner() {
         onClose={() => setMoImport(false)}
         onXong={() => handler.executeEvent("doiThang", { thang })}
       />
-    </div>
+    </Card>
   );
 }
 

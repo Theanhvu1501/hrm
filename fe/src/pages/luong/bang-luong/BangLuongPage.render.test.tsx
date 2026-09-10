@@ -249,7 +249,7 @@ describe("Bảng lương — nút In phiếu lương (P4.3)", () => {
     await screen.findByText("8.500.000");
 
     // In một phiếu mà số còn đổi được là phát ra ngoài một con số sẽ sai.
-    expect((screen.getByRole("button", { name: "In" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "In phiếu lương" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("mở nút In khi dòng đã chốt", async () => {
@@ -259,6 +259,6 @@ describe("Bảng lương — nút In phiếu lương (P4.3)", () => {
     render(<BangLuongPage />);
     await screen.findByText("8.500.000");
 
-    expect((screen.getByRole("button", { name: "In" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "In phiếu lương" }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

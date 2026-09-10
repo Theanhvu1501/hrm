@@ -7,12 +7,17 @@ import {
   Select,
   Alert,
   Button,
+  Space,
   Switch,
   TimePicker,
   Tooltip,
 } from "antd";
+import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined } from "@ant-design/icons";
+import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useCauHinhLuongState } from "../CauHinhLuongHandlerContext";
+import { FieldLabel } from "@/components/form/FieldLabel";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import {
   cauHinhLuongService,
   HE_SO_TICH_SAN,
@@ -22,6 +27,12 @@ import {
   type CauHinhLuong,
 } from "@/services/cauHinhLuongService";
 import "../CauHinhLuongPage.state";
+
+/** Mã loại ngày: chữ thường / số / gạch dưới — cùng quy ước với `ngay_thuong`. */
+const RE_MA_LOAI = /^[a-z][a-z0-9_]*$/;
+
+/** Một dòng bảng hệ số. Bọc khoá vào object vì bảng antd cần bản ghi là object. */
+type DongHeSo = { khoa: string };
 
 /**
  * Khai `soGioMoiNgay` + `lamThem` — tức BẬT quỹ giờ làm thêm cho công ty.
@@ -41,14 +52,6 @@ import "../CauHinhLuongPage.state";
  * ở bước 4 của runbook). Đó là quyết định của công ty, không phải hệ quả phụ
  * của một lần deploy.
  */
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="block mb-1 text-sm font-medium">{children}</label>;
-}
-
-
-/** Mã loại ngày: chữ thường / số / gạch dưới — cùng quy ước với `ngay_thuong`. */
-const RE_MA_LOAI = /^[a-z][a-z0-9_]*$/;
-
 export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
   const [cauHinh, setCauHinh] = useCauHinhLuongState(
     "cauHinh",
@@ -151,7 +154,7 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
           </Button>
         )}
         {canEdit && (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[11px] text-muted-foreground">
             Bấm nút trên chỉ điền sẵn giá trị mặc định vào form — vẫn phải bấm
             “Lưu cấu hình” mới có hiệu lực.
           </p>
@@ -160,8 +163,129 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
     );
   }
 
+  const cotHeSo: ColumnsType<DongHeSo> = [
+    {
+      title: "Loại ngày",
+      key: "loai",
+      // Loại công ty tự thêm chưa có nhãn tiếng Việt thì hiện chính khoá —
+      // thà xấu còn hơn ẩn mất một dòng hệ số đang có hiệu lực.
+      render: (_: unknown, { khoa }: DongHeSo) => NHAN_LOAI_NGAY[khoa] ?? khoa,
+    },
+    {
+      title: "Hệ số trả tiền",
+      key: "heSoTra",
+      width: 150,
+      render: (_: unknown, { khoa }: DongHeSo) => (
+        <InputNumber
+          className="w-full"
+          min={0.1}
+          step={0.5}
+          value={lamThem.heSoTra[khoa]}
+          disabled={!canEdit}
+          onChange={(v) =>
+            capNhatLamThem({
+              heSoTra: { ...lamThem.heSoTra, [khoa]: v ?? 1 },
+            })
+          }
+        />
+      ),
+    },
+    {
+      title: "Hệ số tích quỹ",
+      key: "heSoTichQuy",
+      width: 150,
+      render: (_: unknown, { khoa }: DongHeSo) => (
+        <InputNumber
+          className="w-full"
+          min={HE_SO_TICH_SAN[khoa] ?? 0.1}
+          step={0.5}
+          value={lamThem.heSoTichQuy[khoa]}
+          disabled={!canEdit}
+          onChange={(v) =>
+            capNhatLamThem({
+              heSoTichQuy: {
+                ...lamThem.heSoTichQuy,
+                [khoa]: v ?? HE_SO_TICH_SAN[khoa] ?? 1,
+              },
+            })
+          }
+        />
+      ),
+    },
+    {
+      title: "Miễn thuế phần chênh",
+      key: "mienThueChenh",
+      width: 150,
+      align: "center",
+      render: (_: unknown, { khoa }: DongHeSo) => (
+        <Switch
+          checked={lamThem.mienThueChenh.includes(khoa)}
+          disabled={!canEdit}
+          onChange={(bat) =>
+            capNhatLamThem({
+              mienThueChenh: bat
+                ? [...lamThem.mienThueChenh, khoa]
+                : lamThem.mienThueChenh.filter((x) => x !== khoa),
+            })
+          }
+        />
+      ),
+    },
+    {
+      title: "Thao tác",
+      key: "thaoTac",
+      width: 110,
+      align: "center",
+      render: (_: unknown, { khoa }: DongHeSo, i: number) => (
+        <Space size={4}>
+          <Tooltip title="Lên">
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowUpOutlined />}
+              aria-label={`Lên ${khoa}`}
+              disabled={!canEdit || i === 0}
+              onClick={() => doiCho(i, i - 1)}
+            />
+          </Tooltip>
+          <Tooltip title="Xuống">
+            <Button
+              type="text"
+              size="small"
+              icon={<ArrowDownOutlined />}
+              aria-label={`Xuống ${khoa}`}
+              disabled={!canEdit || i === lamThem.uuTienLoai.length - 1}
+              onClick={() => doiCho(i, i + 1)}
+            />
+          </Tooltip>
+          <Tooltip
+            title={
+              demDon[khoa]
+                ? `Đang có ${demDon[khoa]} đơn làm thêm dùng loại này. Xoá đi thì biểu mẫu 03-LĐTL mất cột và hệ số âm thầm rơi về ngày thường.`
+                : "Xóa"
+            }
+          >
+            {/* `span` bọc ngoài: antd Tooltip không hiện trên nút
+                disabled vì nút không phát sự kiện chuột. */}
+            <span>
+              <Button
+                type="text"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                aria-label={`Xoá ${khoa}`}
+                disabled={!canEdit || !!demDon[khoa]}
+                onClick={() => xoaLoai(khoa)}
+              />
+            </span>
+          </Tooltip>
+        </Space>
+      ),
+    },
+  ];
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <Alert
         type="info"
         showIcon
@@ -169,7 +293,7 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
         description="Đơn làm thêm được duyệt sẽ tích giờ (đã nhân hệ số) vào quỹ; đơn nghỉ bù trừ vào quỹ này theo thứ tự sắp hết hạn trước."
       />
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={[12, 12]}>
         <Col span={8}>
           <FieldLabel>Số giờ của một ngày công</FieldLabel>
           <InputNumber
@@ -181,7 +305,7 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
             disabled={!canEdit}
             onChange={(v) => capNhat({ soGioMoiNgay: v ?? 8 })}
           />
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-[2px] text-[10.5px] text-muted-foreground">
             Dùng quy đổi khi nhân viên xin nghỉ bù trọn ngày / nửa buổi.
           </p>
         </Col>
@@ -201,14 +325,14 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
             onChange={(cheDoBu) => capNhatLamThem({ cheDoBu })}
           />
           {lamThem.cheDoBu === "nghi_bu_va_chenh" && (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-[2px] text-[10.5px] text-muted-foreground">
               Chế độ này bắt buộc hệ số tích quỹ = 1,0 ở mọi loại ngày — bảng
               lương đã trả phần chênh, tích quỹ cao hơn là trả gấp đôi cho cùng
               một giờ công.
             </p>
           )}
           {lamThem.cheDoBu !== "chi_nghi_bu" && (
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-[2px] text-[10.5px] text-muted-foreground">
               Từ chế độ này, phải chốt màn “Bảng lương thêm giờ” của kỳ TRƯỚC
               khi tổng hợp Bảng lương — nếu không, tổng hợp sẽ bị chặn.
             </p>
@@ -231,115 +355,20 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
 
         <Col span={24}>
           <FieldLabel>Hệ số theo loại ngày</FieldLabel>
-          <p className="mb-2 text-xs text-muted-foreground">
+          <p className="mb-2 text-[10.5px] text-muted-foreground">
             Thứ tự từ trên xuống là thứ tự ưu tiên: một giờ thuộc nhiều loại
             thì loại ở trên thắng. Mặc định lễ &gt; nghỉ &gt; đêm &gt; thường,
             nên làm đêm ngày lễ vẫn ăn hệ số ngày lễ.
           </p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left">
-                <th className="py-1">Loại ngày</th>
-                <th className="py-1">Hệ số trả tiền</th>
-                <th className="py-1">Hệ số tích quỹ</th>
-                <th className="py-1">Miễn thuế phần chênh</th>
-                <th className="py-1">Thứ tự / Xoá</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lamThem.uuTienLoai.map((khoa, i) => (
-                <tr key={khoa}>
-                  {/* Loại công ty tự thêm chưa có nhãn tiếng Việt thì hiện
-                      chính khoá — thà xấu còn hơn ẩn mất một dòng hệ số đang
-                      có hiệu lực. */}
-                  <td className="py-1 pr-2">{NHAN_LOAI_NGAY[khoa] ?? khoa}</td>
-                  <td className="py-1 pr-2">
-                    <InputNumber
-                      className="w-full"
-                      min={0.1}
-                      step={0.5}
-                      value={lamThem.heSoTra[khoa]}
-                      disabled={!canEdit}
-                      onChange={(v) =>
-                        capNhatLamThem({
-                          heSoTra: { ...lamThem.heSoTra, [khoa]: v ?? 1 },
-                        })
-                      }
-                    />
-                  </td>
-                  <td className="py-1 pr-2">
-                    <InputNumber
-                      className="w-full"
-                      min={HE_SO_TICH_SAN[khoa] ?? 0.1}
-                      step={0.5}
-                      value={lamThem.heSoTichQuy[khoa]}
-                      disabled={!canEdit}
-                      onChange={(v) =>
-                        capNhatLamThem({
-                          heSoTichQuy: {
-                            ...lamThem.heSoTichQuy,
-                            [khoa]: v ?? HE_SO_TICH_SAN[khoa] ?? 1,
-                          },
-                        })
-                      }
-                    />
-                  </td>
-                  <td className="py-1">
-                    <Switch
-                      checked={lamThem.mienThueChenh.includes(khoa)}
-                      disabled={!canEdit}
-                      onChange={(bat) =>
-                        capNhatLamThem({
-                          mienThueChenh: bat
-                            ? [...lamThem.mienThueChenh, khoa]
-                            : lamThem.mienThueChenh.filter((x) => x !== khoa),
-                        })
-                      }
-                    />
-                  </td>
-                  <td className="py-1 whitespace-nowrap">
-                    <Button
-                      size="small"
-                      aria-label={`Lên ${khoa}`}
-                      disabled={!canEdit || i === 0}
-                      onClick={() => doiCho(i, i - 1)}
-                    >
-                      ↑
-                    </Button>{" "}
-                    <Button
-                      size="small"
-                      aria-label={`Xuống ${khoa}`}
-                      disabled={!canEdit || i === lamThem.uuTienLoai.length - 1}
-                      onClick={() => doiCho(i, i + 1)}
-                    >
-                      ↓
-                    </Button>{" "}
-                    <Tooltip
-                      title={
-                        demDon[khoa]
-                          ? `Đang có ${demDon[khoa]} đơn làm thêm dùng loại này. Xoá đi thì biểu mẫu 03-LĐTL mất cột và hệ số âm thầm rơi về ngày thường.`
-                          : undefined
-                      }
-                    >
-                      {/* `span` bọc ngoài: antd Tooltip không hiện trên nút
-                          disabled vì nút không phát sự kiện chuột. */}
-                      <span>
-                        <Button
-                          size="small"
-                          danger
-                          aria-label={`Xoá ${khoa}`}
-                          disabled={!canEdit || !!demDon[khoa]}
-                          onClick={() => xoaLoai(khoa)}
-                        >
-                          Xoá
-                        </Button>
-                      </span>
-                    </Tooltip>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <BangDuLieu<DongHeSo>
+            columns={cotHeSo}
+            dataSource={lamThem.uuTienLoai.map((khoa) => ({ khoa }))}
+            rowKey="khoa"
+            pagination={false}
+            bordered
+            // Năm, sáu loại ngày — để trang cuộn, không lồng vùng cuộn dọc.
+            scroll={{ y: undefined }}
+          />
 
           {canEdit && (
             <div className="mt-2 flex items-center gap-2">
@@ -362,13 +391,13 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
               >
                 Thêm loại ngày
               </Button>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[10.5px] text-muted-foreground">
                 Chữ thường, số và gạch dưới. Loại mới vào cuối danh sách ưu
                 tiên, hệ số mặc định 1,5 — sửa lại rồi bấm Lưu.
               </span>
             </div>
           )}
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="mt-[2px] text-[10.5px] text-muted-foreground">
             Hệ số tích quỹ tối thiểu 1,5 / 2,0 / 3,0 cho ngày thường / ngày
             nghỉ / ngày lễ (sàn BLLĐ 2019 Đ98.1) khi chế độ là “chỉ nghỉ bù”.
           </p>
@@ -384,7 +413,7 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
               })
             }
           />
-          <span className="text-sm">Công ty có ca đêm</span>
+          <span className="text-[11px]">Công ty có ca đêm</span>
         </Col>
 
         {lamThem.khungGioDem && (
@@ -423,7 +452,7 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
                 }
               />
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-[2px] text-[10.5px] text-muted-foreground">
               BLLĐ 2019 Đ106 định nghĩa ban đêm là 22:00–06:00. Giờ làm thêm
               rơi vào khung này được tách riêng khi tính lương.
             </p>
@@ -438,7 +467,7 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
               capNhatLamThem({ soThangHanDung: bat ? 6 : null })
             }
           />
-          <span className="text-sm">Quỹ có hạn dùng</span>
+          <span className="text-[11px]">Quỹ có hạn dùng</span>
         </Col>
 
         {lamThem.soThangHanDung !== null && (
@@ -453,7 +482,7 @@ export function LamThemEditor({ canEdit }: { canEdit: boolean }) {
               disabled={!canEdit}
               onChange={(v) => capNhatLamThem({ soThangHanDung: v ?? 1 })}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-[2px] text-[10.5px] text-muted-foreground">
               Tính từ cuối tháng tích. Quỹ quá hạn phải được HR đóng tay ở màn
               Quỹ giờ làm thêm — không có tác vụ tự chạy.
             </p>

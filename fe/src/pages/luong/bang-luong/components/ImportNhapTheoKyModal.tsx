@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Alert, Button, Modal, Table, Upload, message } from "antd";
+import { Alert, Button, Modal, Upload, message } from "antd";
 import { DownloadOutlined, UploadOutlined } from "@ant-design/icons";
 import * as XLSX from "xlsx";
 import { apiErrorMessage } from "@/config/api";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import { bangLuongService, type DongLuong } from "@/services/bangLuongService";
 import type { KhoanLuong } from "@/services/cauHinhLuongService";
 import { docLuoiImport, type DongImport } from "../lib/docFileImport";
@@ -131,7 +132,7 @@ export function ImportNhapTheoKyModal({
         return co ? (
           co.employeeName
         ) : (
-          <span className="text-red-500">Không có trong kỳ này</span>
+          <span className="text-[hsl(var(--red))]">Không có trong kỳ này</span>
         );
       },
     },
@@ -139,6 +140,7 @@ export function ImportNhapTheoKyModal({
       title: k.ten,
       key: k.ma,
       align: "right" as const,
+      className: "tabular-nums",
       render: (_: unknown, r: DongImport) => {
         if (!(k.ma in r.giaTri)) return <span className="text-muted-foreground">—</span>;
         const co = theoMa.get(r.maNhanVien.trim().toLowerCase());
@@ -213,8 +215,7 @@ export function ImportNhapTheoKyModal({
             )}
 
             {dong.length > 0 && (
-              <Table<DongImport>
-                size="small"
+              <BangDuLieu<DongImport>
                 rowKey="maNhanVien"
                 columns={cot}
                 dataSource={dong}

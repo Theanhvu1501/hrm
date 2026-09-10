@@ -39,7 +39,9 @@ beforeAll(() => {
 describe('BaoCaoNhanSuPage', () => {
   it('render được và hiện đủ 4 tiêu đề nhóm', () => {
     render(<BaoCaoNhanSuPage />);
-    expect(screen.getByText('Báo cáo nhân sự')).toBeTruthy();
+    // Trang không còn khối tiêu đề riêng (đồng bộ ke-toan-so: tên trang nằm ở
+    // menu) — thay bằng dòng kỳ so sánh trên thanh lọc.
+    expect(screen.getByText(/^So sánh với tháng/)).toBeTruthy();
     for (const nhom of layBaoCao(KY_MAC_DINH).nhom) {
       expect(screen.getByText(`${nhom.soThuTu}. ${nhom.ten}`)).toBeTruthy();
     }

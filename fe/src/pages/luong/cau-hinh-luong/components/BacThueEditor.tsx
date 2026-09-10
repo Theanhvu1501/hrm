@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { Table, Button, InputNumber, Popconfirm, Alert } from "antd";
+import { Button, InputNumber, Popconfirm, Alert, Tooltip } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useCauHinhLuongState } from "../CauHinhLuongHandlerContext";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import type { BacThue, CauHinhLuong } from "@/services/cauHinhLuongService";
 import "../CauHinhLuongPage.state";
 
@@ -88,14 +89,23 @@ export function BacThueEditor({ canEdit }: BacThueEditorProps) {
       ),
     },
     {
-      title: "",
+      title: "Thao tác",
       key: "actions",
-      width: 60,
+      width: 80,
       align: "center",
       render: (_: unknown, __: BacThue, index: number) =>
         canEdit && (
-          <Popconfirm title="Xoá bậc thuế này?" okText="Xoá" cancelText="Huỷ" onConfirm={() => xoaBac(index)}>
-            <Button type="text" danger icon={<DeleteOutlined />} />
+          <Popconfirm
+            title="Xác nhận xóa"
+            description="Bạn có chắc chắn muốn xóa bậc thuế này?"
+            onConfirm={() => xoaBac(index)}
+            okText="Xóa"
+            cancelText="Hủy"
+            okButtonProps={{ danger: true }}
+          >
+            <Tooltip title="Xóa">
+              <Button type="text" danger icon={<DeleteOutlined />} />
+            </Tooltip>
           </Popconfirm>
         ),
     },
@@ -115,13 +125,15 @@ export function BacThueEditor({ canEdit }: BacThueEditorProps) {
           Thêm bậc thuế
         </Button>
       )}
-      <Table<BacThue>
+      <BangDuLieu<BacThue>
         columns={columns}
         dataSource={list}
         rowKey={(record) => `bac-${list.indexOf(record)}`}
         pagination={false}
+        // Lưới nhập liệu: mỗi ô là một ô sửa, viền ô giúp thấy ranh giới.
         bordered
-        scroll={{ x: "max-content" }}
+        // Vài bậc thuế — để trang cuộn, không cần vùng cuộn riêng của bảng.
+        scroll={{ y: undefined }}
       />
     </div>
   );

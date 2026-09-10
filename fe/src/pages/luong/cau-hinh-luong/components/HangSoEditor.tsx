@@ -1,14 +1,11 @@
 import { Row, Col, InputNumber, Select, Checkbox } from "antd";
 import { useCauHinhLuongState } from "../CauHinhLuongHandlerContext";
+import { FieldLabel } from "@/components/form/FieldLabel";
 import type { CauHinhLuong } from "@/services/cauHinhLuongService";
 import "../CauHinhLuongPage.state";
 
 interface HangSoEditorProps {
   canEdit: boolean;
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="block mb-1 text-sm font-medium">{children}</label>;
 }
 
 export function HangSoEditor({ canEdit }: HangSoEditorProps) {
@@ -24,7 +21,7 @@ export function HangSoEditor({ canEdit }: HangSoEditorProps) {
   };
 
   return (
-    <Row gutter={[16, 16]}>
+    <Row gutter={[12, 12]}>
       <Col span={8}>
         <FieldLabel>Mức khai báo mặc định</FieldLabel>
         <InputNumber
@@ -153,7 +150,7 @@ export function HangSoEditor({ canEdit }: HangSoEditorProps) {
           disabled={!canEdit}
           onChange={(v) => capNhat({ phiCongDoan: { tyLe: (v ?? 0) / 100 } })}
         />
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-[2px] text-[10.5px] text-muted-foreground">
           Trừ vào lương người lao động, tính trên lương đóng bảo hiểm. KHÔNG
           làm giảm thu nhập tính thuế.
         </p>

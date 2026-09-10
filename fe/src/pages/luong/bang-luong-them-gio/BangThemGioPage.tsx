@@ -39,28 +39,25 @@ function BangThemGioPageInner() {
   };
 
   return (
-    <div className="space-y-3">
+    <Card>
       <ThanhKyThemGio onXuat={xuat} />
       {!dangTai && danhSach.length === 0 ? (
-        <Card>
-          <Empty description="Chưa có dữ liệu bảng lương thêm giờ tháng này">
-            {canEdit && (
-              <Button
-                type="primary"
-                size="large"
-                icon={<SyncOutlined />}
-                loading={dangTongHop}
-                onClick={() => handler.executeEvent("tongHop", { thang })}
-              >
-                Tổng hợp
-              </Button>
-            )}
-          </Empty>
-        </Card>
+        <Empty description="Chưa có dữ liệu bảng lương thêm giờ tháng này">
+          {canEdit && (
+            <Button
+              type="primary"
+              icon={<SyncOutlined />}
+              loading={dangTongHop}
+              onClick={() => handler.executeEvent("tongHop", { thang })}
+            >
+              Tổng hợp
+            </Button>
+          )}
+        </Empty>
       ) : (
         <BangThemGioTable />
       )}
-    </div>
+    </Card>
   );
 }
 

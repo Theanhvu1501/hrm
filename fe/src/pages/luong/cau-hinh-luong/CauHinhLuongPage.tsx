@@ -31,64 +31,60 @@ function CauHinhLuongPageInner() {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Cấu hình lương</h1>
-          <p className="text-muted-foreground">
-            Khoản lương, bậc thuế TNCN và các hằng số dùng khi tính bảng lương
-          </p>
-        </div>
-        {canEdit && (
-          <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            loading={dangLuu}
-            disabled={!cauHinh}
-            onClick={handleLuu}
-          >
-            Lưu cấu hình
-          </Button>
-        )}
-      </div>
-
-      <Spin spinning={dangTai}>
-        {cauHinh ? (
-          <Card>
-            <Tabs
-              items={[
-                {
-                  key: "khoan-luong",
-                  label: "Khoản lương",
-                  children: <KhoanLuongEditor canEdit={canEdit} />,
-                },
-                {
-                  key: "bac-thue",
-                  label: "Bậc thuế",
-                  children: <BacThueEditor canEdit={canEdit} />,
-                },
-                {
-                  key: "hang-so",
-                  label: "Hằng số",
-                  children: <HangSoEditor canEdit={canEdit} />,
-                },
-                {
-                  key: "lam-them",
-                  label: "Làm thêm & quỹ giờ",
-                  children: <LamThemEditor canEdit={canEdit} />,
-                },
-              ]}
-            />
-          </Card>
-        ) : (
-          !dangTai && (
-            <Card>
-              <Empty description="Không thể tải cấu hình lương" />
-            </Card>
-          )
-        )}
-      </Spin>
-    </div>
+    <Spin spinning={dangTai}>
+      {cauHinh ? (
+        <Card>
+          <Tabs
+            // Nút Lưu nằm trên hàng tab: một nút lưu CẢ bốn tab, nên đặt ngoài
+            // nội dung từng tab để không ai tưởng chỉ lưu tab đang mở.
+            tabBarExtraContent={
+              canEdit && (
+                <Button
+                  type="primary"
+                  icon={<SaveOutlined />}
+                  loading={dangLuu}
+                  onClick={handleLuu}
+                >
+                  Lưu cấu hình
+                </Button>
+              )
+            }
+            items={[
+              {
+                key: "khoan-luong",
+                label: "Khoản lương",
+                children: <KhoanLuongEditor canEdit={canEdit} />,
+              },
+              {
+                key: "bac-thue",
+                label: "Bậc thuế",
+                children: <BacThueEditor canEdit={canEdit} />,
+              },
+              {
+                key: "hang-so",
+                label: "Hằng số",
+                children: <HangSoEditor canEdit={canEdit} />,
+              },
+              {
+                key: "lam-them",
+                label: "Làm thêm & quỹ giờ",
+                children: <LamThemEditor canEdit={canEdit} />,
+              },
+            ]}
+          />
+        </Card>
+      ) : (
+        <Card>
+          {/* Lần tải đầu chưa có gì để hiện: giữ một khoảng trống cho Spin
+              đứng giữa, thay vì báo "không tải được" trong lúc đang tải. */}
+          {dangTai ? (
+            <div className="h-40" />
+          ) : (
+            <Empty description="Không thể tải cấu hình lương" />
+          )}
+        </Card>
+      )}
+    </Spin>
   );
 }
 

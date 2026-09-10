@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Button, DatePicker, Empty, Space, Table, Tag } from "antd";
+import { Alert, Button, Card, DatePicker, Empty, Tag } from "antd";
+import { DownloadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs, { Dayjs } from "dayjs";
 import {
@@ -9,6 +10,8 @@ import {
   type QuyetToanNguoi,
 } from "@/services/quyetToanTncnService";
 import { exportReportExcel } from "@/utils/exportReportExcel";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import { dungSheetQuyetToan } from "./xuatQuyetToan";
 
 /**
@@ -75,7 +78,7 @@ export default function QuyetToanTncnPage() {
       width: 70,
       align: "right",
       render: (_v, r) => (
-        <span style={{ color: r.soKyDaChot < 12 ? "#d46b08" : undefined }}>
+        <span style={{ color: r.soKyDaChot < 12 ? "hsl(var(--amber))" : undefined }}>
           {r.soKyDaChot}
         </span>
       ),
@@ -86,6 +89,7 @@ export default function QuyetToanTncnPage() {
         title: tenCot,
         key: `${khoa}__${c}`,
         align: "right" as const,
+        className: "tabular-nums",
         render: (_v: unknown, r: QuyetToanNguoi) =>
           formatTien(layNhom(r, khoa)?.[c]),
       })),
@@ -94,16 +98,27 @@ export default function QuyetToanTncnPage() {
       title: "Đã khấu trừ",
       key: "daKhauTru",
       align: "right",
+      className: "tabular-nums",
       render: (_v, r) => formatTien(r.daKhauTru),
     },
     {
       title: "Chênh lệch",
       key: "chenhLech",
       align: "right",
+      className: "tabular-nums",
       render: (_v, r) => (
         // Đỏ = còn phải nộp thêm, xanh = được hoàn. Đây là kết quả thật của
         // một cuộc quyết toán, không phải một cột phụ.
-        <strong style={{ color: r.chenhLech > 0 ? "#cf1322" : r.chenhLech < 0 ? "#389e0d" : undefined }}>
+        <strong
+          style={{
+            color:
+              r.chenhLech > 0
+                ? "hsl(var(--red))"
+                : r.chenhLech < 0
+                  ? "hsl(var(--green))"
+                  : undefined,
+          }}
+        >
           {formatTien(r.chenhLech)}
         </strong>
       ),
@@ -117,32 +132,32 @@ export default function QuyetToanTncnPage() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Quyết toán thuế TNCN</h1>
-          <p className="text-muted-foreground">
-            Tính lại thuế cả năm trên biểu thuế năm rồi so với số đã khấu trừ
-            hàng tháng — chênh lệch là số phải nộp thêm hoặc được hoàn
-          </p>
-        </div>
-        <Space wrap>
+    <Card>
+      <FilterBar
+        filters={
           <DatePicker
             picker="year"
             value={dayjs(String(nam), "YYYY")}
             allowClear={false}
             onChange={(d: Dayjs | null) => d && setNam(d.year())}
           />
-          <Button disabled={!kq} onClick={() => kq && exportReportExcel(`QT-TNCN-${kq.nam}`, [dungSheetQuyetToan(kq)])}>
+        }
+        actions={
+          <Button
+            icon={<DownloadOutlined />}
+            disabled={!kq}
+            onClick={() => kq && exportReportExcel(`QT-TNCN-${kq.nam}`, [dungSheetQuyetToan(kq)])}
+          >
             Xuất Excel
           </Button>
-        </Space>
-      </div>
+        }
+      />
 
       {kq && kq.soKyDaChotTrongNam < 12 && (
         <Alert
           type="warning"
           showIcon
+          className="mb-3"
           message={`Năm này mới chốt ${kq.soKyDaChotTrongNam} kỳ lương`}
           description="Bảng đang thiếu tháng — một bảng quyết toán thiếu hai tháng trông y hệt một bảng đủ. Chốt hết các kỳ trước khi đem đi nộp."
         />
@@ -152,6 +167,7 @@ export default function QuyetToanTncnPage() {
         <Alert
           type="info"
           showIcon
+          className="mb-3"
           message={`${kq.khongLuyTien.length} người không quyết toán theo lũy tiến`}
           description={
             <div>
@@ -165,17 +181,19 @@ export default function QuyetToanTncnPage() {
         />
       )}
 
-      <Table<QuyetToanNguoi>
+      <BangDuLieu<QuyetToanNguoi>
         rowKey="employeeId"
-        size="small"
+        // Lưới số tiêu đề hai tầng (năm / từng quý × 8 con số): cần viền ô.
         bordered
         loading={dangTai}
         columns={columns}
         dataSource={kq?.ds ?? []}
+        // Không phân trang: bảng đem đi nộp thuế, xem liền một mạch như file xuất.
         pagination={false}
-        scroll={{ x: "max-content" }}
+        // Không có phân trang nhưng tiêu đề hai tầng → trừ ít hơn chuẩn 285.
+        buTruDoc={250}
         locale={{ emptyText: <Empty description="Chưa có dữ liệu quyết toán năm này" /> }}
       />
-    </div>
+    </Card>
   );
 }

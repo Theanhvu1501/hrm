@@ -70,7 +70,7 @@ export function OSuaBienDong({ label, value, disabled, onSave }: OSuaBienDongPro
     >
       <div style={{ ...cellStyle, cursor: "pointer" }}>
         {formatTien(value)}
-        <EditOutlined style={{ marginLeft: 6, color: "#8c8c8c", fontSize: 11 }} />
+        <EditOutlined style={{ marginLeft: 6, color: "hsl(var(--ink-3))", fontSize: 11 }} />
       </div>
     </Popover>
   );

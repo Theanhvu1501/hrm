@@ -1,11 +1,12 @@
 import { useMemo } from "react";
-import { Empty, InputNumber, Table, Tag } from "antd";
+import { Empty, InputNumber, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   useBangThemGioHandler,
   useBangThemGioState,
 } from "../BangThemGioHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import { NHAN_LOAI_NGAY } from "@/services/cauHinhLuongService";
 import type { DongLuongThemGio } from "@/services/bangLuongThemGioService";
 import "../BangThemGioPage.state";
@@ -58,6 +59,9 @@ export function BangThemGioTable() {
       key: "stt",
       width: 64,
       align: "center",
+      // Ghim cùng cột Họ và tên: cột ghim trái đứng sau một cột không ghim
+      // thì khi cuộn ngang nó trượt đè lên chính cột STT.
+      fixed: "left",
       render: (_v, _r, i) => i + 1,
     },
     {
@@ -147,20 +151,22 @@ export function BangThemGioTable() {
       title: "Thực nhận",
       key: "thucNhan",
       align: "right",
-      render: (_v, r) => <strong>{formatTien(r.thucNhan)}</strong>,
+      render: (_v, r) => <strong>{renderTien(r.thucNhan)}</strong>,
     },
   ];
 
   return (
-    <Table<DongLuongThemGio>
+    <BangDuLieu<DongLuongThemGio>
       rowKey="id"
-      size="small"
+      // Lưới của biểu mẫu 03-LĐTL: tiêu đề nhóm hai tầng cần viền ô mới đọc được.
       bordered
       loading={dangTai}
       columns={columns}
       dataSource={danhSach}
+      // Không phân trang: biểu mẫu in ra ký một lượt, xem đủ mọi dòng như bản in.
       pagination={false}
-      scroll={{ x: "max-content" }}
+      // Không có thanh phân trang nhưng tiêu đề hai tầng → trừ ít hơn chuẩn 285.
+      buTruDoc={250}
       locale={{ emptyText: <Empty description="Chưa có dữ liệu" /> }}
     />
   );

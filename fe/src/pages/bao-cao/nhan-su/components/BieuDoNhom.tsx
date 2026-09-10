@@ -1,4 +1,4 @@
-import { Collapse, Table } from 'antd';
+import { Collapse } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
   Bar,
@@ -14,6 +14,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { TooltipProps } from 'recharts';
+import { BangDuLieu } from '@/components/table/BangDuLieu';
 import type { BieuDo, DiemBieuDo } from '../baoCao.types';
 import { dinhDangGiaTri, dinhDangNhanBieuDo } from '../dinhDang';
 import { MAU_LUOI } from '../mauSac';
@@ -28,13 +29,18 @@ import { MAU_LUOI } from '../mauSac';
  * Mỗi biểu đồ chỉ có MỘT trục giá trị và mọi chuỗi trong đó cùng đơn vị —
  * muốn vẽ hai đại lượng khác thang đo thì tách thành hai biểu đồ, đừng thêm
  * trục phải.
+ *
+ * Màu chuỗi CỐ Ý giữ bộ `--bc-series-*` của màn này, không đổi sang
+ * `--chart-orange/navy/gold` dùng chung: chạy validator `dataviz` trên bộ đó
+ * thì trượt (cam–vàng ΔE 2.8 với người mù màu đỏ, 8.0 với mắt thường; navy
+ * dưới sàn chroma ở nền sáng) — không dùng làm bảng màu phân loại được.
  */
 export default function BieuDoNhom({ bieuDo }: { bieuDo: BieuDo }) {
   const nhieuChuoi = bieuDo.chuoi.length > 1;
 
   return (
-    <div className="border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-800">
-      <div className="mb-2 text-[13px] font-semibold text-gray-700 dark:text-gray-200">
+    <div className="rounded-[9px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3">
+      <div className="mb-2 text-[12px] font-semibold text-[hsl(var(--ink))]">
         {bieuDo.tieuDe}
       </div>
 
@@ -96,7 +102,7 @@ export default function BieuDoNhom({ bieuDo }: { bieuDo: BieuDo }) {
         items={[
           {
             key: 'bang',
-            label: <span className="text-[11px] text-gray-500">Xem số liệu dạng bảng</span>,
+            label: <span className="text-[11px] text-[hsl(var(--ink-2))]">Xem số liệu dạng bảng</span>,
             children: <BangSoLieu bieuDo={bieuDo} />,
           },
         ]}
@@ -113,13 +119,13 @@ function NoiDungTooltip({
 }: TooltipProps<number, string> & { bieuDo: BieuDo }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] shadow-md dark:border-gray-600 dark:bg-gray-900">
-      <div className="mb-1 font-semibold text-gray-700 dark:text-gray-200">{label}</div>
+    <div className="rounded-[7px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2.5 py-1.5 text-[11px] shadow-md">
+      <div className="mb-1 font-semibold text-[hsl(var(--ink))]">{label}</div>
       {payload.map((m) => (
-        <div key={String(m.dataKey)} className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
+        <div key={String(m.dataKey)} className="flex items-center gap-1.5 text-[hsl(var(--ink-2))]">
           <span className="inline-block h-2 w-2 shrink-0" style={{ background: m.color }} />
           <span>{m.name}:</span>
-          <span className="font-semibold">
+          <span className="font-semibold tabular-nums text-[hsl(var(--ink))]">
             {dinhDangGiaTri(Number(m.value), bieuDo.donVi)}
           </span>
         </div>
@@ -136,18 +142,19 @@ function BangSoLieu({ bieuDo }: { bieuDo: BieuDo }) {
       dataIndex: c.khoa,
       key: c.khoa,
       align: 'right' as const,
+      className: 'tabular-nums',
       render: (v: number) => dinhDangGiaTri(v, bieuDo.donVi),
     })),
   ];
 
   return (
-    <Table
+    <BangDuLieu<DiemBieuDo>
       rowKey="nhan"
-      size="small"
       pagination={false}
       columns={cot}
       dataSource={bieuDo.duLieu}
-      className="text-[11px]"
+      // Vài kỳ, nằm trong khung gập — không cần vùng cuộn dọc riêng.
+      scroll={{ y: undefined }}
     />
   );
 }
