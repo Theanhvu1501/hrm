@@ -1,7 +1,10 @@
 import { useMemo } from "react";
-import { Table, Tag, Select, Empty } from "antd";
+import { Card, Tag, Select, Empty } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useQuyGioHandler, useQuyGioState } from "../../QuyGioHandlerContext";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
+import { StatusPill, type PillTone } from "@/components/ui/StatusPill";
 import { OvertimeBalanceRow } from "@/services/overtimeBalanceService";
 import { Employee } from "@/services/employeeService";
 import { homNayVN } from "@/ultils/thoiGianVN";
@@ -11,6 +14,11 @@ import "./QuyGioTable.state";
 const NHAN_TRANG_THAI: Record<string, string> = {
   dang_hieu_luc: "Đang hiệu lực",
   da_dong: "Đã đóng",
+};
+
+const TRANG_THAI_TONE: Record<string, PillTone> = {
+  dang_hieu_luc: "ok",
+  da_dong: "trung-tinh",
 };
 
 // Cột số: tabular-nums để chữ số thẳng cột giữa các hàng.
@@ -93,43 +101,43 @@ export function QuyGioTable() {
       dataIndex: "trangThai",
       key: "trangThai",
       width: 130,
+      align: "center",
       render: (v: string) => (
-        <Tag color={v === "dang_hieu_luc" ? "green" : "default"}>
+        <StatusPill tone={TRANG_THAI_TONE[v] ?? "trung-tinh"}>
           {NHAN_TRANG_THAI[v] ?? v}
-        </Tag>
+        </StatusPill>
       ),
     },
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Quỹ giờ làm thêm</h1>
-          <p className="text-muted-foreground">
-            Số giờ làm thêm đã tích, đã dùng và còn lại của một nhân viên, theo từng kỳ tích
-          </p>
-        </div>
-        <Select
-          showSearch
-          allowClear
-          optionFilterProp="label"
-          placeholder="Chọn nhân viên để xem quỹ"
-          style={{ width: 280 }}
-          options={employeeOptions}
-          value={employeeId}
-          onChange={(v) => handler.executeEvent("chonNhanVien", { employeeId: v })}
-        />
-      </div>
+    <Card>
+      <FilterBar
+        filters={
+          <Select
+            showSearch
+            allowClear
+            optionFilterProp="label"
+            placeholder="Chọn nhân viên để xem quỹ"
+            style={{ width: 280 }}
+            options={employeeOptions}
+            value={employeeId}
+            onChange={(v) => handler.executeEvent("chonNhanVien", { employeeId: v })}
+          />
+        }
+      />
 
-      <Table<OvertimeBalanceRow>
+      <BangDuLieu<OvertimeBalanceRow>
         columns={columns}
         dataSource={danhSach}
         rowKey="id"
         loading={dangTai}
-        pagination={{ pageSize: 15 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} kỳ tích`,
+        }}
         locale={{
           emptyText: (
             <Empty
@@ -142,6 +150,6 @@ export function QuyGioTable() {
           ),
         }}
       />
-    </div>
+    </Card>
   );
 }

@@ -1,10 +1,12 @@
 import { useMemo } from "react";
-import { Table, Button, Tag, Select, DatePicker, Checkbox, Space, Tooltip } from "antd";
+import { Card, Button, Tag, Select, DatePicker, Checkbox, Space, Tooltip } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useBanGhiHandler, useBanGhiState } from "../../BanGhiHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import {
   AttendanceRecord,
   AttendanceRecordFilter,
@@ -130,55 +132,51 @@ export function BanGhiTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Bản ghi chấm công</h1>
-        <p className="text-muted-foreground">
-          Tra cứu các lượt chấm công của toàn công ty và nhập bù cho nhân viên quên chấm
-        </p>
-      </div>
+    <Card>
+      <FilterBar
+        filters={
+          <>
+            <DatePicker.RangePicker
+              format={DINH_DANG_NGAY}
+              value={
+                filter.tuNgay
+                  ? [
+                      dayjs(filter.tuNgay, DINH_DANG_NGAY),
+                      dayjs(filter.denNgay ?? filter.tuNgay, DINH_DANG_NGAY),
+                    ]
+                  : null
+              }
+              onChange={(v) =>
+                timKiem({
+                  tuNgay: v?.[0]?.format(DINH_DANG_NGAY),
+                  denNgay: v?.[1]?.format(DINH_DANG_NGAY),
+                })
+              }
+            />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <DatePicker.RangePicker
-          format={DINH_DANG_NGAY}
-          value={
-            filter.tuNgay
-              ? [
-                  dayjs(filter.tuNgay, DINH_DANG_NGAY),
-                  dayjs(filter.denNgay ?? filter.tuNgay, DINH_DANG_NGAY),
-                ]
-              : null
-          }
-          onChange={(v) =>
-            timKiem({
-              tuNgay: v?.[0]?.format(DINH_DANG_NGAY),
-              denNgay: v?.[1]?.format(DINH_DANG_NGAY),
-            })
-          }
-        />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="Tất cả nhân viên"
+              style={{ width: 260 }}
+              options={employeeOptions}
+              value={filter.employeeId}
+              onChange={(v) => timKiem({ employeeId: v })}
+            />
 
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="Tất cả nhân viên"
-          style={{ width: 260 }}
-          options={employeeOptions}
-          value={filter.employeeId}
-          onChange={(v) => timKiem({ employeeId: v })}
-        />
-
-        <Checkbox
-          checked={filter.ngoaiVung === true}
-          onChange={(e) =>
-            timKiem({ ngoaiVung: e.target.checked ? true : undefined })
-          }
-        >
-          Chỉ hiện ngoài vùng
-        </Checkbox>
-
-        <div className="ml-auto">
-          {canCreate && (
+            <Checkbox
+              checked={filter.ngoaiVung === true}
+              onChange={(e) =>
+                timKiem({ ngoaiVung: e.target.checked ? true : undefined })
+              }
+            >
+              Chỉ hiện ngoài vùng
+            </Checkbox>
+          </>
+        }
+        actions={
+          canCreate && (
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -186,20 +184,22 @@ export function BanGhiTable() {
             >
               Nhập bù
             </Button>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
 
-      <Table<AttendanceRecord>
+      <BangDuLieu<AttendanceRecord>
         rowKey="id"
         loading={loading}
         dataSource={recordList}
         columns={columns}
-        pagination={{ pageSize: 50 }}
-        size="small"
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} bản ghi`,
+        }}
       />
-    </div>
+    </Card>
   );
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Table, Tag, Button, Space, Popconfirm, Select } from "antd";
+import { Card, Button, Space, Popconfirm, Select, Tooltip } from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
@@ -14,6 +14,9 @@ import {
 } from "../../DonChamCongHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
 import { useAuth } from "@/contexts/AuthContext";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { AttendanceRequest } from "@/services/attendanceRequestService";
 import { Employee } from "@/services/employeeService";
 import {
@@ -21,7 +24,7 @@ import {
   LOAI_DON_OPTIONS,
   LOAI_NGHI_OPTIONS,
   TRANG_THAI_OPTIONS,
-  TRANG_THAI_TAG_COLOR,
+  TRANG_THAI_TONE,
   labelFor,
 } from "../../constants";
 import { khoangNgay, khungGio, soLieuDon } from "../../hienThiDon";
@@ -159,34 +162,12 @@ export function DonChamCongTable() {
     {
       title: "Trạng thái",
       key: "trangThai",
-      width: 220,
+      width: 110,
       align: "center",
       render: (_: unknown, record: AttendanceRequest) => (
-        <Space>
-          <Tag color={TRANG_THAI_TAG_COLOR[record.trangThai] || "default"}>
-            {labelFor(TRANG_THAI_OPTIONS, record.trangThai)}
-          </Tag>
-          {canEdit && record.trangThai === "cho_duyet" && (
-            <>
-              <Button
-                size="small"
-                type="primary"
-                icon={<CheckOutlined />}
-                onClick={() => handleApprove(record)}
-              >
-                Duyệt
-              </Button>
-              <Button
-                size="small"
-                danger
-                icon={<CloseOutlined />}
-                onClick={() => handleReject(record)}
-              >
-                Từ chối
-              </Button>
-            </>
-          )}
-        </Space>
+        <StatusPill tone={TRANG_THAI_TONE[record.trangThai] ?? "trung-tinh"}>
+          {labelFor(TRANG_THAI_OPTIONS, record.trangThai)}
+        </StatusPill>
       ),
     },
     {
@@ -197,27 +178,59 @@ export function DonChamCongTable() {
       render: (value?: string) => value || "-",
     },
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "action",
-      width: 120,
+      // Duyệt/Từ chối nằm ở cột ghim phải cùng Sửa/Xoá: bảng 9 cột rộng hơn khung,
+      // để ở cột Trạng thái thì nút bị cột ghim đè lên, phải cuộn ngang mới bấm được.
+      width: 150,
       align: "center",
+      fixed: "right",
       render: (_: unknown, record: AttendanceRequest) => (
-        <Space>
+        <Space size="small">
+          {canEdit && record.trangThai === "cho_duyet" && (
+            <>
+              <Tooltip title="Duyệt đơn">
+                <Button
+                  type="text"
+                  aria-label="Duyệt"
+                  icon={<CheckOutlined />}
+                  onClick={() => handleApprove(record)}
+                  className="!text-[hsl(var(--green))]"
+                />
+              </Tooltip>
+              <Tooltip title="Từ chối đơn">
+                <Button
+                  type="text"
+                  danger
+                  aria-label="Từ chối"
+                  icon={<CloseOutlined />}
+                  onClick={() => handleReject(record)}
+                />
+              </Tooltip>
+            </>
+          )}
           {canEdit && (
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
+            <Tooltip title="Sửa">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+                className="text-primary"
+              />
+            </Tooltip>
           )}
           {canDelete && (
             <Popconfirm
-              title="Bạn có chắc muốn xoá đơn này?"
+              title="Xác nhận xóa"
+              description="Bạn có chắc chắn muốn xóa đơn này?"
               onConfirm={() => handleDelete(record.id)}
-              okText="Xoá"
-              cancelText="Huỷ"
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Tooltip title="Xóa">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           )}
         </Space>
@@ -226,60 +239,59 @@ export function DonChamCongTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Đơn chấm công</h1>
-          <p className="text-muted-foreground">
-            Quản lý đơn giải trình, làm thêm giờ, nghỉ phép và nghỉ bù của
-            nhân viên
-          </p>
-        </div>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            Tạo đơn
-          </Button>
-        )}
-      </div>
+    <Card>
+      <FilterBar
+        filters={
+          <>
+            <Select
+              allowClear
+              showSearch
+              placeholder="Lọc theo nhân viên"
+              style={{ width: 240 }}
+              value={employeeFilter}
+              onChange={(value) => setEmployeeFilter(value)}
+              options={employeeOptions}
+              optionFilterProp="label"
+            />
+            <Select
+              allowClear
+              placeholder="Lọc theo loại đơn"
+              style={{ width: 180 }}
+              value={loaiDonFilter}
+              onChange={(value) => setLoaiDonFilter(value)}
+              options={LOAI_DON_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            />
+            <Select
+              allowClear
+              placeholder="Lọc theo trạng thái"
+              style={{ width: 180 }}
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+              options={TRANG_THAI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            />
+          </>
+        }
+        actions={
+          canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              Tạo đơn
+            </Button>
+          )
+        }
+      />
 
-      <Space wrap>
-        <Select
-          allowClear
-          showSearch
-          placeholder="Lọc theo nhân viên"
-          style={{ width: 240 }}
-          value={employeeFilter}
-          onChange={(value) => setEmployeeFilter(value)}
-          options={employeeOptions}
-          optionFilterProp="label"
-        />
-        <Select
-          allowClear
-          placeholder="Lọc theo loại đơn"
-          style={{ width: 180 }}
-          value={loaiDonFilter}
-          onChange={(value) => setLoaiDonFilter(value)}
-          options={LOAI_DON_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        />
-        <Select
-          allowClear
-          placeholder="Lọc theo trạng thái"
-          style={{ width: 180 }}
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value)}
-          options={TRANG_THAI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        />
-      </Space>
-
-      <Table<AttendanceRequest>
+      <BangDuLieu<AttendanceRequest>
         columns={columns}
         dataSource={rows}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} đơn`,
+        }}
       />
-    </div>
+    </Card>
   );
 }

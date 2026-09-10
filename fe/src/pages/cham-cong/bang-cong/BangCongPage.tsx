@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { Card } from "antd";
 import {
   BangCongHandlerProvider,
   useBangCongHandler,
@@ -17,12 +18,14 @@ function BangCongPageInner() {
   }, [handler]);
 
   return (
-    <div className="space-y-3">
-      <BangCongHeader />
-      <BangCongTable />
-      <BangCongLegend />
+    <>
+      <Card>
+        <BangCongHeader />
+        <BangCongTable />
+        <BangCongLegend />
+      </Card>
       <BangCongPrintView />
-    </div>
+    </>
   );
 }
 

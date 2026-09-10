@@ -1,4 +1,5 @@
-import { Table, Tag, Button, Space, Popconfirm } from "antd";
+import { useMemo, useState } from "react";
+import { Card, Tag, Button, Space, Popconfirm, Tooltip } from "antd";
 import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -6,6 +7,8 @@ import {
   useCaLamViecState,
 } from "../../CaLamViecHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import { WorkShift } from "@/services/workShiftService";
 import "./CaLamViecTable.state";
 
@@ -21,6 +24,15 @@ export function CaLamViecTable() {
   const { canCreate, canEdit, canDelete } = usePagePermission(
     "/cham-cong/ca-lam-viec"
   );
+
+  const [searchText, setSearchText] = useState("");
+
+  const rows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return keyword
+      ? shiftList.filter((item) => item.ten?.toLowerCase().includes(keyword))
+      : shiftList;
+  }, [shiftList, searchText]);
 
   const handleAdd = () => {
     handler.executeEvent("openForm", {});
@@ -86,27 +98,35 @@ export function CaLamViecTable() {
         ),
     },
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "action",
-      width: 110,
+      width: 90,
       align: "center",
+      fixed: "right",
       render: (_: unknown, record: WorkShift) => (
-        <Space>
+        <Space size="small">
           {canEdit && (
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
+            <Tooltip title="Sửa">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+                className="text-primary"
+              />
+            </Tooltip>
           )}
           {canDelete && (
             <Popconfirm
-              title="Bạn có chắc muốn xoá ca làm việc này?"
+              title="Xác nhận xóa"
+              description="Bạn có chắc chắn muốn xóa ca làm việc này?"
               onConfirm={() => handleDelete(record.id)}
-              okText="Xoá"
-              cancelText="Huỷ"
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Tooltip title="Xóa">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           )}
         </Space>
@@ -115,32 +135,35 @@ export function CaLamViecTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            Cấu hình ca làm việc
-          </h1>
-          <p className="text-muted-foreground">
-            Quản lý các ca làm việc dùng cho chấm công
-          </p>
-        </div>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            Thêm ca
-          </Button>
-        )}
-      </div>
+    <Card>
+      <FilterBar
+        search={{
+          value: searchText,
+          onChange: setSearchText,
+          placeholder: "Tìm theo tên ca làm việc...",
+          width: 320,
+        }}
+        actions={
+          canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              Thêm ca
+            </Button>
+          )
+        }
+      />
 
-      <Table<WorkShift>
+      <BangDuLieu<WorkShift>
         columns={columns}
-        dataSource={shiftList}
+        dataSource={rows}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} ca`,
+        }}
       />
-    </div>
+    </Card>
   );
 }

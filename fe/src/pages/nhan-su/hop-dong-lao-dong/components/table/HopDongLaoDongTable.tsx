@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Table, Tag, Button, Space, Popconfirm, Select } from "antd";
+import { Card, Button, Space, Popconfirm, Select, Tooltip, Typography } from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
@@ -14,16 +14,21 @@ import {
   useHopDongLaoDongState,
 } from "../../HopDongLaoDongHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { LaborContract } from "@/services/laborContractService";
 import { Employee } from "@/services/employeeService";
 import {
   LOAI_HOP_DONG_OPTIONS,
   TRANG_THAI_OPTIONS,
-  TRANG_THAI_TAG_COLOR,
+  TRANG_THAI_TONE,
   labelFor,
 } from "../../constants";
 import { HopDongPrintModal } from "../print/HopDongPrintModal";
 import "./HopDongLaoDongTable.state";
+
+const { Text } = Typography;
 
 function formatCurrency(value?: number): string {
   if (value === undefined || value === null) return "-";
@@ -86,6 +91,11 @@ export function HopDongLaoDongTable() {
       dataIndex: "contractNo",
       key: "contractNo",
       width: 120,
+      render: (value: string) => (
+        <Text strong className="text-primary">
+          {value}
+        </Text>
+      ),
     },
     {
       title: "Nhân viên",
@@ -152,41 +162,50 @@ export function HopDongLaoDongTable() {
             }))}
           />
         ) : (
-          <Tag color={TRANG_THAI_TAG_COLOR[record.trangThai] || "default"}>
+          <StatusPill tone={TRANG_THAI_TONE[record.trangThai] ?? "trung-tinh"}>
             {labelFor(TRANG_THAI_OPTIONS, record.trangThai)}
-          </Tag>
+          </StatusPill>
         ),
     },
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "action",
       width: 120,
       align: "center",
+      fixed: "right",
       render: (_: unknown, record: LaborContract) => (
-        <Space>
+        <Space size="small">
           {canExport && (
-            <Button
-              type="text"
-              icon={<PrinterOutlined />}
-              title="In hợp đồng"
-              onClick={() => setPrintTarget(record)}
-            />
+            <Tooltip title="In hợp đồng">
+              <Button
+                type="text"
+                icon={<PrinterOutlined />}
+                onClick={() => setPrintTarget(record)}
+              />
+            </Tooltip>
           )}
           {canEdit && (
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
+            <Tooltip title="Sửa">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+                className="text-primary"
+              />
+            </Tooltip>
           )}
           {canDelete && (
             <Popconfirm
-              title="Bạn có chắc muốn xoá hợp đồng này?"
+              title="Xác nhận xóa"
+              description="Bạn có chắc chắn muốn xóa hợp đồng này?"
               onConfirm={() => handleDelete(record.id)}
-              okText="Xoá"
-              cancelText="Huỷ"
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Tooltip title="Xóa">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           )}
         </Space>
@@ -195,63 +214,63 @@ export function HopDongLaoDongTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Hợp đồng lao động</h1>
-          <p className="text-muted-foreground">
-            Quản lý hợp đồng lao động của nhân viên
-          </p>
-        </div>
-        <Space>
-          {/* Soạn mẫu đã chuyển sang màn riêng `Nhân sự → Mẫu in hợp đồng`:
-              giờ có NHIỀU mẫu nên một modal không còn chứa nổi, và cấu hình
-              in không thuộc về thanh công cụ của danh sách hợp đồng. */}
-          {canEdit && (
-            <Button
-              icon={<SettingOutlined />}
-              onClick={() => navigate("/nhan-su/mau-in-hop-dong")}
-            >
-              Mẫu in hợp đồng
-            </Button>
-          )}
-          {canCreate && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              Thêm hợp đồng
-            </Button>
-          )}
-        </Space>
-      </div>
+    <Card>
+      <FilterBar
+        filters={
+          <>
+            <Select
+              allowClear
+              showSearch
+              placeholder="Lọc theo nhân viên"
+              style={{ width: 240 }}
+              value={employeeFilter}
+              onChange={(value) => setEmployeeFilter(value)}
+              options={employeeOptions}
+              optionFilterProp="label"
+            />
+            <Select
+              allowClear
+              placeholder="Lọc theo trạng thái"
+              style={{ width: 200 }}
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+              options={TRANG_THAI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            />
+          </>
+        }
+        actions={
+          <>
+            {/* Soạn mẫu đã chuyển sang màn riêng `Nhân sự → Mẫu in hợp đồng`:
+                giờ có NHIỀU mẫu nên một modal không còn chứa nổi, và cấu hình
+                in không thuộc về thanh công cụ của danh sách hợp đồng. */}
+            {canEdit && (
+              <Button
+                icon={<SettingOutlined />}
+                onClick={() => navigate("/nhan-su/mau-in-hop-dong")}
+              >
+                Mẫu in hợp đồng
+              </Button>
+            )}
+            {canCreate && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+                Thêm hợp đồng
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      <Space wrap>
-        <Select
-          allowClear
-          showSearch
-          placeholder="Lọc theo nhân viên"
-          style={{ width: 240 }}
-          value={employeeFilter}
-          onChange={(value) => setEmployeeFilter(value)}
-          options={employeeOptions}
-          optionFilterProp="label"
-        />
-        <Select
-          allowClear
-          placeholder="Lọc theo trạng thái"
-          style={{ width: 200 }}
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value)}
-          options={TRANG_THAI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        />
-      </Space>
-
-      <Table<LaborContract>
+      <BangDuLieu<LaborContract>
         columns={columns}
         dataSource={rows}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} hợp đồng`,
+        }}
       />
 
       <HopDongPrintModal
@@ -260,6 +279,6 @@ export function HopDongLaoDongTable() {
         contractLabel={printTarget?.contractNo}
         onClose={() => setPrintTarget(null)}
       />
-    </div>
+    </Card>
   );
 }

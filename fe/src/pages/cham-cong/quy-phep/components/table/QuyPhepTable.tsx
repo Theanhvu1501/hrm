@@ -1,12 +1,30 @@
 import { useEffect } from "react";
-import { Table, Button, Tag, Space, Select, Modal, Form, InputNumber, Input } from "antd";
+import {
+  Card,
+  Button,
+  Tag,
+  Space,
+  Select,
+  Modal,
+  Form,
+  InputNumber,
+  Input,
+  Tooltip,
+  Typography,
+} from "antd";
+import { EditOutlined, HistoryOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useQuyPhepHandler, useQuyPhepState } from "../../QuyPhepHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { DongDuKienPhep, LeaveBalance } from "@/services/leaveBalanceService";
 import { homNayVN } from "@/ultils/thoiGianVN";
-import { nhanTrangThaiQuy, oDuKien, sapHetHan } from "../../nhanQuy";
+import { TONE_TRANG_THAI_QUY, nhanTrangThaiQuy, oDuKien, sapHetHan } from "../../nhanQuy";
 import "./QuyPhepTable.state";
+
+const { Text } = Typography;
 
 const NAM_HIEN_TAI = Number(homNayVN().slice(0, 4));
 const DS_NAM = [NAM_HIEN_TAI - 1, NAM_HIEN_TAI, NAM_HIEN_TAI + 1];
@@ -54,7 +72,20 @@ export function QuyPhepTable() {
   };
 
   const columns: ColumnsType<LeaveBalance> = [
-    { title: "Mã NV", dataIndex: "employeeCode", key: "employeeCode", width: 100 },
+    {
+      title: "Mã NV",
+      dataIndex: "employeeCode",
+      key: "employeeCode",
+      width: 100,
+      render: (v?: string) =>
+        v ? (
+          <Text strong className="text-primary">
+            {v}
+          </Text>
+        ) : (
+          "-"
+        ),
+    },
     { title: "Họ tên", dataIndex: "employeeName", key: "employeeName" },
     { title: "Năm", dataIndex: "nam", key: "nam", width: 80, align: "center" },
     { title: "Được cấp", dataIndex: "soNgayDuocCap", key: "soNgayDuocCap", width: 100, align: "right" },
@@ -115,26 +146,37 @@ export function QuyPhepTable() {
       dataIndex: "trangThai",
       key: "trangThai",
       width: 130,
+      align: "center",
       render: (v: string) => (
-        <Tag color={v === "dang_hieu_luc" ? "green" : "default"}>{nhanTrangThaiQuy(v)}</Tag>
+        <StatusPill tone={TONE_TRANG_THAI_QUY[v] ?? "trung-tinh"}>
+          {nhanTrangThaiQuy(v)}
+        </StatusPill>
       ),
     },
     {
       title: "Thao tác",
       key: "thaoTac",
-      width: 190,
+      width: 90,
+      align: "center",
+      fixed: "right",
       render: (_: unknown, record: LeaveBalance) => (
-        <Space>
-          <Button
-            size="small"
-            onClick={() => handler.executeEvent("moSoBienDong", { quy: record })}
-          >
-            Sổ biến động
-          </Button>
+        <Space size="small">
+          <Tooltip title="Sổ biến động">
+            <Button
+              type="text"
+              icon={<HistoryOutlined />}
+              onClick={() => handler.executeEvent("moSoBienDong", { quy: record })}
+            />
+          </Tooltip>
           {canEdit && (
-            <Button size="small" onClick={() => moDieuChinh(record)}>
-              Điều chỉnh
-            </Button>
+            <Tooltip title="Điều chỉnh">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => moDieuChinh(record)}
+                className="text-primary"
+              />
+            </Tooltip>
           )}
         </Space>
       ),
@@ -142,50 +184,51 @@ export function QuyPhepTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Quỹ phép năm</h1>
-          <p className="text-muted-foreground">
-            Chu kỳ phép năm: cấp đầu năm, theo dõi số dư, đóng quỹ năm cũ
-          </p>
-        </div>
-        <Space wrap>
+    <Card>
+      <FilterBar
+        filters={
           <Select
             value={namLoc}
             style={{ width: 140 }}
             options={DS_NAM.map((n) => ({ value: n, label: `Năm ${n}` }))}
             onChange={(v) => handler.executeEvent("doiNamLoc", { nam: v })}
           />
-          {canCreate && (
-            <Button
-              type="primary"
-              loading={dangXuLy}
-              onClick={() => handler.executeEvent("moXemTruoc", { loai: "cap_dau_nam", nam: namLoc })}
-            >
-              Cấp phép đầu năm
-            </Button>
-          )}
-          {canEdit && (
-            <Button
-              danger
-              loading={dangXuLy}
-              onClick={() => handler.executeEvent("moXemTruoc", { loai: "dong_quy", nam: namLoc })}
-            >
-              Đóng quỹ năm {namLoc}
-            </Button>
-          )}
-        </Space>
-      </div>
+        }
+        actions={
+          <>
+            {canEdit && (
+              <Button
+                danger
+                loading={dangXuLy}
+                onClick={() => handler.executeEvent("moXemTruoc", { loai: "dong_quy", nam: namLoc })}
+              >
+                Đóng quỹ năm {namLoc}
+              </Button>
+            )}
+            {canCreate && (
+              <Button
+                type="primary"
+                loading={dangXuLy}
+                onClick={() => handler.executeEvent("moXemTruoc", { loai: "cap_dau_nam", nam: namLoc })}
+              >
+                Cấp phép đầu năm
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      <Table<LeaveBalance>
+      <BangDuLieu<LeaveBalance>
         columns={columns}
         dataSource={danhSach}
         rowKey="id"
         loading={dangTai}
-        pagination={{ pageSize: 15 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} quỹ phép`,
+        }}
       />
 
       <Modal
@@ -215,6 +258,6 @@ export function QuyPhepTable() {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </Card>
   );
 }

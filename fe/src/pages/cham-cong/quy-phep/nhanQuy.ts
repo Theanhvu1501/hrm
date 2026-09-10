@@ -1,6 +1,13 @@
+import type { PillTone } from '@/components/ui/StatusPill';
+
 export const NHAN_TRANG_THAI_QUY: Record<string, string> = {
   dang_hieu_luc: 'Đang hiệu lực',
   da_dong: 'Đã đóng',
+};
+
+export const TONE_TRANG_THAI_QUY: Record<string, PillTone> = {
+  dang_hieu_luc: 'ok',
+  da_dong: 'trung-tinh',
 };
 
 export const NHAN_LY_DO: Record<string, string> = {

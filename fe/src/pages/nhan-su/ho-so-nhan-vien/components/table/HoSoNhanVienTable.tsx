@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Table, Tag, Button, Space, Popconfirm, Input, Select } from "antd";
+import { Card, Button, Space, Popconfirm, Select, Tooltip, Typography } from "antd";
 import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -9,13 +9,18 @@ import {
 import { usePagePermission } from "@/hooks/usePagePermission";
 import { usePhongBanOptions } from "@/hooks/usePhongBanOptions";
 import { Employee } from "@/services/employeeService";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
+import { StatusPill } from "@/components/ui/StatusPill";
 import {
   LOAI_HOP_DONG_OPTIONS,
   TRANG_THAI_OPTIONS,
-  TRANG_THAI_TAG_COLOR,
+  TRANG_THAI_TONE,
   labelFor,
 } from "../../constants";
 import "./HoSoNhanVienTable.state";
+
+const { Text } = Typography;
 
 export function HoSoNhanVienTable() {
   const handler = useHoSoNhanVienHandler();
@@ -45,7 +50,8 @@ export function HoSoNhanVienTable() {
     const keyword = searchText.trim().toLowerCase();
     return employeeList.filter((item) => {
       const matchesKeyword = keyword
-        ? item.hoTen?.toLowerCase().includes(keyword)
+        ? item.hoTen?.toLowerCase().includes(keyword) ||
+          item.employeeId?.toLowerCase().includes(keyword)
         : true;
       const matchesStatus = statusFilter ? item.trangThai === statusFilter : true;
       return matchesKeyword && matchesStatus;
@@ -57,25 +63,34 @@ export function HoSoNhanVienTable() {
       title: "Mã NV",
       dataIndex: "employeeId",
       key: "employeeId",
-      width: 120,
+      width: 110,
+      render: (value: string) => (
+        <Text strong className="text-primary">
+          {value}
+        </Text>
+      ),
     },
     {
       title: "Họ tên",
       dataIndex: "hoTen",
       key: "hoTen",
+      ellipsis: true,
     },
     {
       title: "Phòng ban",
       dataIndex: "departmentId",
       key: "departmentId",
-      width: 160,
+      width: 180,
+      ellipsis: true,
       render: (id?: string | null) => tenTheoId(id),
     },
     {
       title: "Chức danh",
       dataIndex: "chucDanh",
       key: "chucDanh",
-      width: 160,
+      width: 180,
+      ellipsis: true,
+      render: (value?: string) => value || "-",
     },
     {
       title: "Loại hợp đồng",
@@ -89,36 +104,44 @@ export function HoSoNhanVienTable() {
       title: "Trạng thái",
       dataIndex: "trangThai",
       key: "trangThai",
-      width: 150,
+      width: 130,
       align: "center",
       render: (value: string) => (
-        <Tag color={TRANG_THAI_TAG_COLOR[value] || "default"}>
+        <StatusPill tone={TRANG_THAI_TONE[value] ?? "trung-tinh"}>
           {labelFor(TRANG_THAI_OPTIONS, value)}
-        </Tag>
+        </StatusPill>
       ),
     },
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "action",
-      width: 120,
+      width: 90,
       align: "center",
+      fixed: "right",
       render: (_: unknown, record: Employee) => (
-        <Space>
+        <Space size="small">
           {canEdit && (
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
+            <Tooltip title="Sửa">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+                className="text-primary"
+              />
+            </Tooltip>
           )}
           {canDelete && (
             <Popconfirm
-              title="Bạn có chắc muốn xoá hồ sơ nhân viên này?"
+              title="Xác nhận xóa"
+              description="Bạn có chắc chắn muốn xóa hồ sơ nhân viên này?"
               onConfirm={() => handleDelete(record.id)}
-              okText="Xoá"
-              cancelText="Huỷ"
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Tooltip title="Xóa">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           )}
         </Space>
@@ -127,48 +150,45 @@ export function HoSoNhanVienTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Hồ sơ nhân viên</h1>
-          <p className="text-muted-foreground">
-            Quản lý hồ sơ, thông tin cá nhân và công việc của nhân viên
-          </p>
-        </div>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            Thêm nhân viên
-          </Button>
-        )}
-      </div>
+    <Card>
+      <FilterBar
+        search={{
+          value: searchText,
+          onChange: setSearchText,
+          placeholder: "Tìm theo mã hoặc họ tên nhân viên...",
+          width: 320,
+        }}
+        filters={
+          <Select
+            allowClear
+            placeholder="Tất cả trạng thái"
+            style={{ width: 180 }}
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value)}
+            options={TRANG_THAI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+          />
+        }
+        actions={
+          canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              Thêm nhân viên
+            </Button>
+          )
+        }
+      />
 
-      <Space wrap>
-        <Input.Search
-          allowClear
-          placeholder="Tìm theo họ tên"
-          style={{ width: 260 }}
-          value={searchText}
-          onChange={(e) => setSearchText(e.target.value)}
-        />
-        <Select
-          allowClear
-          placeholder="Lọc theo trạng thái"
-          style={{ width: 200 }}
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value)}
-          options={TRANG_THAI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        />
-      </Space>
-
-      <Table<Employee>
+      <BangDuLieu<Employee>
         columns={columns}
         dataSource={rows}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} nhân viên`,
+        }}
       />
-    </div>
+    </Card>
   );
 }

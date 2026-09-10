@@ -1,3 +1,5 @@
+import type { PillTone } from "@/components/ui/StatusPill";
+
 export const LOAI_HOP_DONG_OPTIONS = [
   { value: "thu_viec", label: "Thử việc" },
   { value: "xac_dinh_thoi_han", label: "Xác định thời hạn" },
@@ -17,11 +19,11 @@ export const HINH_THUC_TRA_LUONG_OPTIONS = [
   { value: "net", label: "Net" },
 ] as const;
 
-export const TRANG_THAI_TAG_COLOR: Record<string, string> = {
-  du_thao: "default",
-  dang_hieu_luc: "green",
-  het_han: "orange",
-  da_thanh_ly: "red",
+export const TRANG_THAI_TONE: Record<string, PillTone> = {
+  du_thao: "nhap",
+  dang_hieu_luc: "ok",
+  het_han: "cho",
+  da_thanh_ly: "trung-tinh",
 };
 
 export function labelFor(

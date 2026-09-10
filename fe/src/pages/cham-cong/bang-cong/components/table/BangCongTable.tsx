@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Empty, Table } from "antd";
+import { Empty, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import {
@@ -7,15 +7,18 @@ import {
   useBangCongState,
 } from "../../BangCongHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import {
   KyHieuDef,
   Timesheet,
   UpdateTimesheetDto,
 } from "@/services/timesheetService";
-import { WEEKDAY_LABELS, isWeekendDay } from "../../constants";
+import { MAU_CUOI_TUAN, WEEKDAY_LABELS, isWeekendDay } from "../../constants";
 import { DayCell } from "./DayCell";
 import { RowNoteEditor } from "./RowNoteEditor";
 import "./BangCongTable.state";
+
+const { Text } = Typography;
 
 export function BangCongTable() {
   const handler = useBangCongHandler();
@@ -59,7 +62,14 @@ export function BangCongTable() {
         key: "employeeCode",
         width: 100,
         fixed: "left",
-        render: (value?: string) => value || "-",
+        render: (value?: string) =>
+          value ? (
+            <Text strong className="text-primary">
+              {value}
+            </Text>
+          ) : (
+            "-"
+          ),
       },
       {
         title: "Họ tên",
@@ -85,7 +95,7 @@ export function BangCongTable() {
               style={{
                 fontSize: 10,
                 fontWeight: 400,
-                color: weekend ? "#cf1322" : undefined,
+                color: weekend ? MAU_CUOI_TUAN : undefined,
               }}
             >
               {WEEKDAY_LABELS[dow]}
@@ -96,10 +106,10 @@ export function BangCongTable() {
         width: 46,
         align: "center" as const,
         onHeaderCell: () => ({
-          style: weekend ? { background: "#fff1f0" } : undefined,
+          style: weekend ? { background: "hsl(var(--red) / 0.08)" } : undefined,
         }),
         onCell: () => ({
-          style: weekend ? { background: "#fff9f8" } : undefined,
+          style: weekend ? { background: "hsl(var(--red) / 0.04)" } : undefined,
         }),
         render: (_: unknown, record: Timesheet) => {
           const entry = record.chiTietNgay?.find((c) => c.ngay === day);
@@ -126,7 +136,7 @@ export function BangCongTable() {
         title: "Tổng công",
         dataIndex: "soNgayCong",
         key: "soNgayCong",
-        width: 90,
+        width: 100,
         fixed: "right",
         align: "center",
         render: (value?: number) => value ?? 0,
@@ -164,7 +174,7 @@ export function BangCongTable() {
         title: "Không lương",
         dataIndex: "soNgayNghiKhongLuong",
         key: "soNgayNghiKhongLuong",
-        width: 100,
+        width: 120,
         fixed: "right",
         align: "center",
         render: (value?: number) => value ?? 0,
@@ -199,28 +209,28 @@ export function BangCongTable() {
   }, [daysInMonth, thang, kyHieuList, canEdit]);
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <Table<Timesheet>
-        columns={columns}
-        dataSource={timesheetList}
-        rowKey="_id"
-        loading={loading}
-        pagination={{ pageSize: 20 }}
-        bordered
-        size="small"
-        scroll={{ x: "max-content" }}
-        locale={{
-          emptyText: (
-            <Empty
-              description={
-                !loading
-                  ? "Bấm 'Tạo/Cập nhật bảng công' để sinh bảng công tháng này"
-                  : " "
-              }
-            />
-          ),
-        }}
-      />
-    </div>
+    <BangDuLieu<Timesheet>
+      columns={columns}
+      dataSource={timesheetList}
+      rowKey="_id"
+      loading={loading}
+      // Lưới ngày công cần kẻ ô như bảng chấm công giấy.
+      bordered
+      // Header hai tầng (ngày + thứ) và dòng chú thích ký hiệu dưới bảng
+      // chiếm thêm chỗ so với bảng danh mục thường.
+      buTruDoc={330}
+      pagination={{
+        defaultPageSize: 50,
+        showSizeChanger: true,
+        pageSizeOptions: ["25", "50", "100", "200"],
+        showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} nhân viên`,
+      }}
+      locale={{
+        // Lúc đang tải BangDuLieu tự để trống ô này — không cần tự nhánh.
+        emptyText: (
+          <Empty description="Bấm 'Tổng hợp bảng công' để sinh bảng công tháng này" />
+        ),
+      }}
+    />
   );
 }

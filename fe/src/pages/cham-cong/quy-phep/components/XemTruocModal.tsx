@@ -1,7 +1,8 @@
-import { Modal, Table, Alert, Tag } from "antd";
+import { Modal, Table, Alert } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useQuyPhepHandler, useQuyPhepState } from "../QuyPhepHandlerContext";
 import { DongXemTruocCap, DongXemTruocDong } from "@/services/leaveBalanceService";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { XemTruocData } from "./XemTruocModal.state";
 
 /**
@@ -32,9 +33,9 @@ export function XemTruocModal() {
       width: 160,
       render: (_: unknown, r: DongXemTruocCap) =>
         r.daCoQuy ? (
-          <Tag color="default">Đã có quỹ — bỏ qua</Tag>
+          <StatusPill tone="trung-tinh">Đã có quỹ — bỏ qua</StatusPill>
         ) : (
-          <Tag color="success">Sẽ cấp</Tag>
+          <StatusPill tone="ok">Sẽ cấp</StatusPill>
         ),
     },
   ];
@@ -48,7 +49,7 @@ export function XemTruocModal() {
       key: "soNgayMat",
       width: 140,
       align: "right",
-      render: (v: number) => <span className="text-red-600 font-medium">-{v}</span>,
+      render: (v: number) => <span className="font-medium text-[hsl(var(--red))]">-{v}</span>,
     },
   ];
 
@@ -79,7 +80,7 @@ export function XemTruocModal() {
             className="mb-3"
             type="info"
             showIcon
-            message={`Sẽ cấp phép cho ${soNguoiSeCap} nhân viên.${
+            title={`Sẽ cấp phép cho ${soNguoiSeCap} nhân viên.${
               soNguoiDaCo > 0 ? ` ${soNguoiDaCo} người đã có quỹ năm ${xemTruoc?.nam} nên sẽ bỏ qua.` : ""
             }`}
           />
@@ -100,7 +101,7 @@ export function XemTruocModal() {
             className="mb-3"
             type="warning"
             showIcon
-            message={`${soNguoiMatPhep} nhân viên sẽ MẤT tổng ${tongNgayMat} ngày phép chưa dùng của năm ${xemTruoc?.nam}.`}
+            title={`${soNguoiMatPhep} nhân viên sẽ MẤT tổng ${tongNgayMat} ngày phép chưa dùng của năm ${xemTruoc?.nam}.`}
             description="Hành động này không thể hoàn tác. Chỉ đóng quỹ khi chắc chắn năm đã kết thúc và không còn đơn nghỉ nào chờ duyệt cho năm đó."
           />
           <Table<DongXemTruocDong>

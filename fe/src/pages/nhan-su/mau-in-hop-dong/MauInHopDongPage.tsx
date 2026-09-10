@@ -23,7 +23,7 @@ import {
 } from "@/services/hopDongTemplateService";
 import { HOP_DONG_TOKEN_DOCS } from "../hop-dong-lao-dong/lib/hopDongTokens";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 /**
  * Quản lý mẫu in hợp đồng lao động — nhiều mẫu, mỗi mẫu một tên (Thử việc,
@@ -132,17 +132,13 @@ export function MauInHopDongPage() {
   };
 
   return (
-    <div className="space-y-3">
-      <div>
-        <Title level={4} className="!mb-0">
-          Mẫu in hợp đồng
-        </Title>
-        <Text type="secondary">
-          Mỗi loại hợp đồng một mẫu riêng — khi in bạn chọn mẫu cần dùng
-        </Text>
-      </div>
-
+    <Card>
       <Tabs
+        tabBarExtraContent={
+          <Text className="hidden text-[11px] text-[hsl(var(--ink-2))] sm:inline">
+            Mỗi loại hợp đồng một mẫu riêng — khi in bạn chọn mẫu cần dùng
+          </Text>
+        }
         items={[
           {
             key: "mau-in",
@@ -272,7 +268,7 @@ export function MauInHopDongPage() {
           },
         ]}
       />
-    </div>
+    </Card>
   );
 }
 

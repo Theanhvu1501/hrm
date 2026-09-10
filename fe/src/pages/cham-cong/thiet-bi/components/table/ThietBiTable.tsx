@@ -1,12 +1,14 @@
-import { Table, Button, Tag, Space, Tabs, Popconfirm, Tooltip } from "antd";
+import { Card, Button, Space, Tabs, Popconfirm, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useThietBiHandler, useThietBiState } from "../../ThietBiHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { EmployeeDevice } from "@/services/employeeDeviceService";
 import { ngayGioVN } from "@/ultils/thoiGianVN";
 import {
   TRANG_THAI_OPTIONS,
-  TRANG_THAI_TAG_COLOR,
+  TRANG_THAI_TONE,
   TAB_OPTIONS,
   labelFor,
   choPhepKichHoatLai,
@@ -59,10 +61,11 @@ export function ThietBiTable() {
       dataIndex: "trangThai",
       key: "trangThai",
       width: 130,
+      align: "center",
       render: (v: string) => (
-        <Tag color={TRANG_THAI_TAG_COLOR[v] || "default"}>
+        <StatusPill tone={TRANG_THAI_TONE[v] ?? "trung-tinh"}>
           {labelFor(TRANG_THAI_OPTIONS, v)}
-        </Tag>
+        </StatusPill>
       ),
     },
     // Cột này là dấu vết vì sao máy từng bị chặn — HR cần đọc TRƯỚC khi bấm
@@ -82,13 +85,17 @@ export function ThietBiTable() {
           } as ColumnsType<EmployeeDevice>[number],
         ]),
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "thaoTac",
-      width: 220,
+      width: 200,
+      align: "center",
+      fixed: "right",
+      // Nút chữ (không phải icon) — mỗi nút là một quyết định có hậu quả lên
+      // máy của nhân viên, đọc nhãn rõ hơn đoán icon.
       render: (_: unknown, r: EmployeeDevice) => {
         if (!canEdit) return null;
         return (
-          <Space>
+          <Space size="small">
             {r.trangThai === "cho_duyet" && (
               <>
                 <Popconfirm
@@ -159,29 +166,27 @@ export function ThietBiTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Thiết bị chấm công</h1>
-        <p className="text-muted-foreground">
-          Hàng đợi duyệt thiết bị — quyết định máy nào được phép chấm công cho từng nhân viên
-        </p>
-      </div>
-
+    <Card>
+      {/* Tab trạng thái chính là bộ lọc của trang — hàng đợi duyệt. */}
       <Tabs
         activeKey={tab}
         onChange={(k) => handler.executeEvent("doiTab", { trangThai: k })}
         items={TAB_OPTIONS.map((o) => ({ key: o.value, label: o.label }))}
       />
 
-      <Table<EmployeeDevice>
+      <BangDuLieu<EmployeeDevice>
         columns={columns}
         rowKey="id"
         loading={loading}
         dataSource={deviceList}
-        pagination={{ pageSize: 10 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        buTruDoc={300}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} thiết bị`,
+        }}
       />
-    </div>
+    </Card>
   );
 }

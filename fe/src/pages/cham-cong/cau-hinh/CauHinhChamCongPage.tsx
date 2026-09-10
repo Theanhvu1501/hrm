@@ -47,31 +47,26 @@ function CauHinhChamCongPageInner() {
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Cấu hình chấm công</h1>
-          <p className="text-muted-foreground">
-            Lịch làm việc trong tuần áp dụng cho toàn công ty
-          </p>
-        </div>
-        {canEdit && (
-          <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            loading={dangLuu}
-            disabled={!cauHinh}
-            onClick={handleLuu}
-          >
-            Lưu cấu hình
-          </Button>
-        )}
-      </div>
-
-      <Spin spinning={dangTai}>
+    <Spin spinning={dangTai}>
+      <Card
+        title="Lịch làm việc"
+        extra={
+          canEdit && (
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={dangLuu}
+              disabled={!cauHinh}
+              onClick={handleLuu}
+            >
+              Lưu cấu hình
+            </Button>
+          )
+        }
+      >
         {cauHinh ? (
-          <Card>
-            <label className="block mb-2 text-sm font-medium">
+          <>
+            <label className="mb-2 block text-[12px] font-medium">
               Ngày làm việc trong tuần
             </label>
             <Checkbox.Group
@@ -80,31 +75,27 @@ function CauHinhChamCongPageInner() {
               onChange={(v) => handleDoiLich(v as number[])}
               disabled={!canEdit}
             />
-            <div className="mt-3 text-xs text-gray-500">
-              Ngày không tích sẽ để trống trên bảng công (không tính công, không
-              chặn chốt), và không tính vào số ngày làm việc chuẩn của tháng khi
-              xét ngưỡng tích phép năm. Nhân viên có lịch khác thì khai riêng ở
-              hồ sơ — khai riêng luôn thắng lịch chung.
+            <div className="mt-3 text-[11px] text-[hsl(var(--ink-2))]">
+              Áp dụng cho toàn công ty. Ngày không tích sẽ để trống trên bảng
+              công (không tính công, không chặn chốt), và không tính vào số ngày
+              làm việc chuẩn của tháng khi xét ngưỡng tích phép năm. Nhân viên có
+              lịch khác thì khai riêng ở hồ sơ — khai riêng luôn thắng lịch chung.
             </div>
             {(cauHinh.ngayLamViecTrongTuan ?? []).length === 0 && (
               <Alert
                 type="warning"
                 showIcon
                 className="mt-3"
-                message="Chưa tích ngày nào"
+                title="Chưa tích ngày nào"
                 description="Bỏ trống hoàn toàn nghĩa là chưa cấu hình: hệ thống sẽ coi MỌI ngày đều là ngày làm việc, kể cả T7 và Chủ nhật. Đó thường không phải điều bạn muốn."
               />
             )}
-          </Card>
+          </>
         ) : (
-          !dangTai && (
-            <Card>
-              <Empty description="Không thể tải cấu hình chấm công" />
-            </Card>
-          )
+          !dangTai && <Empty description="Không thể tải cấu hình chấm công" />
         )}
-      </Spin>
-    </div>
+      </Card>
+    </Spin>
   );
 }
 

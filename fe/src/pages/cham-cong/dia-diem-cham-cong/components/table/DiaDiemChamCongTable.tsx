@@ -1,4 +1,5 @@
-import { Table, Tag, Button, Space, Popconfirm } from "antd";
+import { useMemo, useState } from "react";
+import { Card, Tag, Button, Space, Popconfirm, Tooltip } from "antd";
 import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -6,6 +7,8 @@ import {
   useDiaDiemChamCongState,
 } from "../../DiaDiemChamCongHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import { AttendanceLocation } from "@/services/attendanceLocationService";
 import { LOAI_DIA_DIEM_OPTIONS, labelFor } from "../../constants";
 import "./DiaDiemChamCongTable.state";
@@ -50,6 +53,15 @@ export function DiaDiemChamCongTable() {
     "/cham-cong/dia-diem"
   );
 
+  const [searchText, setSearchText] = useState("");
+
+  const rows = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return keyword
+      ? locationList.filter((item) => item.ten?.toLowerCase().includes(keyword))
+      : locationList;
+  }, [locationList, searchText]);
+
   const handleAdd = () => {
     handler.executeEvent("openForm", {});
   };
@@ -93,27 +105,35 @@ export function DiaDiemChamCongTable() {
         formatChiNhanhPhongBan(record),
     },
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "action",
-      width: 110,
+      width: 90,
       align: "center",
+      fixed: "right",
       render: (_: unknown, record: AttendanceLocation) => (
-        <Space>
+        <Space size="small">
           {canEdit && (
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
+            <Tooltip title="Sửa">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+                className="text-primary"
+              />
+            </Tooltip>
           )}
           {canDelete && (
             <Popconfirm
-              title="Bạn có chắc muốn xoá địa điểm này?"
+              title="Xác nhận xóa"
+              description="Bạn có chắc chắn muốn xóa địa điểm này?"
               onConfirm={() => handleDelete(record.id)}
-              okText="Xoá"
-              cancelText="Huỷ"
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Tooltip title="Xóa">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           )}
         </Space>
@@ -122,32 +142,35 @@ export function DiaDiemChamCongTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">
-            Địa điểm chấm công
-          </h1>
-          <p className="text-muted-foreground">
-            Quản lý các địa điểm cho phép chấm công (GPS/Wifi/QR)
-          </p>
-        </div>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            Thêm địa điểm
-          </Button>
-        )}
-      </div>
+    <Card>
+      <FilterBar
+        search={{
+          value: searchText,
+          onChange: setSearchText,
+          placeholder: "Tìm theo tên địa điểm...",
+          width: 320,
+        }}
+        actions={
+          canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              Thêm địa điểm
+            </Button>
+          )
+        }
+      />
 
-      <Table<AttendanceLocation>
+      <BangDuLieu<AttendanceLocation>
         columns={columns}
-        dataSource={locationList}
+        dataSource={rows}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} địa điểm`,
+        }}
       />
-    </div>
+    </Card>
   );
 }

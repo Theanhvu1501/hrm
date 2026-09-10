@@ -66,13 +66,16 @@ afterEach(() => {
 });
 
 describe("Màn bản ghi chấm công", () => {
-  it("render được tiêu đề trang", async () => {
+  // Trang không còn khối tiêu đề to (tên trang đã có trên sidebar) — dấu hiệu
+  // "màn render được" chuyển sang thanh lọc + nút Nhập bù.
+  it("render được thanh lọc và nút Nhập bù", async () => {
     vi.spyOn(attendanceRecordService, "getList").mockResolvedValue([]);
     vi.spyOn(employeeService, "getList").mockResolvedValue([]);
 
     render(<BanGhiPage />);
 
-    expect(await screen.findByText("Bản ghi chấm công")).toBeTruthy();
+    expect(await screen.findByText("Chỉ hiện ngoài vùng")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Nhập bù/ })).toBeTruthy();
   });
 
   it("bản ghi tự chấm có toạ độ vẫn render", async () => {

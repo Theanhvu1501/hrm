@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Table, Tag, Button, Space, Popconfirm, Select, Tooltip } from "antd";
+import { Card, Button, Space, Popconfirm, Select, Tooltip } from "antd";
 import {
   EditOutlined,
   DeleteOutlined,
@@ -12,12 +12,15 @@ import {
   useThoiViecState,
 } from "../../ThoiViecHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
+import { StatusPill } from "@/components/ui/StatusPill";
 import { Resignation } from "@/services/resignationService";
 import { Employee } from "@/services/employeeService";
 import {
   LOAI_THOI_VIEC_OPTIONS,
   TRANG_THAI_OPTIONS,
-  TRANG_THAI_TAG_COLOR,
+  TRANG_THAI_TONE,
   labelFor,
 } from "../../constants";
 import "./ThoiViecTable.state";
@@ -129,33 +132,41 @@ export function ThoiViecTable() {
             }))}
           />
         ) : (
-          <Tag color={TRANG_THAI_TAG_COLOR[record.trangThai] || "default"}>
+          <StatusPill tone={TRANG_THAI_TONE[record.trangThai] ?? "trung-tinh"}>
             {labelFor(TRANG_THAI_OPTIONS, record.trangThai)}
-          </Tag>
+          </StatusPill>
         ),
     },
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "action",
-      width: 120,
+      width: 90,
       align: "center",
+      fixed: "right",
       render: (_: unknown, record: Resignation) => (
-        <Space>
+        <Space size="small">
           {canEdit && (
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
+            <Tooltip title="Sửa">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+                className="text-primary"
+              />
+            </Tooltip>
           )}
           {canDelete && (
             <Popconfirm
-              title="Bạn có chắc muốn xoá đơn thôi việc này?"
+              title="Xác nhận xóa"
+              description="Bạn có chắc chắn muốn xóa đơn thôi việc này?"
               onConfirm={() => handleDelete(record.id)}
-              okText="Xoá"
-              cancelText="Huỷ"
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Tooltip title="Xóa">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           )}
         </Space>
@@ -164,51 +175,51 @@ export function ThoiViecTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Thôi việc / Bàn giao</h1>
-          <p className="text-muted-foreground">
-            Quản lý đơn thôi việc và checklist bàn giao của nhân viên
-          </p>
-        </div>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            Tạo đơn thôi việc
-          </Button>
-        )}
-      </div>
+    <Card>
+      <FilterBar
+        filters={
+          <>
+            <Select
+              allowClear
+              showSearch
+              placeholder="Lọc theo nhân viên"
+              style={{ width: 240 }}
+              value={employeeFilter}
+              onChange={(value) => setEmployeeFilter(value)}
+              options={employeeOptions}
+              optionFilterProp="label"
+            />
+            <Select
+              allowClear
+              placeholder="Lọc theo trạng thái"
+              style={{ width: 200 }}
+              value={statusFilter}
+              onChange={(value) => setStatusFilter(value)}
+              options={TRANG_THAI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            />
+          </>
+        }
+        actions={
+          canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              Tạo đơn thôi việc
+            </Button>
+          )
+        }
+      />
 
-      <Space wrap>
-        <Select
-          allowClear
-          showSearch
-          placeholder="Lọc theo nhân viên"
-          style={{ width: 240 }}
-          value={employeeFilter}
-          onChange={(value) => setEmployeeFilter(value)}
-          options={employeeOptions}
-          optionFilterProp="label"
-        />
-        <Select
-          allowClear
-          placeholder="Lọc theo trạng thái"
-          style={{ width: 200 }}
-          value={statusFilter}
-          onChange={(value) => setStatusFilter(value)}
-          options={TRANG_THAI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        />
-      </Space>
-
-      <Table<Resignation>
+      <BangDuLieu<Resignation>
         columns={columns}
         dataSource={rows}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} đơn`,
+        }}
       />
-    </div>
+    </Card>
   );
 }

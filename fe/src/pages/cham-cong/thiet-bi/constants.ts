@@ -1,3 +1,5 @@
+import type { PillTone } from "@/components/ui/StatusPill";
+
 /**
  * Nhãn/màu trạng thái thiết bị chấm công, tách riêng khỏi component để test
  * không cần render React — cùng khuôn với
@@ -15,11 +17,11 @@ export const TRANG_THAI_OPTIONS = [
   { value: "thu_hoi", label: "Đã thu hồi" },
 ] as const;
 
-export const TRANG_THAI_TAG_COLOR: Record<string, string> = {
-  cho_duyet: "gold",
-  da_duyet: "green",
-  tu_choi: "red",
-  thu_hoi: "default",
+export const TRANG_THAI_TONE: Record<string, PillTone> = {
+  cho_duyet: "cho",
+  da_duyet: "ok",
+  tu_choi: "tu-choi",
+  thu_hoi: "trung-tinh",
 };
 
 /**

@@ -3,6 +3,7 @@ import { Button, Popover, Space, Tooltip } from "antd";
 import { KyHieuDef } from "@/services/timesheetService";
 import { moTaCanhBao } from "../../nhanCanhBao";
 import { laHrSua } from "../../nguonO";
+import { MAU_CUOI_TUAN, NEN_O_CANH_BAO, VIEN_O_HR_SUA } from "../../constants";
 
 interface DayCellProps {
   day: number;
@@ -36,12 +37,12 @@ export function DayCell({
   const cellStyle: React.CSSProperties = {
     minHeight: 24,
     fontWeight: kyHieu ? 600 : 400,
-    color: isWeekend ? "#cf1322" : undefined,
+    color: isWeekend ? MAU_CUOI_TUAN : undefined,
     cursor: disabled ? "default" : "pointer",
     // Viền xanh = người đã chạm vào ô này, máy sẽ không đụng nữa.
-    border: daLaHrSua ? "1px solid #1677ff" : "1px solid transparent",
+    border: daLaHrSua ? VIEN_O_HR_SUA : "1px solid transparent",
     // Nền vàng = có chuyện cần HR nhìn trước khi chốt.
-    background: coCanhBao ? "#fff7e6" : undefined,
+    background: coCanhBao ? NEN_O_CANH_BAO : undefined,
   };
 
   const boc = (noiDung: React.ReactNode) =>
@@ -92,7 +93,7 @@ export function DayCell({
         </Space>
       }
     >
-      {boc(<div style={cellStyle}>{kyHieu || <span style={{ color: "#bfbfbf" }}>·</span>}</div>)}
+      {boc(<div style={cellStyle}>{kyHieu || <span style={{ color: "hsl(var(--ink-3))" }}>·</span>}</div>)}
     </Popover>
   );
 }

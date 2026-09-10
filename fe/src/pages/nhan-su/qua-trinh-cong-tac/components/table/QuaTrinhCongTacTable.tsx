@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Table, Tag, Button, Space, Popconfirm, Select } from "antd";
+import { Card, Tag, Button, Space, Popconfirm, Select, Tooltip } from "antd";
 import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -7,6 +7,8 @@ import {
   useQuaTrinhCongTacState,
 } from "../../QuaTrinhCongTacHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import { EmploymentHistory } from "@/services/employmentHistoryService";
 import { Employee } from "@/services/employeeService";
 import {
@@ -139,27 +141,35 @@ export function QuaTrinhCongTacTable() {
       render: (value?: string) => value || "-",
     },
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "action",
-      width: 120,
+      width: 90,
       align: "center",
+      fixed: "right",
       render: (_: unknown, record: EmploymentHistory) => (
-        <Space>
+        <Space size="small">
           {canEdit && (
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
-            />
+            <Tooltip title="Sửa">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => handleEdit(record)}
+                className="text-primary"
+              />
+            </Tooltip>
           )}
           {canDelete && (
             <Popconfirm
-              title="Bạn có chắc muốn xoá quá trình công tác này?"
+              title="Xác nhận xóa"
+              description="Bạn có chắc chắn muốn xóa quá trình công tác này?"
               onConfirm={() => handleDelete(record.id)}
-              okText="Xoá"
-              cancelText="Huỷ"
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Tooltip title="Xóa">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           )}
         </Space>
@@ -168,51 +178,51 @@ export function QuaTrinhCongTacTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Quá trình công tác</h1>
-          <p className="text-muted-foreground">
-            Ghi nhận lịch sử thay đổi điều chuyển, tăng lương, bổ nhiệm, trạng thái của nhân viên
-          </p>
-        </div>
-        {canCreate && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            Ghi nhận thay đổi
-          </Button>
-        )}
-      </div>
+    <Card>
+      <FilterBar
+        filters={
+          <>
+            <Select
+              allowClear
+              showSearch
+              placeholder="Lọc theo nhân viên"
+              style={{ width: 240 }}
+              value={employeeFilter}
+              onChange={(value) => setEmployeeFilter(value)}
+              options={employeeOptions}
+              optionFilterProp="label"
+            />
+            <Select
+              allowClear
+              placeholder="Lọc theo loại thay đổi"
+              style={{ width: 200 }}
+              value={loaiThayDoiFilter}
+              onChange={(value) => setLoaiThayDoiFilter(value)}
+              options={LOAI_THAY_DOI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            />
+          </>
+        }
+        actions={
+          canCreate && (
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              Ghi nhận thay đổi
+            </Button>
+          )
+        }
+      />
 
-      <Space wrap>
-        <Select
-          allowClear
-          showSearch
-          placeholder="Lọc theo nhân viên"
-          style={{ width: 240 }}
-          value={employeeFilter}
-          onChange={(value) => setEmployeeFilter(value)}
-          options={employeeOptions}
-          optionFilterProp="label"
-        />
-        <Select
-          allowClear
-          placeholder="Lọc theo loại thay đổi"
-          style={{ width: 200 }}
-          value={loaiThayDoiFilter}
-          onChange={(value) => setLoaiThayDoiFilter(value)}
-          options={LOAI_THAY_DOI_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
-        />
-      </Space>
-
-      <Table<EmploymentHistory>
+      <BangDuLieu<EmploymentHistory>
         columns={columns}
         dataSource={rows}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} bản ghi`,
+        }}
       />
-    </div>
+    </Card>
   );
 }

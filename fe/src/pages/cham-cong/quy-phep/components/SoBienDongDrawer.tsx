@@ -32,7 +32,7 @@ export function SoBienDongDrawer() {
       width: 100,
       align: "right",
       render: (v: number) => (
-        <span className={v >= 0 ? "text-green-600" : "text-red-600"}>
+        <span className={v >= 0 ? "text-[hsl(var(--green))]" : "text-[hsl(var(--red))]"}>
           {v >= 0 ? `+${v}` : v}
         </span>
       ),

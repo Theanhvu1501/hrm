@@ -3,6 +3,7 @@ import React from "react";
 import { describe, it, expect, beforeAll } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { DayCell } from "./DayCell";
+import { VIEN_O_HR_SUA } from "../../constants";
 
 /**
  * Finding B (review wave 2): BE coi ô có ký hiệu nhưng THIẾU `nguon` là
@@ -57,10 +58,10 @@ function timODiv(container: HTMLElement, noiDung: string) {
   return within(container).getByText(noiDung).closest("div") as HTMLDivElement;
 }
 
-// jsdom chuẩn hoá "#1677ff" (mã màu cellStyle.border của DayCell) thành
-// dạng rgb() khi đọc lại qua style — so bằng dạng đã chuẩn hoá thay vì chuỗi
-// hex gốc.
-const VIEN_XANH = "1px solid rgb(22, 119, 255)";
+// Viền "HR sửa tay" giờ lấy từ token (`hsl(var(--blue))`) khai ở constants —
+// jsdom giữ nguyên chuỗi var() khi đọc lại qua style, nên so thẳng với hằng
+// số mà DayCell và chú giải cùng dùng.
+const VIEN_XANH = VIEN_O_HR_SUA;
 
 describe("DayCell — nguồn ô quyết định viền + nút Trả về tự động", () => {
   it("thiếu nguon nhưng CÓ ký hiệu → coi là hr_sua: viền xanh + nút Trả về tự động", () => {

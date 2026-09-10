@@ -1,8 +1,10 @@
-import { Table, Button, Tag, Space, Popconfirm, Select } from "antd";
+import { Card, Button, Tag, Space, Popconfirm, Select, Tooltip } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useNgayLeHandler, useNgayLeState } from "../../NgayLeHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
+import { FilterBar } from "@/components/common/FilterBar";
+import { BangDuLieu } from "@/components/table/BangDuLieu";
 import { Holiday } from "@/services/holidayService";
 import { homNayVN } from "@/ultils/thoiGianVN";
 import "./NgayLeTable.state";
@@ -45,29 +47,37 @@ export function NgayLeTable() {
     },
     { title: "Ghi chú", dataIndex: "moTa", key: "moTa" },
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "thaoTac",
-      width: 100,
+      width: 90,
       align: "center",
+      fixed: "right",
       render: (_: unknown, record: Holiday) => (
-        <Space>
+        <Space size="small">
           {canEdit && (
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handler.executeEvent("openForm", { record })}
-            />
+            <Tooltip title="Sửa">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => handler.executeEvent("openForm", { record })}
+                className="text-primary"
+              />
+            </Tooltip>
           )}
           {canDelete && (
             <Popconfirm
-              title="Xoá ngày lễ này?"
-              okText="Xoá"
-              cancelText="Huỷ"
+              title="Xác nhận xóa"
+              description="Bạn có chắc chắn muốn xóa ngày lễ này?"
+              okText="Xóa"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
               onConfirm={() =>
                 handler.executeEvent("removeHoliday", { id: record.id })
               }
             >
-              <Button type="text" danger icon={<DeleteOutlined />} />
+              <Tooltip title="Xóa">
+                <Button type="text" danger icon={<DeleteOutlined />} />
+              </Tooltip>
             </Popconfirm>
           )}
         </Space>
@@ -76,22 +86,18 @@ export function NgayLeTable() {
   ];
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Ngày nghỉ lễ</h1>
-          <p className="text-muted-foreground">
-            Quản lý danh mục ngày nghỉ lễ dùng cho chấm công
-          </p>
-        </div>
-        <Space>
+    <Card>
+      <FilterBar
+        filters={
           <Select
             value={nam}
             style={{ width: 120 }}
             options={DS_NAM.map((n) => ({ value: n, label: `Năm ${n}` }))}
             onChange={(v) => handler.executeEvent("doiNam", { nam: v })}
           />
-          {canCreate && (
+        }
+        actions={
+          canCreate && (
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -99,19 +105,22 @@ export function NgayLeTable() {
             >
               Thêm ngày lễ
             </Button>
-          )}
-        </Space>
-      </div>
+          )
+        }
+      />
 
-      <Table<Holiday>
+      <BangDuLieu<Holiday>
         columns={columns}
         dataSource={holidayList}
         rowKey="id"
         loading={loading}
-        pagination={{ pageSize: 10 }}
-        bordered
-        scroll={{ x: "max-content" }}
+        pagination={{
+          defaultPageSize: 50,
+          showSizeChanger: true,
+          pageSizeOptions: ["25", "50", "100", "200"],
+          showTotal: (total, range) => `${range[0]}-${range[1]} của ${total} ngày lễ`,
+        }}
       />
-    </div>
+    </Card>
   );
 }

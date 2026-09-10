@@ -1,3 +1,5 @@
+import type { PillTone } from "@/components/ui/StatusPill";
+
 export const LOAI_DON_OPTIONS = [
   { value: "giai_trinh", label: "Giải trình" },
   { value: "lam_them_gio", label: "Làm thêm giờ" },
@@ -41,10 +43,18 @@ export const TRANG_THAI_OPTIONS = [
   { value: "tu_choi", label: "Từ chối" },
 ] as const;
 
+// Vỏ nhân viên /toi (DanhSachDon) vẫn dùng Tag antd với bảng màu này.
 export const TRANG_THAI_TAG_COLOR: Record<string, string> = {
   cho_duyet: "gold",
   da_duyet: "green",
   tu_choi: "red",
+};
+
+// Khu quản trị dùng StatusPill.
+export const TRANG_THAI_TONE: Record<string, PillTone> = {
+  cho_duyet: "cho",
+  da_duyet: "ok",
+  tu_choi: "tu-choi",
 };
 
 export function labelFor(
