@@ -22,6 +22,7 @@ import { useTableTitleConfig } from '@/components/glossary/useTableTitleConfig';
 import { useFieldLabels } from '@/components/glossary/useFieldLabels';
 import { useTableColumnFilters } from '@/components/table/useTableColumnFilters';
 import type { ColumnsType } from 'antd/es/table';
+import { sapXepTheoNhan } from '@/lib/sapXep';
 
 
 const DEFAULT_PASSWORD = '123456';
@@ -341,11 +342,13 @@ const ThanhVienPage = () => {
                   (option?.label ?? '').toLowerCase().includes(input.toLowerCase()) ||
                   (option?.email ?? '').toLowerCase().includes(input.toLowerCase())
                 }
-                options={availableUsers.map((u) => ({
-                  value: u.id,
-                  label: u.hoTen,
-                  email: u.email,
-                }))}
+                options={sapXepTheoNhan(
+                  availableUsers.map((u) => ({
+                    value: u.id,
+                    label: u.hoTen,
+                    email: u.email,
+                  })),
+                )}
                 optionRender={(option) => (
                   <div className="flex flex-col">
                     <span>{option.data.label}</span>

@@ -52,52 +52,79 @@ function getAllState(
   };
 }
 
-function SectionRow({ mod }: { mod: PermissionModule }) {
-  return (
-    <tr>
-      <td
-        colSpan={7}
-        style={{
-          backgroundColor: "#f0f0f0",
-          fontWeight: 700,
-          padding: "10px 12px",
-          fontSize: 13,
-          letterSpacing: "0.5px",
-        }}
-      >
-        {mod.label}
-      </td>
-    </tr>
-  );
-}
+/**
+ * BA bậc nền của bảng, đậm dần từ dưới lên: hàng lá chẵn → hàng cha cấp 1 →
+ * hàng tiêu đề nhóm. Trước đây cả ba đều là `hsl(var(--muted))` nên tiêu đề
+ * nhóm có nền y hệt hàng lá chẵn và cấu trúc bảng phẳng ra.
+ *
+ * Chọn theo token để chạy được ở CẢ hai theme (bản tối vừa được tách bậc
+ * --card 17% / --muted 23% / --border 34%):
+ *   sáng: #E6E6EA → #F3F4F6 → #FAFAFB (trên card trắng)
+ *   tối:  #42526C → #29374C → #222F42 (trên card #1D283A)
+ * Chênh lệch giữa hai bậc liền kề: 1.13 / 1.05 (sáng), 1.52 / 1.12 (tối).
+ */
+const NEN_TIEU_DE_NHOM = "hsl(var(--border))";
+const NEN_HANG_CHA = "hsl(var(--muted))";
+const NEN_HANG_LA_CHAN = "hsl(var(--muted) / 0.45)";
 
-function ParentRow({
+const VIEN_DUOI = "1px solid hsl(var(--border))";
+
+/**
+ * Hàng gộp — dùng chung cho hàng TIÊU ĐỀ NHÓM (phân hệ, `isSection`) và hàng
+ * CHA (nhóm nhỏ trong Danh mục). Hai hàng chỉ khác nền, cỡ chữ và thụt lề; ô
+ * tick "cả nhóm" thì y hệt nhau, nên gộp thay vì nuôi hai cơ chế.
+ *
+ * Trước đây hàng tiêu đề nhóm là một ô `colSpan={7}` KHÔNG có ô tick. Hồi còn
+ * 3 nhóm kỹ thuật thì ít ai để ý; từ khi ma trận tách theo 12 phân hệ nghiệp
+ * vụ, 11 nhóm không tick cả nhóm được nghĩa là admin phải tick tay từng khoá.
+ *
+ * `togglePermission` đã sẵn sàng nhận khoá của một nhóm: nó tìm module theo
+ * khoá rồi gom mọi lá con (`collectLeafModules`) — không cần đường xử lý riêng.
+ */
+function NhomRow({
   mod,
   permissions,
   handler,
   depth,
+  laTieuDeNhom,
 }: {
   mod: PermissionModule;
   permissions: ModulePermission[];
   handler: ReturnType<typeof usePhanQuyenHandler>;
   depth: number;
+  laTieuDeNhom?: boolean;
 }) {
   const leafKeys = collectLeafModules([mod]);
   const allState = getAllState(permissions, leafKeys);
+  const nenHang = laTieuDeNhom
+    ? NEN_TIEU_DE_NHOM
+    : depth === 1
+      ? NEN_HANG_CHA
+      : undefined;
+  const vien = laTieuDeNhom ? undefined : VIEN_DUOI;
 
   return (
-    <tr style={{ backgroundColor: depth === 1 ? "#fafafa" : undefined }}>
+    <tr style={{ backgroundColor: nenHang }}>
       <td
-        style={{
-          padding: "8px 12px",
-          paddingLeft: 12 + depth * 20,
-          fontWeight: 600,
-          borderBottom: "1px solid #f0f0f0",
-        }}
+        style={
+          laTieuDeNhom
+            ? {
+                padding: "10px 12px",
+                fontWeight: 700,
+                fontSize: 13,
+                letterSpacing: "0.5px",
+              }
+            : {
+                padding: "8px 12px",
+                paddingLeft: 12 + depth * 20,
+                fontWeight: 600,
+                borderBottom: VIEN_DUOI,
+              }
+        }
       >
         {mod.label}
       </td>
-      <td style={{ textAlign: "center", borderBottom: "1px solid #f0f0f0" }}>
+      <td style={{ textAlign: "center", borderBottom: vien }}>
         <Checkbox
           checked={allState.checked}
           indeterminate={allState.indeterminate}
@@ -114,7 +141,7 @@ function ParentRow({
         return (
           <td
             key={action.key}
-            style={{ textAlign: "center", borderBottom: "1px solid #f0f0f0" }}
+            style={{ textAlign: "center", borderBottom: vien }}
           >
             <Checkbox
               checked={state.checked}
@@ -153,17 +180,17 @@ function LeafRow({
   const someChecked = PERMISSION_ACTIONS.some((a) => perm.actions[a.key]);
 
   return (
-    <tr style={{ backgroundColor: isEven ? "#fafbfc" : "#ffffff" }}>
+    <tr style={{ backgroundColor: isEven ? NEN_HANG_LA_CHAN : "hsl(var(--card))" }}>
       <td
         style={{
           padding: "8px 12px",
           paddingLeft: 12 + depth * 20,
-          borderBottom: "1px solid #f0f0f0",
+          borderBottom: "1px solid hsl(var(--border))",
         }}
       >
         {mod.label}
       </td>
-      <td style={{ textAlign: "center", borderBottom: "1px solid #f0f0f0" }}>
+      <td style={{ textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}>
         <Checkbox
           checked={allChecked}
           indeterminate={!allChecked && someChecked}
@@ -178,7 +205,7 @@ function LeafRow({
       {PERMISSION_ACTIONS.map((action) => (
         <td
           key={action.key}
-          style={{ textAlign: "center", borderBottom: "1px solid #f0f0f0" }}
+          style={{ textAlign: "center", borderBottom: "1px solid hsl(var(--border))" }}
         >
           <Checkbox
             checked={perm.actions[action.key]}
@@ -206,7 +233,16 @@ function renderModuleRows(
 
   for (const mod of modules) {
     if (mod.isSection) {
-      rows.push(<SectionRow key={`section-${mod.key}`} mod={mod} />);
+      rows.push(
+        <NhomRow
+          key={`section-${mod.key}`}
+          mod={mod}
+          permissions={permissions}
+          handler={handler}
+          depth={depth}
+          laTieuDeNhom
+        />
+      );
       if (mod.children) {
         rows.push(
           ...renderModuleRows(mod.children, permissions, handler, depth, counter)
@@ -214,7 +250,7 @@ function renderModuleRows(
       }
     } else if (mod.children) {
       rows.push(
-        <ParentRow
+        <NhomRow
           key={`parent-${mod.key}`}
           mod={mod}
           permissions={permissions}
@@ -277,14 +313,14 @@ export function PermissionMatrix() {
           }}
         >
           <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
-            <tr style={{ backgroundColor: "#fafafa" }}>
+            <tr style={{ backgroundColor: "hsl(var(--muted))" }}>
               <th
                 style={{
                   textAlign: "left",
                   padding: "12px",
-                  borderBottom: "2px solid #e8e8e8",
+                  borderBottom: "2px solid hsl(var(--border))",
                   fontWeight: 600,
-                  backgroundColor: "#fafafa",
+                  backgroundColor: "hsl(var(--muted))",
                 }}
               >
                 Module
@@ -293,11 +329,11 @@ export function PermissionMatrix() {
                 style={{
                   textAlign: "center",
                   padding: "12px 4px",
-                  borderBottom: "2px solid #e8e8e8",
+                  borderBottom: "2px solid hsl(var(--border))",
                   fontWeight: 600,
                   width: 50,
                   whiteSpace: "nowrap",
-                  backgroundColor: "#fafafa",
+                  backgroundColor: "hsl(var(--muted))",
                 }}
               >
                 Tất cả
@@ -308,11 +344,11 @@ export function PermissionMatrix() {
                   style={{
                     textAlign: "center",
                     padding: "12px 4px",
-                    borderBottom: "2px solid #e8e8e8",
+                    borderBottom: "2px solid hsl(var(--border))",
                     fontWeight: 600,
                     width: 50,
                     whiteSpace: "nowrap",
-                    backgroundColor: "#fafafa",
+                    backgroundColor: "hsl(var(--muted))",
                   }}
                 >
                   {action.label}
