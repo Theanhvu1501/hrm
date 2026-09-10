@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Space } from 'antd';
 import type { ColumnType } from 'antd/es/table';
 import { useAuth } from '@/contexts/AuthContext';
@@ -26,7 +26,17 @@ export function useTableTitleConfig<T>(pageKey: string, columns: ColumnType<T>[]
 
   // Cột "quản lý được" = có title chuỗi + key/dataIndex. Cột thao tác (không title/không
   // key) không vào danh sách chooser và LUÔN hiển thị.
-  const colTitles = useMemo(() => extractColTitles(columns), [columns]);
+  //
+  // Ổn định theo NỘI DUNG (key + tiêu đề), không theo danh tính mảng: trang nào
+  // cũng dựng `columns` mới mỗi lần render, nên memo theo `[columns]` làm mọi thứ
+  // phía sau — kể cả `settingsButton` — thành phần tử mới mỗi lần. Trang đẩy nút
+  // đó lên cha bằng setState trong useEffect (Vai trò, Quy chuẩn) sẽ lặp vô hạn:
+  // cha set state → bảng render lại → nút mới → effect chạy lại ("Maximum update
+  // depth exceeded").
+  const colTitlesMoi = extractColTitles(columns);
+  const chuKyCot = colTitlesMoi.map((c) => `${c.colKey}\u0000${c.def}`).join('\u0001');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const colTitles = useMemo(() => colTitlesMoi, [chuKyCot]);
   const eligibleKeys = useMemo(() => colTitles.map((c) => c.colKey), [colTitles]);
 
   const terms: TitleTermSpec[] = useMemo(
@@ -48,10 +58,13 @@ export function useTableTitleConfig<T>(pageKey: string, columns: ColumnType<T>[]
     () => (showAll ? eligibleKeys : eligibleKeys.filter((k) => visibleSet.has(k))),
     [showAll, eligibleKeys, visibleSet],
   );
-  const onVisibleChange = (keys: string[]) => {
-    setSavedKeys(keys);
-    saveVisibleKeys(pageKey, keys);
-  };
+  const onVisibleChange = useCallback(
+    (keys: string[]) => {
+      setSavedKeys(keys);
+      saveVisibleKeys(pageKey, keys);
+    },
+    [pageKey],
+  );
 
   // --- Đổi tên + lọc cột ---
   const mappedColumns = useMemo(() => {
@@ -88,17 +101,21 @@ export function useTableTitleConfig<T>(pageKey: string, columns: ColumnType<T>[]
     [colTitles, tenantG, linhVucG, pageKey],
   );
 
-  const settingsButton =
-    colTitles.length > 0 ? (
-      <Space size={4}>
-        <ColumnChooser
-          items={chooserItems}
-          visibleKeys={visibleKeys}
-          onChange={onVisibleChange}
-        />
-        {isSuperAdmin && <TableTitleSettings terms={terms} defaults={defaults} />}
-      </Space>
-    ) : null;
+  // Memo để nút giữ nguyên danh tính khi không có gì đổi — xem chú thích ở colTitles.
+  const settingsButton = useMemo(
+    () =>
+      colTitles.length > 0 ? (
+        <Space size={4}>
+          <ColumnChooser
+            items={chooserItems}
+            visibleKeys={visibleKeys}
+            onChange={onVisibleChange}
+          />
+          {isSuperAdmin && <TableTitleSettings terms={terms} defaults={defaults} />}
+        </Space>
+      ) : null,
+    [colTitles.length, chooserItems, visibleKeys, onVisibleChange, isSuperAdmin, terms, defaults],
+  );
 
   return { columns: mappedColumns, settingsButton };
 }

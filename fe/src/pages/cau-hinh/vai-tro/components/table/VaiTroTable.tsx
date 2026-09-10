@@ -1,7 +1,7 @@
 import { Table, Tag, Button, Space, Popconfirm } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { useEffect, useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { useVaiTroHandler, useVaiTroState } from "../../VaiTroHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
 import { VaiTroItem } from "./VaiTroTable.state";
@@ -10,10 +10,18 @@ import { useTableTitleConfig } from "@/components/glossary/useTableTitleConfig";
 import { useTableColumnFilters } from "@/components/table/useTableColumnFilters";
 
 interface VaiTroTableProps {
-  onSettingsButton?: (node: React.ReactNode) => void;
+  /**
+   * Vẽ phần đầu trang, nhận nút cài đặt cột của bảng.
+   *
+   * KHÔNG đẩy nút lên cha bằng setState trong useEffect: `settingsButton` là
+   * phần tử React tạo mới mỗi lần render, nên cha set state → bảng render lại
+   * → nút mới → effect chạy lại… lặp vô hạn ("Maximum update depth exceeded").
+   * Render-prop giữ nguyên bố cục (nút vẫn nằm ở header) mà không có state.
+   */
+  renderHeader?: (settingsButton: ReactNode) => ReactNode;
 }
 
-export function VaiTroTable({ onSettingsButton }: VaiTroTableProps) {
+export function VaiTroTable({ renderHeader }: VaiTroTableProps) {
   const handler = useVaiTroHandler();
   const [vaiTroList] = useVaiTroState("vaiTroList", [] as VaiTroItem[]);
   const [loading] = useVaiTroState("loading", false);
@@ -93,10 +101,6 @@ export function VaiTroTable({ onSettingsButton }: VaiTroTableProps) {
   // spread lại cột nên giữ nguyên filterDropdown + fixed do filterable gắn vào.
   const { columns: cfgColumns, settingsButton } = useTableTitleConfig<VaiTroItem>('cauHinh.vaiTro', columns);
 
-  useEffect(() => {
-    onSettingsButton?.(settingsButton);
-  }, [settingsButton, onSettingsButton]);
-
   const rows = useMemo(
     () =>
       vaiTroList.filter((r) =>
@@ -106,15 +110,18 @@ export function VaiTroTable({ onSettingsButton }: VaiTroTableProps) {
   );
 
   return (
-    <Table<VaiTroItem>
-      columns={cfgColumns}
-      dataSource={rows}
-      rowKey="id"
-      loading={loading}
-      pagination={{ pageSize: 10 }}
-      bordered
-      // Cột ghim (fixed) chỉ có tác dụng khi bảng cuộn ngang được → cần scroll.x.
-      scroll={{ x: hasPinned ? "max-content" : undefined }}
-    />
+    <>
+      {renderHeader?.(settingsButton)}
+      <Table<VaiTroItem>
+        columns={cfgColumns}
+        dataSource={rows}
+        rowKey="id"
+        loading={loading}
+        pagination={{ pageSize: 10 }}
+        bordered
+        // Cột ghim (fixed) chỉ có tác dụng khi bảng cuộn ngang được → cần scroll.x.
+        scroll={{ x: hasPinned ? "max-content" : undefined }}
+      />
+    </>
   );
 }
