@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Button, Input, Select, InputNumber, Row, Col } from "antd";
+import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
+import { OChonNgay } from "@/components/form/OChonNgay";
 import { Controller, useForm } from "react-hook-form";
 import {
   useHopDongLaoDongHandler,
@@ -52,21 +54,6 @@ function toFormValues(contract: LaborContract | null): HopDongLaoDongFormValues 
     trangThai: contract.trangThai || "du_thao",
     ghiChu: contract.ghiChu || "",
   };
-}
-
-function FieldLabel({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <label className="block mb-1 text-sm font-medium">
-      {children}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-  );
 }
 
 export function HopDongLaoDongForm() {
@@ -196,7 +183,7 @@ export function HopDongLaoDongForm() {
         </Button>,
       ]}
     >
-      <Row gutter={16}>
+      <Row gutter={12}>
         <Col span={24}>
           <FieldLabel required>Nhân viên</FieldLabel>
           <Controller
@@ -215,13 +202,9 @@ export function HopDongLaoDongForm() {
               />
             )}
           />
-          {errors.employeeId && (
-            <div className="text-red-500 text-xs mt-1">
-              {errors.employeeId.message}
-            </div>
-          )}
+          <FieldError>{errors.employeeId?.message}</FieldError>
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Loại hợp đồng</FieldLabel>
           <Controller
             name="loaiHopDong"
@@ -238,7 +221,7 @@ export function HopDongLaoDongForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Trạng thái</FieldLabel>
           <Controller
             name="trangThai"
@@ -255,35 +238,41 @@ export function HopDongLaoDongForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Ngày bắt đầu</FieldLabel>
           <Controller
             name="ngayBatDau"
             control={control}
             render={({ field }) => (
-              <Input {...field} type="date" className="w-full" />
+              <OChonNgay
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
+              />
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Ngày kết thúc</FieldLabel>
           <Controller
             name="ngayKetThuc"
             control={control}
             render={({ field }) => (
-              <Input
-                {...field}
-                type="date"
-                className="w-full"
+              <OChonNgay
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
                 disabled={isKhongXacDinh}
+                // Phải ghi rõ nhánh còn lại: truyền `undefined` sẽ đè mất
+                // placeholder "dd/mm/yyyy" mặc định của OChonNgay.
                 placeholder={
-                  isKhongXacDinh ? "Không xác định thời hạn" : undefined
+                  isKhongXacDinh ? "Không xác định thời hạn" : "dd/mm/yyyy"
                 }
               />
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Mức lương khai báo</FieldLabel>
           <Controller
             name="mucLuong"
@@ -302,12 +291,12 @@ export function HopDongLaoDongForm() {
           />
           {/* Nhãn "Mức lương" trống trơn chính là lý do trên production có
               hợp đồng in đúng lương thoả thuận. Nói thẳng đây là số nào. */}
-          <div className="mt-1 text-xs text-muted-foreground">
+          <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
             Số ghi trên hợp đồng và đăng ký BHXH — không phải lương thực nhận.
             Tự điền theo hồ sơ khi chọn nhân viên, sửa được nếu cần.
           </div>
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Phụ cấp</FieldLabel>
           <Controller
             name="phuCap"
@@ -325,7 +314,7 @@ export function HopDongLaoDongForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Hình thức trả lương</FieldLabel>
           <Controller
             name="hinhThucTraLuong"
@@ -342,7 +331,7 @@ export function HopDongLaoDongForm() {
             )}
           />
         </Col>
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Ghi chú</FieldLabel>
           <Controller
             name="ghiChu"

@@ -1,5 +1,7 @@
 import { useEffect } from "react";
-import { Modal, Button, Input, Select, DatePicker, TimePicker, Row, Col } from "antd";
+import { Modal, Button, Input, Select, TimePicker, Row, Col } from "antd";
+import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
+import { OChonNgay } from "@/components/form/OChonNgay";
 import { Controller, useForm } from "react-hook-form";
 import dayjs from "dayjs";
 import { useBanGhiHandler, useBanGhiState } from "../../BanGhiHandlerContext";
@@ -13,21 +15,6 @@ import {
   gioTuongLaiBiChan,
 } from "./nhapBuForm.convert";
 import "./NhapBuForm.state";
-
-function FieldLabel({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <label className="block mb-1 text-sm font-medium">
-      {children}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-  );
-}
 
 export function NhapBuForm() {
   const handler = useBanGhiHandler();
@@ -95,7 +82,7 @@ export function NhapBuForm() {
         </Button>,
       ]}
     >
-      <Row gutter={16}>
+      <Row gutter={12}>
         <Col span={24}>
           <FieldLabel required>Nhân viên</FieldLabel>
           <Controller
@@ -113,35 +100,30 @@ export function NhapBuForm() {
               />
             )}
           />
-          {errors.employeeId && (
-            <div className="text-red-500 text-xs mt-1">{errors.employeeId.message}</div>
-          )}
+          <FieldError>{errors.employeeId?.message}</FieldError>
         </Col>
 
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Ngày</FieldLabel>
           <Controller
             name="ngay"
             control={control}
             rules={{ required: "Vui lòng chọn ngày" }}
             render={({ field }) => (
-              <DatePicker
-                className="w-full"
-                format={DINH_DANG_NGAY}
-                value={field.value ? dayjs(field.value, DINH_DANG_NGAY) : null}
+              <OChonNgay
+                value={field.value}
+                onBlur={field.onBlur}
                 disabledDate={(current) => !!current && ngayTuongLaiBiChan(current)}
-                onChange={(date) =>
-                  field.onChange(date ? date.format(DINH_DANG_NGAY) : null)
-                }
+                // OChonNgay xoá trắng trả '' — đổi về null cho khớp kiểu
+                // `ngay: string | null` của form này.
+                onChange={(ngay) => field.onChange(ngay || null)}
               />
             )}
           />
-          {errors.ngay && (
-            <div className="text-red-500 text-xs mt-1">{errors.ngay.message}</div>
-          )}
+          <FieldError>{errors.ngay?.message}</FieldError>
         </Col>
 
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Giờ</FieldLabel>
           <Controller
             name="gio"
@@ -160,15 +142,13 @@ export function NhapBuForm() {
               />
             )}
           />
-          {errors.gio && (
-            <div className="text-red-500 text-xs mt-1">{errors.gio.message}</div>
-          )}
-          <div className="text-xs text-muted-foreground mt-1">
+          <FieldError>{errors.gio?.message}</FieldError>
+          <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
             Không thể nhập bù cho thời điểm ở tương lai.
           </div>
         </Col>
 
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel required>Vào hay ra</FieldLabel>
           <Controller
             name="loai"
@@ -186,7 +166,7 @@ export function NhapBuForm() {
           />
         </Col>
 
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Lý do nhập bù</FieldLabel>
           <Controller
             name="ghiChu"

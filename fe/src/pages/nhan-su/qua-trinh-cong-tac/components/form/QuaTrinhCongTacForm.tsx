@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from "react";
-import { Modal, Button, Input, Select, InputNumber, DatePicker, Row, Col } from "antd";
+import { Modal, Button, Input, Select, InputNumber, Row, Col } from "antd";
+import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
+import { OChonNgay } from "@/components/form/OChonNgay";
 import { Controller, useForm } from "react-hook-form";
-import dayjs from "dayjs";
 import {
   useQuaTrinhCongTacHandler,
   useQuaTrinhCongTacState,
@@ -50,21 +51,6 @@ function toFormValues(record: EmploymentHistory | null): QuaTrinhCongTacFormValu
     lyDo: record.lyDo || "",
     ghiChu: record.ghiChu || "",
   };
-}
-
-function FieldLabel({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <label className="block mb-1 text-sm font-medium">
-      {children}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-  );
 }
 
 export function QuaTrinhCongTacForm() {
@@ -176,7 +162,7 @@ export function QuaTrinhCongTacForm() {
         </Button>,
       ]}
     >
-      <Row gutter={16}>
+      <Row gutter={12}>
         <Col span={24}>
           <FieldLabel required>Nhân viên</FieldLabel>
           <Controller
@@ -195,16 +181,12 @@ export function QuaTrinhCongTacForm() {
               />
             )}
           />
-          {errors.employeeId && (
-            <div className="text-red-500 text-xs mt-1">
-              {errors.employeeId.message}
-            </div>
-          )}
+          <FieldError>{errors.employeeId?.message}</FieldError>
         </Col>
 
         {referenceInfo && (
           <Col span={24} className="mt-2">
-            <div className="rounded bg-muted/50 border border-border px-3 py-2 text-xs text-muted-foreground">
+            <div className="rounded bg-muted/50 border border-border px-3 py-2 text-[10.5px] text-[hsl(var(--ink-2))]">
               Hiện tại — Phòng ban: <strong>{referenceInfo.phongBan || "-"}</strong>{" "}
               &nbsp;|&nbsp; Chức danh: <strong>{referenceInfo.chucDanh || "-"}</strong>{" "}
               &nbsp;|&nbsp; Trạng thái:{" "}
@@ -213,7 +195,7 @@ export function QuaTrinhCongTacForm() {
           </Col>
         )}
 
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Loại thay đổi</FieldLabel>
           <Controller
             name="loaiThayDoi"
@@ -231,30 +213,23 @@ export function QuaTrinhCongTacForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Ngày hiệu lực</FieldLabel>
           <Controller
             name="ngayHieuLuc"
             control={control}
             rules={{ required: "Vui lòng chọn ngày hiệu lực" }}
             render={({ field }) => (
-              <DatePicker
-                className="w-full"
-                format="DD/MM/YYYY"
-                value={field.value ? dayjs(field.value) : null}
-                onChange={(date) =>
-                  field.onChange(date ? date.format("YYYY-MM-DD") : "")
-                }
+              <OChonNgay
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
               />
             )}
           />
-          {errors.ngayHieuLuc && (
-            <div className="text-red-500 text-xs mt-1">
-              {errors.ngayHieuLuc.message}
-            </div>
-          )}
+          <FieldError>{errors.ngayHieuLuc?.message}</FieldError>
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Phòng ban mới</FieldLabel>
           <Controller
             name="departmentIdMoi"
@@ -273,7 +248,7 @@ export function QuaTrinhCongTacForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Chức danh mới</FieldLabel>
           <Controller
             name="chucDanhMoi"
@@ -283,7 +258,7 @@ export function QuaTrinhCongTacForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Trạng thái mới</FieldLabel>
           <Controller
             name="trangThaiMoi"
@@ -302,7 +277,7 @@ export function QuaTrinhCongTacForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Mức lương mới</FieldLabel>
           <Controller
             name="mucLuongMoi"
@@ -320,7 +295,7 @@ export function QuaTrinhCongTacForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Số quyết định</FieldLabel>
           <Controller
             name="soQuyetDinh"
@@ -330,7 +305,7 @@ export function QuaTrinhCongTacForm() {
             )}
           />
         </Col>
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Lý do</FieldLabel>
           <Controller
             name="lyDo"
@@ -340,7 +315,7 @@ export function QuaTrinhCongTacForm() {
             )}
           />
         </Col>
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Ghi chú</FieldLabel>
           <Controller
             name="ghiChu"

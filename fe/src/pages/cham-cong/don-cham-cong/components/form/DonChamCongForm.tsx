@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Modal, Button, Input, Select, DatePicker, TimePicker, Row, Col } from "antd";
+import { Modal, Button, Input, Select, TimePicker, Row, Col } from "antd";
+import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
+import { OChonNgay } from "@/components/form/OChonNgay";
 import { Controller, useForm } from "react-hook-form";
 import dayjs from "dayjs";
 import {
@@ -30,22 +32,6 @@ import { layStatus } from "@/pages/cham-cong/cua-toi/trangThai";
 import "./DonChamCongForm.state";
 
 const TIME_FORMAT = "HH:mm";
-const DATE_FORMAT = "YYYY-MM-DD";
-
-function FieldLabel({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <label className="block mb-1 text-sm font-medium">
-      {children}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-  );
-}
 
 export function DonChamCongForm() {
   const handler = useDonChamCongHandler();
@@ -219,7 +205,7 @@ export function DonChamCongForm() {
         </Button>,
       ]}
     >
-      <Row gutter={16}>
+      <Row gutter={12}>
         <Col span={24}>
           <FieldLabel required>Nhân viên</FieldLabel>
           <Controller
@@ -237,13 +223,9 @@ export function DonChamCongForm() {
               />
             )}
           />
-          {errors.employeeId && (
-            <div className="text-red-500 text-xs mt-1">
-              {errors.employeeId.message}
-            </div>
-          )}
+          <FieldError>{errors.employeeId?.message}</FieldError>
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Loại đơn</FieldLabel>
           <Controller
             name="loaiDon"
@@ -260,29 +242,24 @@ export function DonChamCongForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>{co("denNgay") ? "Từ ngày" : "Ngày"}</FieldLabel>
           <Controller
             name="ngay"
             control={control}
             rules={{ required: "Vui lòng chọn ngày" }}
             render={({ field }) => (
-              <DatePicker
-                className="w-full"
-                format="DD/MM/YYYY"
-                value={field.value ? dayjs(field.value, DATE_FORMAT) : null}
-                onChange={(date) =>
-                  field.onChange(date ? date.format(DATE_FORMAT) : "")
-                }
+              <OChonNgay
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
               />
             )}
           />
-          {errors.ngay && (
-            <div className="text-red-500 text-xs mt-1">{errors.ngay.message}</div>
-          )}
+          <FieldError>{errors.ngay?.message}</FieldError>
         </Col>
         {co("denNgay") && (
-          <Col span={12} className="mt-3">
+          <Col span={12} className="mt-2">
             <FieldLabel>Đến ngày</FieldLabel>
             <Controller
               name="denNgay"
@@ -305,29 +282,22 @@ export function DonChamCongForm() {
                   "Đến ngày phải bằng hoặc sau ngày bắt đầu",
               }}
               render={({ field }) => (
-                <DatePicker
-                  className="w-full"
-                  format="DD/MM/YYYY"
+                <OChonNgay
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
                   placeholder="Để trống nếu nghỉ một ngày"
-                  value={field.value ? dayjs(field.value, DATE_FORMAT) : null}
-                  onChange={(date) =>
-                    field.onChange(date ? date.format(DATE_FORMAT) : "")
-                  }
                 />
               )}
             />
-            {errors.denNgay && (
-              <div className="text-red-500 text-xs mt-1">
-                {errors.denNgay.message}
-              </div>
-            )}
+            <FieldError>{errors.denNgay?.message}</FieldError>
           </Col>
         )}
         {/* Ngay dưới ô chọn ngày (Từ ngày/Đến ngày ở trên), TRƯỚC khi HR bấm
             Tạo/Cập nhật — cùng vị trí và cùng lý do như form nhân viên: số dư
             phải thấy được lúc còn đang chọn ngày. */}
         {laDonPhepNam && (
-          <Col span={24} className="mt-3">
+          <Col span={24} className="mt-2">
             <KhoiSoDuPhep
               danhSach={soDuPhepForm}
               homNay={homNayVN()}
@@ -337,7 +307,7 @@ export function DonChamCongForm() {
         )}
         {loaiDon === "nghi_bu" && (
           <>
-            <Col span={12} className="mt-3">
+            <Col span={12} className="mt-2">
               <FieldLabel required>Kiểu nghỉ</FieldLabel>
               <Controller
                 name="kieuNghi"
@@ -359,7 +329,7 @@ export function DonChamCongForm() {
                 quỹ. `employeeId` của NHÂN VIÊN ĐANG CHỌN — HR xem hộ số dư
                 của người khác, không phải số dư của chính HR. */}
             {employeeId && (
-              <Col span={24} className="mt-3">
+              <Col span={24} className="mt-2">
                 <SoDuQuyGioBanner
                   employeeId={employeeId}
                   onHetQuy={setHetQuyGio}
@@ -369,7 +339,7 @@ export function DonChamCongForm() {
           </>
         )}
         {co("buoi") && (
-          <Col span={12} className="mt-3">
+          <Col span={12} className="mt-2">
             <FieldLabel>Buổi</FieldLabel>
             <Controller
               name="buoi"
@@ -388,7 +358,7 @@ export function DonChamCongForm() {
           </Col>
         )}
         {co("loaiNghi") && (
-          <Col span={12} className="mt-3">
+          <Col span={12} className="mt-2">
             <FieldLabel required>Loại nghỉ</FieldLabel>
             <Controller
               name="loaiNghi"
@@ -410,16 +380,12 @@ export function DonChamCongForm() {
                 />
               )}
             />
-            {errors.loaiNghi && (
-              <div className="text-red-500 text-xs mt-1">
-                {errors.loaiNghi.message}
-              </div>
-            )}
+            <FieldError>{errors.loaiNghi?.message}</FieldError>
           </Col>
         )}
         {co("gioTu") && (
           <>
-            <Col span={12} className="mt-3">
+            <Col span={12} className="mt-2">
               <FieldLabel required={batBuocGio}>Giờ từ</FieldLabel>
               <Controller
                 name="gioTu"
@@ -446,13 +412,9 @@ export function DonChamCongForm() {
                   />
                 )}
               />
-              {errors.gioTu && (
-                <div className="text-red-500 text-xs mt-1">
-                  {errors.gioTu.message}
-                </div>
-              )}
+              <FieldError>{errors.gioTu?.message}</FieldError>
             </Col>
-            <Col span={12} className="mt-3">
+            <Col span={12} className="mt-2">
               <FieldLabel required={batBuocGio}>Giờ đến</FieldLabel>
               <Controller
                 name="gioDen"
@@ -472,15 +434,11 @@ export function DonChamCongForm() {
                   />
                 )}
               />
-              {errors.gioDen && (
-                <div className="text-red-500 text-xs mt-1">
-                  {errors.gioDen.message}
-                </div>
-              )}
+              <FieldError>{errors.gioDen?.message}</FieldError>
             </Col>
           </>
         )}
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Lý do</FieldLabel>
           <Controller
             name="lyDo"
@@ -490,7 +448,7 @@ export function DonChamCongForm() {
             )}
           />
         </Col>
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Minh chứng</FieldLabel>
           <Controller
             name="minhChung"
@@ -500,7 +458,7 @@ export function DonChamCongForm() {
             )}
           />
         </Col>
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Ghi chú</FieldLabel>
           <Controller
             name="ghiChu"

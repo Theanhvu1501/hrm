@@ -5,6 +5,7 @@ import {
   cauHinhLuongService,
   type CauHinhLuong,
 } from "@/services/cauHinhLuongService";
+import { FieldLabel } from "@/components/form/FieldLabel";
 import type { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
 import { dienGiaiThueVaBaoHiem } from "./luongTab.dienGiai";
 
@@ -33,11 +34,11 @@ function TieuDeNhom({
   mo?: string;
 }) {
   return (
-    <div className="mb-3 border-b border-border pb-1.5">
-      <div className="text-xs font-semibold uppercase tracking-wide">
-        {children}
-      </div>
-      {mo && <div className="mt-0.5 text-xs text-muted-foreground">{mo}</div>}
+    <div className="mb-2 border-b border-border pb-1.5">
+      <div className="text-[12.5px] font-bold">{children}</div>
+      {mo && (
+        <div className="mt-0.5 text-[10.5px] text-[hsl(var(--ink-2))]">{mo}</div>
+      )}
     </div>
   );
 }
@@ -55,9 +56,11 @@ function O({
 }) {
   return (
     <div>
-      <label className="block mb-1 text-sm font-medium">{nhan}</label>
+      <FieldLabel>{nhan}</FieldLabel>
       {children}
-      {goiY && <div className="mt-1 text-xs text-muted-foreground">{goiY}</div>}
+      {goiY && (
+        <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">{goiY}</div>
+      )}
     </div>
   );
 }
@@ -85,7 +88,7 @@ function CoTick({
           >
             {nhan}
           </Checkbox>
-          <div className="ml-6 text-xs text-muted-foreground">{mo}</div>
+          <div className="ml-6 text-[10.5px] text-[hsl(var(--ink-2))]">{mo}</div>
         </div>
       )}
     />
@@ -137,7 +140,7 @@ export function LuongTab() {
       <TieuDeNhom mo="Một kỳ lương sinh ra hai bảng từ hai con số này: mức khai báo để nộp thuế và bảo hiểm, lương thoả thuận là số nhân viên thực nhận.">
         Thu nhập
       </TieuDeNhom>
-      <Row gutter={[16, 16]}>
+      <Row gutter={[12, 8]}>
         <Col span={12}>
           <O nhan="Lương thoả thuận (₫/tháng)">
             <Controller
@@ -191,11 +194,11 @@ export function LuongTab() {
       </Row>
 
       {khoanRieng.length > 0 && (
-        <div className="mt-6">
+        <div className="mt-4">
           <TieuDeNhom mo="Để trống = ăn mức chung của công ty. Điền 0 = người này không có khoản đó.">
             Phụ cấp riêng của người này
           </TieuDeNhom>
-          <Row gutter={[16, 12]}>
+          <Row gutter={[12, 8]}>
             {khoanRieng.map((k) => (
               <Col span={12} key={k.ma}>
                 <O
@@ -227,9 +230,9 @@ export function LuongTab() {
         </div>
       )}
 
-      <div className="mt-6">
+      <div className="mt-4">
         <TieuDeNhom>Hợp đồng &amp; bảo hiểm</TieuDeNhom>
-        <Row gutter={[16, 12]}>
+        <Row gutter={[12, 8]}>
           <Col span={12}>
             <CoTick
               ten="dongBH"
@@ -263,28 +266,28 @@ export function LuongTab() {
         {/* Bốn ô tick trên cộng lại ra đúng MỘT cách tính, mà nhìn ô tick thì
             không thấy được — nhất là khi tick nhiều ô cùng lúc, cái nào thắng.
             Khối này nói thẳng kết quả, tỷ lệ lấy thật từ Cấu hình lương. */}
-        <div className="mt-4 border border-border bg-muted px-4 py-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <div className="mt-3 border border-border bg-muted px-3 py-2">
+          <div className="text-[10.5px] font-semibold uppercase tracking-wide text-[hsl(var(--ink-2))]">
             Kết quả áp dụng
           </div>
-          <dl className="mt-2 space-y-1.5 text-sm">
+          <dl className="mt-1.5 space-y-1 text-[11px]">
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-muted-foreground">Thuế TNCN</dt>
+              <dt className="w-24 shrink-0 text-[hsl(var(--ink-2))]">Thuế TNCN</dt>
               <dd>{dienGiai.thue}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-24 shrink-0 text-muted-foreground">Bảo hiểm</dt>
+              <dt className="w-24 shrink-0 text-[hsl(var(--ink-2))]">Bảo hiểm</dt>
               <dd>{dienGiai.baoHiem}</dd>
             </div>
           </dl>
         </div>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-4">
         <TieuDeNhom mo="Chỉ điền khi nhân viên này khác quy định chung. Ô để trống thì lấy theo Cấu hình lương.">
           Cấu hình riêng
         </TieuDeNhom>
-        <Row gutter={[16, 16]}>
+        <Row gutter={[12, 8]}>
           <Col span={12}>
             <O nhan="Công chuẩn (ngày/tháng)">
               <Controller

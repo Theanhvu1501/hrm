@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Modal, Button, Input, Select, Checkbox, DatePicker, Row, Col } from "antd";
+import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
 import { Controller, useForm } from "react-hook-form";
 import dayjs from "dayjs";
 import {
@@ -18,21 +19,6 @@ import {
 import "./NgayLeForm.state";
 
 const { RangePicker } = DatePicker;
-
-function FieldLabel({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <label className="block mb-1 text-sm font-medium">
-      {children}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-  );
-}
 
 export function NgayLeForm() {
   const handler = useNgayLeHandler();
@@ -92,7 +78,7 @@ export function NgayLeForm() {
         </Button>,
       ]}
     >
-      <Row gutter={16}>
+      <Row gutter={12}>
         <Col span={24}>
           <FieldLabel required>Tên ngày lễ</FieldLabel>
           <Controller
@@ -103,12 +89,10 @@ export function NgayLeForm() {
               <Input {...field} placeholder="Ví dụ: Tết Nguyên đán 2027" />
             )}
           />
-          {errors.ten && (
-            <div className="text-red-500 text-xs mt-1">{errors.ten.message}</div>
-          )}
+          <FieldError>{errors.ten?.message}</FieldError>
         </Col>
 
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel required>Khoảng ngày nghỉ</FieldLabel>
           <Controller
             name="khoang"
@@ -117,7 +101,9 @@ export function NgayLeForm() {
             render={({ field }) => (
               <RangePicker
                 className="w-full"
-                format={DINH_DANG_NGAY}
+                // Chỉ đổi cách HIỂN THỊ sang DD/MM/YYYY như OChonNgay; giá trị
+                // lưu vẫn đọc/ghi theo DINH_DANG_NGAY (YYYY-MM-DD) bên dưới.
+                format="DD/MM/YYYY"
                 value={
                   field.value
                     ? [
@@ -136,15 +122,13 @@ export function NgayLeForm() {
               />
             )}
           />
-          {errors.khoang && (
-            <div className="text-red-500 text-xs mt-1">{errors.khoang.message}</div>
-          )}
-          <div className="text-xs text-muted-foreground mt-1">
+          <FieldError>{errors.khoang?.message}</FieldError>
+          <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
             Nghỉ một ngày thì chọn cùng ngày cho cả hai đầu.
           </div>
         </Col>
 
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Loại</FieldLabel>
           <Controller
             name="loai"
@@ -161,7 +145,7 @@ export function NgayLeForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3 flex items-end">
+        <Col span={12} className="mt-2 flex items-end">
           <Controller
             name="huongLuong"
             control={control}
@@ -176,7 +160,7 @@ export function NgayLeForm() {
           />
         </Col>
 
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Ghi chú</FieldLabel>
           <Controller
             name="moTa"

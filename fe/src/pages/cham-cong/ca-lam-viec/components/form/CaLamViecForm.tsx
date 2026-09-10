@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Modal, Button, Input, Checkbox, InputNumber, TimePicker, Row, Col } from "antd";
+import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
 import { Controller, useForm } from "react-hook-form";
 import dayjs from "dayjs";
 import {
@@ -36,21 +37,6 @@ function toFormValues(shift: WorkShift | null): CaLamViecFormValues {
     soPhutLinhHoat: shift.soPhutLinhHoat,
     moTa: shift.moTa || "",
   };
-}
-
-function FieldLabel({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <label className="block mb-1 text-sm font-medium">
-      {children}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-  );
 }
 
 export function CaLamViecForm() {
@@ -125,7 +111,7 @@ export function CaLamViecForm() {
         </Button>,
       ]}
     >
-      <Row gutter={16}>
+      <Row gutter={12}>
         <Col span={24}>
           <FieldLabel required>Tên ca</FieldLabel>
           <Controller
@@ -136,11 +122,9 @@ export function CaLamViecForm() {
               <Input {...field} placeholder="Vd: Ca hành chính" />
             )}
           />
-          {errors.ten && (
-            <div className="text-red-500 text-xs mt-1">{errors.ten.message}</div>
-          )}
+          <FieldError>{errors.ten?.message}</FieldError>
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Giờ bắt đầu</FieldLabel>
           <Controller
             name="gioBatDau"
@@ -157,13 +141,9 @@ export function CaLamViecForm() {
               />
             )}
           />
-          {errors.gioBatDau && (
-            <div className="text-red-500 text-xs mt-1">
-              {errors.gioBatDau.message}
-            </div>
-          )}
+          <FieldError>{errors.gioBatDau?.message}</FieldError>
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Giờ kết thúc</FieldLabel>
           <Controller
             name="gioKetThuc"
@@ -180,16 +160,12 @@ export function CaLamViecForm() {
               />
             )}
           />
-          {errors.gioKetThuc && (
-            <div className="text-red-500 text-xs mt-1">
-              {errors.gioKetThuc.message}
-            </div>
-          )}
-          <div className="text-xs text-muted-foreground mt-1">
+          <FieldError>{errors.gioKetThuc?.message}</FieldError>
+          <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
             Giờ kết thúc ≤ giờ bắt đầu sẽ tự động tính là ca qua đêm.
           </div>
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Giờ nghỉ (từ)</FieldLabel>
           <Controller
             name="gioNghiTu"
@@ -207,7 +183,7 @@ export function CaLamViecForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Giờ nghỉ (đến)</FieldLabel>
           <Controller
             name="gioNghiDen"
@@ -225,7 +201,7 @@ export function CaLamViecForm() {
             )}
           />
         </Col>
-        <Col span={laLinhHoat ? 12 : 24} className="mt-3">
+        <Col span={laLinhHoat ? 12 : 24} className="mt-2">
           <Controller
             name="laLinhHoat"
             control={control}
@@ -240,7 +216,7 @@ export function CaLamViecForm() {
           />
         </Col>
         {laLinhHoat && (
-          <Col span={12} className="mt-3">
+          <Col span={12} className="mt-2">
             <FieldLabel>Số phút linh hoạt</FieldLabel>
             <Controller
               name="soPhutLinhHoat"
@@ -251,7 +227,7 @@ export function CaLamViecForm() {
             />
           </Col>
         )}
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Mô tả</FieldLabel>
           <Controller
             name="moTa"

@@ -4,16 +4,16 @@ import {
   Button,
   Input,
   Select,
-  DatePicker,
   Checkbox,
   Row,
   Col,
   Space,
   Divider,
 } from "antd";
+import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
+import { OChonNgay } from "@/components/form/OChonNgay";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
-import dayjs from "dayjs";
 import {
   useThoiViecHandler,
   useThoiViecState,
@@ -51,21 +51,6 @@ function toFormValues(record: Resignation | null): ThoiViecFormValues {
     soQuyetDinh: record.soQuyetDinh || "",
     ghiChu: record.ghiChu || "",
   };
-}
-
-function FieldLabel({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <label className="block mb-1 text-sm font-medium">
-      {children}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-  );
 }
 
 export function ThoiViecForm() {
@@ -148,7 +133,7 @@ export function ThoiViecForm() {
         </Button>,
       ]}
     >
-      <Row gutter={16}>
+      <Row gutter={12}>
         <Col span={24}>
           <FieldLabel required>Nhân viên</FieldLabel>
           <Controller
@@ -168,54 +153,40 @@ export function ThoiViecForm() {
               />
             )}
           />
-          {errors.employeeId && (
-            <div className="text-red-500 text-xs mt-1">
-              {errors.employeeId.message}
-            </div>
-          )}
+          <FieldError>{errors.employeeId?.message}</FieldError>
         </Col>
 
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Ngày nộp đơn</FieldLabel>
           <Controller
             name="ngayNopDon"
             control={control}
             rules={{ required: "Vui lòng chọn ngày nộp đơn" }}
             render={({ field }) => (
-              <DatePicker
-                className="w-full"
-                format="DD/MM/YYYY"
-                value={field.value ? dayjs(field.value) : null}
-                onChange={(date) =>
-                  field.onChange(date ? date.format("YYYY-MM-DD") : "")
-                }
+              <OChonNgay
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
               />
             )}
           />
-          {errors.ngayNopDon && (
-            <div className="text-red-500 text-xs mt-1">
-              {errors.ngayNopDon.message}
-            </div>
-          )}
+          <FieldError>{errors.ngayNopDon?.message}</FieldError>
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Ngày làm việc cuối</FieldLabel>
           <Controller
             name="ngayLamViecCuoi"
             control={control}
             render={({ field }) => (
-              <DatePicker
-                className="w-full"
-                format="DD/MM/YYYY"
-                value={field.value ? dayjs(field.value) : null}
-                onChange={(date) =>
-                  field.onChange(date ? date.format("YYYY-MM-DD") : "")
-                }
+              <OChonNgay
+                value={field.value}
+                onChange={field.onChange}
+                onBlur={field.onBlur}
               />
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Loại thôi việc</FieldLabel>
           <Controller
             name="loaiThoiViec"
@@ -232,7 +203,7 @@ export function ThoiViecForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Số quyết định</FieldLabel>
           <Controller
             name="soQuyetDinh"
@@ -242,7 +213,7 @@ export function ThoiViecForm() {
             )}
           />
         </Col>
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Lý do</FieldLabel>
           <Controller
             name="lyDo"
@@ -252,7 +223,7 @@ export function ThoiViecForm() {
             )}
           />
         </Col>
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Vi phạm (nếu có)</FieldLabel>
           <Controller
             name="viPham"
@@ -267,7 +238,7 @@ export function ThoiViecForm() {
           />
         </Col>
 
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <Divider titlePlacement="left">Checklist bàn giao</Divider>
           <Space direction="vertical" className="w-full" size="small">
             {checklistArray.fields.map((field, index) => (
@@ -315,7 +286,7 @@ export function ThoiViecForm() {
           </Space>
         </Col>
 
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Ghi chú</FieldLabel>
           <Controller
             name="ghiChu"

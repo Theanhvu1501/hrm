@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { Modal, Button, Input, Select, InputNumber, Row, Col } from "antd";
+import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
 import { Controller, useForm } from "react-hook-form";
 import {
   useDiaDiemChamCongHandler,
@@ -43,21 +44,6 @@ function toFormValues(
     chiNhanh: location.chiNhanh || "",
     phongBan: location.phongBan || "",
   };
-}
-
-function FieldLabel({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <label className="block mb-1 text-sm font-medium">
-      {children}
-      {required && <span className="text-red-500 ml-0.5">*</span>}
-    </label>
-  );
 }
 
 export function DiaDiemChamCongForm() {
@@ -134,7 +120,7 @@ export function DiaDiemChamCongForm() {
         </Button>,
       ]}
     >
-      <Row gutter={16}>
+      <Row gutter={12}>
         <Col span={24}>
           <FieldLabel required>Tên địa điểm</FieldLabel>
           <Controller
@@ -145,11 +131,9 @@ export function DiaDiemChamCongForm() {
               <Input {...field} placeholder="Vd: Văn phòng chính" />
             )}
           />
-          {errors.ten && (
-            <div className="text-red-500 text-xs mt-1">{errors.ten.message}</div>
-          )}
+          <FieldError>{errors.ten?.message}</FieldError>
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel required>Loại</FieldLabel>
           <Controller
             name="loai"
@@ -169,7 +153,7 @@ export function DiaDiemChamCongForm() {
 
         {loai === "gps" && (
           <>
-            <Col span={12} className="mt-3">
+            <Col span={12} className="mt-2">
               <FieldLabel required>Latitude</FieldLabel>
               <Controller
                 name="latitude"
@@ -179,13 +163,9 @@ export function DiaDiemChamCongForm() {
                   <InputNumber {...field} className="w-full" step={0.000001} />
                 )}
               />
-              {errors.latitude && (
-                <div className="text-red-500 text-xs mt-1">
-                  {errors.latitude.message}
-                </div>
-              )}
+              <FieldError>{errors.latitude?.message}</FieldError>
             </Col>
-            <Col span={12} className="mt-3">
+            <Col span={12} className="mt-2">
               <FieldLabel required>Longitude</FieldLabel>
               <Controller
                 name="longitude"
@@ -195,13 +175,9 @@ export function DiaDiemChamCongForm() {
                   <InputNumber {...field} className="w-full" step={0.000001} />
                 )}
               />
-              {errors.longitude && (
-                <div className="text-red-500 text-xs mt-1">
-                  {errors.longitude.message}
-                </div>
-              )}
+              <FieldError>{errors.longitude?.message}</FieldError>
             </Col>
-            <Col span={12} className="mt-3">
+            <Col span={12} className="mt-2">
               <FieldLabel required>Bán kính (m)</FieldLabel>
               <Controller
                 name="banKinh"
@@ -211,17 +187,13 @@ export function DiaDiemChamCongForm() {
                   <InputNumber {...field} className="w-full" min={0} />
                 )}
               />
-              {errors.banKinh && (
-                <div className="text-red-500 text-xs mt-1">
-                  {errors.banKinh.message}
-                </div>
-              )}
+              <FieldError>{errors.banKinh?.message}</FieldError>
             </Col>
           </>
         )}
 
         {loai === "wifi" && (
-          <Col span={12} className="mt-3">
+          <Col span={12} className="mt-2">
             <FieldLabel required>IP Wifi</FieldLabel>
             <Controller
               name="ipWifi"
@@ -231,16 +203,12 @@ export function DiaDiemChamCongForm() {
                 <Input {...field} placeholder="Vd: 192.168.1.1" />
               )}
             />
-            {errors.ipWifi && (
-              <div className="text-red-500 text-xs mt-1">
-                {errors.ipWifi.message}
-              </div>
-            )}
+            <FieldError>{errors.ipWifi?.message}</FieldError>
           </Col>
         )}
 
         {loai === "qr" && (
-          <Col span={12} className="mt-3">
+          <Col span={12} className="mt-2">
             <FieldLabel required>Mã QR</FieldLabel>
             <Controller
               name="maQr"
@@ -250,15 +218,11 @@ export function DiaDiemChamCongForm() {
                 <Input {...field} placeholder="Nhập mã QR" />
               )}
             />
-            {errors.maQr && (
-              <div className="text-red-500 text-xs mt-1">
-                {errors.maQr.message}
-              </div>
-            )}
+            <FieldError>{errors.maQr?.message}</FieldError>
           </Col>
         )}
 
-        <Col span={24} className="mt-3">
+        <Col span={24} className="mt-2">
           <FieldLabel>Địa chỉ</FieldLabel>
           <Controller
             name="diaChi"
@@ -268,7 +232,7 @@ export function DiaDiemChamCongForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Chi nhánh</FieldLabel>
           <Controller
             name="chiNhanh"
@@ -278,7 +242,7 @@ export function DiaDiemChamCongForm() {
             )}
           />
         </Col>
-        <Col span={12} className="mt-3">
+        <Col span={12} className="mt-2">
           <FieldLabel>Phòng ban</FieldLabel>
           <Controller
             name="phongBan"

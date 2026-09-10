@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { Select, Checkbox, Alert } from "antd";
+import { FieldLabel } from "@/components/form/FieldLabel";
 import { workShiftService, WorkShift } from "@/services/workShiftService";
 import { nguoiDungService } from "@/services/nguoiDungService";
 import { cauHinhChamCongService } from "@/services/cauHinhChamCongService";
@@ -80,7 +81,7 @@ export function ChamCongTab() {
       />
 
       <div className="mb-3">
-        <label className="block mb-1 text-sm font-medium">Tài khoản đăng nhập</label>
+        <FieldLabel>Tài khoản đăng nhập</FieldLabel>
         <Controller
           name="userId"
           control={control}
@@ -97,7 +98,7 @@ export function ChamCongTab() {
             />
           )}
         />
-        <div className="mt-1 text-xs text-gray-500">
+        <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
           Bắt buộc để nhân viên tự chấm công và xem bảng công của mình. Hệ thống
           không tự khớp theo email — phải gán tay. Không gán tài khoản thì nhân
           viên không tự chấm công được.
@@ -105,7 +106,7 @@ export function ChamCongTab() {
       </div>
 
       <div className="mb-3">
-        <label className="block mb-1 text-sm font-medium">Ca làm việc</label>
+        <FieldLabel>Ca làm việc</FieldLabel>
         <Controller
           name="workShiftId"
           control={control}
@@ -120,16 +121,14 @@ export function ChamCongTab() {
             />
           )}
         />
-        <div className="mt-1 text-xs text-gray-500">
+        <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
           Không gán ca thì vẫn chấm công được nhưng hệ thống không tính đi muộn
           / về sớm.
         </div>
       </div>
 
       <div className="mb-3">
-        <label className="block mb-1 text-sm font-medium">
-          Ngày làm việc trong tuần
-        </label>
+        <FieldLabel>Ngày làm việc trong tuần</FieldLabel>
         <Controller
           name="ngayLamViecTrongTuan"
           control={control}
@@ -141,7 +140,7 @@ export function ChamCongTab() {
             />
           )}
         />
-        <div className="mt-1 text-xs text-gray-500">
+        <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
           Bỏ trống = theo lịch chung của công ty
           {moTaLich(lichChung) ? ` (${moTaLich(lichChung)})` : ""}. Chỉ khai ở
           đây khi người này làm khác lịch chung.
@@ -158,7 +157,7 @@ export function ChamCongTab() {
             </Checkbox>
           )}
         />
-        <div className="mt-1 text-xs text-gray-500">
+        <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
           Mặc định nhân viên đứng ngoài bán kính địa điểm sẽ KHÔNG chấm công
           được. Bật ô này cho người làm thị trường, đi công trình hoặc làm tại
           nhà. Bản ghi của họ vẫn được đánh dấu "ngoài vùng" để HR đối chiếu.

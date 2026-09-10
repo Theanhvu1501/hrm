@@ -1,5 +1,7 @@
 import { Controller, useFormContext } from "react-hook-form";
 import { Input, Select, Row, Col } from "antd";
+import { FieldLabel } from "@/components/form/FieldLabel";
+import { OChonNgay } from "@/components/form/OChonNgay";
 import { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
 import { LOAI_HOP_DONG_OPTIONS, TRANG_THAI_OPTIONS } from "../../../constants";
 import { usePhongBanOptions } from "@/hooks/usePhongBanOptions";
@@ -9,9 +11,9 @@ export function CongViecTab() {
   const { options, loading } = usePhongBanOptions();
 
   return (
-    <Row gutter={16}>
+    <Row gutter={12}>
       <Col span={12}>
-        <label className="block mb-1 text-sm font-medium">Phòng ban</label>
+        <FieldLabel>Phòng ban</FieldLabel>
         <Controller
           name="departmentId"
           control={control}
@@ -30,41 +32,47 @@ export function CongViecTab() {
         />
       </Col>
       <Col span={12}>
-        <label className="block mb-1 text-sm font-medium">Chức danh</label>
+        <FieldLabel>Chức danh</FieldLabel>
         <Controller
           name="chucDanh"
           control={control}
           render={({ field }) => <Input {...field} placeholder="Nhập chức danh" />}
         />
       </Col>
-      <Col span={12} className="mt-3">
-        <label className="block mb-1 text-sm font-medium">Ngày vào làm</label>
+      <Col span={12} className="mt-2">
+        <FieldLabel>Ngày vào làm</FieldLabel>
         <Controller
           name="ngayVaoLam"
           control={control}
           render={({ field }) => (
-            <Input {...field} type="date" className="w-full" />
+            <OChonNgay
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+            />
           )}
         />
       </Col>
-      <Col span={12} className="mt-3">
-        <label className="block mb-1 text-sm font-medium">
-          Ngày lên chính thức
-        </label>
+      <Col span={12} className="mt-2">
+        <FieldLabel>Ngày lên chính thức</FieldLabel>
         <Controller
           name="ngayChinhThuc"
           control={control}
           render={({ field }) => (
-            <Input {...field} type="date" className="w-full" />
+            <OChonNgay
+              value={field.value}
+              onChange={field.onChange}
+              onBlur={field.onBlur}
+            />
           )}
         />
-        <div className="mt-1 text-xs text-gray-500">
+        <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
           Để trống = đang thử việc: chưa có quỹ phép năm. Số ngày phép vẫn
           tính từ Ngày vào làm.
         </div>
       </Col>
-      <Col span={12} className="mt-3">
-        <label className="block mb-1 text-sm font-medium">Loại hợp đồng</label>
+      <Col span={12} className="mt-2">
+        <FieldLabel>Loại hợp đồng</FieldLabel>
         <Controller
           name="loaiHopDong"
           control={control}
@@ -80,8 +88,8 @@ export function CongViecTab() {
           )}
         />
       </Col>
-      <Col span={12} className="mt-3">
-        <label className="block mb-1 text-sm font-medium">Trạng thái</label>
+      <Col span={12} className="mt-2">
+        <FieldLabel>Trạng thái</FieldLabel>
         <Controller
           name="trangThai"
           control={control}

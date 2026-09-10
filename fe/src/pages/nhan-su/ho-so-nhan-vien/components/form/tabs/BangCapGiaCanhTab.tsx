@@ -1,6 +1,7 @@
 import { Controller, useFieldArray, useFormContext } from "react-hook-form";
 import { Button, Divider, Input, Space } from "antd";
 import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { OChonNgay } from "@/components/form/OChonNgay";
 import { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
 
 export function BangCapGiaCanhTab() {
@@ -74,7 +75,15 @@ export function BangCapGiaCanhTab() {
               name={`nguoiPhuThuoc.${index}.ngaySinh`}
               control={control}
               render={({ field: f }) => (
-                <Input {...f} type="date" style={{ width: 160 }} />
+                <OChonNgay
+                  value={f.value}
+                  onChange={f.onChange}
+                  onBlur={f.onBlur}
+                  // Hàng này không có nhãn, các ô bên cạnh dùng placeholder
+                  // làm nhãn — ô ngày cũng vậy cho khỏi lạc giữa hàng.
+                  placeholder="Ngày sinh"
+                  style={{ width: 160 }}
+                />
               )}
             />
             <Controller
