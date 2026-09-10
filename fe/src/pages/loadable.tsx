@@ -7,6 +7,11 @@ const PageLoader = () => (
   </div>
 );
 
+// Trang chủ tổng quan (khu quản trị)
+export const TrangChuPage = loadable(() => import('./trang-chu/TrangChuPage'), {
+  fallback: <PageLoader />
+});
+
 // Auth
 export const LoginPage = loadable(() => import('./auth/LoginPage'), {
   fallback: <PageLoader />

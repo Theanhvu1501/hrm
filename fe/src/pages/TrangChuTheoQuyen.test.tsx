@@ -9,13 +9,16 @@ const mockAuth = vi.fn();
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => mockAuth(),
 }));
+// Trang tổng quan gọi API — ở đây chỉ kiểm việc CHỌN ĐÍCH nên thay bằng bản giả.
+vi.mock('./loadable', () => ({
+  TrangChuPage: () => <div>TRANG CHU TONG QUAN</div>,
+}));
 
 function ve() {
   return render(
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route path="/" element={<TrangChuTheoQuyen />} />
-        <Route path="/cau-hinh/vai-tro" element={<div>KHU QUAN TRI</div>} />
         <Route path="/toi/cham-cong" element={<div>MAN CHAM CONG</div>} />
       </Routes>
     </MemoryRouter>
@@ -25,13 +28,13 @@ function ve() {
 describe('TrangChuTheoQuyen', () => {
   beforeEach(() => mockAuth.mockReset());
 
-  it('có quyền quản trị → vào khu quản trị', () => {
+  it('có quyền quản trị → thấy trang chủ tổng quan', () => {
     mockAuth.mockReturnValue({
       user: { isSuperAdmin: false },
       hasPermission: (q: string) => q === '/cau-hinh/vai-tro:xem',
     });
     ve();
-    expect(screen.getByText('KHU QUAN TRI')).toBeTruthy();
+    expect(screen.getByText('TRANG CHU TONG QUAN')).toBeTruthy();
   });
 
   /**
@@ -48,12 +51,12 @@ describe('TrangChuTheoQuyen', () => {
     expect(screen.getByText('MAN CHAM CONG')).toBeTruthy();
   });
 
-  it('superadmin → vào khu quản trị kể cả khi danh sách quyền rỗng', () => {
+  it('superadmin → thấy trang chủ tổng quan kể cả khi danh sách quyền rỗng', () => {
     mockAuth.mockReturnValue({
       user: { isSuperAdmin: true },
       hasPermission: () => false,
     });
     ve();
-    expect(screen.getByText('KHU QUAN TRI')).toBeTruthy();
+    expect(screen.getByText('TRANG CHU TONG QUAN')).toBeTruthy();
   });
 });
