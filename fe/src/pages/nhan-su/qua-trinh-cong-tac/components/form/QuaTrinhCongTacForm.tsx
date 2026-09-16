@@ -1,5 +1,15 @@
-import { useEffect, useMemo } from "react";
-import { Modal, Button, Input, Select, InputNumber, Row, Col } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Modal,
+  Button,
+  Input,
+  Select,
+  InputNumber,
+  Row,
+  Col,
+  AutoComplete,
+  Divider,
+} from "antd";
 import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
 import { OChonNgay } from "@/components/form/OChonNgay";
 import { Controller, useForm } from "react-hook-form";
@@ -19,6 +29,13 @@ import {
 } from "../../constants";
 import { QuaTrinhCongTacFormValues } from "./QuaTrinhCongTacForm.state";
 import { usePhongBanOptions } from "@/hooks/usePhongBanOptions";
+import { useChucDanhOptions } from "@/hooks/useChucDanhOptions";
+import { DinhKemO } from "@/components/form/DinhKemO";
+import { idNhap } from "@/services/dinhKemService";
+import {
+  cauHinhLuongService,
+  type CauHinhLuong,
+} from "@/services/cauHinhLuongService";
 import "./QuaTrinhCongTacForm.state";
 
 const DEFAULT_VALUES: QuaTrinhCongTacFormValues = {
@@ -29,6 +46,7 @@ const DEFAULT_VALUES: QuaTrinhCongTacFormValues = {
   chucDanhMoi: "",
   trangThaiMoi: undefined,
   mucLuongMoi: undefined,
+  phuCapMoi: {},
   soQuyetDinh: "",
   lyDo: "",
   ghiChu: "",
@@ -47,6 +65,7 @@ function toFormValues(record: EmploymentHistory | null): QuaTrinhCongTacFormValu
     chucDanhMoi: record.chucDanhMoi || "",
     trangThaiMoi: record.trangThaiMoi || undefined,
     mucLuongMoi: record.mucLuongMoi,
+    phuCapMoi: record.phuCapMoi ?? {},
     soQuyetDinh: record.soQuyetDinh || "",
     lyDo: record.lyDo || "",
     ghiChu: record.ghiChu || "",
@@ -77,11 +96,34 @@ export function QuaTrinhCongTacForm() {
   const isEditing = !!editingHistory;
   const selectedEmployeeId = watch("employeeId");
 
+  const { options: chucDanhOptions } = useChucDanhOptions();
+
+  /**
+   * Chứng từ là BẮT BUỘC (yêu cầu d13) nhưng bản ghi chưa tồn tại lúc đính
+   * kèm — tệp bám id nháp, BE đếm theo id đó trước khi ghi rồi mới gán sang
+   * id thật. Sinh lại mỗi lần mở form: dùng lại id cũ là quyết định vừa nhập
+   * dở mang theo chứng từ của lần trước.
+   */
+  const [idNhapQt, setIdNhapQt] = useState("");
+
+  const [cauHinh, setCauHinh] = useState<CauHinhLuong | null>(null);
+  useEffect(() => {
+    cauHinhLuongService
+      .get()
+      .then(setCauHinh)
+      .catch(() => setCauHinh(null));
+  }, []);
+  /** Khoản được đặt riêng theo người — cùng bộ với tab Lương của hồ sơ. */
+  const khoanRieng = (cauHinh?.khoanLuong ?? []).filter((k) => k.choPhepRieng);
+
   useEffect(() => {
     if (formVisible) {
       reset(toFormValues(editingHistory));
+      if (!editingHistory) setIdNhapQt(idNhap());
     }
   }, [formVisible, editingHistory, reset]);
+
+  const idDinhKem = editingHistory?.id ?? idNhapQt;
 
   const employeeOptions = useMemo(
     () =>
@@ -129,6 +171,13 @@ export function QuaTrinhCongTacForm() {
       chucDanhMoi: values.chucDanhMoi || undefined,
       trangThaiMoi: values.trangThaiMoi || undefined,
       mucLuongMoi: values.mucLuongMoi,
+      // Chỉ gửi khoản THỰC SỰ có số: gửi cả khoá rỗng là ghi đè mức riêng của
+      // người ta bằng `undefined` rồi rơi về mức chung công ty.
+      phuCapMoi: Object.fromEntries(
+        Object.entries(values.phuCapMoi ?? {}).filter(
+          ([, v]) => typeof v === "number",
+        ),
+      ) as Record<string, number>,
       soQuyetDinh: values.soQuyetDinh || undefined,
       lyDo: values.lyDo || undefined,
       ghiChu: values.ghiChu || undefined,
@@ -137,7 +186,7 @@ export function QuaTrinhCongTacForm() {
     if (isEditing && editingHistory) {
       handler.executeEvent("updateHistory", { id: editingHistory.id, dto });
     } else {
-      handler.executeEvent("createHistory", dto);
+      handler.executeEvent("createHistory", { ...dto, idNhap: idNhapQt });
     }
   };
 
@@ -254,29 +303,25 @@ export function QuaTrinhCongTacForm() {
             name="chucDanhMoi"
             control={control}
             render={({ field }) => (
-              <Input {...field} placeholder="Nhập chức danh mới (nếu có)" />
-            )}
-          />
-        </Col>
-        <Col span={12} className="mt-2">
-          <FieldLabel>Trạng thái mới</FieldLabel>
-          <Controller
-            name="trangThaiMoi"
-            control={control}
-            render={({ field }) => (
-              <Select
+              <AutoComplete
                 {...field}
-                allowClear
+                options={chucDanhOptions}
+                filterOption={(nhap, o) =>
+                  (o?.label ?? "")
+                    .toString()
+                    .toLowerCase()
+                    .includes(nhap.toLowerCase())
+                }
+                placeholder="Chọn theo sơ đồ tổ chức (nếu có)"
                 className="w-full"
-                placeholder="Chọn trạng thái mới (nếu có)"
-                options={TRANG_THAI_MOI_OPTIONS.map((o) => ({
-                  value: o.value,
-                  label: o.label,
-                }))}
               />
             )}
           />
         </Col>
+        {/* Ô "Trạng thái mới" đã bỏ (yêu cầu d13): đổi trạng thái sang đã
+            nghỉ là việc của màn Thôi việc, để cả hai nơi cùng sửa thì không
+            ai biết bên nào đúng. Màn Thôi việc tự ghi một dòng "Thôi việc"
+            vào chính bảng này khi duyệt. */}
         <Col span={12} className="mt-2">
           <FieldLabel>Mức lương mới</FieldLabel>
           <Controller
@@ -305,6 +350,59 @@ export function QuaTrinhCongTacForm() {
             )}
           />
         </Col>
+        {khoanRieng.length > 0 && (
+          <Col span={24}>
+            <Divider titlePlacement="left" className="!mb-2 !mt-3">
+              Phụ cấp / KPI mới
+            </Divider>
+            <div className="mb-2 text-[10.5px] text-[hsl(var(--ink-2))]">
+              Để trống = giữ nguyên mức đang áp dụng. Điền số = ghi đè mức
+              riêng của người này kể từ quyết định này.
+            </div>
+            <Row gutter={[12, 8]}>
+              {khoanRieng.map((k) => (
+                <Col span={12} key={k.ma}>
+                  <FieldLabel>{k.ten}</FieldLabel>
+                  <Controller
+                    name={`phuCapMoi.${k.ma}` as never}
+                    control={control}
+                    render={({ field }) => (
+                      <InputNumber
+                        {...field}
+                        value={(field.value as number | null | undefined) ?? null}
+                        className="w-full"
+                        min={0}
+                        placeholder="Giữ nguyên"
+                        formatter={(v) =>
+                          `${v ?? ""}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        }
+                        parser={(v) =>
+                          Number((v ?? "").replace(/,/g, "")) as unknown as number
+                        }
+                      />
+                    )}
+                  />
+                </Col>
+              ))}
+            </Row>
+          </Col>
+        )}
+
+        <Col span={24}>
+          <Divider titlePlacement="left" className="!mb-2 !mt-3">
+            Chứng từ
+          </Divider>
+          {/* Bắt buộc theo yêu cầu d13 — BE từ chối ghi nếu không có tệp nào. */}
+          <DinhKemO
+            nhan="Quyết định / chứng từ kèm theo (bắt buộc)"
+            doiTuong="qua_trinh_cong_tac"
+            doiTuongId={idDinhKem}
+            nhom="quyet_dinh"
+            nhieu
+            goiY="Quyết định bổ nhiệm, quyết định điều chuyển, biên bản thoả thuận…"
+          />
+        </Col>
+
         <Col span={24} className="mt-2">
           <FieldLabel>Lý do</FieldLabel>
           <Controller

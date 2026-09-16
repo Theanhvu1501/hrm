@@ -15,11 +15,16 @@ export interface EmploymentHistory {
   trangThaiMoi?: string;
   mucLuongCu?: number;
   mucLuongMoi?: number;
+  phuCapMoi?: PhuCapTheoKhoan;
+  phuCapCu?: PhuCapTheoKhoan;
   soQuyetDinh?: string;
   lyDo?: string;
   ghiChu?: string;
   isActive: boolean;
 }
+
+/** Mức riêng mới theo từng khoản lương, khoá là mã khoản. */
+export type PhuCapTheoKhoan = Record<string, number>;
 
 export interface EmploymentHistoryFilter {
   employeeId?: string;
@@ -38,6 +43,9 @@ export interface CreateEmploymentHistoryDto {
   chucDanhMoi?: string;
   trangThaiMoi?: string;
   mucLuongMoi?: number;
+  phuCapMoi?: PhuCapTheoKhoan;
+  /** Id nháp để BE kiểm chứng từ bắt buộc rồi gán tệp sang bản ghi thật. */
+  idNhap?: string;
   soQuyetDinh?: string;
   lyDo?: string;
   ghiChu?: string;
@@ -72,6 +80,15 @@ class EmploymentHistoryService extends ServiceBase {
     return this.transform(res);
   }
 
+  /**
+   * Phụ lục hợp đồng của một quyết định thay đổi (yêu cầu d13). BE dựng HTML
+   * từ ẢNH CHỤP trên bản ghi nên in lại quyết định cũ vẫn ra đúng số của thời
+   * điểm đó.
+   */
+  async phuLuc(id: string): Promise<{ html: string }> {
+    return this.get<{ html: string }>({ endpoint: `/${id}/phu-luc` });
+  }
+
   async remove(id: string): Promise<void> {
     await super.delete({ endpoint: `/${id}` });
   }
@@ -92,6 +109,8 @@ class EmploymentHistoryService extends ServiceBase {
       trangThaiMoi: x.trangThaiMoi as string | undefined,
       mucLuongCu: x.mucLuongCu as number | undefined,
       mucLuongMoi: x.mucLuongMoi as number | undefined,
+      phuCapMoi: x.phuCapMoi as PhuCapTheoKhoan | undefined,
+      phuCapCu: x.phuCapCu as PhuCapTheoKhoan | undefined,
       soQuyetDinh: x.soQuyetDinh as string | undefined,
       lyDo: x.lyDo as string | undefined,
       ghiChu: x.ghiChu as string | undefined,

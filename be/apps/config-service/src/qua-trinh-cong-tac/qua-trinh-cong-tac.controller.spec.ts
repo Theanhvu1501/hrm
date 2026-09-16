@@ -23,6 +23,9 @@ const proto = QuaTrinhCongTac_Controller.prototype as any;
 const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['findAll', RequestMethod.GET, '/nhan-su/qua-trinh-cong-tac:xem'],
   ['findOne', RequestMethod.GET, '/nhan-su/qua-trinh-cong-tac:xem'],
+  // In phụ lục hợp đồng = xuất văn bản → quyền `:xuat`, cùng tiền lệ với in
+  // hợp đồng lao động.
+  ['phuLuc', RequestMethod.GET, '/nhan-su/qua-trinh-cong-tac:xuat'],
   ['create', RequestMethod.POST, '/nhan-su/qua-trinh-cong-tac:them'],
   ['update', RequestMethod.PUT, '/nhan-su/qua-trinh-cong-tac:sua'],
   ['remove', RequestMethod.DELETE, '/nhan-su/qua-trinh-cong-tac:xoa'],

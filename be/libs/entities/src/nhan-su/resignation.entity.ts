@@ -20,6 +20,16 @@ export class Resignation extends BaseEntity {
   @Column({ default: 'cho_duyet' }) trangThai: string; // cho_duyet|da_duyet|hoan_thanh|tu_choi
   @Column({ nullable: true }) soQuyetDinh?: string;
   @Column({ nullable: true }) ghiChu?: string;
+  /**
+   * Vị trí này cần tuyển người thay (yêu cầu d14: "Phần phê duyệt thôi việc =>
+   * Chuyển sang phần Tạo Kế hoạch tuyển dụng thay thế").
+   *
+   * Phân hệ Tuyển dụng thuộc nhóm "Bổ sung sau" của bảng yêu cầu nên ở đây
+   * mới GHI NHẬN nhu cầu; khi có màn Kế hoạch tuyển dụng thì nó đọc đúng cờ
+   * này thay vì phải hỏi lại HR từng trường hợp một.
+   */
+  @Column({ default: false }) canTuyenThayThe: boolean;
+  @Column({ nullable: true }) ghiChuTuyenDung?: string;
   @Column({ default: true }) isActive: boolean;
   // Chụp lại Employee.trangThai NGAY TRƯỚC LÚC hồ sơ này lần đầu đẩy nhân
   // viên sang 'da_nghi' (tức lúc trangThai chuyển vào da_duyet/hoan_thanh).

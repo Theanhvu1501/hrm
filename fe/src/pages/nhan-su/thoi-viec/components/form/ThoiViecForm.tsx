@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Modal,
   Button,
@@ -21,11 +21,15 @@ import {
 import { Resignation } from "@/services/resignationService";
 import { Employee } from "@/services/employeeService";
 import { LOAI_THOI_VIEC_OPTIONS } from "../../constants";
+import { DinhKemO } from "@/components/form/DinhKemO";
+import { idNhap } from "@/services/dinhKemService";
 import { toCreateThoiViecDto } from "./thoiViecForm.convert";
 import { ThoiViecFormValues } from "./ThoiViecForm.state";
 import "./ThoiViecForm.state";
 
 const DEFAULT_VALUES: ThoiViecFormValues = {
+  canTuyenThayThe: false,
+  ghiChuTuyenDung: "",
   employeeId: "",
   ngayNopDon: "",
   ngayLamViecCuoi: "",
@@ -50,6 +54,8 @@ function toFormValues(record: Resignation | null): ThoiViecFormValues {
     checklistBanGiao: record.checklistBanGiao || [],
     soQuyetDinh: record.soQuyetDinh || "",
     ghiChu: record.ghiChu || "",
+    canTuyenThayThe: record.canTuyenThayThe ?? false,
+    ghiChuTuyenDung: record.ghiChuTuyenDung || "",
   };
 }
 
@@ -77,11 +83,17 @@ export function ThoiViecForm() {
 
   const isEditing = !!editingResignation;
 
+  /** Tệp đính kèm bám id nháp khi hồ sơ chưa lưu; BE gán lại sau khi tạo. */
+  const [idNhapTv, setIdNhapTv] = useState("");
+
   useEffect(() => {
     if (formVisible) {
       reset(toFormValues(editingResignation));
+      if (!editingResignation) setIdNhapTv(idNhap());
     }
   }, [formVisible, editingResignation, reset]);
+
+  const idDinhKem = editingResignation?.id ?? idNhapTv;
 
   const employeeOptions = useMemo(
     () =>
@@ -108,7 +120,7 @@ export function ThoiViecForm() {
     if (isEditing && editingResignation) {
       handler.executeEvent("updateResignation", { id: editingResignation.id, dto });
     } else {
-      handler.executeEvent("createResignation", dto);
+      handler.executeEvent("createResignation", { ...dto, idNhap: idNhapTv });
     }
   };
 
@@ -284,6 +296,76 @@ export function ThoiViecForm() {
               Thêm mục bàn giao
             </Button>
           </Space>
+        </Col>
+
+        <Col span={24}>
+          <Divider titlePlacement="left" className="!mb-2 !mt-3">
+            Hồ sơ đính kèm
+          </Divider>
+          {/* Yêu cầu d14. Biên bản bàn giao và thanh lý hợp đồng là ĐIỀU KIỆN
+              để chuyển hồ sơ sang "Hoàn thành" — BE chặn nếu thiếu. Đơn xin
+              nghỉ không bắt buộc vì thôi việc do hết hạn HĐ hoặc kỷ luật thì
+              không có đơn nào cả. */}
+          <div className="space-y-2.5">
+            <DinhKemO
+              nhan="Đơn xin nghỉ việc"
+              doiTuong="thoi_viec"
+              doiTuongId={idDinhKem}
+              nhom="don_xin_nghi"
+              nhieu
+            />
+            <DinhKemO
+              nhan="Biên bản bàn giao (bắt buộc khi hoàn thành)"
+              doiTuong="thoi_viec"
+              doiTuongId={idDinhKem}
+              nhom="ban_giao"
+              nhieu
+            />
+            <DinhKemO
+              nhan="Thanh lý hợp đồng (bắt buộc khi hoàn thành)"
+              doiTuong="thoi_viec"
+              doiTuongId={idDinhKem}
+              nhom="thanh_ly"
+              nhieu
+            />
+          </div>
+        </Col>
+
+        <Col span={24}>
+          <Divider titlePlacement="left" className="!mb-2 !mt-3">
+            Tuyển thay thế
+          </Divider>
+          <Controller
+            name="canTuyenThayThe"
+            control={control}
+            render={({ field }) => (
+              <div>
+                <Checkbox
+                  checked={!!field.value}
+                  onChange={(e) => field.onChange(e.target.checked)}
+                >
+                  Vị trí này cần tuyển người thay
+                </Checkbox>
+                <div className="ml-6 text-[10.5px] text-[hsl(var(--ink-2))]">
+                  Ghi nhận nhu cầu để phân hệ Tuyển dụng lập kế hoạch — chưa
+                  tạo kế hoạch ngay tại đây.
+                </div>
+              </div>
+            )}
+          />
+          <div className="mt-2">
+            <Controller
+              name="ghiChuTuyenDung"
+              control={control}
+              render={({ field }) => (
+                <Input.TextArea
+                  {...field}
+                  rows={2}
+                  placeholder="Yêu cầu tuyển thay thế: thời hạn, số lượng, yêu cầu chuyên môn…"
+                />
+              )}
+            />
+          </div>
         </Col>
 
         <Col span={24} className="mt-2">

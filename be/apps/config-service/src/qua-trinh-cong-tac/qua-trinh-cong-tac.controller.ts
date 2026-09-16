@@ -45,6 +45,20 @@ export class QuaTrinhCongTac_Controller {
     return { success: true, data };
   }
 
+  /**
+   * Phụ lục hợp đồng của một quyết định thay đổi (yêu cầu d13). Phải khai
+   * TRƯỚC `@Get(':id')` — Nest khớp theo thứ tự, để sau thì "phu-luc" bị nuốt
+   * thành một id.
+   *
+   * Quyền `:xuat` (xuất văn bản), cùng tiền lệ với in hợp đồng.
+   */
+  @Get(':id/phu-luc')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/qua-trinh-cong-tac:xuat')
+  async phuLuc(@Param('id') id: string) {
+    return { success: true, data: await this.quaTrinhCongTac_Service.phuLuc(id) };
+  }
+
   @Get(':id')
   @UseGuards(PermissionGuard)
   @Permissions('/nhan-su/qua-trinh-cong-tac:xem')

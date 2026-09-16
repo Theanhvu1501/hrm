@@ -2,7 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { ThoiViec_Service } from './thoi-viec.service';
-import { Resignation, Employee } from '@app/entities';
+import { DinhKem_Service } from '../dinh-kem/dinh-kem.service';
+import { Resignation, Employee, EmploymentHistory } from '@app/entities';
 
 describe('ThoiViec_Service', () => {
   let service: ThoiViec_Service;
@@ -17,6 +18,14 @@ describe('ThoiViec_Service', () => {
     findOne: jest.Mock;
     save: jest.Mock;
   };
+  /** Quá trình công tác sinh tự động khi thôi việc có hiệu lực. */
+  let mockQuaTrinhRepo: {
+    find: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+  };
+  /** Chứng từ bàn giao — mặc định trả ĐỦ để bài cũ không vướng. */
+  let mockDinhKem: { danhSach: jest.Mock; ganLai: jest.Mock };
 
   const EMP_ID = '507f1f77bcf86cd799439011';
   const RESIGNATION_ID = '507f1f77bcf86cd799439099';
@@ -134,6 +143,19 @@ describe('ThoiViec_Service', () => {
       save: jest.fn((v) => Promise.resolve(v)),
     };
 
+    mockQuaTrinhRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      create: jest.fn((v) => v),
+      save: jest.fn((v) => Promise.resolve({ ...v, _id: 'qt-1' })),
+    };
+
+    mockDinhKem = {
+      danhSach: jest
+        .fn()
+        .mockResolvedValue([{ nhom: 'ban_giao' }, { nhom: 'thanh_ly' }]),
+      ganLai: jest.fn().mockResolvedValue(1),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ThoiViec_Service,
@@ -142,6 +164,17 @@ describe('ThoiViec_Service', () => {
           useValue: mockResignationRepo,
         },
         { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
+        {
+          // Dòng Quá trình công tác sinh tự động khi thôi việc có hiệu lực.
+          provide: getRepositoryToken(EmploymentHistory),
+          useValue: mockQuaTrinhRepo,
+        },
+        {
+          // Chứng từ bàn giao — mặc định trả ĐỦ để các bài cũ kiểm đúng thứ
+          // chúng định kiểm; bài nào kiểm ràng buộc chứng từ thì tự đặt lại.
+          provide: DinhKem_Service,
+          useValue: mockDinhKem,
+        },
       ],
     }).compile();
 
@@ -1000,6 +1033,111 @@ describe('ThoiViec_Service', () => {
         expect(mockEmployeeRepo.save.mock.calls.length).toBe(soLanGhiNvTruoc);
         expect(kho.employeeDb().trangThai).toBe('da_nghi');
       });
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Yêu cầu d14: chứng từ bàn giao + dòng Quá trình công tác + tuyển thay thế
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('yêu cầu d14', () => {
+    function dungHoSo(over: Record<string, unknown> = {}) {
+      const hoSo: any = {
+        _id: RESIGNATION_ID,
+        id: RESIGNATION_ID,
+        employeeId: EMP_ID,
+        ngayNopDon: '2026-09-01',
+        ngayLamViecCuoi: '2026-09-30',
+        loaiThoiViec: 'tu_nguyen',
+        trangThai: 'da_duyet',
+        soQuyetDinh: 'QĐ-09',
+        ...over,
+      };
+      mockResignationRepo.findOne.mockResolvedValue(hoSo);
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Lan',
+        chucDanh: 'Nhân viên',
+        trangThai: 'dang_lam_viec',
+      });
+      return hoSo;
+    }
+
+    it('thiếu biên bản bàn giao / thanh lý thì KHÔNG cho chuyển sang Hoàn thành', async () => {
+      dungHoSo();
+      mockDinhKem.danhSach.mockResolvedValue([{ nhom: 'don_xin_nghi' }]);
+
+      await expect(
+        service.updateStatus(RESIGNATION_ID, 'hoan_thanh'),
+      ).rejects.toThrow(/Biên bản bàn giao/);
+    });
+
+    it('đủ chứng từ thì chuyển được', async () => {
+      dungHoSo();
+      mockDinhKem.danhSach.mockResolvedValue([
+        { nhom: 'ban_giao' },
+        { nhom: 'thanh_ly' },
+      ]);
+
+      const ra = await service.updateStatus(RESIGNATION_ID, 'hoan_thanh');
+      expect(ra.trangThai).toBe('hoan_thanh');
+    });
+
+    it('duyệt thôi việc thì tự ghi một dòng Quá trình công tác', async () => {
+      dungHoSo({ trangThai: 'cho_duyet' });
+
+      await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+
+      expect(mockQuaTrinhRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          loaiThayDoi: 'thoi_viec',
+          employeeId: EMP_ID,
+          ngayHieuLuc: '2026-09-30',
+          trangThaiMoi: 'da_nghi',
+          soQuyetDinh: 'QĐ-09',
+        }),
+      );
+    });
+
+    it('duyệt lại lần hai KHÔNG sinh dòng trùng', async () => {
+      dungHoSo({ trangThai: 'cho_duyet' });
+      mockQuaTrinhRepo.find.mockResolvedValue([{ _id: 'qt-cu' }]);
+
+      await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+
+      expect(mockQuaTrinhRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('ghi dòng quá trình hỏng thì KHÔNG chặn việc chốt thôi việc', async () => {
+      dungHoSo({ trangThai: 'cho_duyet' });
+      mockQuaTrinhRepo.save.mockRejectedValue(new Error('mongo lỗi'));
+      jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      const ra = await service.updateStatus(RESIGNATION_ID, 'da_duyet');
+      expect(ra.trangThai).toBe('da_duyet');
+    });
+
+    it('cờ cần tuyển thay thế được lưu khi tạo hồ sơ', async () => {
+      mockEmployeeRepo.findOne.mockResolvedValue({
+        _id: EMP_ID,
+        employeeId: 'NV0001',
+        hoTen: 'Lan',
+      });
+
+      await service.create({
+        employeeId: EMP_ID,
+        ngayNopDon: '2026-09-01',
+        loaiThoiViec: 'tu_nguyen',
+        canTuyenThayThe: true,
+        ghiChuTuyenDung: 'Cần tuyển gấp trong tháng 10',
+      } as any);
+
+      expect(mockResignationRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          canTuyenThayThe: true,
+          ghiChuTuyenDung: 'Cần tuyển gấp trong tháng 10',
+        }),
+      );
     });
   });
 });

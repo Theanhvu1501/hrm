@@ -1,8 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { EmploymentHistory, Employee } from '@app/entities';
+import { CauHinhLuong, EmploymentHistory, Employee } from '@app/entities';
 import { PhongBanService } from '../phong-ban/phong-ban.service';
+import { DinhKem_Service } from '../dinh-kem/dinh-kem.service';
+import { HopDong_Service } from '../hop-dong/hop-dong.service';
+import { renderPhuLucDeIn } from './lib/phuLucRender';
 import {
   CreateQuaTrinhCongTacDto,
   UpdateQuaTrinhCongTacDto,
@@ -24,6 +31,10 @@ export class QuaTrinhCongTac_Service {
     @InjectRepository(Employee)
     private readonly employeeRepo: Repository<Employee>,
     private readonly phongBanService: PhongBanService,
+    private readonly dinhKem_Service: DinhKem_Service,
+    private readonly hopDong_Service: HopDong_Service,
+    @InjectRepository(CauHinhLuong)
+    private readonly cauHinhLuongRepo: Repository<CauHinhLuong>,
   ) {}
 
   private async findEmployee(employeeId: string): Promise<Employee> {
@@ -60,6 +71,29 @@ export class QuaTrinhCongTac_Service {
     const phongBanCu = tenCua(emp.departmentId);
     const phongBanMoi = tenCua(dto.departmentIdMoi);
 
+    // Yêu cầu d13: "Số quyết định bổ nhiệm: cho up kèm chứng từ (bắt buộc)".
+    // Kiểm TRƯỚC khi ghi, theo id NHÁP mà tệp đang bám: ghi xong mới kiểm thì
+    // hoặc phải xoá bản ghi vừa tạo, hoặc để lại một quyết định không chứng từ
+    // đúng thứ ta vừa cấm.
+    //
+    // `thoi_viec` do màn Thôi việc tự sinh (chứng từ nằm ở hồ sơ thôi việc)
+    // nên không đòi ở đây.
+    if (dto.loaiThayDoi !== 'thoi_viec') {
+      const soTep = dto.idNhap
+        ? (
+            await this.dinhKem_Service.danhSach({
+              doiTuong: 'qua_trinh_cong_tac',
+              doiTuongId: dto.idNhap,
+            })
+          ).length
+        : 0;
+      if (soTep === 0) {
+        throw new BadRequestException(
+          'Phải đính kèm quyết định (hoặc chứng từ tương đương) trước khi lưu',
+        );
+      }
+    }
+
     // Snapshot the employee's CURRENT values before we mutate anything, so
     // the history record captures the true "before" state of this change.
     const entity = this.repo.create({
@@ -74,7 +108,10 @@ export class QuaTrinhCongTac_Service {
       chucDanhMoi: dto.chucDanhMoi,
       trangThaiCu: emp.trangThai,
       trangThaiMoi: dto.trangThaiMoi,
+      mucLuongCu: emp.luongThoaThuan,
       mucLuongMoi: dto.mucLuongMoi,
+      phuCapCu: emp.giaTriKhoan ?? undefined,
+      phuCapMoi: dto.phuCapMoi,
       soQuyetDinh: dto.soQuyetDinh,
       lyDo: dto.lyDo,
       ghiChu: dto.ghiChu,
@@ -83,13 +120,38 @@ export class QuaTrinhCongTac_Service {
 
     const saved = await this.repo.save(entity);
 
-    // Apply: only the fields actually present in the dto are written onto
-    // the employee record — everything else is left untouched. mucLuong is
-    // decision-info only (Employee has no salary field), so it is NEVER
-    // written back to the employee.
+    // Chuyển các tệp đang bám id nháp sang id thật. Lỗi ở bước này KHÔNG được
+    // làm hỏng việc ghi quyết định — quyết định đã lưu, tệp thì đính lại được.
+    if (dto.idNhap) {
+      await this.dinhKem_Service
+        .ganLai(
+          'qua_trinh_cong_tac',
+          dto.idNhap,
+          // `saved.id` là getter của BaseEntity; `_id` là đường dự phòng khi
+          // repo trả về đối tượng thuần (không qua TypeORM hydrate).
+          String(saved.id ?? (saved as { _id?: unknown })._id ?? ''),
+        )
+        .catch(() => undefined);
+    }
+
+    // Ghi thay đổi lên hồ sơ. Chỉ trường CÓ trong dto mới được ghi, còn lại
+    // giữ nguyên.
+    //
+    // Khác bản trước: LƯƠNG nay cũng được ghi (yêu cầu d13 cột G "khi thay đổi
+    // thì thông tin lương của NLĐ cần được thay đổi"). Trước đây mức lương mới
+    // chỉ nằm trên tờ quyết định, còn bảng lương tháng sau vẫn tính theo số
+    // cũ — đúng loại sai lặng lẽ mà không ai phát hiện cho tới kỳ trả lương.
     if (dto.departmentIdMoi) emp.departmentId = dto.departmentIdMoi;
     emp.chucDanh = dto.chucDanhMoi ?? emp.chucDanh;
     emp.trangThai = dto.trangThaiMoi ?? emp.trangThai;
+    if (typeof dto.mucLuongMoi === 'number') {
+      emp.luongThoaThuan = dto.mucLuongMoi;
+    }
+    if (dto.phuCapMoi && Object.keys(dto.phuCapMoi).length) {
+      // GỘP chứ không thay cả bảng: quyết định chỉ nói về vài khoản, các khoản
+      // riêng khác của người này không có lý do gì bị xoá theo.
+      emp.giaTriKhoan = { ...(emp.giaTriKhoan ?? {}), ...dto.phuCapMoi };
+    }
     await this.employeeRepo.save(emp);
 
     return saved;
@@ -149,6 +211,60 @@ export class QuaTrinhCongTac_Service {
     const item = await this.findOne(id);
     Object.assign(item, dto);
     return this.repo.save(item);
+  }
+
+  /**
+   * Phụ lục hợp đồng cho một quyết định thay đổi (yêu cầu d13).
+   *
+   * Dựng từ ẢNH CHỤP trên bản ghi (`mucLuongCu`, `phuCapCu`, `chucDanhCu`…)
+   * chứ không đọc hồ sơ hiện tại: in lại phụ lục của một quyết định từ năm
+   * ngoái phải ra đúng con số của năm ngoái, không phải mức lương hôm nay.
+   *
+   * `tenKhoan` lấy từ Cấu hình lương để in "Phụ cấp chức vụ" thay vì mã
+   * `PC_CHUC_VU`; thiếu cấu hình thì in mã, vẫn hơn là không in gì.
+   */
+  async phuLuc(id: string): Promise<{ html: string }> {
+    const td = await this.findOne(id);
+    const emp = await this.findEmployee(td.employeeId).catch(() => null);
+    const congTy = await this.hopDong_Service.getThongTinCongTy();
+
+    // Nhãn khoản lương: đọc thẳng cấu hình (chỉ ĐỌC). Chưa cấu hình thì bảng
+    // phụ lục in mã khoản — xấu nhưng vẫn đúng số, hơn là không in dòng nào.
+    const cauHinh = await this.cauHinhLuongRepo
+      .find({ where: { isActive: true } as any })
+      .catch(() => []);
+    const tenKhoan: Record<string, string> = Object.fromEntries(
+      (cauHinh[0]?.khoanLuong ?? []).map((k) => [k.ma, k.ten]),
+    );
+
+    return {
+      html: renderPhuLucDeIn({
+        thayDoi: {
+          soQuyetDinh: td.soQuyetDinh,
+          ngayHieuLuc: td.ngayHieuLuc,
+          loaiThayDoi: td.loaiThayDoi,
+          lyDo: td.lyDo,
+          phongBanCu: td.phongBanCu,
+          phongBanMoi: td.phongBanMoi,
+          chucDanhCu: td.chucDanhCu,
+          chucDanhMoi: td.chucDanhMoi,
+          mucLuongCu: td.mucLuongCu,
+          mucLuongMoi: td.mucLuongMoi,
+          phuCapCu: td.phuCapCu,
+          phuCapMoi: td.phuCapMoi,
+        },
+        nhanVien: {
+          hoTen: emp?.hoTen ?? td.employeeName,
+          ngaySinh: emp?.ngaySinh,
+          cccd: emp?.cccd,
+          ngayCapCccd: emp?.ngayCapCccd,
+          noiCapCccd: emp?.noiCapCccd,
+          diaChi: emp?.diaChi,
+        },
+        congTy,
+        tenKhoan,
+      }),
+    };
   }
 
   async remove(id: string): Promise<void> {

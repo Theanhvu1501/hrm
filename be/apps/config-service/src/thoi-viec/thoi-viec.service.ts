@@ -1,7 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Resignation, Employee } from '@app/entities';
+import { DinhKem_Service } from '../dinh-kem/dinh-kem.service';
+import { Resignation, Employee, EmploymentHistory } from '@app/entities';
 import { CreateThoiViecDto, UpdateThoiViecDto } from './dto';
 
 export interface ThoiViecFilter {
@@ -20,6 +25,9 @@ export class ThoiViec_Service {
     private readonly repo: Repository<Resignation>,
     @InjectRepository(Employee)
     private readonly employeeRepo: Repository<Employee>,
+    @InjectRepository(EmploymentHistory)
+    private readonly quaTrinhRepo: Repository<EmploymentHistory>,
+    private readonly dinhKem_Service: DinhKem_Service,
   ) {}
 
   private async findEmployee(employeeId: string): Promise<Employee> {
@@ -50,11 +58,28 @@ export class ThoiViec_Service {
       checklistBanGiao: dto.checklistBanGiao,
       soQuyetDinh: dto.soQuyetDinh,
       ghiChu: dto.ghiChu,
+      canTuyenThayThe: dto.canTuyenThayThe ?? false,
+      ghiChuTuyenDung: dto.ghiChuTuyenDung,
       trangThai: 'cho_duyet',
       isActive: true,
     } as Partial<Resignation>);
 
-    return this.repo.save(entity);
+    const daLuu = await this.repo.save(entity);
+
+    // Chuyển tệp (đơn xin nghỉ, biên bản bàn giao…) từ id nháp sang id thật.
+    // Lỗi ở đây KHÔNG được làm hỏng việc lưu hồ sơ — hồ sơ đã ghi, tệp đính
+    // lại được từ màn sửa.
+    if (dto.idNhap) {
+      await this.dinhKem_Service
+        .ganLai(
+          'thoi_viec',
+          dto.idNhap,
+          String(daLuu.id ?? (daLuu as { _id?: unknown })._id ?? ''),
+        )
+        .catch(() => undefined);
+    }
+
+    return daLuu;
   }
 
   /**
@@ -327,8 +352,77 @@ export class ThoiViec_Service {
    * hồ sơ CUỐI) thay vì suy luận gián tiếp — xem doc-comment
    * `vaChuyenTiepDangDoNeuCo()` cho lý giải đầy đủ.
    */
+  /**
+   * Hồ sơ chuyển sang HOÀN THÀNH thì phải có đủ chứng từ bàn giao (yêu cầu
+   * d14: "Thêm mục: Đính kèm Biên bản bàn giao; Thanh lý hợp đồng, Đơn xin
+   * nghỉ").
+   *
+   * Cố ý CHỈ đòi ở bước hoàn thành, không đòi lúc tạo hồ sơ: lúc NLĐ mới nộp
+   * đơn thì biên bản bàn giao và thanh lý hợp đồng chưa tồn tại. Đòi sớm là
+   * buộc HR đính một tệp giả để đi tiếp.
+   */
+  private async kiemChungTuBanGiao(item: Resignation): Promise<void> {
+    const tep = await this.dinhKem_Service.danhSach({
+      doiTuong: 'thoi_viec',
+      doiTuongId: String(item.id ?? (item as { _id?: unknown })._id ?? ''),
+    });
+    const co = (nhom: string) => tep.some((t) => t.nhom === nhom);
+    const thieu: string[] = [];
+    if (!co('ban_giao')) thieu.push('Biên bản bàn giao');
+    if (!co('thanh_ly')) thieu.push('Thanh lý hợp đồng');
+    if (thieu.length) {
+      throw new BadRequestException(
+        `Chưa đính kèm: ${thieu.join(', ')} — bổ sung rồi mới chuyển sang Hoàn thành.`,
+      );
+    }
+  }
+
+  /**
+   * Ghi một dòng vào Quá trình công tác khi thôi việc có hiệu lực (yêu cầu
+   * d13: gộp thôi việc vào dòng thời gian Loại thay đổi, thay vì để người
+   * dùng phải nhập tay lần thứ hai cùng một sự kiện).
+   *
+   * Idempotent theo `soQuyetDinh` + nhân viên + ngày: duyệt → huỷ duyệt →
+   * duyệt lại không được sinh ba dòng cho cùng một lần nghỉ.
+   */
+  private async ghiQuaTrinhThoiViec(
+    item: Resignation,
+    emp: Employee,
+  ): Promise<void> {
+    const ngayHieuLuc = item.ngayLamViecCuoi || item.ngayNopDon;
+    const daCo = await this.quaTrinhRepo.find({
+      where: {
+        employeeId: item.employeeId,
+        loaiThayDoi: 'thoi_viec',
+        ngayHieuLuc,
+        isActive: true,
+      } as any,
+    });
+    if (daCo.length) return;
+
+    await this.quaTrinhRepo.save(
+      this.quaTrinhRepo.create({
+        employeeId: item.employeeId,
+        employeeName: emp.hoTen,
+        employeeCode: emp.employeeId,
+        loaiThayDoi: 'thoi_viec',
+        ngayHieuLuc,
+        chucDanhCu: emp.chucDanh,
+        trangThaiCu: item.trangThaiNhanVienTruocKhiDuyet ?? emp.trangThai,
+        trangThaiMoi: 'da_nghi',
+        soQuyetDinh: item.soQuyetDinh,
+        lyDo: item.lyDo,
+        ghiChu: 'Tự ghi từ hồ sơ thôi việc',
+        isActive: true,
+      } as Partial<EmploymentHistory>),
+    );
+  }
+
   async updateStatus(id: string, trangThai: string): Promise<Resignation> {
     const item = await this.findOne(id);
+    if (trangThai === 'hoan_thanh') {
+      await this.kiemChungTuBanGiao(item);
+    }
     const dangHieuLucTruoc = this.coHieuLucNghiViec(item.trangThai);
     const seHieuLuc = this.coHieuLucNghiViec(trangThai);
 
@@ -369,6 +463,15 @@ export class ThoiViec_Service {
 
     emp.trangThai = seHieuLuc ? 'da_nghi' : this.trangThaiKhoiPhuc(item);
     await this.employeeRepo.save(emp);
+
+    if (seHieuLuc) {
+      // Dòng thời gian là thứ phụ: hỏng ở đây KHÔNG được chặn việc chốt thôi
+      // việc (hồ sơ nhân viên đã sang 'da_nghi' rồi). Ghi lại được bằng cách
+      // duyệt lại vì hàm này idempotent.
+      await this.ghiQuaTrinhThoiViec(item, emp).catch((e) =>
+        console.error('[thoi-viec] không ghi được quá trình công tác:', e),
+      );
+    }
 
     item.trangThai = trangThai;
     // Lần ghi hồ sơ CUỐI của quy trình duyệt/huỷ-duyệt này — tắt cờ dang dở

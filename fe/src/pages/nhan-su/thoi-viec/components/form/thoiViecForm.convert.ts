@@ -33,5 +33,10 @@ export function toCreateThoiViecDto(
         : undefined,
     soQuyetDinh: values.soQuyetDinh || undefined,
     ghiChu: values.ghiChu || undefined,
+    // `?? false` chứ không `|| undefined`: bỏ tick "cần tuyển thay thế" rồi
+    // lưu lại phải thực sự tắt cờ, mà `undefined` bị JSON.stringify loại khỏi
+    // body và BE (Object.assign) sẽ giữ nguyên giá trị cũ.
+    canTuyenThayThe: values.canTuyenThayThe ?? false,
+    ghiChuTuyenDung: values.ghiChuTuyenDung || "",
   };
 }

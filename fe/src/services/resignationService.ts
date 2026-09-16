@@ -19,6 +19,8 @@ export interface Resignation {
   trangThai: string; // cho_duyet|da_duyet|hoan_thanh|tu_choi
   soQuyetDinh?: string;
   ghiChu?: string;
+  canTuyenThayThe?: boolean;
+  ghiChuTuyenDung?: string;
   isActive: boolean;
 }
 
@@ -35,6 +37,11 @@ export interface ResignationFilter {
 // config-service bật `forbidNonWhitelisted` nên khoá lạ làm hỏng cả request
 // (400 trống trơn). Chiều đọc vẫn có hai trường — xem `Resignation` bên trên.
 export interface CreateResignationDto {
+  /** Cần tuyển người thay (yêu cầu d14) — ghi nhận để phân hệ Tuyển dụng dùng sau. */
+  canTuyenThayThe?: boolean;
+  ghiChuTuyenDung?: string;
+  /** Id nháp để BE gán tệp đính kèm sang hồ sơ vừa tạo. */
+  idNhap?: string;
   employeeId: string;
   ngayNopDon: string;
   ngayLamViecCuoi?: string;

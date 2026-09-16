@@ -1,6 +1,20 @@
 import { useMemo, useState } from "react";
-import { Card, Tag, Button, Space, Popconfirm, Select, Tooltip } from "antd";
-import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  Card,
+  Tag,
+  Button,
+  Space,
+  Popconfirm,
+  Select,
+  Tooltip,
+  message,
+} from "antd";
+import {
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  PrinterOutlined,
+} from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import {
   useQuaTrinhCongTacHandler,
@@ -9,10 +23,16 @@ import {
 import { usePagePermission } from "@/hooks/usePagePermission";
 import { FilterBar } from "@/components/common/FilterBar";
 import { BangDuLieu } from "@/components/table/BangDuLieu";
-import { EmploymentHistory } from "@/services/employmentHistoryService";
+import {
+  EmploymentHistory,
+  employmentHistoryService,
+} from "@/services/employmentHistoryService";
+import { printHtml } from "@/utils/printHtml";
+import { apiErrorMessage } from "@/config/api";
 import { Employee } from "@/services/employeeService";
 import {
   LOAI_THAY_DOI_OPTIONS,
+  LOAI_THAY_DOI_LABEL,
   TRANG_THAI_MOI_OPTIONS,
   LOAI_THAY_DOI_TAG_COLOR,
   labelFor,
@@ -54,7 +74,7 @@ export function QuaTrinhCongTacTable() {
   const [historyList] = useQuaTrinhCongTacState("historyList", [] as EmploymentHistory[]);
   const [employeeList] = useQuaTrinhCongTacState("employeeList", [] as Employee[]);
   const [loading] = useQuaTrinhCongTacState("loading", false);
-  const { canCreate, canEdit, canDelete } = usePagePermission(
+  const { canCreate, canEdit, canDelete, canExport } = usePagePermission(
     "/nhan-su/qua-trinh-cong-tac"
   );
 
@@ -63,6 +83,19 @@ export function QuaTrinhCongTacTable() {
 
   const handleAdd = () => {
     handler.executeEvent("openForm", {});
+  };
+
+  /**
+   * In phụ lục hợp đồng cho một quyết định (yêu cầu d13). Dùng chung cơ chế
+   * in (iframe sandbox) với hợp đồng và phiếu lương — không dựng bản thứ hai.
+   */
+  const inPhuLuc = async (record: EmploymentHistory) => {
+    try {
+      const { html } = await employmentHistoryService.phuLuc(record.id);
+      printHtml(html, `Phụ lục HĐ — ${record.employeeName ?? ""}`);
+    } catch (err) {
+      message.error(apiErrorMessage(err, "Không in được phụ lục"));
+    }
   };
 
   const handleEdit = (record: EmploymentHistory) => {
@@ -117,7 +150,9 @@ export function QuaTrinhCongTacTable() {
       align: "center",
       render: (value: string) => (
         <Tag color={LOAI_THAY_DOI_TAG_COLOR[value] || "default"}>
-          {labelFor(LOAI_THAY_DOI_OPTIONS, value)}
+          {/* Đọc từ bảng NHÃN, không từ danh sách chọn: bản ghi cũ mang
+              loại đã bỏ khỏi ô chọn vẫn phải hiện đúng chữ. */}
+          {LOAI_THAY_DOI_LABEL[value] ?? labelFor(LOAI_THAY_DOI_OPTIONS, value)}
         </Tag>
       ),
     },
@@ -143,11 +178,20 @@ export function QuaTrinhCongTacTable() {
     {
       title: "Thao tác",
       key: "action",
-      width: 90,
+      width: 120,
       align: "center",
       fixed: "right",
       render: (_: unknown, record: EmploymentHistory) => (
         <Space size="small">
+          {canExport && (
+            <Tooltip title="In phụ lục hợp đồng">
+              <Button
+                type="text"
+                icon={<PrinterOutlined />}
+                onClick={() => void inPhuLuc(record)}
+              />
+            </Tooltip>
+          )}
           {canEdit && (
             <Tooltip title="Sửa">
               <Button

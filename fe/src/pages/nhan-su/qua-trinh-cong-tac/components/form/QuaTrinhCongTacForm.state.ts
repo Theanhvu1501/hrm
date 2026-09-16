@@ -9,6 +9,8 @@ export interface QuaTrinhCongTacFormValues {
   chucDanhMoi?: string;
   trangThaiMoi?: string;
   mucLuongMoi?: number;
+  /** Mức riêng mới theo từng khoản lương; `null`/vắng = giữ nguyên. */
+  phuCapMoi?: Record<string, number | null>;
   soQuyetDinh?: string;
   lyDo?: string;
   ghiChu?: string;

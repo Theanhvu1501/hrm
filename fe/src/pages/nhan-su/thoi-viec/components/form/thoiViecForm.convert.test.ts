@@ -27,6 +27,11 @@ const KHOA_BE_CHAP_NHAN = [
   "checklistBanGiao",
   "soQuyetDinh",
   "ghiChu",
+  // Yêu cầu d14 — nhu cầu tuyển người thay, đã khai trong CreateThoiViecDto
+  // của BE. Thiếu ở danh sách này là bài test dưới đây báo đỏ, đúng ý đồ:
+  // mỗi khoá mới phải được đối chiếu với DTO của BE bằng tay.
+  "canTuyenThayThe",
+  "ghiChuTuyenDung",
 ];
 
 describe("toCreateThoiViecDto", () => {

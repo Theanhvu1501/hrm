@@ -16,6 +16,9 @@ export interface ThoiViecFormValues {
   checklistBanGiao: ChecklistBanGiaoFormItem[];
   soQuyetDinh?: string;
   ghiChu?: string;
+  /** Cần tuyển người thay cho vị trí này (yêu cầu d14). */
+  canTuyenThayThe?: boolean;
+  ghiChuTuyenDung?: string;
 }
 
 export interface FormStates extends BaseStates {

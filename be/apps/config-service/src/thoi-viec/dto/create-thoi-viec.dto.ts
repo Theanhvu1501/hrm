@@ -57,4 +57,21 @@ export class CreateThoiViecDto {
   @IsOptional()
   @IsString()
   ghiChu?: string;
+
+  /**
+   * Nhu cầu tuyển người thay (yêu cầu d14). Phải khai ở đây vì `main.ts` bật
+   * `forbidNonWhitelisted` — thiếu là cả form 400.
+   */
+  @IsOptional()
+  @IsBoolean()
+  canTuyenThayThe?: boolean;
+
+  @IsOptional()
+  @IsString()
+  ghiChuTuyenDung?: string;
+
+  /** Id nháp mà tệp đính kèm bám vào khi hồ sơ chưa lưu. */
+  @IsOptional()
+  @IsString()
+  idNhap?: string;
 }
