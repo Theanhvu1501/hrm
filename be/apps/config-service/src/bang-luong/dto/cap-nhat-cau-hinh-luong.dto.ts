@@ -170,6 +170,14 @@ export class CapNhatCauHinhLuongDto {
   @IsOptional() @IsNumber() giamTruBanThan?: number;
   @IsOptional() @IsNumber() giamTruNPT?: number;
   @IsOptional() @IsObject() bhxh?: { tyLe: number; canCu: CanCuBHXH };
+
+  /**
+   * Trừ thuế TNCN của NLĐ theo mức nào (yêu cầu d32). Thiếu khai ở đây là cả
+   * form Cấu hình lương 400 vì `main.ts` bật `forbidNonWhitelisted`.
+   */
+  @IsOptional()
+  @IsIn(['khai_bao', 'thuc_te'], { message: 'Căn cứ khấu trừ thuế không hợp lệ' })
+  khauTruThueTheo?: 'khai_bao' | 'thuc_te';
   @IsOptional() @IsArray() bacThue?: BacThue[];
   @IsOptional() @IsObject() thuViec?: { tyLe: number };
   @IsOptional() @IsObject() quyTacThoiVu?: { tyLe: number; nguong: number };

@@ -17,6 +17,17 @@ export class CauHinhLuong extends BaseEntity {
   @Column('json', { nullable: true }) thuViec: { tyLe: number };
   @Column('json', { nullable: true }) quyTacThoiVu: { tyLe: number; nguong: number };
   @Column('json', { nullable: true }) quyTacCamKet: { mienThue: boolean };
+  /**
+   * Trừ thuế TNCN của NLĐ theo mức nào (yêu cầu d32: "Hiện trạng sai Khấu trừ
+   * thuế của NLĐ").
+   *
+   * `khai_bao` (mặc định) — trừ đúng số thuế đã KHAI và NỘP cho cơ quan thuế.
+   * `thuc_te` — trừ theo thuế tính trên lương thật.
+   *
+   * Vì sao mặc định `khai_bao`: trừ của người lao động nhiều hơn số thực nộp
+   * thì phần chênh không đi đâu cả, và không giải thích được với họ.
+   */
+  @Column({ default: 'khai_bao' }) khauTruThueTheo: string;
   @Column({ default: 1000 }) lamTron: number;
   @Column({ default: 8 }) soGioMoiNgay: number;
   @Column('json', { nullable: true }) lamThem: CauHinhLamThem;

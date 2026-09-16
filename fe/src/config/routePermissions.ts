@@ -6,6 +6,9 @@ export const routePermissions: Record<string, string> = {
   '/cau-hinh/thanh-vien': '/cau-hinh/thanh-vien:xem',
   '/cau-hinh/cau-hinh-luong': '/luong/cau-hinh:xem',
   '/luong/bang-luong': '/luong/bang-luong:xem',
+  '/luong/tam-ung': '/luong/tam-ung:xem',
+  // Ba bảng tổng hợp đọc từ bảng lương — đi chung quyền với bảng lương.
+  '/luong/bao-cao': '/luong/bang-luong:xem',
   // Bảng lương thêm giờ dùng chung quyền với bảng lương chính — cùng nhóm rủi
   // ro (thu nhập thật), và không mở module quyền mới thì không phải chạy
   // ops/grant-quyen-module-moi.ts lúc deploy.

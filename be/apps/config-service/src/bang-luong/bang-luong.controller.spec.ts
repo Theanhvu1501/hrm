@@ -36,7 +36,13 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['tongHop', RequestMethod.POST, '/luong/bang-luong:them'],
   ['chot', RequestMethod.POST, '/luong/bang-luong:sua'],
   ['moLai', RequestMethod.POST, '/luong/bang-luong:sua'],
-  ['quyetToanTncn', RequestMethod.GET, '/luong/bang-luong:xem'],
+    // Gửi phiếu lương cho NLĐ (yêu cầu d36) = công bố số liệu → quyền `:sua`.
+  ['guiPhieuLuong', RequestMethod.POST, '/luong/bang-luong:sua'],
+  // Ba bảng tổng hợp của yêu cầu d33/d34/d35 — cùng quyền với bảng lương.
+  ['bangBaoHiem', RequestMethod.GET, '/luong/bang-luong:xem'],
+  ['bangCongDoan', RequestMethod.GET, '/luong/bang-luong:xem'],
+  ['bangThueTheoKy', RequestMethod.GET, '/luong/bang-luong:xem'],
+['quyetToanTncn', RequestMethod.GET, '/luong/bang-luong:xem'],
   ['danhSachDong', RequestMethod.GET, '/luong/bang-luong:xem'],
   ['capNhatDong', RequestMethod.PATCH, '/luong/bang-luong:sua'],
   // Import ghi đè số nhập tay của cả kỳ — cùng mức nguy hiểm với sửa từng

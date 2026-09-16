@@ -109,6 +109,24 @@ export function HangSoEditor({ canEdit }: HangSoEditorProps) {
           </div>
         )}
       </Col>
+      <Col span={8}>
+        <FieldLabel>Khấu trừ thuế TNCN của NLĐ theo</FieldLabel>
+        <Select
+          className="w-full"
+          value={cauHinh.khauTruThueTheo ?? "khai_bao"}
+          disabled={!canEdit}
+          options={[
+            { value: "khai_bao", label: "Mức khai báo (số đã nộp)" },
+            { value: "thuc_te", label: "Mức thực tế" },
+          ]}
+          onChange={(khauTruThueTheo) => capNhat({ khauTruThueTheo })}
+        />
+        <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
+          "Mức khai báo" là số thuế công ty thực nộp — trừ của nhân viên nhiều
+          hơn số thực nộp thì phần chênh không đi đâu cả.
+        </div>
+      </Col>
+
       {/* `?.`/`?? 0`: tenant tạo trước P4.1 chưa từng lưu `bhCongTy` và vẫn có
           thể mở màn này trước khi BE backfill khối đó. */}
       <Col span={8}>

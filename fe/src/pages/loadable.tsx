@@ -43,6 +43,14 @@ export const BangLuongPage = loadable(() => import('./luong/bang-luong/BangLuong
   fallback: <PageLoader />
 });
 
+export const TamUngPage = loadable(() => import('./luong/tam-ung/TamUngPage'), {
+  fallback: <PageLoader />
+});
+
+export const BaoCaoLuongPage = loadable(() => import('./luong/bao-cao/BaoCaoLuongPage'), {
+  fallback: <PageLoader />
+});
+
 export const BangThemGioPage = loadable(() => import('./luong/bang-luong-them-gio/BangThemGioPage'), {
   fallback: <PageLoader />
 });

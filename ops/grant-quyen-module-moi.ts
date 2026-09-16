@@ -33,7 +33,8 @@ const MODULE_KHUON = '/cham-cong/ca-lam-viec';
  * Đợt P4.2a (Quỹ giờ làm thêm): cấp `/cham-cong/quy-gio`. (Đợt P3.8 đã cấp
  * `/cham-cong/quy-phep`; đợt P4 đã cấp `/luong/*`.)
  * Đợt P4.5 (Cấu hình chấm công): cấp `/cham-cong/cau-hinh`.
- * Đợt "Phần Hành Phần mềm" (2026-09): cấp `/nhan-su/so-do-to-chuc` — module
+ * Đợt "Phần Hành Phần mềm" (2026-09): cấp `/nhan-su/so-do-to-chuc` và
+ * `/luong/tam-ung` — hai module
  * mới cho yêu cầu d13 (chức danh lấy theo sơ đồ tổ chức). Module KHUÔN cho
  * nhóm này là `/nhan-su/ho-so-nhan-vien` chứ không phải ca làm việc: ai quản
  * hồ sơ nhân sự thì cũng là người dựng sơ đồ tổ chức.
@@ -55,6 +56,10 @@ const MODULE_CAN_CAP = ['/cham-cong/quy-gio', '/cham-cong/cau-hinh'];
 /** Module nhân sự — sao bộ hành động từ `/nhan-su/ho-so-nhan-vien`. */
 const MODULE_KHUON_NHAN_SU = '/nhan-su/ho-so-nhan-vien';
 const MODULE_CAN_CAP_NHAN_SU = ['/nhan-su/so-do-to-chuc'];
+
+/** Module lương — sao bộ hành động từ `/luong/bang-luong`. */
+const MODULE_KHUON_LUONG = '/luong/bang-luong';
+const MODULE_CAN_CAP_LUONG = ['/luong/tam-ung'];
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -108,12 +113,17 @@ async function main() {
       MODULE_KHUON_NHAN_SU,
     );
 
+    const hanhDongKhuonLuong = hanhDongCuaModule(hienCo, MODULE_KHUON_LUONG);
+
     const quyenThem = [
       ...MODULE_CAN_CAP.flatMap((module) =>
         hanhDongKhuon.map((hanhDong) => `${module}:${hanhDong}`),
       ),
       ...MODULE_CAN_CAP_NHAN_SU.flatMap((module) =>
         hanhDongKhuonNhanSu.map((hanhDong) => `${module}:${hanhDong}`),
+      ),
+      ...MODULE_CAN_CAP_LUONG.flatMap((module) =>
+        hanhDongKhuonLuong.map((hanhDong) => `${module}:${hanhDong}`),
       ),
     ].filter((quyen) => !hienCo.includes(quyen));
 
@@ -123,7 +133,7 @@ async function main() {
     }
 
     console.log(
-      `- CẬP NHẬT ${nhan}\n    khuôn ${MODULE_KHUON} = [${hanhDongKhuon.join(', ')}]\n    khuôn ${MODULE_KHUON_NHAN_SU} = [${hanhDongKhuonNhanSu.join(', ')}]\n    thêm ${quyenThem.length} quyền: ${quyenThem.join(', ')}`,
+      `- CẬP NHẬT ${nhan}\n    khuôn ${MODULE_KHUON} = [${hanhDongKhuon.join(', ')}]\n    khuôn ${MODULE_KHUON_NHAN_SU} = [${hanhDongKhuonNhanSu.join(', ')}]\n    khuôn ${MODULE_KHUON_LUONG} = [${hanhDongKhuonLuong.join(', ')}]\n    thêm ${quyenThem.length} quyền: ${quyenThem.join(', ')}`,
     );
 
     soHangDoi += 1;

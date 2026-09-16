@@ -8,8 +8,16 @@ import type { KhoanLuong } from "@/services/cauHinhLuongService";
  * route đó khoá phạm vi theo token của chính người đang đăng nhập, nên kế toán
  * gọi nó chỉ ra phiếu của chính mình.
  *
- * Chỉ đọc `thucTe`. `khaiBao`/`mucKhaiBao`/`luongThoaThuan` không bao giờ được
- * in ra: phiếu này đưa tận tay người lao động (spec P4.3 §2.1).
+ * Chỉ đọc `thucTe`. `khaiBao`/`mucKhaiBao` không bao giờ được in ra: phiếu
+ * này đưa tận tay người lao động và mức khai báo là chiến lược khai BHXH của
+ * công ty (spec P4.3 §2.1).
+ *
+ * Bố cục theo MẪU PHIẾU LƯƠNG của chủ sản phẩm (sheet "PHIẾU LƯƠNG", yêu cầu
+ * d36): khối định danh + ba phần I/II/III.
+ *
+ * `luongThoaThuan` CÓ in ở khối đầu (nhãn "Lương cơ bản") — khác với route tự
+ * phục vụ. Lý do: đây là lương của CHÍNH người cầm tờ phiếu, họ đã ký trong
+ * hợp đồng; thứ phải giấu là mức khai báo, không phải lương thật của họ.
  */
 
 function escapeHtml(value: string): string {
@@ -34,6 +42,10 @@ const CSS = `
   td { padding: 3px 0; }
   td.so { text-align: right; font-variant-numeric: tabular-nums; }
   tr.nhom td { border-top: 1px solid #000; font-weight: bold; }
+  tr.phan td { padding-top: 8px; font-weight: bold; text-transform: none; }
+  table.dinh-danh { margin-top: 8px; }
+  table.dinh-danh td:first-child { width: 45%; }
+  .luu-y { margin-top: 8px; font-style: italic; font-size: 11px; }
   .ky { margin-top: 28px; display: flex; justify-content: space-around; text-align: center; }
 `;
 
@@ -82,21 +94,29 @@ export function dungPhieuLuongHtml(
     )
     .join("");
 
+  const congChuan = dong.cauHinhApDung?.congChuan ?? 0;
+
   return `<style>${CSS}</style>
 <div class="cty">${escapeHtml(tenCongTy)}</div>
 <h1>PHIẾU LƯƠNG</h1>
 <div class="cty">${escapeHtml(`${thangSo}/${nam}`)}</div>
-<div class="meta">
-  Họ và tên: <strong>${escapeHtml(dong.employeeName ?? "")}</strong>
-  &nbsp;·&nbsp; Mã NV: ${escapeHtml(dong.employeeCode ?? "")}
-  &nbsp;·&nbsp; Công: ${dong.congThuong ?? 0}
-</div>
+<table class="dinh-danh">
+  <tr><td>Đối tượng</td><td><strong>${escapeHtml(dong.employeeName ?? "")}</strong> (${escapeHtml(dong.employeeCode ?? "")})</td></tr>
+  <tr><td>Lương cơ bản</td><td class="so">${tien(dong.luongThoaThuan)}</td></tr>
+  <tr><td>Ngày công chuẩn</td><td class="so">${congChuan}</td></tr>
+</table>
 <table>
+  <tr class="phan"><td>I. Thông tin tiền lương</td><td class="so">${tien(t.tongThuNhap)}</td></tr>
+  <tr><td>Công thực tế</td><td class="so">${dong.congThuong ?? 0}</td></tr>
+  <tr><td>Công thử việc</td><td class="so">${dong.congThuViec ?? 0}</td></tr>
+  <tr><td>Công khác (phép, lễ, nghỉ bù)</td><td class="so">${dong.congKhac ?? 0}</td></tr>
   ${dongKhoan}
   <tr class="nhom"><td>Tổng thu nhập</td><td class="so">${tien(t.tongThuNhap)}</td></tr>
+  <tr class="phan"><td>II. Các khoản khấu trừ</td><td class="so"></td></tr>
   ${dongTru}
-  <tr class="nhom"><td>THỰC LĨNH</td><td class="so">${tien(t.thucLinh)}</td></tr>
+  <tr class="nhom"><td>III. TỔNG TIỀN LƯƠNG THỰC NHẬN</td><td class="so">${tien(t.thucLinh)}</td></tr>
 </table>
+<div class="luu-y">Lưu ý: Thử việc hưởng theo tỷ lệ quy định trên lương cơ bản và phụ cấp theo tiêu chuẩn.</div>
 <div class="ky">
   <div>Người lập<br/><em>(ký, ghi rõ họ tên)</em></div>
   <div>Người nhận<br/><em>(ký, ghi rõ họ tên)</em></div>

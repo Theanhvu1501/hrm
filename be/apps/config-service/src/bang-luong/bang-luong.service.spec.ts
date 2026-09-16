@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { BangLuong_Service } from './bang-luong.service';
+import { TamUng_Service } from '../tam-ung/tam-ung.service';
 import {
   AttendanceRequest,
   CauHinhLuong,
@@ -11,7 +12,8 @@ import {
   Timesheet,
 } from '@app/entities';
 import type { CauHinhLuongData } from '@app/entities';
-import { ganCauHinhRieng, lamTronTheo, tinhDongLuong } from '@app/core';
+import {
+  apDungKhauTruThue, ganCauHinhRieng, lamTronTheo, tinhDongLuong } from '@app/core';
 import { CAU_HINH_LUONG_MAC_DINH } from './cau-hinh-luong.seed';
 
 describe('BangLuong_Service', () => {
@@ -123,6 +125,12 @@ describe('BangLuong_Service', () => {
         { provide: getRepositoryToken(Employee), useValue: mockEmployeeRepo },
         { provide: getRepositoryToken(Timesheet), useValue: mockTimesheetRepo },
         { provide: getRepositoryToken(AttendanceRequest), useValue: mockDonRepo },
+        {
+          // Đơn tạm ứng đã duyệt (yêu cầu d30). Mặc định RỖNG để mọi bài cũ
+          // giữ nguyên số; bài nào kiểm tạm ứng thì tự đặt lại.
+          provide: TamUng_Service,
+          useValue: { tongDaDuyetTheoKy: jest.fn().mockResolvedValue({}) },
+        },
         { provide: getRepositoryToken(DongLuongThemGio), useValue: mockThemGioRepo },
       ],
     }).compile();
@@ -489,13 +497,22 @@ describe('BangLuong_Service', () => {
         { base: 5_500_000, mucKhaiBao: 5_500_000, ...congChung },
         ch,
       );
-      const expectedThucTe = tinhDongLuong(
-        { base: 15_000_000, mucKhaiBao: 5_500_000, ...congChung },
+      // Yêu cầu d32: thuế TRỪ của NLĐ bằng đúng số đã khai và nộp, nên
+      // `thucTe` là kết quả engine ĐÃ chỉnh theo `apDungKhauTruThue` —
+      // so thẳng với `tinhDongLuong` sẽ lệch đúng ở hai trường thuế/thực lĩnh.
+      const expectedThucTe = apDungKhauTruThue(
+        expectedKhaiBao,
+        tinhDongLuong(
+          { base: 15_000_000, mucKhaiBao: 5_500_000, ...congChung },
+          ch,
+        ),
         ch,
+        { tamUng: 0, khauTruKhac: 0 },
       );
 
       expect(result.khaiBao).toEqual(expectedKhaiBao);
       expect(result.thucTe).toEqual(expectedThucTe);
+      expect(result.thucTe.thue).toBe(expectedKhaiBao.thue);
       expect(result.khaiBao.giaTriTungKhoan.HIEU_SUAT).toBe(2_000_000);
     });
 
@@ -555,9 +572,15 @@ describe('BangLuong_Service', () => {
         { base: 5_500_000, mucKhaiBao: 5_500_000, ...congChung },
         ch,
       );
-      const expectedThucTe = tinhDongLuong(
-        { base: 15_000_000, mucKhaiBao: 5_500_000, ...congChung },
+      // Xem chú thích ở bài trên: `thucTe` đi qua `apDungKhauTruThue`.
+      const expectedThucTe = apDungKhauTruThue(
+        expectedKhaiBao,
+        tinhDongLuong(
+          { base: 15_000_000, mucKhaiBao: 5_500_000, ...congChung },
+          ch,
+        ),
         ch,
+        { tamUng: 0, khauTruKhac: 0 },
       );
 
       expect(result.khaiBao).toEqual(expectedKhaiBao);
@@ -1566,5 +1589,95 @@ describe('BangLuong_Service', () => {
 
       expect(kq.soDongGhi).toBe(1);
     });
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Yêu cầu d36: phiếu lương chỉ hiện với NLĐ sau khi bấm GỬI
+// ────────────────────────────────────────────────────────────────────────────
+/** Dựng service với repo giả tối thiểu — đủ cho hai đường phiếu lương. */
+async function dungServiceLuong() {
+  const mockDongLuongRepo: any = {
+    find: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
+    create: jest.fn((v: any) => v),
+    save: jest.fn((v: any) => Promise.resolve(v)),
+  };
+  const rong = {
+    find: jest.fn().mockResolvedValue([]),
+    findOne: jest.fn().mockResolvedValue(null),
+    create: jest.fn((v: any) => v),
+    save: jest.fn((v: any) => Promise.resolve(v)),
+  };
+
+  const moduleRef: TestingModule = await Test.createTestingModule({
+    providers: [
+      BangLuong_Service,
+      {
+        provide: getRepositoryToken(CauHinhLuong),
+        useValue: {
+          ...rong,
+          find: jest
+            .fn()
+            .mockResolvedValue([{ ...CAU_HINH_LUONG_MAC_DINH, bhCongTy: { tyLe: 0.215, tyLeHopDongThu2: 0.005 } }]),
+        },
+      },
+      { provide: getRepositoryToken(DongLuong), useValue: mockDongLuongRepo },
+      { provide: getRepositoryToken(Employee), useValue: rong },
+      { provide: getRepositoryToken(Timesheet), useValue: rong },
+      { provide: getRepositoryToken(AttendanceRequest), useValue: rong },
+      { provide: getRepositoryToken(DongLuongThemGio), useValue: rong },
+      {
+        provide: TamUng_Service,
+        useValue: { tongDaDuyetTheoKy: jest.fn().mockResolvedValue({}) },
+      },
+    ],
+  }).compile();
+
+  return {
+    service: moduleRef.get(BangLuong_Service) as BangLuong_Service,
+    mockDongLuongRepo,
+  };
+}
+
+describe('BangLuong_Service — gửi phiếu lương', () => {
+  it('chưa gửi thì nhân viên KHÔNG xem được phiếu, dù kỳ đã chốt', async () => {
+    const { service, mockDongLuongRepo } = await dungServiceLuong();
+    mockDongLuongRepo.find.mockResolvedValue([
+      { thang: '2026-09', employeeId: 'nv-1', trangThai: 'chot', daGuiPhieu: false },
+    ]);
+
+    expect(await service.phieuLuongCuaToi('nv-1', '2026-09')).toBeNull();
+  });
+
+  it('dòng chốt TRƯỚC bản vá (chưa có cột) vẫn xem được — không lấy mất phiếu cũ', async () => {
+    const { service, mockDongLuongRepo } = await dungServiceLuong();
+    mockDongLuongRepo.find.mockResolvedValue([
+      {
+        thang: '2026-09',
+        employeeId: 'nv-1',
+        trangThai: 'chot',
+        thucTe: { giaTriTungKhoan: {} },
+      },
+    ]);
+
+    expect(await service.phieuLuongCuaToi('nv-1', '2026-09')).not.toBeNull();
+  });
+
+  it('gửi: chỉ đánh dấu dòng ĐÃ CHỐT, đếm số dòng còn nháp bị bỏ qua', async () => {
+    const { service, mockDongLuongRepo } = await dungServiceLuong();
+    const dsGoc = [
+      { thang: '2026-09', trangThai: 'chot', daGuiPhieu: false },
+      { thang: '2026-09', trangThai: 'nhap', daGuiPhieu: false },
+      { thang: '2026-09', trangThai: 'chot', daGuiPhieu: true },
+    ];
+    mockDongLuongRepo.find.mockResolvedValue(dsGoc);
+
+    const kq = await service.guiPhieuLuong('2026-09', '2026-09-30');
+
+    expect(kq).toStrictEqual({ soPhieu: 1, boQua: 1 });
+    expect(dsGoc[0].daGuiPhieu).toBe(true);
+    expect((dsGoc[0] as any).ngayGuiPhieu).toBe('2026-09-30');
+    expect(dsGoc[1].daGuiPhieu).toBe(false);
   });
 });

@@ -127,6 +127,11 @@ export interface CauHinhLuong {
   giamTruBanThan: number;
   giamTruNPT: number;
   bhxh: { tyLe: number; canCu: CanCuBHXH };
+  /**
+   * Trừ thuế TNCN của NLĐ theo mức nào (yêu cầu d32).
+   * `khai_bao` (mặc định) = trừ đúng số đã khai và nộp cho cơ quan thuế.
+   */
+  khauTruThueTheo?: 'khai_bao' | 'thuc_te';
   /** Phần BH công ty chịu — `tyLeHopDongThu2` áp khi NV là HĐLĐ thứ 2. */
   bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
   /** Phí công đoàn trừ vào lương NLĐ. Cấu hình cũ chưa có → đọc `?? 0`. */

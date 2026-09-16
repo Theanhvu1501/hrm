@@ -14,6 +14,7 @@ import { ThemGio_Service } from './them-gio.service';
 import { QuyGio_Module } from '../quy-gio/quy-gio.module';
 import { NhanVien_Module } from '../nhan-vien/nhan-vien.module';
 import { ThemGio_Controller } from './them-gio.controller';
+import { TamUng_Module } from '../tam-ung/tam-ung.module';
 
 @Module({
   imports: [
@@ -21,6 +22,8 @@ import { ThemGio_Controller } from './them-gio.controller';
     QuyGio_Module,
     // Route tự phục vụ cần `resolveEmployeeFromUser()` để suy employeeId từ token.
     NhanVien_Module,
+    // Đơn tạm ứng đã duyệt điền sẵn ô "Tạm ứng" lúc tổng hợp (yêu cầu d30).
+    TamUng_Module,
     DatabaseModule.forFeature([
       CauHinhLuong,
       DongLuong,

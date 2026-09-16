@@ -15,3 +15,5 @@ export * from './luong/dung-phieu-luong';
 export * from './luong/quyet-toan-tncn';
 export * from './luong/gan-cau-hinh-rieng';
 export * from './luong/muc-khai-bao';
+export * from './luong/bao-cao-luong';
+export * from './luong/khau-tru-thue';

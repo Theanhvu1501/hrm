@@ -7,6 +7,7 @@ import {
   TongHopKyDto,
 } from './dto';
 import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
+import { ngayVN } from '../ban-ghi-cham-cong/thoi-gian.util';
 import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 
 /**
@@ -155,6 +156,63 @@ export class BangLuong_Controller {
    * cùng dữ liệu, cùng nhóm rủi ro với bảng lương, và thêm module quyền là
    * thêm một bước bắt buộc `ops/grant-quyen-module-moi.ts` lúc deploy.
    */
+  /**
+   * Ba bảng tổng hợp đọc từ dòng lương đã tổng hợp (yêu cầu d33/d34/d35).
+   * Dùng lại quyền `/luong/bang-luong:xem` — cùng dữ liệu, cùng nhóm rủi ro;
+   * thêm module quyền là thêm một bước cấp quyền dễ quên lúc deploy.
+   *
+   * Route TĨNH nên phải khai TRƯỚC `@Get()` và `@Patch(':id')`.
+   */
+  /**
+   * Gửi phiếu lương của kỳ cho người lao động (yêu cầu d36). Quyền `:sua` —
+   * đây là hành động công bố số liệu, không phải chỉ đọc.
+   */
+  @Post('gui-phieu')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:sua')
+  async guiPhieuLuong(@Body() body: { thang: string }) {
+    const data = await this.bangLuong_Service.guiPhieuLuong(
+      body?.thang,
+      ngayVN(new Date()),
+    );
+    return { success: true, data };
+  }
+
+  @Get('bao-hiem')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:xem')
+  async bangBaoHiem(@Query('thang') thang: string) {
+    const data = await this.bangLuong_Service.bangBaoHiem(thang);
+    return { success: true, data };
+  }
+
+  @Get('cong-doan')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:xem')
+  async bangCongDoan(
+    @Query('tuThang') tuThang: string,
+    @Query('denThang') denThang: string,
+  ) {
+    const data = await this.bangLuong_Service.bangCongDoan(tuThang, denThang);
+    return { success: true, data };
+  }
+
+  @Get('thue-theo-ky')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:xem')
+  async bangThueTheoKy(
+    @Query('tuThang') tuThang: string,
+    @Query('denThang') denThang: string,
+    @Query('muc') muc?: string,
+  ) {
+    const data = await this.bangLuong_Service.bangThueTheoKy(
+      tuThang,
+      denThang,
+      muc === 'thucTe' ? 'thucTe' : 'khaiBao',
+    );
+    return { success: true, data };
+  }
+
   @Get('quyet-toan-tncn')
   @UseGuards(PermissionGuard)
   @Permissions('/luong/bang-luong:xem')

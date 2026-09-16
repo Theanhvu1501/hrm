@@ -49,6 +49,19 @@ export class DongLuong extends BaseEntity {
   @Column('json', { nullable: true }) thucTe: KetQuaLuong;
 
   @Column({ default: 'nhap' }) trangThai: string; // nhap|chot (theo kỳ)
+  /**
+   * Đã GỬI phiếu lương cho người lao động chưa (yêu cầu d36: "Của ai chỉ nhìn
+   * được phiếu lương của mình khi ấn gửi").
+   *
+   * Tách khỏi `trangThai`: chốt kỳ là việc của kế toán (khoá số để tính
+   * tiếp), gửi phiếu là việc công bố cho từng người. Chốt xong còn phải rà
+   * lại, và bắt hai việc đó đi cùng nhau nghĩa là không bao giờ chốt sớm được.
+   *
+   * Dòng chốt TRƯỚC bản vá này không có cột — khi đọc, chỉ ẩn khi cờ bằng
+   * đúng `false`, để phiếu lương cũ không biến mất khỏi tay người lao động.
+   */
+  @Column({ default: false }) daGuiPhieu: boolean;
+  @Column({ nullable: true }) ngayGuiPhieu?: string;
   @Column({ default: true }) isActive: boolean;
 }
 

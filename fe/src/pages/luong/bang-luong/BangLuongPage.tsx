@@ -13,6 +13,8 @@ import { usePagePermission } from "@/hooks/usePagePermission";
 import type { DongLuong } from "@/services/bangLuongService";
 import type { KhoanLuong } from "@/services/cauHinhLuongService";
 import { ImportNhapTheoKyModal } from "./components/ImportNhapTheoKyModal";
+import { InBangLuongModal } from "./components/InBangLuongModal";
+import { useAuth } from "@/contexts/AuthContext";
 import "./BangLuongPage.state";
 
 function BangLuongPageInner() {
@@ -24,6 +26,8 @@ function BangLuongPageInner() {
   const [khoanLuong] = useBangLuongState("khoanLuong", [] as KhoanLuong[]);
   const { canEdit } = usePagePermission("/luong/bang-luong");
   const [moImport, setMoImport] = useState(false);
+  const [moIn, setMoIn] = useState(false);
+  const { currentTenant } = useAuth();
 
   useEffect(() => {
     handler.executeEvent("init", {});
@@ -35,7 +39,7 @@ function BangLuongPageInner() {
 
   return (
     <Card>
-      <ThanhKy onImport={() => setMoImport(true)} />
+      <ThanhKy onImport={() => setMoImport(true)} onIn={() => setMoIn(true)} />
       {!dangTai && danhSach.length === 0 ? (
         <Empty description="Chưa tổng hợp bảng lương tháng này">
           {canEdit && (
@@ -52,6 +56,15 @@ function BangLuongPageInner() {
       ) : (
         <BangLuongTable />
       )}
+
+      <InBangLuongModal
+        open={moIn}
+        thang={thang}
+        danhSach={danhSach}
+        khoanLuong={khoanLuong}
+        tenCongTy={currentTenant?.tenantName ?? ""}
+        onClose={() => setMoIn(false)}
+      />
 
       <ImportNhapTheoKyModal
         open={moImport}

@@ -56,6 +56,50 @@ export type CapNhatDongLuongDto = Partial<
   Pick<DongLuong, 'nhapTheoKy' | 'tamUng' | 'khauTruKhac'>
 >;
 
+
+/** Một dòng bảng tổng hợp trích nộp BHXH (yêu cầu d33). */
+export interface DongBaoHiem {
+  stt: number;
+  employeeId: string;
+  maNhanVien: string;
+  hoTen: string;
+  mucDong: number;
+  omDauThaiSan: number;
+  huuTriTuTuat: number;
+  bhyt: number;
+  bhtn: number;
+  tnldBnn: number;
+  cong: number;
+  nld: number;
+  dn: number;
+}
+
+/** Một dòng danh sách phí công đoàn theo kỳ (yêu cầu d35). */
+export interface DongCongDoan {
+  stt: number;
+  employeeId: string;
+  maNhanVien: string;
+  hoTen: string;
+  mucDong: number;
+  tyLe: number;
+  soTien: number;
+}
+
+/** Một dòng bảng thuế TNCN theo kỳ tự chọn (yêu cầu d34). */
+export interface DongThueTheoKy {
+  stt: number;
+  employeeId: string;
+  maNhanVien: string;
+  hoTen: string;
+  soKy: number;
+  tongThuNhap: number;
+  bhxh: number;
+  mienThue: number;
+  giamTruGiaCanh: number;
+  thuNhapTinhThue: number;
+  thue: number;
+}
+
 class BangLuongService extends ServiceBase {
   constructor() {
     super({ endpoint: '/config/bang-luong' });
@@ -141,6 +185,42 @@ class BangLuongService extends ServiceBase {
       trangThai: (x.trangThai as string) ?? 'nhap',
     };
   }
+  /** Bảng tổng hợp trích nộp BHXH của một tháng (yêu cầu d33). */
+  bangBaoHiem(thang: string): Promise<DongBaoHiem[]> {
+    return this.get<DongBaoHiem[]>({
+      endpoint: '/bao-hiem',
+      params: { thang },
+    });
+  }
+
+  /** Danh sách phí công đoàn theo kỳ tự chọn (yêu cầu d35). */
+  bangCongDoan(tuThang: string, denThang: string): Promise<DongCongDoan[]> {
+    return this.get<DongCongDoan[]>({
+      endpoint: '/cong-doan',
+      params: { tuThang, denThang },
+    });
+  }
+
+  /** Bảng thuế TNCN theo kỳ tự chọn (yêu cầu d34). */
+  bangThueTheoKy(
+    tuThang: string,
+    denThang: string,
+    muc: 'khaiBao' | 'thucTe' = 'khaiBao',
+  ): Promise<DongThueTheoKy[]> {
+    return this.get<DongThueTheoKy[]>({
+      endpoint: '/thue-theo-ky',
+      params: { tuThang, denThang, muc },
+    });
+  }
+
+  /** Gửi phiếu lương của kỳ cho người lao động (yêu cầu d36). */
+  guiPhieuLuong(thang: string): Promise<{ soPhieu: number; boQua: number }> {
+    return this.post<{ soPhieu: number; boQua: number }>(
+      { thang },
+      { endpoint: '/gui-phieu' },
+    );
+  }
+
 }
 
 export const bangLuongService = new BangLuongService();

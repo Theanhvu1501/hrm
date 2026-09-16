@@ -70,6 +70,7 @@ export const permissionModules: PermissionModule[] = [
     isSection: true,
     children: [
       { key: '/luong/bang-luong', label: 'Bảng lương' },
+      { key: '/luong/tam-ung', label: 'Tạm ứng lương' },
       { key: '/luong/cau-hinh', label: 'Cấu hình lương' },
     ],
   },

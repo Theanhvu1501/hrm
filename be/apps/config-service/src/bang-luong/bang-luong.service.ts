@@ -9,6 +9,7 @@ import {
   Employee,
   Timesheet,
 } from '@app/entities';
+import { TamUng_Service } from '../tam-ung/tam-ung.service';
 import type {
   CauHinhLuongApDung,
   CauHinhLuongData,
@@ -16,11 +17,20 @@ import type {
   PhieuLuong,
 } from '@app/entities';
 import {
+  apDungKhauTruThue,
+  dungBangBaoHiem,
+  dungBangCongDoan,
+  dungBangThueTheoKy,
   dungPhieuLuong,
   ganCauHinhRieng,
   mucKhaiBaoApDung,
   quyetToanMotNguoi,
   tinhDongLuong,
+} from '@app/core';
+import type {
+  DongBaoHiem,
+  DongCongDoan,
+  DongThueTheoKy,
 } from '@app/core';
 // `QuyetToanNguoi` định nghĩa ở @app/core (nơi có luật thuế), KHÔNG ở
 // @app/entities — core đã import entities, khai ngược lại là vòng phụ thuộc.
@@ -73,6 +83,8 @@ export class BangLuong_Service {
     private readonly donRepo: Repository<AttendanceRequest>,
     @InjectRepository(DongLuongThemGio)
     private readonly themGioRepo: Repository<DongLuongThemGio>,
+    // Đơn tạm ứng đã duyệt → điền sẵn ô "Tạm ứng" lúc tổng hợp (yêu cầu d30).
+    private readonly tamUng_Service: TamUng_Service,
   ) {}
 
   /**
@@ -256,6 +268,12 @@ export class BangLuong_Service {
     const employees = await this.employeeRepo.find({ where: { isActive: true } });
 
     const themGioTheoNV = await this.layTienOtDaChot(thang, chEntity);
+    // Tạm ứng ĐÃ DUYỆT của kỳ (yêu cầu d30) — điền sẵn ô "Tạm ứng". Lỗi đọc
+    // KHÔNG được chặn cả kỳ lương: thiếu số tạm ứng thì kế toán gõ tay được,
+    // còn không tổng hợp được bảng lương thì cả công ty không có lương.
+    const tamUngTheoNV = await this.tamUng_Service
+      .tongDaDuyetTheoKy(thang)
+      .catch(() => ({} as Record<string, number>));
 
     const rows: DongLuong[] = [];
 
@@ -290,7 +308,14 @@ export class BangLuong_Service {
         phuCapCoDinh: emp.phuCapCoDinh ?? 0,
         giaTriKhoan: emp.giaTriKhoan,
         soNguoiPhuThuoc: emp.soNguoiPhuThuoc ?? 0,
-        tamUng: existing?.tamUng ?? 0,
+        /**
+         * Ưu tiên số kế toán đã gõ tay ở lần chạy trước — cùng quy ước với
+         * `nhapTheoKy`/`khauTruKhac`: tổng hợp lại là thao tác thường ngày,
+         * ghi đè số người ta vừa sửa là mất việc của họ.
+         *
+         * Dòng CHƯA có số nào thì lấy tổng đơn tạm ứng đã duyệt của kỳ.
+         */
+        tamUng: existing?.tamUng ?? tamUngTheoNV[employeeId] ?? 0,
         khauTruKhac: existing?.khauTruKhac ?? 0,
         dongBH: !!emp.dongBH,
         thoiVu: !!emp.thoiVu,
@@ -304,7 +329,14 @@ export class BangLuong_Service {
       };
 
       const khaiBao = tinhDongLuong(this.buildDauVao(mucKhaiBao, mucKhaiBao, snapshot), chNV);
-      const thucTe = tinhDongLuong(this.buildDauVao(luongThoaThuan, mucKhaiBao, snapshot), chNV);
+      // Số thuế TRỪ của NLĐ bằng đúng số công ty KHAI và NỘP (yêu cầu d32) —
+      // xem `apDungKhauTruThue`.
+      const thucTe = apDungKhauTruThue(
+        khaiBao,
+        tinhDongLuong(this.buildDauVao(luongThoaThuan, mucKhaiBao, snapshot), chNV),
+        chNV,
+        { tamUng: snapshot.tamUng, khauTruKhac: snapshot.khauTruKhac },
+      );
 
       let row = existing;
       if (!row) {
@@ -381,6 +413,44 @@ export class BangLuong_Service {
    * `employeeId` do controller suy từ TOKEN truyền xuống; service không nhận
    * nó từ client ở bất kỳ đường nào khác.
    */
+  /**
+   * Phiếu lương đã ĐƯỢC GỬI cho người này chưa (yêu cầu d36).
+   *
+   * Chỉ ẩn khi cờ bằng ĐÚNG `false`: dòng chốt trước bản vá không có cột này
+   * (`undefined`), và ẩn chúng đi nghĩa là lấy mất phiếu lương cũ khỏi tay
+   * người lao động vì một thay đổi kỹ thuật.
+   */
+  private daGuiChoNLD(dong: DongLuong): boolean {
+    return dong.daGuiPhieu !== false;
+  }
+
+  /**
+   * GỬI phiếu lương của một kỳ cho người lao động (yêu cầu d36).
+   *
+   * Chỉ gửi dòng ĐÃ CHỐT: gửi một bảng còn nháp là gửi con số sắp đổi.
+   */
+  async guiPhieuLuong(
+    thang: string,
+    homNay: string,
+  ): Promise<{ soPhieu: number; boQua: number }> {
+    const rows = await this.dongLuongRepo.find({ where: { thang } as any });
+    let soPhieu = 0;
+    let boQua = 0;
+    for (const d of rows) {
+      if (d.isActive === false) continue;
+      if (d.trangThai !== 'chot') {
+        boQua += 1;
+        continue;
+      }
+      if (d.daGuiPhieu === true) continue;
+      d.daGuiPhieu = true;
+      d.ngayGuiPhieu = homNay;
+      await this.dongLuongRepo.save(d);
+      soPhieu += 1;
+    }
+    return { soPhieu, boQua };
+  }
+
   async phieuLuongCuaToi(
     employeeId: string,
     thang: string,
@@ -390,6 +460,9 @@ export class BangLuong_Service {
     });
     const dong = rows[0];
     if (!dong || dong.trangThai !== 'chot') return null;
+    // Chưa bấm GỬI thì người lao động chưa thấy gì — kế toán còn rà lại sau
+    // khi chốt, và một con số sắp sửa không nên nằm trên tay người nhận lương.
+    if (!this.daGuiChoNLD(dong)) return null;
 
     const ch = this.toCauHinhData(await this.layCauHinh());
     return dungPhieuLuong(dong, ch.khoanLuong ?? []);
@@ -401,7 +474,7 @@ export class BangLuong_Service {
       where: { employeeId } as any,
     });
     return rows
-      .filter((r) => r.trangThai === 'chot')
+      .filter((r) => r.trangThai === 'chot' && this.daGuiChoNLD(r))
       .map((r) => r.thang)
       .sort()
       .reverse();
@@ -419,6 +492,58 @@ export class BangLuong_Service {
    * thời vụ trong năm — và `quyetToanMotNguoi()` ghi chú lại để kế toán biết
    * mà kiểm tay.
    */
+  /**
+   * Dòng lương CÒN HIỆU LỰC trong một khoảng kỳ ('YYYY-MM' … 'YYYY-MM').
+   *
+   * Lọc trong bộ nhớ vì `thang` là chuỗi và bộ lọc là một khoảng — cùng cách
+   * `quyetToanNam()` đang làm ngay bên dưới, giữ hai đường nhất quán.
+   */
+  private async dongTrongKy(
+    tuThang: string,
+    denThang: string,
+  ): Promise<DongLuong[]> {
+    if (!/^\d{4}-\d{2}$/.test(tuThang) || !/^\d{4}-\d{2}$/.test(denThang)) {
+      throw new BadRequestException('Kỳ phải có định dạng YYYY-MM');
+    }
+    if (denThang < tuThang) {
+      throw new BadRequestException('Kỳ kết thúc phải sau kỳ bắt đầu');
+    }
+    const tatCa = await this.dongLuongRepo.find({});
+    return tatCa.filter(
+      (d) =>
+        d.isActive !== false &&
+        (d.thang ?? '') >= tuThang &&
+        (d.thang ?? '') <= denThang,
+    );
+  }
+
+  /** Bảng tổng hợp trích nộp BHXH của MỘT tháng (yêu cầu d33). */
+  async bangBaoHiem(thang: string): Promise<DongBaoHiem[]> {
+    const ds = await this.dongTrongKy(thang, thang);
+    const ch = this.toCauHinhData(await this.layCauHinh());
+    return dungBangBaoHiem(ds, ch);
+  }
+
+  /** Danh sách phí công đoàn theo kỳ tự chọn (yêu cầu d35). */
+  async bangCongDoan(
+    tuThang: string,
+    denThang: string,
+  ): Promise<DongCongDoan[]> {
+    const ds = await this.dongTrongKy(tuThang, denThang);
+    const ch = this.toCauHinhData(await this.layCauHinh());
+    return dungBangCongDoan(ds, ch);
+  }
+
+  /** Bảng thuế TNCN theo kỳ tự chọn (yêu cầu d34). */
+  async bangThueTheoKy(
+    tuThang: string,
+    denThang: string,
+    muc: 'khaiBao' | 'thucTe' = 'khaiBao',
+  ): Promise<DongThueTheoKy[]> {
+    const ds = await this.dongTrongKy(tuThang, denThang);
+    return dungBangThueTheoKy(ds, muc);
+  }
+
   async quyetToanNam(nam: number): Promise<{
     nam: number;
     ds: QuyetToanNguoi[];
@@ -567,9 +692,16 @@ export class BangLuong_Service {
       this.buildDauVao(mucKhaiBao, mucKhaiBao, snapshot),
       ch,
     );
-    item.thucTe = tinhDongLuong(
-      this.buildDauVao(item.luongThoaThuan, mucKhaiBao, snapshot),
+    // Cùng quy ước khấu trừ thuế với đường Tổng hợp — hai đường mà khác nhau
+    // thì sửa một khoản biến động sẽ âm thầm đổi số thuế đã trừ.
+    item.thucTe = apDungKhauTruThue(
+      item.khaiBao,
+      tinhDongLuong(
+        this.buildDauVao(item.luongThoaThuan, mucKhaiBao, snapshot),
+        ch,
+      ),
       ch,
+      { tamUng: snapshot.tamUng, khauTruKhac: snapshot.khauTruKhac },
     );
 
     return this.dongLuongRepo.save(item);

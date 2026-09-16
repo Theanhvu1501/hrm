@@ -87,10 +87,12 @@ export const MENU_LEAVES: MenuLeaf[] = [
   // công & ca — không còn là một mục menu riêng. Route `/cham-cong/cau-hinh`
   // vẫn sống (mở thẳng tab đó) để link cũ và quyền cũ không vỡ.
 
-  // ===== 4. Lương (3) — cả nhóm đi chung quyền Bảng lương =====
+  // ===== 4. Lương (5) — cả nhóm đi chung quyền Bảng lương, trừ Tạm ứng =====
   { key: '/luong/bang-luong', label: 'Bảng lương', module: 'luong', status: 'ok', icon: <DollarOutlined /> },
+  { key: '/luong/tam-ung', label: 'Tạm ứng lương', module: 'luong', status: 'ok', icon: <WalletOutlined /> },
   { key: '/luong/bang-luong-them-gio', permKey: '/luong/bang-luong', label: 'Bảng lương thêm giờ', module: 'luong', status: 'ok', icon: <CalculatorOutlined /> },
   { key: '/luong/quyet-toan-tncn', permKey: '/luong/bang-luong', label: 'Quyết toán TNCN', module: 'luong', status: 'ok', icon: <ProfileOutlined /> },
+  { key: '/luong/bao-cao', permKey: '/luong/bang-luong', label: 'BHXH · Công đoàn · Thuế', module: 'luong', status: 'ok', icon: <ProfileOutlined /> },
 
   // Cấu hình lương mở từ nút bánh răng (route /cau-hinh/...) nhưng thuộc nghiệp
   // vụ Lương — khai legacy để rail sáng Lương và panel hiện danh sách Lương.

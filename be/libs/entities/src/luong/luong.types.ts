@@ -123,6 +123,8 @@ export interface CauHinhLuongData {
    * không phải deploy.
    */
   phiCongDoan: { tyLe: number };
+  /** `khai_bao` | `thuc_te` — xem `CauHinhLuong.khauTruThueTheo`. */
+  khauTruThueTheo?: 'khai_bao' | 'thuc_te';
   lamTron: number;
   /** Số giờ của MỘT ngày công. Quy đổi ngày↔giờ cho nghỉ bù, và là mẫu số của đơn giá giờ. */
   soGioMoiNgay: number;
