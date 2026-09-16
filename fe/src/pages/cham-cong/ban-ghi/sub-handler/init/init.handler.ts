@@ -27,7 +27,11 @@ export class InitHandler extends CSubHanlder {
     // danh sách để chấm công/tra cứu của chính mình) nên lỗi ở đây hiếm khi
     // là lỗi quyền — không cần làm phiền người dùng bằng message, chỉ log.
     try {
-      const employeeList = await employeeService.getList();
+      // Ẩn người đã nghỉ TỪ THÁNG TRƯỚC (yêu cầu d20): họ không còn phát
+      // sinh bản ghi chấm công nào, để lại chỉ làm ô chọn dài thêm mỗi tháng.
+      const employeeList = await employeeService.getList({
+        conTrongThang: homNayVN().slice(0, 7),
+      });
       this.setState("employeeList", employeeList);
     } catch (error) {
       console.error("Tải danh sách nhân viên lỗi:", error);

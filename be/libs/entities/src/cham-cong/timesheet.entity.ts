@@ -45,6 +45,22 @@ export class Timesheet extends BaseEntity {
   @Column({ default: 0 }) soLanVeSom: number;
   @Column({ nullable: true }) ghiChu?: string;
   @Column({ default: 'nhap' }) trangThai: string; // nhap|chot
+  // ── Gửi NLĐ xác nhận (yêu cầu d19) ──────────────────────────────────────
+  /**
+   * `chua_gui` | `cho_xac_nhan` | `da_xac_nhan` | `de_nghi_dieu_chinh`
+   *
+   * KHÔNG có trạng thái "hết hạn": hết hạn là một câu hỏi về THỜI GIAN, trả
+   * lời được bằng `hanXacNhan` mỗi lần đọc. Lưu thành trạng thái thì phải có
+   * một tiến trình chạy nền để đổi nó, và hễ tiến trình đó không chạy là dữ
+   * liệu nói sai.
+   */
+  @Column({ default: 'chua_gui' }) trangThaiXacNhan: string;
+  /** "YYYY-MM-DD" — quá ngày này thì NLĐ hết quyền phản hồi, bảng tự khoá. */
+  @Column({ nullable: true }) hanXacNhan?: string;
+  @Column({ nullable: true }) ngayGuiXacNhan?: string;
+  @Column({ nullable: true }) ngayXacNhan?: string;
+  /** Nội dung NLĐ đề nghị điều chỉnh — C&B đọc để biết phải sửa ô nào. */
+  @Column({ nullable: true }) yKienNhanVien?: string;
   @Column({ default: true }) isActive: boolean;
 }
 

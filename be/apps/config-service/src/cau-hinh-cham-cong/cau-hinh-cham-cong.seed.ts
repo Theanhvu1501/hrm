@@ -9,5 +9,8 @@ import type { CauHinhChamCong } from '@app/entities';
  */
 export const CAU_HINH_CHAM_CONG_MAC_DINH: Partial<CauHinhChamCong> = {
   ngayLamViecTrongTuan: [1, 2, 3, 4, 5],
+  // Mặc định TẮT: bật lên là ai cũng bỏ qua được đối chiếu địa điểm chỉ bằng
+  // cách chọn "làm từ xa" khi bấm.
+  choPhepTuKhaiTuXa: false,
   isActive: true,
 };

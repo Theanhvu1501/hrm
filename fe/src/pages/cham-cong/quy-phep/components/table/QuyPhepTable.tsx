@@ -206,13 +206,21 @@ export function QuyPhepTable() {
               </Button>
             )}
             {canCreate && (
-              <Button
-                type="primary"
-                loading={dangXuLy}
-                onClick={() => handler.executeEvent("moXemTruoc", { loai: "cap_dau_nam", nam: namLoc })}
-              >
-                Cấp phép đầu năm
-              </Button>
+              // Tên nút nói đúng việc nó làm (yêu cầu d21: "Quỹ phép không ứng
+              // trước mà cộng dồn theo tháng; không cấp phép đầu năm"). Với
+              // năm ĐANG DIỄN RA, thao tác này chỉ MỞ quỹ rỗng; ngày phép cộng
+              // dần mỗi lần chốt bảng công một tháng đạt trên nửa số công.
+              // Gọi là "Cấp phép đầu năm" thì HR tưởng bấm xong là có đủ 12
+              // ngày, rồi thắc mắc vì sao số dư bằng 0.
+              <Tooltip title="Mở quỹ rỗng cho năm đang chạy; ngày phép cộng dần mỗi tháng làm trên nửa số công (chốt bảng công là cộng). Năm đã qua thì cấp trọn theo số tháng đã làm.">
+                <Button
+                  type="primary"
+                  loading={dangXuLy}
+                  onClick={() => handler.executeEvent("moXemTruoc", { loai: "cap_dau_nam", nam: namLoc })}
+                >
+                  Mở quỹ phép năm
+                </Button>
+              </Tooltip>
             )}
           </>
         }

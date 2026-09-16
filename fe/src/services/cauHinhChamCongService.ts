@@ -5,6 +5,11 @@ export interface CauHinhChamCong {
   id?: string;
   /** 0=CN … 6=T7. */
   ngayLamViecTrongTuan: number[];
+  /**
+   * Cho phép nhân viên tự khai "làm từ xa" khi bấm chấm công (yêu cầu d16).
+   * Bật lên là bỏ hàng rào đối chiếu địa điểm — xem cảnh báo trên màn cấu hình.
+   */
+  choPhepTuKhaiTuXa?: boolean;
 }
 
 class CauHinhChamCongService extends ServiceBase {

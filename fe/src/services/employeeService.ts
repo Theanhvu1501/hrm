@@ -102,6 +102,12 @@ export interface DongKhaiBaoBH {
 }
 
 export interface EmployeeFilter {
+  /**
+   * "YYYY-MM" — chỉ lấy người CÒN thuộc biên chế trong tháng đó (yêu cầu d20:
+   * "Ngừng hiển thị NLĐ nghỉ từ tháng trước"). Người nghỉ GIỮA tháng này vẫn
+   * còn, vì bảng công tháng này vẫn có công của họ.
+   */
+  conTrongThang?: string;
   hoTen?: string;
   departmentId?: string;
   trangThai?: string;

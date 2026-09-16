@@ -81,6 +81,27 @@ function CauHinhChamCongPageInner() {
               làm việc chuẩn của tháng khi xét ngưỡng tích phép năm. Nhân viên có
               lịch khác thì khai riêng ở hồ sơ — khai riêng luôn thắng lịch chung.
             </div>
+            <div className="mt-4 border-t border-border pt-3">
+              <Checkbox
+                checked={!!cauHinh.choPhepTuKhaiTuXa}
+                disabled={!canEdit}
+                onChange={(e) =>
+                  setCauHinh({
+                    ...cauHinh,
+                    choPhepTuKhaiTuXa: e.target.checked,
+                  })
+                }
+              >
+                Cho phép nhân viên tự khai "làm từ xa" khi chấm công
+              </Checkbox>
+              <div className="mt-1 text-[11px] text-[hsl(var(--ink-2))]">
+                Bật lên thì khi bấm chấm công, nhân viên chọn được "Làm từ xa"
+                và lượt đó BỎ đối chiếu địa điểm — tức hàng rào GPS không còn
+                tác dụng với ai chọn ô đó. Để tắt thì vẫn làm từ xa được, nhưng
+                phải qua đơn "làm online" có người duyệt.
+              </div>
+            </div>
+
             {(cauHinh.ngayLamViecTrongTuan ?? []).length === 0 && (
               <Alert
                 type="warning"

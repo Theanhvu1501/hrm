@@ -121,6 +121,11 @@ export const CauHinhChamCongPage = loadable(() => import('./cham-cong/cau-hinh/C
   fallback: <PageLoader />
 });
 
+/** Vỏ hai tab gộp "Ca làm việc" + "Thiết lập chung" (yêu cầu d24). */
+export const CauHinhChamCongGopPage = loadable(() => import('./cham-cong/cau-hinh/CauHinhChamCongGopPage'), {
+  fallback: <PageLoader />
+});
+
 export const ChamCongCuaToiPage = loadable(
   () => import('./cham-cong/cua-toi/ChamCongCuaToiPage'),
   { fallback: <PageLoader /> }

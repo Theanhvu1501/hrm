@@ -44,7 +44,7 @@ import {
   QuyGioPage,
   ThietBiPage,
   BanGhiPage,
-  CauHinhChamCongPage,
+  CauHinhChamCongGopPage,
   ChamCongCuaToiPage,
   BaoCaoNhanSuPage,
   TrangChuTheoQuyen,
@@ -301,11 +301,14 @@ const App = () => (
                     path="cua-toi"
                     element={<Navigate to="/toi/cham-cong" replace />}
                   />
+                  {/* Gộp ca làm việc + thiết lập chung vào một màn hai tab
+                      (yêu cầu d24). Hai đường dẫn cũ giữ nguyên để link cũ và
+                      quyền cũ không vỡ — chỉ khác tab mở sẵn. */}
                   <Route
                     path="ca-lam-viec"
                     element={
                       <ProtectedRoute requiredPermission="/cham-cong/ca-lam-viec:xem">
-                        <CaLamViecPage />
+                        <CauHinhChamCongGopPage tabMacDinh="ca" />
                       </ProtectedRoute>
                     }
                   />
@@ -377,7 +380,7 @@ const App = () => (
                     path="cau-hinh"
                     element={
                       <ProtectedRoute requiredPermission="/cham-cong/cau-hinh:xem">
-                        <CauHinhChamCongPage />
+                        <CauHinhChamCongGopPage tabMacDinh="chung" />
                       </ProtectedRoute>
                     }
                   />

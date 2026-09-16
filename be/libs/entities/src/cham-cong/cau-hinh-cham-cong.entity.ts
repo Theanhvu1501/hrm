@@ -13,6 +13,15 @@ import { BaseEntity } from '../base.entity';
 export class CauHinhChamCong extends BaseEntity {
   /** 0=CN … 6=T7. Rỗng = HR cố ý bỏ trống ⇒ rơi về đáy "mọi ngày là ngày làm việc". */
   @Column('json', { nullable: true }) ngayLamViecTrongTuan: number[];
+  /**
+   * Cho phép nhân viên TỰ KHAI "làm từ xa" khi bấm chấm công (yêu cầu d16).
+   *
+   * Mặc định TẮT và đó là chủ ý: bật lên nghĩa là ai cũng bỏ qua được đối
+   * chiếu địa điểm chỉ bằng cách chọn một ô — hàng rào GPS coi như không còn.
+   * Công ty nào chấp nhận đánh đổi đó thì tự bật; còn lại vẫn đi đường đơn
+   * `lam_online` có người duyệt.
+   */
+  @Column({ default: false }) choPhepTuKhaiTuXa: boolean;
   @Column({ default: true }) isActive: boolean;
 }
 

@@ -462,6 +462,11 @@ export class ThoiViec_Service {
     }
 
     emp.trangThai = seHieuLuc ? 'da_nghi' : this.trangThaiKhoiPhuc(item);
+    // Mốc nghỉ đi LIỀN với trạng thái: huỷ duyệt mà quên xoá mốc thì người đã
+    // quay lại làm việc vẫn bị các màn chấm công ẩn đi.
+    emp.ngayNghiViec = seHieuLuc
+      ? item.ngayLamViecCuoi || item.ngayNopDon
+      : undefined;
     await this.employeeRepo.save(emp);
 
     if (seHieuLuc) {

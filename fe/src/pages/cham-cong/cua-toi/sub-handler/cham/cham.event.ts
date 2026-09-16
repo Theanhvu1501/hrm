@@ -1,4 +1,5 @@
 import { BaseEvents } from "@/common";
+import type { HinhThucLam } from "@/services/attendanceRecordService";
 
 export interface ChamEvent extends BaseEvents {
   /**
@@ -6,7 +7,10 @@ export interface ChamEvent extends BaseEvents {
    * màn hình "thiết bị chưa được phép"; các lần khác handler tự điền tên suy
    * từ user agent.
    */
-  cham: { params: { tenThietBi?: string }; result: void };
+  cham: {
+    params: { tenThietBi?: string; hinhThucLam?: HinhThucLam };
+    result: void;
+  };
 }
 
 declare module "../../chamCongCuaToiHandler" {

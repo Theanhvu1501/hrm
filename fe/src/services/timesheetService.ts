@@ -48,6 +48,13 @@ export interface Timesheet {
   isActive: boolean;
   soOTrong?: number;
   soOCanhBao?: number;
+  // ── Gửi NLĐ xác nhận (yêu cầu d19) ──────────────────────────────────────
+  /** `chua_gui` | `cho_xac_nhan` | `da_xac_nhan` | `de_nghi_dieu_chinh`. */
+  trangThaiXacNhan?: string;
+  hanXacNhan?: string;
+  ngayGuiXacNhan?: string;
+  ngayXacNhan?: string;
+  yKienNhanVien?: string;
 }
 
 /** Tóm tắt trả về từ POST /generate — không còn là mảng Timesheet, phải nạp lại danh sách riêng. */
@@ -83,6 +90,21 @@ export interface SetDayDto {
   kyHieu: string;
   // Khi bật, kyHieu bị BE bỏ qua và ô được trả về cho máy quản (nguon = 'tu_dong').
   veTuDong?: boolean;
+}
+
+/** Một dòng của bảng giờ làm thực tế (một người × một ngày). */
+export interface DongGioLam {
+  employeeId: string;
+  maNhanVien?: string;
+  hoTen?: string;
+  ngay: string;
+  gioVao: string | null;
+  gioRa: string | null;
+  tongGio: number;
+  thieuGioRa: boolean;
+  laOnline: boolean;
+  diMuonPhut: number;
+  veSomPhut: number;
 }
 
 class TimesheetService extends ServiceBase {
@@ -131,6 +153,42 @@ class TimesheetService extends ServiceBase {
       { endpoint: '/finalize' }
     );
     return res.map(this.transform);
+  }
+
+  /** Bảng giờ làm thực tế của tháng (yêu cầu d16/d19). */
+  async bangGioLam(thang: string): Promise<DongGioLam[]> {
+    return this.get<DongGioLam[]>({ endpoint: '/gio-lam', params: { thang } });
+  }
+
+  /** Gửi bảng công cả tháng cho nhân viên xác nhận (yêu cầu d19). */
+  async guiXacNhan(
+    thang: string,
+    hanXacNhan: string,
+  ): Promise<{ soBang: number; hanXacNhan: string }> {
+    return this.post<{ soBang: number; hanXacNhan: string }>(
+      { thang, hanXacNhan },
+      { endpoint: '/gui-xac-nhan' },
+    );
+  }
+
+  /** TỰ PHỤC VỤ: bảng công của chính người đang đăng nhập. */
+  async cuaToi(thang: string): Promise<Timesheet | null> {
+    return this.get<Timesheet | null>({
+      endpoint: '/cua-toi',
+      params: { thang },
+    });
+  }
+
+  /** TỰ PHỤC VỤ: xác nhận / đề nghị điều chỉnh bảng công của chính mình. */
+  async phanHoi(
+    id: string,
+    dongY: boolean,
+    yKien?: string,
+  ): Promise<Timesheet> {
+    return this.post<Timesheet>(
+      { dongY, yKien },
+      { endpoint: `/cua-toi/${id}/phan-hoi` },
+    );
   }
 
   async remove(id: string): Promise<void> {

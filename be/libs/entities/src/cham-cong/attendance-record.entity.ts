@@ -40,6 +40,15 @@ export class AttendanceRecord extends BaseEntity {
    * vẫn được ghi đầy đủ — bỏ KIỂM vị trí không phải bỏ GHI vị trí.
    */
   @Column({ default: false }) laOnline: boolean;
+  /**
+   * `tai_van_phong` | `tu_xa` — người chấm TỰ KHAI khi bấm (yêu cầu d16).
+   *
+   * Khác `laOnline` ở chỗ: `laOnline` là KẾT LUẬN của hệ thống (có đơn làm
+   * online đã duyệt, hoặc công ty cho tự khai), còn cột này là điều người
+   * dùng nói. Giữ riêng để khi đối chiếu còn biết ai khai gì — gộp vào một
+   * cột là mất dấu vết.
+   */
+  @Column({ nullable: true }) hinhThucLam?: string;
   @Column({ nullable: true }) ipAddress?: string;
 
   @Column({ nullable: true }) deviceId?: string;

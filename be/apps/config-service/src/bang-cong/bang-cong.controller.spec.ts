@@ -25,6 +25,11 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   ['kyHieu', RequestMethod.GET, '/cham-cong/bang-cong:xem'],
   ['findAll', RequestMethod.GET, '/cham-cong/bang-cong:xem'],
   ['findOne', RequestMethod.GET, '/cham-cong/bang-cong:xem'],
+  // Bảng giờ làm thực tế: xuất giờ ra/vào của toàn bộ nhân sự → quyền `:xuat`.
+  ['bangGioLam', RequestMethod.GET, '/cham-cong/bang-cong:xuat'],
+  // Gửi bảng công cho nhân viên xác nhận = SỬA trạng thái bảng công của cả
+  // tháng (yêu cầu d19).
+  ['guiXacNhan', RequestMethod.POST, '/cham-cong/bang-cong:sua'],
   ['generate', RequestMethod.POST, '/cham-cong/bang-cong:them'],
   ['update', RequestMethod.PUT, '/cham-cong/bang-cong:sua'],
   ['setDay', RequestMethod.PATCH, '/cham-cong/bang-cong:sua'],
@@ -54,21 +59,29 @@ describe('BangCong_Controller — phân quyền', () => {
     expect(quetPhanQuyenRoute(BangCong_Controller)).toEqual([]);
   });
 
+  /** Route tự phục vụ (nhánh `cua-toi`) cố ý KHÔNG nằm trong bảng quyền. */
+  const ROUTE_TU_PHUC_VU = ['cuaToi', 'phanHoiXacNhan'];
+
   it('bảng quyền ở trên phủ đúng toàn bộ route của controller', () => {
     const routeThucTe = Object.getOwnPropertyNames(proto).filter(
       (ten) => httpMethodOf(proto[ten]) !== undefined,
     );
-    expect(routeThucTe.sort()).toEqual(BANG_QUYEN.map(([t]) => t).sort());
+    expect(routeThucTe.sort()).toEqual(
+      [...BANG_QUYEN.map(([t]) => t), ...ROUTE_TU_PHUC_VU].sort(),
+    );
   });
 
   /**
-   * Màn hình `/toi/bang-cong` của nhân viên hiện là `ComingSoonPage` và không
-   * gọi API nào, nên module này KHÔNG có route tự phục vụ. Khoá lại tường
-   * minh: khi ai đó làm màn hình đó thật, cách đúng là thêm route `cua-toi`
-   * khoá phạm vi bằng `employeeId` suy từ token, không phải gỡ quyền của các
-   * route hiện có.
+   * Hai route TỰ PHỤC VỤ (yêu cầu d19: nhân viên xác nhận bảng công của chính
+   * mình) nằm dưới nhánh `cua-toi` — đúng tiền tố mặc định của
+   * `quetPhanQuyenRoute`, nên KHÔNG phải nới danh sách miễn trừ. Mọi route
+   * khác vẫn phải có quyền đầy đủ.
+   *
+   * Phạm vi dữ liệu của hai route đó khoá bằng `employeeId` suy từ token
+   * (`BangCong_Service.cuaToi` / `phanHoiXacNhan` so khớp lại lần nữa), không
+   * bằng `@Permissions`.
    */
-  it('không route nào được miễn trừ theo diện tự phục vụ', () => {
+  it('không route nào được miễn trừ ngoài nhánh cua-toi', () => {
     expect(quetPhanQuyenRoute(BangCong_Controller, [])).toEqual([]);
   });
 });
@@ -85,7 +98,8 @@ describe('BangCong_Controller — mo-lai', () => {
     bangCong = {
       moLai: jest.fn().mockResolvedValue(2),
     };
-    return new BangCong_Controller(bangCong as any);
+    // Đối số thứ hai là NhanVien_Service, chỉ dùng ở hai route tự phục vụ.
+    return new BangCong_Controller(bangCong as any, {} as any);
   }
 
   it('mo-lai gọi service với đúng tháng', async () => {
@@ -103,6 +117,14 @@ describe('BangCong_Controller — mo-lai', () => {
     const ten = Object.getOwnPropertyNames(proto);
     const routePost = ten.filter((t) => httpMethodOf(proto[t]) === RequestMethod.POST);
 
-    expect(routePost).toEqual(['generate', 'finalize', 'moLai']);
+    // `gui-xac-nhan` là route POST tên cố định (một đoạn) — nằm trước
+    // `cua-toi/:id/phan-hoi` đúng nguyên tắc route tên cố định đứng trước.
+    expect(routePost).toEqual([
+      'guiXacNhan',
+      'phanHoiXacNhan',
+      'generate',
+      'finalize',
+      'moLai',
+    ]);
   });
 });

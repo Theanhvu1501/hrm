@@ -6,7 +6,7 @@ import { StatusPill } from "@/components/ui/StatusPill";
 import { XemTruocData } from "./XemTruocModal.state";
 
 /**
- * Modal xem trước DÙNG CHUNG cho "Cấp phép đầu năm" và "Đóng quỹ năm N".
+ * Modal xem trước DÙNG CHUNG cho "Mở quỹ phép năm" và "Đóng quỹ năm N".
  * Đây là màn hình BẮT BUỘC người dùng phải đi qua trước khi ghi dữ liệu —
  * nút "Xác nhận" ở đây là nơi DUY NHẤT phát sự kiện `xacNhanXemTruoc`
  * (xem thao-tac.handler.ts), nên không có nút nào khác trong màn hình gọi
@@ -26,7 +26,15 @@ export function XemTruocModal() {
   const capColumns: ColumnsType<DongXemTruocCap> = [
     { title: "Mã NV", dataIndex: "employeeCode", key: "employeeCode", width: 100 },
     { title: "Họ tên", dataIndex: "employeeName", key: "employeeName" },
-    { title: "Số ngày dự kiến cấp", dataIndex: "soNgay", key: "soNgay", width: 160, align: "right" },
+    {
+      // Với năm ĐANG CHẠY, đây là số ngày của CẢ NĂM nếu làm đủ — không phải
+      // số được cộng vào ngay. Quỹ mở ra bằng 0 và cộng dần theo tháng.
+      title: "Mức cả năm (dự kiến)",
+      dataIndex: "soNgay",
+      key: "soNgay",
+      width: 180,
+      align: "right",
+    },
     {
       title: "Trạng thái",
       key: "trangThai",
@@ -62,7 +70,7 @@ export function XemTruocModal() {
     <Modal
       title={
         dangMoCap
-          ? `Xem trước cấp phép đầu năm ${xemTruoc?.nam}`
+          ? `Xem trước mở quỹ phép năm ${xemTruoc?.nam}`
           : `Xem trước đóng quỹ năm ${xemTruoc?.nam}`
       }
       open={!!xemTruoc}

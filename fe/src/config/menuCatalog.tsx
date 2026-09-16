@@ -79,11 +79,13 @@ export const MENU_LEAVES: MenuLeaf[] = [
   { key: '/cham-cong/ban-ghi', label: 'Bản ghi chấm công', module: 'cham-cong', cluster: 'THEO DÕI', status: 'ok', icon: <AuditOutlined /> },
   { key: '/cham-cong/quy-phep', label: 'Quỹ phép', module: 'cham-cong', cluster: 'THEO DÕI', status: 'ok', icon: <WalletOutlined /> },
   { key: '/cham-cong/quy-gio', label: 'Quỹ giờ làm thêm', module: 'cham-cong', cluster: 'THEO DÕI', status: 'ok', icon: <FieldTimeOutlined /> },
-  { key: '/cham-cong/ca-lam-viec', label: 'Cấu hình ca làm việc', module: 'cham-cong', cluster: 'THIẾT LẬP', status: 'ok', icon: <ClockCircleOutlined /> },
+  { key: '/cham-cong/ca-lam-viec', label: 'Cấu hình chấm công & ca', module: 'cham-cong', cluster: 'THIẾT LẬP', status: 'ok', icon: <ClockCircleOutlined /> },
   { key: '/cham-cong/dia-diem', label: 'Địa điểm chấm công', module: 'cham-cong', cluster: 'THIẾT LẬP', status: 'ok', icon: <EnvironmentOutlined /> },
   { key: '/cham-cong/ngay-le', label: 'Ngày nghỉ lễ', module: 'cham-cong', cluster: 'THIẾT LẬP', status: 'ok', icon: <CalendarOutlined /> },
   { key: '/cham-cong/thiet-bi', label: 'Thiết bị chấm công', module: 'cham-cong', cluster: 'THIẾT LẬP', status: 'ok', icon: <TabletOutlined /> },
-  { key: '/cham-cong/cau-hinh', label: 'Cấu hình chấm công', module: 'cham-cong', cluster: 'THIẾT LẬP', status: 'ok', icon: <SettingOutlined /> },
+  // Yêu cầu d24: "Cấu hình chấm công" đã gộp thành TAB của màn Cấu hình chấm
+  // công & ca — không còn là một mục menu riêng. Route `/cham-cong/cau-hinh`
+  // vẫn sống (mở thẳng tab đó) để link cũ và quyền cũ không vỡ.
 
   // ===== 4. Lương (3) — cả nhóm đi chung quyền Bảng lương =====
   { key: '/luong/bang-luong', label: 'Bảng lương', module: 'luong', status: 'ok', icon: <DollarOutlined /> },

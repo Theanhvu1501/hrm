@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Empty, Typography } from "antd";
+import { Empty, Tooltip, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import {
@@ -8,6 +8,7 @@ import {
 } from "../../BangCongHandlerContext";
 import { usePagePermission } from "@/hooks/usePagePermission";
 import { BangDuLieu } from "@/components/table/BangDuLieu";
+import { StatusPill } from "@/components/ui/StatusPill";
 import {
   KyHieuDef,
   Timesheet,
@@ -187,6 +188,49 @@ export function BangCongTable() {
         fixed: "right",
         align: "center",
         render: (value?: number) => value ?? 0,
+      },
+      {
+        // Trạng thái xác nhận của NLĐ (yêu cầu d19). Để C&B biết ai đã xác
+        // nhận, ai đang đề nghị sửa — và sửa cái gì (rê chuột đọc ý kiến).
+        title: "Xác nhận",
+        key: "xacNhan",
+        width: 130,
+        fixed: "right",
+        align: "center",
+        render: (_: unknown, record: Timesheet) => {
+          const tt = record.trangThaiXacNhan ?? "chua_gui";
+          if (tt === "chua_gui") {
+            return <span className="text-muted-foreground">—</span>;
+          }
+          const quaHan =
+            !!record.hanXacNhan &&
+            dayjs().format("YYYY-MM-DD") > record.hanXacNhan;
+          if (tt === "da_xac_nhan") {
+            return <StatusPill tone="ok">Đã xác nhận</StatusPill>;
+          }
+          if (tt === "de_nghi_dieu_chinh") {
+            return (
+              <Tooltip title={record.yKienNhanVien || "Không ghi nội dung"}>
+                <span>
+                  <StatusPill tone="cho">Đề nghị sửa</StatusPill>
+                </span>
+              </Tooltip>
+            );
+          }
+          return quaHan ? (
+            <Tooltip title={`Hạn ${record.hanXacNhan} đã qua — bảng tự khoá`}>
+              <span>
+                <StatusPill tone="trung-tinh">Quá hạn</StatusPill>
+              </span>
+            </Tooltip>
+          ) : (
+            <Tooltip title={`Hạn phản hồi ${record.hanXacNhan}`}>
+              <span>
+                <StatusPill tone="cho">Chờ xác nhận</StatusPill>
+              </span>
+            </Tooltip>
+          );
+        },
       },
       {
         title: "",

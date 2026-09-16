@@ -1,6 +1,23 @@
-import { useMemo } from "react";
-import { Button, DatePicker, Popconfirm, Tooltip } from "antd";
-import { LockOutlined, PrinterOutlined, SyncOutlined, UnlockOutlined } from "@ant-design/icons";
+import { useMemo, useState } from "react";
+import {
+  Button,
+  DatePicker,
+  Modal,
+  Popconfirm,
+  Tooltip,
+  message,
+} from "antd";
+import * as XLSX from "xlsx";
+import { apiErrorMessage } from "@/config/api";
+import { timesheetService } from "@/services/timesheetService";
+import {
+  LockOutlined,
+  PrinterOutlined,
+  SyncOutlined,
+  UnlockOutlined,
+  FileExcelOutlined,
+  SendOutlined,
+} from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
 import {
   useBangCongHandler,
@@ -22,6 +39,73 @@ export function BangCongHeader() {
   const [finalizing] = useBangCongState("finalizing", false);
   const [reopening] = useBangCongState("reopening", false);
   const { canCreate, canEdit, canExport } = usePagePermission("/cham-cong/bang-cong");
+
+  const [dangXuatGio, setDangXuatGio] = useState(false);
+  const [hanXacNhan, setHanXacNhan] = useState<Dayjs | null>(null);
+  const [moGuiXacNhan, setMoGuiXacNhan] = useState(false);
+  const [dangGui, setDangGui] = useState(false);
+
+  /**
+   * Xuất BẢNG GIỜ LÀM THỰC TẾ (yêu cầu d16/d19) — giờ vào/ra/tổng giờ từng
+   * ngày, lấy thẳng từ bản ghi chấm công chứ không từ bảng công (bảng công có
+   * thể đã được sửa tay; "giờ làm thực tế" phải là thứ máy ghi lại).
+   */
+  const xuatBangGioLam = async () => {
+    setDangXuatGio(true);
+    try {
+      const ds = await timesheetService.bangGioLam(thang);
+      if (ds.length === 0) {
+        message.info("Tháng này chưa có lượt chấm công nào.");
+        return;
+      }
+      const gio = (iso: string | null) =>
+        iso ? dayjs(iso).format("HH:mm") : "";
+      const luoi = ds.map((d) => ({
+        "Mã NV": d.maNhanVien ?? "",
+        "Họ tên": d.hoTen ?? "",
+        Ngày: d.ngay,
+        "Giờ vào": gio(d.gioVao),
+        "Giờ ra": gio(d.gioRa),
+        "Tổng giờ": d.tongGio,
+        "Làm từ xa": d.laOnline ? "x" : "",
+        "Đi muộn (phút)": d.diMuonPhut,
+        "Về sớm (phút)": d.veSomPhut,
+        "Thiếu giờ ra": d.thieuGioRa ? "x" : "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(luoi);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Gio lam");
+      XLSX.writeFile(wb, `Bang-gio-lam-${thang}.xlsx`);
+    } catch (err) {
+      message.error(apiErrorMessage(err, "Không xuất được bảng giờ làm"));
+    } finally {
+      setDangXuatGio(false);
+    }
+  };
+
+  /** Gửi bảng công cả tháng cho nhân viên xác nhận, kèm hạn phản hồi. */
+  const guiXacNhan = async () => {
+    if (!hanXacNhan) {
+      message.error("Chọn hạn xác nhận trước khi gửi");
+      return;
+    }
+    setDangGui(true);
+    try {
+      const kq = await timesheetService.guiXacNhan(
+        thang,
+        hanXacNhan.format("YYYY-MM-DD"),
+      );
+      message.success(
+        `Đã gửi ${kq.soBang} bảng công, hạn phản hồi ${dayjs(kq.hanXacNhan).format("DD/MM/YYYY")}`,
+      );
+      setMoGuiXacNhan(false);
+      handler.executeEvent("init", {});
+    } catch (err) {
+      message.error(apiErrorMessage(err, "Gửi xác nhận thất bại"));
+    } finally {
+      setDangGui(false);
+    }
+  };
 
   const trangThai = useMemo((): { label: string; tone: PillTone } => {
     if (timesheetList.length === 0) {
@@ -70,6 +154,7 @@ export function BangCongHeader() {
   };
 
   return (
+    <>
     <FilterBar
       filters={
         <>
@@ -117,6 +202,28 @@ export function BangCongHeader() {
               In bảng chấm công
             </Button>
           )}
+          {canExport && (
+            <Tooltip title="Giờ vào / giờ ra / tổng giờ từng ngày, lấy từ bản ghi chấm công">
+              <Button
+                icon={<FileExcelOutlined />}
+                loading={dangXuatGio}
+                onClick={xuatBangGioLam}
+              >
+                Bảng giờ làm
+              </Button>
+            </Tooltip>
+          )}
+          {canEdit && (
+            <Tooltip title="Gửi bảng công cho nhân viên xác nhận, có hạn phản hồi; quá hạn bảng tự khoá">
+              <Button
+                icon={<SendOutlined />}
+                disabled={timesheetList.length === 0}
+                onClick={() => setMoGuiXacNhan(true)}
+              >
+                Gửi NV xác nhận
+              </Button>
+            </Tooltip>
+          )}
           {canEdit && coDongDaChot && (
             <Popconfirm
               title="Mở lại bảng công tháng này?"
@@ -160,5 +267,32 @@ export function BangCongHeader() {
         </>
       }
     />
+
+      <Modal
+        title={`Gửi bảng công tháng ${thang} cho nhân viên xác nhận`}
+        open={moGuiXacNhan}
+        onCancel={() => setMoGuiXacNhan(false)}
+        onOk={guiXacNhan}
+        okText="Gửi"
+        cancelText="Huỷ"
+        confirmLoading={dangGui}
+      >
+        <div className="text-[12px]">
+          Nhân viên sẽ thấy bảng công của mình ở màn "Bảng công của tôi" và bấm
+          xác nhận hoặc đề nghị điều chỉnh. Quá hạn thì không phản hồi được nữa
+          — bảng coi như đã được chấp nhận.
+        </div>
+        <div className="mt-3">
+          <div className="mb-1 text-[12px] font-medium">Hạn phản hồi</div>
+          <DatePicker
+            className="w-full"
+            format="DD/MM/YYYY"
+            value={hanXacNhan}
+            onChange={setHanXacNhan}
+            disabledDate={(d) => d && d.isBefore(dayjs().startOf("day"))}
+          />
+        </div>
+      </Modal>
+    </>
   );
 }

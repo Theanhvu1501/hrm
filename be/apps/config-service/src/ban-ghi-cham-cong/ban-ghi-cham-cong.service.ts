@@ -29,6 +29,7 @@ import {
 import { chuanHoaIp } from './ip.util';
 import { ChamCongDto, HrNhapChamCongDto } from './dto';
 import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
+import { tinhGioLamTrongNgay } from './gio-lam.util';
 import { lichTuanApDung } from '../cau-hinh-cham-cong/lich-tuan';
 
 const NGUONG_TRUNG_LAP_MS = 60_000;
@@ -274,9 +275,31 @@ export class BanGhiChamCong_Service {
     // phải trả thêm một truy vấn nào. Đặt cạnh `choPhepChamNgoaiVung` vì cùng
     // một loại ngoại lệ, khác nhau ở phạm vi — cờ kia mở vĩnh viễn cho một
     // người và do HR bật tay, cái này mở đúng những ngày đã có người duyệt.
-    const laOnline = kq.ngoaiVung
-      ? await this.coDonOnlineDaDuyet(employeeId, ngay)
-      : false;
+    // Người chấm TỰ KHAI làm từ xa (yêu cầu d16) — chỉ được chấp nhận khi
+    // công ty đã bật cờ trong Cấu hình chấm công. Không bật mà vẫn chọn thì
+    // TỪ CHỐI hẳn, chứ không âm thầm coi như "tại văn phòng": im lặng hạ cấp
+    // lựa chọn của người dùng là cách chắc chắn để họ tưởng mình đã khai và
+    // HR tưởng người đó ngồi ở văn phòng.
+    const tuKhaiTuXa = dto.hinhThucLam === 'tu_xa';
+    if (tuKhaiTuXa) {
+      const cauHinh = await this.cauHinhChamCong_Service.layCauHinh();
+      const coDon = await this.coDonOnlineDaDuyet(employeeId, ngay);
+      if (
+        !cauHinh.choPhepTuKhaiTuXa &&
+        !coDon &&
+        emp.choPhepChamNgoaiVung !== true
+      ) {
+        throw new BadRequestException(
+          'Công ty chưa cho phép tự khai làm từ xa — nộp đơn làm online để được duyệt.',
+        );
+      }
+    }
+
+    const laOnline = tuKhaiTuXa
+      ? true
+      : kq.ngoaiVung
+        ? await this.coDonOnlineDaDuyet(employeeId, ngay)
+        : false;
 
     // Ngoài bán kính thì CHẶN, trừ người được HR cấp phép riêng.
     //
@@ -345,6 +368,8 @@ export class BanGhiChamCong_Service {
         // bật là một cảnh báo không ai đọc.
         ngoaiVung: laOnline ? false : kq.ngoaiVung,
         laOnline,
+        // Lưu cả điều NGƯỜI DÙNG khai, không chỉ kết luận của hệ thống.
+        hinhThucLam: dto.hinhThucLam ?? 'tai_van_phong',
         // Lưu bản đã chuẩn hoá: báo cáo đọc `::ffff:…` không ra nghĩa gì,
         // và giá trị lưu phải chính là giá trị đã dùng để đối chiếu.
         ipAddress: ip,
@@ -605,6 +630,16 @@ export class BanGhiChamCong_Service {
        * thay vì để họ tự phát hiện bằng cách bấm thử rồi thấy không bị chặn.
        */
       laOnline,
+      /**
+       * Công ty có cho tự khai "làm từ xa" khi bấm không (yêu cầu d16).
+       *
+       * Trả trong endpoint TỰ PHỤC VỤ này vì màn hình nhân viên cần biết có
+       * nên hiện ô chọn hay không — mà `GET /cau-hinh-cham-cong` thì đòi
+       * quyền quản trị, nhân viên thường không có.
+       */
+      choPhepTuKhaiTuXa:
+        (await this.cauHinhChamCong_Service.layCauHinh()).choPhepTuKhaiTuXa ===
+        true,
       nhanVien: {
         id: employeeId,
         hoTen: emp.hoTen,
@@ -627,6 +662,9 @@ export class BanGhiChamCong_Service {
         banKinh: d.banKinh,
       })),
       soCong: this.tinhSoCong(banGhi),
+      // Tổng giờ làm trong ngày (yêu cầu d16). Tính từ CÁC CẶP vào–ra, không
+      // phải hiệu hai đầu — xem `tinhGioLamTrongNgay`.
+      gioLam: tinhGioLamTrongNgay(banGhi),
       // Ngày công ĐANG HIỂN THỊ (`ngayCong`) đã có lượt vào thì mọi lượt tiếp
       // theo là RA — không bao giờ quay lại "vào" nữa, kể cả khi lượt vào đó
       // đã có lượt ra đi kèm rồi. Nhờ vậy bấm lại nút "ra" chỉ cập nhật giờ ra

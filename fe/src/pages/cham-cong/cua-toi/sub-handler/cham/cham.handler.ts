@@ -3,6 +3,7 @@ import { CSubHanlder } from "@/common/c-handler/core/sub-handler.ts/sub-handler"
 import {
   attendanceRecordService,
   ChamCongDto,
+  HinhThucLam,
   TrangThaiHomNay,
 } from "@/services/attendanceRecordService";
 import { getDeviceId } from "@/services/deviceIdentity";
@@ -14,7 +15,10 @@ import "./cham.event";
 @RegisterHandler("cham-cong-cua-toi-context")
 export class ChamHandler extends CSubHanlder {
   @HandlerDecorator("cham")
-  async cham(params: { tenThietBi?: string }): Promise<void> {
+  async cham(params: {
+    tenThietBi?: string;
+    hinhThucLam?: HinhThucLam;
+  }): Promise<void> {
     const homNay = this.getState("homNay") as TrangThaiHomNay | null;
     if (!homNay) return;
     // Chặn bấm chồng: cú chạm thứ hai lúc đang gửi sẽ đẻ ra hai request, và
@@ -38,6 +42,8 @@ export class ChamHandler extends CSubHanlder {
         latitude: viTri.latitude,
         longitude: viTri.longitude,
         doChinhXacMet: viTri.doChinhXacMet,
+        // Người dùng tự khai (yêu cầu d16). Không gửi = mặc định tại văn phòng.
+        hinhThucLam: params?.hinhThucLam,
         // LUÔN gửi tên máy, kể cả lần chấm đầu tiên khi người dùng chưa đặt
         // tên: backend tự tạo dòng chờ duyệt ngay lần đó và chỉ ghi tên đúng
         // một lần, nên bỏ trống là để HR nhìn một UUID trần trong hàng chờ.

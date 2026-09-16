@@ -17,6 +17,18 @@ export class ChamCongDto {
   })
   phuongThuc: 'gps' | 'wifi' | 'qr';
 
+  /**
+   * Hình thức làm việc người dùng TỰ KHAI cho lượt bấm này (yêu cầu d16).
+   * Mặc định `tai_van_phong`. Chọn `tu_xa` chỉ được chấp nhận khi công ty bật
+   * `choPhepTuKhaiTuXa`, hoặc ngày đó đã có đơn làm online được duyệt, hoặc
+   * người này được HR cấp phép chấm ngoài vùng — xem `ban-ghi-cham-cong.service`.
+   */
+  @IsOptional()
+  @IsIn(['tai_van_phong', 'tu_xa'], {
+    message: 'Hình thức làm việc phải là tai_van_phong hoặc tu_xa',
+  })
+  hinhThucLam?: 'tai_van_phong' | 'tu_xa';
+
   @IsOptional() @IsNumber() latitude?: number;
   @IsOptional() @IsNumber() longitude?: number;
   @IsOptional() @IsNumber() doChinhXacMet?: number;

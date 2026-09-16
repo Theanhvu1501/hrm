@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Input, Typography } from "antd";
+import { Alert, Button, Card, Input, Segmented, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import { Hero } from "./Hero";
 import {
@@ -16,6 +16,7 @@ import { DAI_NHAT_TEN_THIET_BI, tenThietBiMacDinh } from "../tenThietBi";
 import {
   AttendanceRecord,
   TrangThaiHomNay,
+  type HinhThucLam,
 } from "@/services/attendanceRecordService";
 import { KetQuaChamCongDialog } from "./KetQuaChamCongDialog";
 import "./NutCham.state";
@@ -67,6 +68,8 @@ export function NutCham() {
   // có rìa xuống nào để bắt) và không tự mở lại khi trạng thái đổi vì lý do
   // khác cú bấm (vd nạp lại lịch tuần).
   const [dialogMo, setDialogMo] = useState(false);
+  /** Hình thức làm việc người dùng tự khai cho lượt bấm sắp tới (yêu cầu d16). */
+  const [hinhThucLam, setHinhThucLam] = useState<HinhThucLam>("tai_van_phong");
   const dangChamTruocRef = useRef(dangCham);
   useEffect(() => {
     const laKetQuaChamCong =
@@ -205,11 +208,43 @@ export function NutCham() {
         />
       )}
 
+      {/*
+        Tự khai hình thức làm việc (yêu cầu d16). CHỈ hiện khi công ty đã bật
+        trong Cấu hình chấm công — chưa bật mà vẫn hiện thì người ta chọn xong
+        bấm và ăn lỗi, không hiểu vì sao có ô chọn mà không dùng được.
+
+        Ngày đã có đơn làm online được duyệt thì cũng không cần ô này: băng
+        thông báo phía trên đã nói rõ hôm nay không kiểm vị trí.
+      */}
+      {homNay.choPhepTuKhaiTuXa && !homNay.laOnline && (
+        <div className="mb-3">
+          <div className="mb-1 text-[12px] font-medium">Hôm nay bạn làm ở đâu?</div>
+          <Segmented
+            block
+            value={hinhThucLam}
+            onChange={(v) => setHinhThucLam(v as HinhThucLam)}
+            options={[
+              { label: "Tại văn phòng", value: "tai_van_phong" },
+              { label: "Làm từ xa", value: "tu_xa" },
+            ]}
+          />
+          {hinhThucLam === "tu_xa" && (
+            <div className="mt-1 text-[11px] text-[hsl(var(--ink-2))]">
+              Lượt chấm này sẽ không đối chiếu vị trí. Vị trí vẫn được ghi lại.
+            </div>
+          )}
+        </div>
+      )}
+
       <Hero
         homNay={homNay}
         laVao={laVao}
         dangCham={dangCham}
-        onCham={() => handler.executeEvent("cham", {})}
+        onCham={() =>
+          handler.executeEvent("cham", {
+            hinhThucLam: homNay.choPhepTuKhaiTuXa ? hinhThucLam : undefined,
+          })
+        }
       />
     </div>
   );

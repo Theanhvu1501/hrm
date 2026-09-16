@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -28,6 +30,9 @@ import {
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 import { CauHinhChamCong_Service } from '../cau-hinh-cham-cong/cau-hinh-cham-cong.service';
 import { lichTuanApDung } from '../cau-hinh-cham-cong/lich-tuan';
+import { tinhGioLamTrongNgay } from '../ban-ghi-cham-cong/gio-lam.util';
+import { ngayVN } from '../ban-ghi-cham-cong/thoi-gian.util';
+import { conNhanPhanHoi, daQuaHan } from './xac-nhan-bang-cong';
 
 export interface BangCongFilter {
   thang?: string;
@@ -48,6 +53,21 @@ export const MA_LOI_BANG_CONG = {
 } as const;
 
 /** Tóm tắt một lần tổng hợp `generate()` — xem doc-comment của hàm đó. */
+/** Một dòng của BẢNG GIỜ LÀM THỰC TẾ (một người × một ngày). */
+export interface DongGioLam {
+  employeeId: string;
+  maNhanVien?: string;
+  hoTen?: string;
+  ngay: string;
+  gioVao: string | null;
+  gioRa: string | null;
+  tongGio: number;
+  thieuGioRa: boolean;
+  laOnline: boolean;
+  diMuonPhut: number;
+  veSomPhut: number;
+}
+
 export interface TomTatTongHop {
   soDongXuLy: number;
   soODaDien: number;
@@ -123,6 +143,165 @@ export class BangCong_Service {
    * phá dữ liệu người: nó chỉ tính lại phần vốn dĩ của máy. Đổi lại phải trả
    * về tóm tắt để HR biết còn bao nhiêu ô phải tự xử lý.
    */
+  /**
+   * BẢNG GIỜ LÀM THỰC TẾ của một tháng (yêu cầu d16/d19: "Thêm bảng giờ làm
+   * thực tế" — bảng chấm công xuất được bảng giờ làm).
+   *
+   * Khác BẢNG CÔNG ở chỗ: bảng công nói NGÀY CÔNG (X, P, L, 1/2…) dùng để
+   * tính lương, còn bảng này nói GIỜ — người vào lúc nào, ra lúc nào, tổng
+   * bao nhiêu giờ. Hai câu hỏi khác nhau nên không gộp một bảng: gộp là mỗi
+   * ô phải mang hai nghĩa và không ô nào đọc được.
+   *
+   * Chỉ đọc `attendance_records`, KHÔNG đọc bảng công: bảng công có thể đã
+   * được HR sửa tay, mà "giờ làm thực tế" phải là những gì máy ghi lại.
+   */
+  async bangGioLam(thang: string): Promise<DongGioLam[]> {
+    const [employees, banGhi] = await Promise.all([
+      this.employeeRepo.find({ where: { isActive: true } as any }),
+      this.recordRepo.find({
+        where: {
+          isActive: true,
+          ngay: { $gte: `${thang}-01`, $lte: `${thang}-31` },
+        } as any,
+      }),
+    ]);
+
+    const theoNguoi = new Map<string, AttendanceRecord[]>();
+    for (const b of banGhi) {
+      const ds = theoNguoi.get(b.employeeId) ?? [];
+      ds.push(b);
+      theoNguoi.set(b.employeeId, ds);
+    }
+
+    const ra: DongGioLam[] = [];
+    for (const emp of employees) {
+      const id = String((emp as any)._id);
+      const cua = theoNguoi.get(id) ?? [];
+      if (cua.length === 0) continue;
+
+      const theoNgay = new Map<string, AttendanceRecord[]>();
+      for (const b of cua) {
+        const ds = theoNgay.get(b.ngay) ?? [];
+        ds.push(b);
+        theoNgay.set(b.ngay, ds);
+      }
+
+      for (const [ngay, dsNgay] of [...theoNgay.entries()].sort()) {
+        const gio = tinhGioLamTrongNgay(dsNgay);
+        ra.push({
+          employeeId: id,
+          maNhanVien: emp.employeeId,
+          hoTen: emp.hoTen,
+          ngay,
+          gioVao: gio.gioVao,
+          gioRa: gio.gioRa,
+          tongGio: gio.tongGio,
+          thieuGioRa: gio.thieuGioRa,
+          // Một ngày được coi là làm từ xa nếu CÓ lượt bấm nào của ngày đó
+          // mang cờ online — nửa ngày ở nhà nửa ngày ở văn phòng vẫn là ngày
+          // có làm từ xa, và đó là thứ người duyệt cần nhìn thấy.
+          laOnline: dsNgay.some((b) => b.laOnline),
+          diMuonPhut: dsNgay.reduce((t, b) => t + (b.soPhutDiMuon ?? 0), 0),
+          veSomPhut: dsNgay.reduce((t, b) => t + (b.soPhutVeSom ?? 0), 0),
+        });
+      }
+    }
+
+    return ra;
+  }
+
+  /**
+   * GỬI bảng công của cả tháng cho người lao động xác nhận (yêu cầu d19).
+   *
+   * Gửi lại một bảng ĐÃ xác nhận sẽ đặt nó về "chờ xác nhận" và xoá ý kiến cũ
+   * — đúng ý: C&B chỉ gửi lại sau khi đã sửa theo đề nghị, và khi đó lần xác
+   * nhận trước không còn nói về bảng đang cầm trên tay nữa.
+   */
+  async guiXacNhan(
+    thang: string,
+    hanXacNhan: string,
+  ): Promise<{ soBang: number; hanXacNhan: string }> {
+    if (!/^\d{4}-\d{2}$/.test(thang)) {
+      throw new BadRequestException('Tháng phải có định dạng YYYY-MM');
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(hanXacNhan)) {
+      throw new BadRequestException('Hạn xác nhận phải có định dạng YYYY-MM-DD');
+    }
+    const homNay = ngayVN(new Date());
+    if (hanXacNhan < homNay) {
+      // Gửi kèm một hạn đã qua là gửi một bảng khoá sẵn: người nhận mở ra chỉ
+      // để đọc "quá hạn", không phản hồi được gì.
+      throw new BadRequestException('Hạn xác nhận phải từ hôm nay trở đi');
+    }
+
+    const ds = await this.repo.find({ where: { thang, isActive: true } as any });
+    if (ds.length === 0) {
+      throw new BadRequestException(
+        'Chưa có bảng công tháng này — bấm Tổng hợp trước khi gửi xác nhận.',
+      );
+    }
+
+    for (const b of ds) {
+      b.trangThaiXacNhan = 'cho_xac_nhan';
+      b.hanXacNhan = hanXacNhan;
+      b.ngayGuiXacNhan = homNay;
+      b.ngayXacNhan = undefined;
+      b.yKienNhanVien = undefined;
+      await this.repo.save(b);
+    }
+
+    return { soBang: ds.length, hanXacNhan };
+  }
+
+  /**
+   * Bảng công CỦA CHÍNH người đang đăng nhập. `employeeId` suy từ token —
+   * đó là toàn bộ ranh giới ngăn một người đọc bảng công của đồng nghiệp.
+   */
+  async cuaToi(employeeId: string, thang: string): Promise<Timesheet | null> {
+    const ds = await this.repo.find({
+      where: { thang, employeeId, isActive: true } as any,
+    });
+    return ds[0] ?? null;
+  }
+
+  /**
+   * NLĐ xác nhận hoặc đề nghị điều chỉnh bảng công của CHÍNH MÌNH.
+   *
+   * Quá hạn thì từ chối: hạn có tác dụng thật, không phải một dòng chữ trang
+   * trí. Bảng của người khác cũng từ chối — `employeeId` truyền vào đây luôn
+   * là id suy từ token, và so khớp ở đây là lớp thứ hai cho cùng bất biến.
+   */
+  async phanHoiXacNhan(
+    employeeId: string,
+    id: string,
+    dongY: boolean,
+    yKien?: string,
+  ): Promise<Timesheet> {
+    const item = await this.findOne(id);
+    if (item.employeeId !== employeeId) {
+      throw new ForbiddenException('Đây không phải bảng công của bạn');
+    }
+
+    const homNay = ngayVN(new Date());
+    if (!conNhanPhanHoi(item, homNay)) {
+      throw new BadRequestException(
+        daQuaHan(item, homNay)
+          ? 'Đã quá hạn xác nhận — bảng công đã khoá, liên hệ C&B nếu cần sửa.'
+          : 'Bảng công này không ở trạng thái chờ bạn xác nhận.',
+      );
+    }
+    if (!dongY && !yKien?.trim()) {
+      // Đề nghị điều chỉnh mà không nói điều chỉnh gì thì C&B không có gì để
+      // làm, và vòng gửi–nhận lặp lại thêm một lượt vô ích.
+      throw new BadRequestException('Nêu rõ nội dung cần điều chỉnh');
+    }
+
+    item.trangThaiXacNhan = dongY ? 'da_xac_nhan' : 'de_nghi_dieu_chinh';
+    item.ngayXacNhan = homNay;
+    item.yKienNhanVien = yKien?.trim() || undefined;
+    return this.repo.save(item);
+  }
+
   async generate(thang: string): Promise<TomTatTongHop> {
     const [employees, dongCoSan, banGhi, don, ngayLe, thoiViec] = await Promise.all([
       this.employeeRepo.find({ where: { isActive: true } as any }),

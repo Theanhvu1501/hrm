@@ -14,7 +14,14 @@ import {
 } from '@nestjs/common';
 import { BangCong_Service } from './bang-cong.service';
 import type { BangCongFilter } from './bang-cong.service';
-import { UpdateTimesheetDto, ThangDto, SetDayDto } from './dto';
+import {
+  UpdateTimesheetDto,
+  ThangDto,
+  SetDayDto,
+  GuiXacNhanDto,
+  PhanHoiBangCongDto,
+} from './dto';
+import { NhanVien_Service } from '../nhan-vien/nhan-vien.service';
 import { KY_HIEU_CHAM_CONG } from './cham-cong-ky-hieu';
 import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 
@@ -37,7 +44,12 @@ import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
 @Controller('bang-cong')
 @UseGuards(JwtGuard)
 export class BangCong_Controller {
-  constructor(private readonly bangCong_Service: BangCong_Service) {}
+  constructor(
+    private readonly bangCong_Service: BangCong_Service,
+    // Chỉ để suy hồ sơ NV từ token ở hai route tự phục vụ — KHÔNG dùng cho
+    // route quản trị nào bên dưới.
+    private readonly nhanVien_Service: NhanVien_Service,
+  ) {}
 
   // Danh mục ký hiệu là hằng số trong mã nguồn, không phải dữ liệu công ty —
   // nhưng vẫn gắn `:xem` như mọi route GET khác: nó chỉ có ích khi đọc được
@@ -56,6 +68,68 @@ export class BangCong_Controller {
   async findAll(@Query() query: BangCongFilter) {
     const data = await this.bangCong_Service.findAll(query);
     return { success: true, data };
+  }
+
+  /**
+   * Bảng giờ làm thực tế của tháng (yêu cầu d16/d19). Route TĨNH nên phải
+   * đứng trước `@Get(':id')`.
+   *
+   * Quyền `:xuat` — đây là bảng giờ ra/vào của TOÀN BỘ nhân sự, dùng để xuất
+   * đối chiếu, khác với mở một bảng công để sửa.
+   */
+  /**
+   * Bảng công CỦA CHÍNH người đang đăng nhập — TỰ PHỤC VỤ, chỉ `JwtGuard`.
+   *
+   * Không gắn `@Permissions` vì mọi nhân viên đều phải xem được bảng công của
+   * mình để xác nhận, kể cả người chưa được cấp vai trò nào. Phạm vi dữ liệu
+   * khoá bằng `employeeId` suy từ token, KHÔNG nhận từ query.
+   *
+   * Phải đặt TRƯỚC `@Get(':id')`.
+   */
+  @Get('cua-toi')
+  async cuaToi(@Query('thang') thang: string, @Req() req: any) {
+    const emp = await this.nhanVien_Service.resolveEmployeeFromUser(req.user);
+    const data = await this.bangCong_Service.cuaToi(
+      String((emp as any)._id),
+      thang,
+    );
+    return { success: true, data };
+  }
+
+  /** Gửi bảng công cả tháng cho nhân viên xác nhận (yêu cầu d19). */
+  @Post('gui-xac-nhan')
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/bang-cong:sua')
+  async guiXacNhan(@Body() body: GuiXacNhanDto) {
+    const data = await this.bangCong_Service.guiXacNhan(
+      body.thang,
+      body.hanXacNhan,
+    );
+    return { success: true, data };
+  }
+
+  /** Tự phục vụ: xác nhận / đề nghị điều chỉnh bảng công của chính mình. */
+  @Post('cua-toi/:id/phan-hoi')
+  async phanHoiXacNhan(
+    @Param('id') id: string,
+    @Body() body: PhanHoiBangCongDto,
+    @Req() req: any,
+  ) {
+    const emp = await this.nhanVien_Service.resolveEmployeeFromUser(req.user);
+    const data = await this.bangCong_Service.phanHoiXacNhan(
+      String((emp as any)._id),
+      id,
+      body.dongY,
+      body.yKien,
+    );
+    return { success: true, data };
+  }
+
+  @Get('gio-lam')
+  @UseGuards(PermissionGuard)
+  @Permissions('/cham-cong/bang-cong:xuat')
+  async bangGioLam(@Query('thang') thang: string) {
+    return { success: true, data: await this.bangCong_Service.bangGioLam(thang) };
   }
 
   @Get(':id')

@@ -128,6 +128,10 @@ describe('BanGhiChamCong_Service', () => {
     // NV (dòng ~296, ~325 trở xuống) tự override biến này khi cần.
     cauHinhChamCong = {
       lichTuanChung: jest.fn().mockResolvedValue([1, 2, 3, 4, 5]),
+      // Mặc định TẮT tự khai làm từ xa — đúng như seed thật.
+      layCauHinh: jest
+        .fn()
+        .mockResolvedValue({ choPhepTuKhaiTuXa: false }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -1630,6 +1634,101 @@ describe('BanGhiChamCong_Service', () => {
       const kq: any = await service.homNay(USER);
 
       expect(kq.laOnline).toBe(false);
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Yêu cầu d16: nhân viên tự khai "làm từ xa" khi bấm chấm công
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('tự khai làm từ xa', () => {
+    const NV_KHONG_CO_CO: any = { ...NV, choPhepChamNgoaiVung: false };
+    const XA = { latitude: 10.0, longitude: 106.0, doChinhXacMet: 5 };
+    const DIA_DIEM_GPS = {
+      _id: 'l1',
+      ten: 'VP',
+      loai: 'gps',
+      latitude: 21.0,
+      longitude: 105.8,
+      banKinh: 100,
+      isActive: true,
+    };
+
+    beforeEach(() => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue(NV_KHONG_CO_CO);
+      shiftRepo.findOne.mockResolvedValue(CA);
+      recordRepo.findOne.mockResolvedValue(null);
+      recordRepo.save.mockImplementation((v: any) => Promise.resolve(v));
+      locationRepo.find.mockResolvedValue([DIA_DIEM_GPS]);
+      requestRepo.find.mockResolvedValue([]);
+    });
+
+    it('công ty CHƯA bật thì từ chối hẳn, KHÔNG âm thầm hạ về "tại văn phòng"', async () => {
+      cauHinhChamCong.layCauHinh.mockResolvedValue({
+        choPhepTuKhaiTuXa: false,
+      });
+
+      await expect(
+        service.checkIn(USER, {
+          deviceId: 'd1',
+          phuongThuc: 'gps',
+          hinhThucLam: 'tu_xa',
+          ...XA,
+        } as any),
+      ).rejects.toThrow(/chưa cho phép tự khai làm từ xa/i);
+
+      expect(recordRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('công ty đã bật: chấm được dù ở xa, laOnline=true và ghi lại điều người dùng khai', async () => {
+      cauHinhChamCong.layCauHinh.mockResolvedValue({
+        choPhepTuKhaiTuXa: true,
+      });
+
+      const kq = await service.checkIn(USER, {
+        deviceId: 'd1',
+        phuongThuc: 'gps',
+        hinhThucLam: 'tu_xa',
+        ...XA,
+      } as any);
+
+      expect(kq.laOnline).toBe(true);
+      expect(kq.ngoaiVung).toBe(false);
+      expect(kq.hinhThucLam).toBe('tu_xa');
+      // Bỏ KIỂM vị trí không phải bỏ GHI vị trí.
+      expect(kq.latitude).toBe(XA.latitude);
+    });
+
+    it('không khai gì thì mặc định là tại văn phòng và vẫn đối chiếu vị trí', async () => {
+      cauHinhChamCong.layCauHinh.mockResolvedValue({
+        choPhepTuKhaiTuXa: true,
+      });
+
+      await expect(
+        service.checkIn(USER, {
+          deviceId: 'd1',
+          phuongThuc: 'gps',
+          ...XA,
+        } as any),
+      ).rejects.toThrow();
+    });
+
+    it('người được HR cấp phép chấm ngoài vùng vẫn tự khai được dù công ty chưa bật', async () => {
+      nhanVien.resolveEmployeeFromUser.mockResolvedValue({
+        ...NV,
+        choPhepChamNgoaiVung: true,
+      });
+      cauHinhChamCong.layCauHinh.mockResolvedValue({
+        choPhepTuKhaiTuXa: false,
+      });
+
+      const kq = await service.checkIn(USER, {
+        deviceId: 'd1',
+        phuongThuc: 'gps',
+        hinhThucLam: 'tu_xa',
+        ...XA,
+      } as any);
+
+      expect(kq.laOnline).toBe(true);
     });
   });
 });

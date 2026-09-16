@@ -1,4 +1,11 @@
-import { IsArray, IsInt, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsInt,
+  IsOptional,
+  Max,
+  Min,
+} from 'class-validator';
 
 /**
  * `forbidNonWhitelisted` đang bật ở `main.ts` — trường nào không khai ở đây
@@ -12,4 +19,9 @@ export class CapNhatCauHinhChamCongDto {
   @Min(0, { each: true })
   @Max(6, { each: true })
   ngayLamViecTrongTuan?: number[];
+
+  /** Cho phép nhân viên tự khai "làm từ xa" khi bấm chấm công (yêu cầu d16). */
+  @IsOptional()
+  @IsBoolean()
+  choPhepTuKhaiTuXa?: boolean;
 }

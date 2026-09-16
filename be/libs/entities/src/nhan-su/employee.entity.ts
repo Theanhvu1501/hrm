@@ -48,6 +48,15 @@ export class Employee extends BaseEntity {
   @Column({ nullable: true }) ngayChinhThuc?: string;
   @Column({ default: 'thu_viec' }) loaiHopDong: string;   // thu_viec|chinh_thuc|dich_vu
   @Column({ default: 'dang_lam_viec' }) trangThai: string; // dang_lam_viec|da_nghi|tam_nghi
+  /**
+   * Ngày làm việc CUỐI CÙNG, ghi khi hồ sơ thôi việc có hiệu lực.
+   *
+   * `trangThai = 'da_nghi'` mới chỉ trả lời "còn làm không"; các màn chấm công
+   * cần biết NGHỈ TỪ BAO GIỜ để ẩn đúng người (yêu cầu d20: "Ngừng hiển thị
+   * NLĐ nghỉ từ tháng trước" — người nghỉ giữa tháng này vẫn phải còn trong
+   * bảng của tháng này).
+   */
+  @Column({ nullable: true }) ngayNghiViec?: string;
   @Column('json', { nullable: true }) bangCap?: BangCap[];
   @Column('json', { nullable: true }) nguoiPhuThuoc?: NguoiPhuThuoc[];
   @Column('json', { nullable: true }) lienHeKhanCap?: LienHeKhanCap;

@@ -16,6 +16,11 @@ import type { DongKhaiBaoBH } from './lib/khaiBaoBaoHiem';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 
 export interface EmployeeFilter {
+  /**
+   * "YYYY-MM" — chỉ lấy người CÒN thuộc biên chế trong tháng đó: chưa nghỉ,
+   * hoặc nghỉ từ trong tháng này trở đi. Dùng cho các màn chấm công.
+   */
+  conTrongThang?: string;
   hoTen?: string;
   departmentId?: string;
   trangThai?: string;
@@ -180,7 +185,22 @@ export class NhanVien_Service {
     if (filter?.departmentId) where.departmentId = filter.departmentId;
     if (filter?.trangThai) where.trangThai = filter.trangThai;
 
-    return this.repo.find({ where });
+    const ds = await this.repo.find({ where });
+
+    /**
+     * Ẩn người đã nghỉ TRƯỚC tháng đang xem (yêu cầu d20).
+     *
+     * Lọc trong bộ nhớ chứ không đẩy xuống Mongo: điều kiện là "chưa có mốc
+     * nghỉ HOẶC mốc nghỉ >= đầu tháng", mà `where` của driver Mongo ở đây
+     * không dịch được `$or` lồng với các bộ lọc phía trên một cách chắc chắn.
+     * Danh sách nhân sự của một công ty tính bằng trăm, không phải bằng triệu.
+     */
+    if (filter?.conTrongThang) {
+      const dauThang = `${filter.conTrongThang}-01`;
+      return ds.filter((nv) => !nv.ngayNghiViec || nv.ngayNghiViec >= dauThang);
+    }
+
+    return ds;
   }
 
   async findOne(id: string): Promise<Employee> {

@@ -13,6 +13,8 @@ import {
 import { homNayVN } from "@/ultils/thoiGianVN";
 import { gomTheoNgay } from "@/pages/cham-cong/cua-toi/lichTuan";
 import { thongDiepLoiDon } from "@/pages/toi/don-tu/thongDiepLoi";
+import { timesheetService, type Timesheet } from "@/services/timesheetService";
+import { XacNhanBangCong } from "./XacNhanBangCong";
 import {
   dichThang,
   luoiThang,
@@ -69,6 +71,8 @@ export default function BangCongThang() {
   const [banGhiThang, setBanGhiThang] = useState<AttendanceRecord[]>([]);
   const [donCuaToi, setDonCuaToi] = useState<AttendanceRequest[]>([]);
   const [homNayData, setHomNayData] = useState<TrangThaiHomNay | null>(null);
+  /** Bảng công tháng này do C&B chốt — để xác nhận / đề nghị điều chỉnh (d19). */
+  const [bangCong, setBangCong] = useState<Timesheet | null>(null);
 
   const taiDuLieu = useCallback((thangCanTai: string) => {
     setDangTai(true);
@@ -80,11 +84,15 @@ export default function BangCongThang() {
       attendanceRecordService.cuaToi(tuNgay, denNgay),
       attendanceRequestService.cuaToi(),
       attendanceRecordService.homNay(),
+      // Chưa có bảng công tháng này là chuyện bình thường (C&B chưa tổng hợp)
+      // — không được để nó làm hỏng cả màn hình.
+      timesheetService.cuaToi(thangCanTai).catch(() => null),
     ])
-      .then(([banGhi, don, hn]) => {
+      .then(([banGhi, don, hn, bc]) => {
         setBanGhiThang(banGhi);
         setDonCuaToi(don);
         setHomNayData(hn);
+        setBangCong(bc);
       })
       .catch((err) => {
         console.error("Tải bảng công tháng lỗi:", err);
@@ -138,6 +146,14 @@ export default function BangCongThang() {
 
   return (
     <div className="w-full">
+      {/* Khối xác nhận đứng TRÊN lịch: đây là việc có hạn, để dưới cùng thì
+          người ta cuộn qua mà không thấy. */}
+      <XacNhanBangCong
+        bangCong={bangCong}
+        homNay={homNay}
+        onXong={() => taiDuLieu(thang)}
+      />
+
       <div className="emp-card mb-4 p-3">
         <div className="mb-2.5 flex items-center justify-between">
           <span className="text-[15px] font-semibold">{nhanThang(thang)}</span>

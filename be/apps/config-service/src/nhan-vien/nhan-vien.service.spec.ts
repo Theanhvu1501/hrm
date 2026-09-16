@@ -755,3 +755,53 @@ describe('NhanVien_Service — mở khoá quỹ phép (P3.8)', () => {
     expect(quyPhep.moKhoaLenChinhThuc).not.toHaveBeenCalled();
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Yêu cầu d20: ẩn người đã nghỉ TRƯỚC tháng đang xem khỏi các màn chấm công
+// ────────────────────────────────────────────────────────────────────────────
+describe('NhanVien_Service — findAll lọc theo tháng còn biên chế', () => {
+  const DS = [
+    { hoTen: 'Đang làm', isActive: true },
+    { hoTen: 'Nghỉ tháng trước', ngayNghiViec: '2026-08-31', isActive: true },
+    { hoTen: 'Nghỉ giữa tháng này', ngayNghiViec: '2026-09-15', isActive: true },
+    { hoTen: 'Nghỉ ngày đầu tháng', ngayNghiViec: '2026-09-01', isActive: true },
+  ];
+
+  async function dungVoiDanhSach() {
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        NhanVien_Service,
+        {
+          provide: getRepositoryToken(Employee),
+          useValue: { find: jest.fn().mockResolvedValue(DS) },
+        },
+        { provide: getRepositoryToken(EmployeeCounter), useValue: {} },
+        {
+          provide: getRepositoryToken(CauHinhLuong),
+          useValue: { find: jest.fn().mockResolvedValue([]) },
+        },
+        {
+          provide: TenantContextService,
+          useValue: { getCurrentTenantId: () => 't1' },
+        },
+        { provide: QuyPhep_Service, useValue: {} },
+      ],
+    }).compile();
+    return moduleRef.get(NhanVien_Service);
+  }
+
+  it('bỏ người nghỉ trước tháng, GIỮ người nghỉ trong tháng', async () => {
+    const svc = await dungVoiDanhSach();
+    const ra = await svc.findAll({ conTrongThang: '2026-09' });
+    expect(ra.map((n: any) => n.hoTen)).toStrictEqual([
+      'Đang làm',
+      'Nghỉ giữa tháng này',
+      'Nghỉ ngày đầu tháng',
+    ]);
+  });
+
+  it('không truyền tháng thì không lọc gì thêm', async () => {
+    const svc = await dungVoiDanhSach();
+    expect(await svc.findAll({})).toHaveLength(4);
+  });
+});

@@ -77,7 +77,12 @@ describe('CauHinhChamCong_Service', () => {
     const dtoRong = plainToInstance(CapNhatCauHinhChamCongDto, {});
     // Khẳng định TRƯỚC: field có tồn tại trên instance (đúng bẫy đang test),
     // không phải test một `{}` không đại diện cho input thật.
-    expect(Object.keys(dtoRong)).toStrictEqual(['ngayLamViecTrongTuan']);
+    // Mọi field optional của DTO đều có mặt với `undefined` — thêm field mới
+    // vào DTO thì thêm vào đây, đó chính là điều bài test này canh.
+    expect(Object.keys(dtoRong)).toStrictEqual([
+      'ngayLamViecTrongTuan',
+      'choPhepTuKhaiTuXa',
+    ]);
     expect(dtoRong.ngayLamViecTrongTuan).toBeUndefined();
 
     const ch = await service.capNhat(dtoRong);

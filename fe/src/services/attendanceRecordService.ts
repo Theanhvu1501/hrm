@@ -108,6 +108,8 @@ export interface TrangThaiHomNay {
     laCaQuaDem: boolean;
   } | null;
   hanhDongKeTiep: 'vao' | 'ra';
+  /** Công ty có cho tự khai "làm từ xa" khi bấm không (yêu cầu d16). */
+  choPhepTuKhaiTuXa?: boolean;
   banGhi: AttendanceRecord[];
   /** id phòng ban trong danh mục identity-service — trước đây là tên
    *  (`phongBan`), BE nay trả id để FE tự tra tên qua `usePhongBanOptions`. */
@@ -127,9 +129,17 @@ export interface TrangThaiHomNay {
   laOnline?: boolean;
 }
 
+export type HinhThucLam = 'tai_van_phong' | 'tu_xa';
+
 export interface ChamCongDto {
   deviceId: string;
   phuongThuc: 'gps' | 'wifi' | 'qr';
+  /**
+   * Người chấm tự khai làm tại văn phòng hay từ xa (yêu cầu d16). Chọn
+   * `tu_xa` khi công ty chưa bật thì BE TỪ CHỐI — không âm thầm hạ về
+   * `tai_van_phong`.
+   */
+  hinhThucLam?: HinhThucLam;
   latitude?: number;
   longitude?: number;
   doChinhXacMet?: number;
@@ -184,6 +194,7 @@ class AttendanceRecordService extends ServiceBase {
       soCong: res.soCong === undefined ? 0 : res.soCong,
       // Backend cũ chưa có trường này → coi như không phải ngày online.
       laOnline: res.laOnline === true,
+      choPhepTuKhaiTuXa: res.choPhepTuKhaiTuXa === true,
     };
   }
 
