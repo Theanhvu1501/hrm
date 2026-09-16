@@ -85,6 +85,22 @@ export interface CauHinhLuongRieng {
   bhxhCanCu?: CanCuBHXH;
 }
 
+/** Một dòng của bảng khai báo lao động với cơ quan bảo hiểm. */
+export interface DongKhaiBaoBH {
+  stt: number;
+  maNhanVien: string;
+  hoTen: string;
+  soSoBH: string;
+  cccd: string;
+  ngaySinh: string;
+  gioiTinh: string;
+  diaChi: string;
+  chucDanh: string;
+  mucDong: number;
+  tuNgay: string;
+  ghiChu: string;
+}
+
 export interface EmployeeFilter {
   hoTen?: string;
   departmentId?: string;
@@ -158,6 +174,14 @@ class EmployeeService extends ServiceBase {
   async update(id: string, dto: UpdateEmployeeDto): Promise<Employee> {
     const res = await this.put<Record<string, unknown>>(dto, { endpoint: `/${id}` });
     return this.transform(res);
+  }
+
+  /**
+   * Bảng khai báo lao động gửi cơ quan bảo hiểm (mẫu D02-LT). Mức đóng do BE
+   * tính bằng ĐÚNG hàm mà bảng lương dùng — FE không dựng lại công thức.
+   */
+  async khaiBaoBaoHiem(): Promise<DongKhaiBaoBH[]> {
+    return this.get<DongKhaiBaoBH[]>({ endpoint: "/khai-bao-bao-hiem" });
   }
 
   async remove(id: string): Promise<void> {

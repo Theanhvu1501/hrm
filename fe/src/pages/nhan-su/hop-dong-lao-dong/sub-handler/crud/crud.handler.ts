@@ -1,7 +1,7 @@
 import { HandlerDecorator, RegisterHandler } from "@/common";
 import { CSubHanlder } from "@/common/c-handler/core/sub-handler.ts/sub-handler";
-import { message } from "antd";
-import { apiErrorMessage } from "@/config/api";
+import { Modal, message } from "antd";
+import { apiErrorCode, apiErrorMessage } from "@/config/api";
 import { laborContractService } from "@/services/laborContractService";
 import type {
   CreateLaborContractDto,
@@ -28,20 +28,52 @@ export class CrudHandler extends CSubHanlder {
   async createContract(dto: CreateLaborContractDto): Promise<void> {
     this.setState("saving", true);
     try {
-      const created = await laborContractService.create(dto);
-      const currentList = (this.getState("contractList") as LaborContract[]) || [];
-      this.setState("contractList", [...currentList, created]);
-      this.setState("formVisible", false);
-      this.setState("editingContract", null);
-      message.success("Thêm hợp đồng thành công!");
+      await this.luuHopDongMoi(dto);
     } catch (error) {
       console.error("Create labor contract error:", error);
+
+      // Hai lỗi 409 khác nhau, xử lý khác nhau — phân biệt bằng MÃ, không
+      // phải câu chữ:
+      //   HOP_DONG_TRUNG  → nhân viên đã có hợp đồng: HỎI LẠI rồi tạo tiếp
+      //                     (phụ lục, tái ký đều là việc thật — yêu cầu d10).
+      //   còn lại (vd đủ 2 HĐ xác định thời hạn) → báo đỏ, không có đường đi tiếp.
+      if (apiErrorCode(error) === "HOP_DONG_TRUNG") {
+        this.setState("saving", false);
+        Modal.confirm({
+          title: "Nhân viên này đã có hợp đồng",
+          content: apiErrorMessage(error, "Xác nhận tạo hợp đồng mới?"),
+          okText: "Vẫn tạo mới",
+          cancelText: "Huỷ",
+          onOk: async () => {
+            this.setState("saving", true);
+            try {
+              await this.luuHopDongMoi({ ...dto, xacNhanTrung: true });
+            } catch (e) {
+              message.error(apiErrorMessage(e, "Không thể thêm hợp đồng"));
+            } finally {
+              this.setState("saving", false);
+            }
+          },
+        });
+        return;
+      }
+
       // BE ném ConflictException (409) khi nhân viên đã ký đủ 2 HĐ xác định
       // thời hạn — message tiếng Việt đó phải hiển thị nguyên văn cho người dùng.
       message.error(apiErrorMessage(error, "Không thể thêm hợp đồng"));
     } finally {
       this.setState("saving", false);
     }
+  }
+
+  /** Phần thân dùng chung cho lần gửi đầu và lần gửi sau khi người dùng xác nhận. */
+  private async luuHopDongMoi(dto: CreateLaborContractDto): Promise<void> {
+    const created = await laborContractService.create(dto);
+    const currentList = (this.getState("contractList") as LaborContract[]) || [];
+    this.setState("contractList", [...currentList, created]);
+    this.setState("formVisible", false);
+    this.setState("editingContract", null);
+    message.success("Thêm hợp đồng thành công!");
   }
 
   @HandlerDecorator("updateContract")

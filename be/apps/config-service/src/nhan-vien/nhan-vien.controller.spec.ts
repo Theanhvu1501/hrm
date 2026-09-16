@@ -37,6 +37,9 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   // @Patch đổi trạng thái xếp cùng nhóm @Delete → `:xoa` (ngưng hoạt động là
   // xoá mềm, không phải sửa thông tin).
   ['updateStatus', RequestMethod.PATCH, '/nhan-su/ho-so-nhan-vien:xoa'],
+  // Bảng khai báo lao động gửi cơ quan bảo hiểm: xuất danh sách lương làm
+  // căn cứ đóng của TOÀN BỘ nhân sự → quyền `:xuat`, không phải `:xem`.
+  ['khaiBaoBaoHiem', RequestMethod.GET, '/nhan-su/ho-so-nhan-vien:xuat'],
 ];
 
 /** Route tự phục vụ: cố ý KHÔNG nhận quyền theo vai trò. */

@@ -1,6 +1,15 @@
 import { useMemo, useState } from "react";
 import { Card, Button, Space, Popconfirm, Select, Tooltip, Typography } from "antd";
-import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  FileExcelOutlined,
+} from "@ant-design/icons";
+import * as XLSX from "xlsx";
+import { message } from "antd";
+import { apiErrorMessage } from "@/config/api";
+import { employeeService } from "@/services/employeeService";
 import type { ColumnsType } from "antd/es/table";
 import {
   useHoSoNhanVienHandler,
@@ -26,7 +35,7 @@ export function HoSoNhanVienTable() {
   const handler = useHoSoNhanVienHandler();
   const [employeeList] = useHoSoNhanVienState("employeeList", [] as Employee[]);
   const [loading] = useHoSoNhanVienState("loading", false);
-  const { canCreate, canEdit, canDelete } = usePagePermission(
+  const { canCreate, canEdit, canDelete, canExport } = usePagePermission(
     "/nhan-su/ho-so-nhan-vien"
   );
   const { tenTheoId } = usePhongBanOptions();
@@ -149,6 +158,43 @@ export function HoSoNhanVienTable() {
     },
   ];
 
+  /**
+   * Xuất bảng khai báo lao động (yêu cầu d9 cột G). Số liệu lấy TỪ BE — mức
+   * đóng của mỗi người phụ thuộc căn cứ đóng khai trong Cấu hình lương, dựng
+   * lại công thức ở FE là tạo nguồn sự thật thứ hai cho một con số đi thẳng
+   * vào tờ khai với cơ quan bảo hiểm.
+   */
+  const xuatKhaiBaoBH = async () => {
+    try {
+      const ds = await employeeService.khaiBaoBaoHiem();
+      if (ds.length === 0) {
+        message.info("Chưa có nhân sự nào để khai báo.");
+        return;
+      }
+      const luoi = ds.map((d) => ({
+        STT: d.stt,
+        "Mã NV": d.maNhanVien,
+        "Họ và tên": d.hoTen,
+        "Mã số BHXH": d.soSoBH,
+        "Số CCCD": d.cccd,
+        "Ngày sinh": d.ngaySinh,
+        "Giới tính": d.gioiTinh,
+        "Địa chỉ": d.diaChi,
+        "Chức danh": d.chucDanh,
+        "Tiền lương đóng BH": d.mucDong,
+        "Từ ngày": d.tuNgay,
+        "Ghi chú": d.ghiChu,
+      }));
+      const ws = XLSX.utils.json_to_sheet(luoi);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Khai bao BH");
+      const homNay = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `Khai-bao-lao-dong-BH-${homNay}.xlsx`);
+    } catch (err) {
+      message.error(apiErrorMessage(err, "Không xuất được bảng khai báo"));
+    }
+  };
+
   return (
     <Card>
       <FilterBar
@@ -169,11 +215,20 @@ export function HoSoNhanVienTable() {
           />
         }
         actions={
-          canCreate && (
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              Thêm nhân viên
-            </Button>
-          )
+          <Space size={8}>
+            {canExport && (
+              <Tooltip title="Danh sách nhân sự kèm mức tiền lương làm căn cứ đóng, để nộp cơ quan bảo hiểm">
+                <Button icon={<FileExcelOutlined />} onClick={xuatKhaiBaoBH}>
+                  Khai báo bảo hiểm
+                </Button>
+              </Tooltip>
+            )}
+            {canCreate && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+                Thêm nhân viên
+              </Button>
+            )}
+          </Space>
         }
       />
 

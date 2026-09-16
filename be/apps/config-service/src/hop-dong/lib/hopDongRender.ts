@@ -42,6 +42,8 @@ export interface HopDongRenderEmployee {
   soDienThoai?: string;
   /** Chức danh HIỆN TẠI của nhân viên — chỉ dùng làm fallback khi hợp đồng chưa có contract.chucDanh (hợp đồng tạo trước khi có cột này). */
   chucDanh?: string;
+  email?: string;
+  mst?: string;
 }
 
 export interface HopDongRenderCongTy {
@@ -278,9 +280,23 @@ export function buildHopDongPlaceholders(input: HopDongRenderInput): Record<stri
     soDienThoaiNLD: v(employee.soDienThoai),
     chucDanh: v(chucDanh),
 
+    emailNLD: v(employee.email),
+    mstNLD: v(employee.mst),
+
+    // Ngày hiệu lực dạng DD/MM/YYYY, dùng thẳng trong các mẫu nạp từ file
+    // .docx của bên pháp chế ("Thời gian thử việc: từ ngày … đến ngày …").
+    // Khác `dieu1_2` ở chỗ đó chỉ là MỘT câu dựng sẵn cho mẫu mặc định.
+    ngayBatDau: v(fmtDate(contract.ngayBatDau)),
+    ngayKetThuc: v(fmtDate(contract.ngayKetThuc)),
+
     dieu1_1: v(LOAI_HOP_DONG_LABEL[contract.loaiHopDong] ?? contract.loaiHopDong),
     dieu1_2: v(buildDieu1_2(contract)),
     mucLuong: v(fmtTien(contract.mucLuong)),
+    // Chỉ CON SỐ, không kèm "đồng/tháng": các mẫu từ file .docx đã có sẵn đơn
+    // vị trong câu ("… VNĐ/tháng/24 ngày công"), ghép thêm nữa là đọc thành
+    // "15.000.000 đồng/tháng VNĐ/tháng".
+    mucLuongSo: v(contract.mucLuong ? contract.mucLuong.toLocaleString('vi-VN') : ''),
+    phuCapSo: v(contract.phuCap ? contract.phuCap.toLocaleString('vi-VN') : ''),
     phuCapText: v(phuCapText),
   };
 }
@@ -297,8 +313,9 @@ export const HOP_DONG_TOKENS = [
   'tenCongTy', 'diaChiCongTy', 'maSoThueCongTy', 'nguoiDaiDien', 'chucVuNguoiDaiDien',
   'thanhPhoKy', 'maHopDongMau',
   'hoTenNLD', 'ngaySinh', 'gioiTinh', 'soCCCD', 'ngayCapCccd', 'noiCapCccd',
-  'diaChiNLD', 'soDienThoaiNLD', 'chucDanh',
-  'dieu1_1', 'dieu1_2', 'mucLuong', 'phuCapText',
+  'diaChiNLD', 'soDienThoaiNLD', 'chucDanh', 'emailNLD', 'mstNLD',
+  'ngayBatDau', 'ngayKetThuc',
+  'dieu1_1', 'dieu1_2', 'mucLuong', 'mucLuongSo', 'phuCapText', 'phuCapSo',
 ] as const;
 
 /** Tìm các token {{...}} trong mẫu KHÔNG nằm trong HOP_DONG_TOKENS — vd lỗi gõ như {{mucLuongg}}. */

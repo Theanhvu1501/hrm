@@ -65,6 +65,21 @@ export class NhanVien_Controller {
    * Phải đặt route này TRƯỚC `@Get(':id')` — nếu đặt sau, Nest sẽ khớp
    * "me" thành tham số :id.
    */
+  /**
+   * Bảng khai báo lao động với cơ quan bảo hiểm. Route TĨNH nên phải đứng
+   * trước `@Get(':id')`, nếu không Nest khớp "khai-bao-bao-hiem" thành :id.
+   *
+   * Quyền `:xuat` chứ không `:xem` — đây là xuất một danh sách gồm lương làm
+   * căn cứ đóng của TOÀN BỘ nhân sự, khác hẳn việc mở một hồ sơ.
+   */
+  @Get('khai-bao-bao-hiem')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/ho-so-nhan-vien:xuat')
+  async khaiBaoBaoHiem() {
+    const data = await this.nhanVien_Service.khaiBaoBaoHiem();
+    return { success: true, data };
+  }
+
   @Get('me')
   async me(@Req() req: any) {
     const data = await this.nhanVien_Service.resolveEmployeeFromUser(req.user);

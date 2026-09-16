@@ -36,6 +36,9 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   // dễ quên lúc deploy (màn hình 403 với mọi người).
   ['dsMauIn', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xem'],
   ['themMauIn', RequestMethod.POST, '/nhan-su/hop-dong-lao-dong:them'],
+  // Nạp bộ mẫu dựng sẵn từ file .docx của bên pháp chế — là THÊM mẫu, cùng
+  // quyền với themMauIn.
+  ['napMauMacDinh', RequestMethod.POST, '/nhan-su/hop-dong-lao-dong:them'],
   ['suaMauIn', RequestMethod.PUT, '/nhan-su/hop-dong-lao-dong:sua'],
   ['xoaMauIn', RequestMethod.DELETE, '/nhan-su/hop-dong-lao-dong:xoa'],
   ['getThongTinCongTy', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xem'],

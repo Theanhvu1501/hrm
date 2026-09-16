@@ -13,7 +13,11 @@ import {
   Typography,
   message,
 } from "antd";
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
+import {
+  DeleteOutlined,
+  DownloadOutlined,
+  PlusOutlined,
+} from "@ant-design/icons";
 import { apiErrorMessage } from "@/config/api";
 import { usePagePermission } from "@/hooks/usePagePermission";
 import {
@@ -102,6 +106,25 @@ export function MauInHopDongPage() {
     }
   };
 
+  const napMacDinh = async () => {
+    setSaving(true);
+    try {
+      const { daThem, daCo } = await hopDongTemplateService.napMauMacDinh();
+      if (daThem.length === 0) {
+        message.info(
+          `Đã có đủ ${daCo.length} mẫu dựng sẵn — không thêm mẫu nào.`,
+        );
+      } else {
+        message.success(`Đã nạp ${daThem.length} mẫu: ${daThem.join(", ")}`);
+      }
+      await taiDanhSach();
+    } catch (err) {
+      message.error(apiErrorMessage(err, "Nạp mẫu dựng sẵn thất bại"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const luuMau = async () => {
     if (!dangChon) return;
     setSaving(true);
@@ -151,14 +174,31 @@ export function MauInHopDongPage() {
                   title="Danh sách mẫu"
                   extra={
                     canEdit && (
-                      <Button
-                        size="small"
-                        icon={<PlusOutlined />}
-                        onClick={themMau}
-                        loading={saving}
-                      >
-                        Thêm
-                      </Button>
+                      <Space size={4}>
+                        {/* Bộ mẫu dựng sẵn từ file .docx của bên pháp chế
+                            (hợp đồng thử việc / lao động / thực tập / cam kết
+                            bảo mật / dịch vụ). Chỉ thêm mẫu còn thiếu, không
+                            ghi đè mẫu đã sửa tay. */}
+                        <Popconfirm
+                          title="Nạp bộ mẫu dựng sẵn"
+                          description="Thêm các mẫu hợp đồng chuẩn còn thiếu. Mẫu đang có sẽ giữ nguyên."
+                          okText="Nạp"
+                          cancelText="Huỷ"
+                          onConfirm={napMacDinh}
+                        >
+                          <Button size="small" icon={<DownloadOutlined />} loading={saving}>
+                            Mẫu dựng sẵn
+                          </Button>
+                        </Popconfirm>
+                        <Button
+                          size="small"
+                          icon={<PlusOutlined />}
+                          onClick={themMau}
+                          loading={saving}
+                        >
+                          Thêm
+                        </Button>
+                      </Space>
                     )
                   }
                 >

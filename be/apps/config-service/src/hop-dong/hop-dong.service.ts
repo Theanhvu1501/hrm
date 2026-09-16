@@ -16,6 +16,7 @@ import {
 } from '@app/entities';
 import { TenantContextService } from '@app/core';
 import { CreateHopDongDto, UpdateHopDongDto, UpdateThongTinCongTyDto } from './dto';
+import { MAU_IN_MAC_DINH } from './lib/mauInMacDinh';
 import {
   DEFAULT_HOP_DONG_HTML,
   renderHopDongHtml,
@@ -147,16 +148,56 @@ export class HopDong_Service {
     }
   }
 
+  /**
+   * Danh sách hợp đồng CÒN HIỆU LỰC DỮ LIỆU của một nhân viên (chưa xoá mềm).
+   * Dùng cho cảnh báo trùng — gồm cả bản nháp và bản đã hết hạn, vì câu hỏi
+   * ở đây là "người này đã có hợp đồng nào trong hệ thống chưa", không phải
+   * "có hợp đồng nào đang chạy không".
+   */
+  async hopDongCuaNhanVien(employeeId: string): Promise<LaborContract[]> {
+    return this.repo.find({
+      where: { employeeId, isActive: true } as any,
+    });
+  }
+
   async create(dto: CreateHopDongDto): Promise<LaborContract> {
     if (dto.loaiHopDong === 'xac_dinh_thoi_han') {
       await this.assertFixedTermLimitNotExceeded(dto.employeeId);
     }
 
+    // Yêu cầu d10: tạo hợp đồng cho người ĐÃ có hợp đồng thì phải hỏi lại,
+    // không chặn hẳn — phụ lục, tái ký, hợp đồng nối tiếp đều là việc thật.
+    //
+    // Chặn ở SERVICE chứ không chỉ hỏi ở giao diện: hỏi trên FE mà BE vẫn
+    // nhận là bấm Lưu hai lần (mạng chậm, bấm lại) sinh ra hai hợp đồng y
+    // hệt mà không ai được hỏi câu nào.
+    const { xacNhanTrung, ...duLieu } = dto;
+    if (!xacNhanTrung) {
+      const daCo = await this.hopDongCuaNhanVien(dto.employeeId);
+      if (daCo.length) {
+        const ten = dto.employeeName || daCo[0].employeeName || 'Nhân viên này';
+        const ma = dto.employeeCode || daCo[0].employeeCode;
+        const liet = daCo
+          .map(
+            (hd) =>
+              `${hd.contractNo}${hd.ngayBatDau ? ` (từ ${hd.ngayBatDau})` : ''}`,
+          )
+          .join(', ');
+        throw new ConflictException({
+          code: 'HOP_DONG_TRUNG',
+          message: `${ten}${ma ? ` (${ma})` : ''} đã có ${daCo.length} hợp đồng: ${liet}. Xác nhận tạo thêm hợp đồng mới?`,
+        });
+      }
+    }
+
     const tenantId = this.tenantContext.getCurrentTenantId();
     const contractNo = await this.generateContractNo(tenantId);
 
+    // `xacNhanTrung` đã bị tách khỏi `duLieu`: nó là câu trả lời cho một lần
+    // hỏi, không phải thuộc tính của hợp đồng — lưu xuống là mỗi bản ghi mang
+    // theo một cột vô nghĩa mà lần sửa sau lại phải giải thích.
     const entity = this.repo.create({
-      ...dto,
+      ...duLieu,
       contractNo,
       isActive: true,
     } as Partial<LaborContract>);
@@ -296,6 +337,41 @@ export class HopDong_Service {
     } as Partial<LaborContractTemplate>);
 
     return [await this.mauInMoiRepo.save(dauTien)];
+  }
+
+  /**
+   * Nạp bộ mẫu in dựng sẵn từ các file .docx của bên pháp chế
+   * (`docs/Mau_hop_dong`, sinh bằng `ops/chuyen-mau-hop-dong.py`).
+   *
+   * Chỉ THÊM mẫu còn thiếu, so theo TÊN: chạy lại lần hai không nhân đôi danh
+   * sách, và mẫu tenant đã sửa tay KHÔNG bị ghi đè — người ta sửa là có lý do,
+   * ghi đè im lặng là mất công sức của họ mà không ai báo.
+   *
+   * HTML vẫn đi qua `lamSachHtmlMau` như mẫu tenant tự soạn: bộ mẫu này do
+   * script sinh ra và script thì sẽ được sửa, không có lý do gì cho nó một
+   * đường ghi không qua sanitize.
+   */
+  async napMauMacDinh(): Promise<{ daThem: string[]; daCo: string[] }> {
+    const hienCo = await this.mauInMoiRepo.find({ where: { isActive: true } });
+    const tenHienCo = new Set(hienCo.map((m) => m.ten.trim().toLowerCase()));
+
+    const daThem: string[] = [];
+    const daCo: string[] = [];
+    for (const mau of MAU_IN_MAC_DINH) {
+      if (tenHienCo.has(mau.ten.trim().toLowerCase())) {
+        daCo.push(mau.ten);
+        continue;
+      }
+      await this.mauInMoiRepo.save(
+        this.mauInMoiRepo.create({
+          ten: mau.ten,
+          html: this.lamSachHtmlMau(mau.html),
+          isActive: true,
+        } as Partial<LaborContractTemplate>),
+      );
+      daThem.push(mau.ten);
+    }
+    return { daThem, daCo };
   }
 
   async themMauIn(dto: {
@@ -459,6 +535,8 @@ export class HopDong_Service {
         diaChi: employee.diaChi,
         soDienThoai: employee.soDienThoai,
         chucDanh: employee.chucDanh,
+        email: employee.email,
+        mst: employee.mst,
       },
       congTy,
     });

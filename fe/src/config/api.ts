@@ -67,6 +67,22 @@ export class ApiError extends Error {
  * Khi server có phản hồi (statusCode) → dùng message thật từ backend
  * (vd "Người dùng đã là thành viên của công ty này"); còn lại → fallback.
  */
+/**
+ * Mã lỗi MIỀN do backend ném kèm (`GlobalExceptionFilter` ưu tiên `resp.code`
+ * hơn mã suy từ HTTP status). Dùng khi FE phải xử lý khác nhau cho nhiều tình
+ * huống cùng một status — vd 409 "đã có hợp đồng" thì hỏi lại chứ không báo
+ * lỗi đỏ như 409 "đã đủ 2 hợp đồng xác định thời hạn".
+ *
+ * So khớp theo MÃ, không theo câu chữ tiếng Việt: câu chữ sẽ đổi và khi đó
+ * nhánh xử lý hỏng im lặng.
+ */
+export function apiErrorCode(error: unknown): string | undefined {
+  const goc = (error as { originalError?: unknown })?.originalError;
+  const data = (goc as { response?: { data?: unknown } })?.response?.data;
+  const ma = (data as { error?: { code?: unknown } })?.error?.code;
+  return typeof ma === "string" ? ma : undefined;
+}
+
 export function apiErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiError && error.statusCode && error.message) {
     return error.message;

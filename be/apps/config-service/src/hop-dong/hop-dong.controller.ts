@@ -72,6 +72,19 @@ export class HopDong_Controller {
     return { success: true, data };
   }
 
+  /**
+   * Nạp bộ mẫu dựng sẵn từ file .docx của bên pháp chế. Đặt TRƯỚC
+   * `mau-in/:mauInId` — Nest khớp route theo thứ tự khai báo, để sau thì
+   * "nap-mac-dinh" bị hiểu thành một mauInId.
+   */
+  @Post('mau-in/nap-mac-dinh')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/hop-dong-lao-dong:them')
+  async napMauMacDinh() {
+    const data = await this.hopDong_Service.napMauMacDinh();
+    return { success: true, data };
+  }
+
   @Put('mau-in/:mauInId')
   @UseGuards(PermissionGuard)
   @Permissions('/nhan-su/hop-dong-lao-dong:sua')

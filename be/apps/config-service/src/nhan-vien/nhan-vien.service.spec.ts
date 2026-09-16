@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { NhanVien_Service } from './nhan-vien.service';
-import { Employee, EmployeeCounter } from '@app/entities';
+import { CauHinhLuong, Employee, EmployeeCounter } from '@app/entities';
 import { TenantContextService } from '@app/core';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 
@@ -80,6 +80,11 @@ describe('NhanVien_Service', () => {
         {
           provide: getRepositoryToken(EmployeeCounter),
           useValue: mockCounterRepo,
+        },
+        {
+          // Chỉ đọc, phục vụ bảng khai báo lao động với cơ quan bảo hiểm.
+          provide: getRepositoryToken(CauHinhLuong),
+          useValue: { find: jest.fn().mockResolvedValue([]) },
         },
         { provide: TenantContextService, useValue: mockTenantContext },
         // Không có test nào ở describe gốc này quan tâm tới mở khoá quỹ phép
@@ -614,6 +619,10 @@ async function dungServiceNhanVien(opts: { quyPhep?: any } = {}) {
       NhanVien_Service,
       { provide: getRepositoryToken(Employee), useValue: repoNv },
       { provide: getRepositoryToken(EmployeeCounter), useValue: counterRepo },
+      {
+        provide: getRepositoryToken(CauHinhLuong),
+        useValue: { find: jest.fn().mockResolvedValue([]) },
+      },
       { provide: TenantContextService, useValue: tenantContext },
       { provide: QuyPhep_Service, useValue: quyPhep },
     ],

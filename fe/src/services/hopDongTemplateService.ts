@@ -82,6 +82,17 @@ class HopDongTemplateService extends ServiceBase {
     };
   }
 
+  /**
+   * Nạp bộ mẫu dựng sẵn từ file .docx của bên pháp chế. Chỉ thêm mẫu còn
+   * thiếu (so theo tên) — mẫu tenant đã sửa tay không bị ghi đè.
+   */
+  async napMauMacDinh(): Promise<{ daThem: string[]; daCo: string[] }> {
+    return this.post<{ daThem: string[]; daCo: string[] }>(
+      {},
+      { endpoint: "/mau-in/nap-mac-dinh" },
+    );
+  }
+
   async xoaMauIn(id: string): Promise<void> {
     await this.delete({ endpoint: `/mau-in/${id}` });
   }

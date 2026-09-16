@@ -148,6 +148,59 @@ describe('HopDong_Service', () => {
   // ──────────────────────────────────────────────────────────────────────────
   // create — contractNo generation
   // ──────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────────────────
+  // create — cảnh báo trùng nhân viên (yêu cầu d10)
+  // ──────────────────────────────────────────────────────────────────────────
+  describe('create — cảnh báo nhân viên đã có hợp đồng', () => {
+    it('ném 409 kèm mã HOP_DONG_TRUNG khi nhân viên đã có hợp đồng', async () => {
+      mockContractRepo.find.mockResolvedValue([
+        {
+          contractNo: 'HD0007',
+          employeeName: 'Trần Thị B',
+          employeeCode: 'NV0007',
+          ngayBatDau: '2026-01-01',
+        },
+      ]);
+
+      await expect(
+        service.create({
+          employeeId: 'emp-7',
+          employeeName: 'Trần Thị B',
+          employeeCode: 'NV0007',
+          loaiHopDong: 'thu_viec',
+        } as any),
+      ).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'HOP_DONG_TRUNG' }),
+      });
+
+      expect(mockContractRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('có cờ xác nhận thì tạo bình thường, và KHÔNG lưu cờ đó xuống hợp đồng', async () => {
+      mockContractRepo.find.mockResolvedValue([{ contractNo: 'HD0007' }]);
+
+      const hd = await service.create({
+        employeeId: 'emp-7',
+        loaiHopDong: 'thu_viec',
+        xacNhanTrung: true,
+      } as any);
+
+      expect(hd.contractNo).toBe('HD0001');
+      expect('xacNhanTrung' in (hd as Record<string, unknown>)).toBe(false);
+    });
+
+    it('nhân viên chưa có hợp đồng nào thì không hỏi gì', async () => {
+      mockContractRepo.find.mockResolvedValue([]);
+
+      const hd = await service.create({
+        employeeId: 'emp-moi',
+        loaiHopDong: 'thu_viec',
+      } as any);
+
+      expect(hd.contractNo).toBe('HD0001');
+    });
+  });
+
   describe('create — contractNo generation', () => {
     it('generates sequential contractNo HD0001 then HD0002', async () => {
       const first = await service.create({
@@ -244,12 +297,21 @@ describe('HopDong_Service', () => {
       const result = await service.create({
         employeeId: 'emp-1',
         loaiHopDong: 'khong_xac_dinh_thoi_han',
+        // Người này đã có 2 hợp đồng nên cảnh báo trùng (d10) sẽ hỏi — bài
+        // này kiểm QUY TẮC 2 LẦN, không kiểm cảnh báo trùng, nên trả lời
+        // trước cho khỏi lẫn hai thứ.
+        xacNhanTrung: true,
       } as any);
 
       expect(result.contractNo).toBe('HD0001');
-      // Rule only applies to xac_dinh_thoi_han, so the rule's find() check
-      // should be skipped entirely for other contract types.
-      expect(mockContractRepo.find).not.toHaveBeenCalled();
+      // Quy tắc chỉ áp cho xac_dinh_thoi_han: KHÔNG được có truy vấn nào lọc
+      // theo loại đó. (find() vẫn được gọi cho việc khác — cảnh báo trùng —
+      // nên phải kiểm nội dung truy vấn thay vì "không gọi lần nào".)
+      expect(mockContractRepo.find).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ loaiHopDong: 'xac_dinh_thoi_han' }),
+        }),
+      );
     });
   });
 

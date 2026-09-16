@@ -4,9 +4,19 @@ import {
   IsOptional,
   IsIn,
   IsNumber,
+  IsBoolean,
 } from 'class-validator';
 
 export class CreateHopDongDto {
+  /**
+   * Người dùng đã xem cảnh báo "nhân viên này đã có hợp đồng" và vẫn muốn
+   * tạo (yêu cầu d10). KHÔNG lưu xuống entity — chỉ là câu trả lời cho một
+   * lần hỏi, xem `HopDong_Service.create`.
+   */
+  @IsOptional()
+  @IsBoolean()
+  xacNhanTrung?: boolean;
+
   @IsString()
   @IsNotEmpty({ message: 'Nhân viên không được để trống' })
   employeeId: string;

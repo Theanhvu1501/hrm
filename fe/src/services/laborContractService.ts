@@ -28,6 +28,11 @@ export interface LaborContractFilter {
 }
 
 export interface CreateLaborContractDto {
+  /**
+   * Người dùng đã xem cảnh báo "nhân viên này đã có hợp đồng" và vẫn muốn
+   * tạo. Không phải thuộc tính của hợp đồng — BE tách ra, không lưu xuống.
+   */
+  xacNhanTrung?: boolean;
   employeeId: string;
   employeeName?: string;
   employeeCode?: string;

@@ -7,10 +7,12 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Employee, EmployeeCounter } from '@app/entities';
+import { CauHinhLuong, Employee, EmployeeCounter } from '@app/entities';
 import { TenantContextService } from '@app/core';
 import { CreateEmployeeDto, UpdateEmployeeDto } from './dto';
 import { chuanHoaHoSo } from './lib/chuanHoaHoSo';
+import { dungBangKhaiBaoBH } from './lib/khaiBaoBaoHiem';
+import type { DongKhaiBaoBH } from './lib/khaiBaoBaoHiem';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 
 export interface EmployeeFilter {
@@ -29,6 +31,8 @@ export class NhanVien_Service {
     private readonly repo: Repository<Employee>,
     @InjectRepository(EmployeeCounter)
     private readonly counterRepo: Repository<EmployeeCounter>,
+    @InjectRepository(CauHinhLuong)
+    private readonly cauHinhLuongRepo: Repository<CauHinhLuong>,
     private readonly tenantContext: TenantContextService,
     // Vòng phụ thuộc CỐ Ý với QuyPhep_Module (xem nhan-vien.module.ts):
     // forwardRef() cần ở CẢ import module lẫn injection này — thiếu một chỗ
@@ -231,6 +235,38 @@ export class NhanVien_Service {
     await this.moKhoaQuyNeuCanThiet(daLuu, truocKhiSua);
 
     return daLuu;
+  }
+
+  /**
+   * Bảng KHAI BÁO LAO ĐỘNG gửi cơ quan bảo hiểm (yêu cầu d9 cột G).
+   *
+   * Chỉ hồ sơ còn hiệu lực: người đã xoá mềm không còn là lao động của đơn vị,
+   * khai lên là khai khống.
+   */
+  async khaiBaoBaoHiem(): Promise<DongKhaiBaoBH[]> {
+    const nhanVien = await this.repo.find({
+      where: { isActive: true } as any,
+    });
+    // Sắp theo mã NV cho khớp thứ tự HR vẫn đọc ở màn Hồ sơ; `find` của Mongo
+    // không đảm bảo thứ tự nào cả.
+    nhanVien.sort((a, b) =>
+      (a.employeeId ?? '').localeCompare(b.employeeId ?? ''),
+    );
+
+    const rows = await this.cauHinhLuongRepo.find({
+      where: { isActive: true } as any,
+    });
+    const chung = rows[0];
+    if (!chung) {
+      // Chưa cấu hình lương thì chưa biết căn cứ đóng — trả bảng với mức 0
+      // kèm ghi chú còn hơn đoán bừa một căn cứ rồi khai sai với cơ quan BH.
+      return dungBangKhaiBaoBH(nhanVien, {
+        mucKhaiBaoMacDinh: 0,
+        khoanLuong: [],
+        bhxh: { tyLe: 0, canCu: 'MUC_KHAI_BAO' },
+      } as any);
+    }
+    return dungBangKhaiBaoBH(nhanVien, chung);
   }
 
   async remove(id: string): Promise<void> {
