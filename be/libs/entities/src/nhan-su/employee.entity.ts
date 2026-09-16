@@ -2,8 +2,15 @@ import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../base.entity';
 import type { CauHinhLuongRieng } from '../luong/luong.types';
 
-export interface BangCap { ten: string; noiCap?: string; nam?: string; }
-export interface NguoiPhuThuoc { hoTen: string; quanHe?: string; ngaySinh?: string; giayTo?: string; }
+/**
+ * `id` là khoá RIÊNG của dòng, do FE sinh lúc thêm dòng. Tệp đính kèm bám
+ * theo id này (`DinhKem.khoaPhu`), KHÔNG bám theo vị trí trong mảng: xoá dòng
+ * đầu là mọi vị trí phía sau tụt xuống một và bằng cấp sẽ mang file của người
+ * khác. Optional vì hồ sơ lưu trước bản vá chưa có — chưa có id thì chưa đính
+ * kèm được, lưu lại một lần là có.
+ */
+export interface BangCap { id?: string; ten: string; noiCap?: string; nam?: string; }
+export interface NguoiPhuThuoc { id?: string; hoTen: string; quanHe?: string; ngaySinh?: string; giayTo?: string; }
 export interface LienHeKhanCap { hoTen?: string; quanHe?: string; soDienThoai?: string; }
 
 @Entity('employees')
@@ -17,6 +24,8 @@ export class Employee extends BaseEntity {
   @Column({ nullable: true }) ngayCapCccd?: string;
   @Column({ nullable: true }) noiCapCccd?: string;
   @Column({ nullable: true }) mst?: string;
+  /** Số sổ BHXH — in lên bảng khai báo lao động với cơ quan bảo hiểm. */
+  @Column({ nullable: true }) soSoBH?: string;
   @Column({ nullable: true }) soDienThoai?: string;
   @Column({ nullable: true }) email?: string;
   @Column({ nullable: true }) diaChi?: string;
@@ -71,6 +80,14 @@ export class Employee extends BaseEntity {
   @Column('json', { nullable: true }) giaTriKhoan?: Record<string, number>;
   @Column({ default: 0 }) soNguoiPhuThuoc: number;
   @Column({ default: false }) dongBH: boolean;
+  /**
+   * Thời điểm BÁO TĂNG bảo hiểm ("YYYY-MM-DD"). `dongBH` trả lời "có đóng
+   * không", cột này trả lời "từ tháng nào" — thiếu nó thì bảng BHXH tháng 3
+   * vẫn trích của người mới báo tăng từ tháng 5.
+   *
+   * Trống + `dongBH` = đóng từ đầu (giữ nguyên hành vi của hồ sơ cũ).
+   */
+  @Column({ nullable: true }) ngayBatDauDongBH?: string;
   @Column({ default: false }) thoiVu: boolean;
   @Column({ default: false }) camKet: boolean;
   // ── Lương (P4.1) ──

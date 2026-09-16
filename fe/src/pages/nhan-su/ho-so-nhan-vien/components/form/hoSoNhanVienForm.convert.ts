@@ -35,6 +35,7 @@ export function toCreateEmployeeDto(
     ngaySinh: values.ngaySinh || undefined,
     gioiTinh: values.gioiTinh || undefined,
     mst: values.mst || undefined,
+    soSoBH: values.soSoBH || "",
     soDienThoai: values.soDienThoai || undefined,
     email: values.email || undefined,
     diaChi: values.diaChi || undefined,
@@ -89,9 +90,14 @@ export function toCreateEmployeeDto(
     // lưu xuống nói đúng điều người nhập muốn nói.
     mucKhaiBao: values.mucKhaiBao ? values.mucKhaiBao : undefined,
     ...giaTriKhoanToDto(values.giaTriKhoan),
-    phuCapCoDinh: values.phuCapCoDinh ?? 0,
-    soNguoiPhuThuoc: values.soNguoiPhuThuoc ?? 0,
+    // `phuCapCoDinh` và `soNguoiPhuThuoc` KHÔNG còn gửi từ form (yêu cầu d9):
+    // phụ cấp nay khai theo từng khoản trong Cấu hình lương, còn số người phụ
+    // thuộc do BE suy từ danh sách Gia cảnh (`chuanHoaHoSo`). Gửi lại ở đây là
+    // dựng lại đúng hai nguồn sự thật vừa bỏ.
     dongBH: values.dongBH ?? false,
+    // Chuỗi rỗng chứ không `undefined` — xem QUY TẮC CHUNG đầu file: bỏ tick
+    // đóng BH rồi xoá mốc báo tăng thì mốc phải thực sự mất.
+    ngayBatDauDongBH: values.ngayBatDauDongBH || "",
     thoiVu: values.thoiVu ?? false,
     camKet: values.camKet ?? false,
 

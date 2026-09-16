@@ -10,6 +10,7 @@ import { Repository } from 'typeorm';
 import { Employee, EmployeeCounter } from '@app/entities';
 import { TenantContextService } from '@app/core';
 import { CreateEmployeeDto, UpdateEmployeeDto } from './dto';
+import { chuanHoaHoSo } from './lib/chuanHoaHoSo';
 import { QuyPhep_Service } from '../quy-phep/quy-phep.service';
 
 export interface EmployeeFilter {
@@ -99,7 +100,7 @@ export class NhanVien_Service {
     const employeeId = await this.generateEmployeeId(tenantId);
 
     const entity = this.repo.create({
-      ...dto,
+      ...chuanHoaHoSo({ ...dto }),
       employeeId,
       isActive: true,
     } as Partial<Employee>);
@@ -224,7 +225,7 @@ export class NhanVien_Service {
     }
 
     const truocKhiSua = item.ngayChinhThuc;
-    Object.assign(item, dto);
+    Object.assign(item, chuanHoaHoSo({ ...dto }));
     const daLuu = await this.repo.save(item);
 
     await this.moKhoaQuyNeuCanThiet(daLuu, truocKhiSua);

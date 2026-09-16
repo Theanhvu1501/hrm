@@ -1,4 +1,5 @@
 import { ServiceBase } from './base/service-base';
+import type { CanCuBHXH } from './cauHinhLuongService';
 
 export interface KetQuaLuong {
   giaTriTungKhoan: Record<string, number>;
@@ -41,7 +42,7 @@ export interface DongLuong {
     congChuan: number;
     thuViecTyLe: number;
     bhxhTyLe: number;
-    bhxhCanCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN';
+    bhxhCanCu: CanCuBHXH;
   };
   tamUng: number;
   khauTruKhac: number;

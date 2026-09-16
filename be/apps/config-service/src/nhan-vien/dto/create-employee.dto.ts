@@ -14,7 +14,12 @@ import {
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import type { BangCap, NguoiPhuThuoc, LienHeKhanCap } from '@app/entities';
+import type {
+  BangCap,
+  NguoiPhuThuoc,
+  LienHeKhanCap,
+  CanCuBHXH,
+} from '@app/entities';
 
 /**
  * Override cấu hình lương cho riêng một NV. Trường vắng mặt = kế thừa
@@ -39,8 +44,8 @@ export class CauHinhLuongRiengDto {
   bhxhTyLe?: number;
 
   @IsOptional()
-  @IsIn(['MUC_KHAI_BAO', 'LUONG_THOA_THUAN'])
-  bhxhCanCu?: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN';
+  @IsIn(['MUC_KHAI_BAO', 'LUONG_THOA_THUAN', 'LUONG_VA_PHU_CAP'])
+  bhxhCanCu?: CanCuBHXH;
 }
 
 export class CreateEmployeeDto {
@@ -73,6 +78,11 @@ export class CreateEmployeeDto {
   @IsOptional()
   @IsString()
   mst?: string;
+
+  /** Số sổ BHXH — dùng cho bảng khai báo lao động với cơ quan bảo hiểm. */
+  @IsOptional()
+  @IsString()
+  soSoBH?: string;
 
   @IsOptional()
   @IsString()
@@ -185,6 +195,14 @@ export class CreateEmployeeDto {
   @IsOptional()
   @IsBoolean()
   dongBH?: boolean;
+
+  /**
+   * Thời điểm báo tăng bảo hiểm ("YYYY-MM-DD"). Thiếu khai ở đây là cả form
+   * 400 vì `main.ts` bật `forbidNonWhitelisted`.
+   */
+  @IsOptional()
+  @IsString()
+  ngayBatDauDongBH?: string;
 
   @IsOptional()
   @IsBoolean()

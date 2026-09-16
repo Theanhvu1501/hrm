@@ -1,15 +1,18 @@
 import { Controller, useFormContext } from "react-hook-form";
-import { Input, Select, Row, Col } from "antd";
+import { AutoComplete, Input, Select, Row, Col, Divider } from "antd";
 import { FieldLabel, FieldError } from "@/components/form/FieldLabel";
 import { OChonNgay } from "@/components/form/OChonNgay";
 import { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
-import { GIOI_TINH_OPTIONS } from "../../../constants";
+import { GIOI_TINH_OPTIONS, NOI_CAP_CCCD_OPTIONS } from "../../../constants";
+import { DinhKemO } from "@/components/form/DinhKemO";
+import { useHoSoDinhKemId } from "../HoSoDinhKemContext";
 
 export function CaNhanTab() {
   const {
     control,
     formState: { errors },
   } = useFormContext<HoSoNhanVienFormValues>();
+  const idDinhKem = useHoSoDinhKemId();
 
   return (
     <Row gutter={12}>
@@ -58,7 +61,21 @@ export function CaNhanTab() {
           control={control}
           rules={{ required: "Vui lòng nhập nơi cấp CCCD" }}
           render={({ field }) => (
-            <Input {...field} placeholder="Cục Cảnh sát QLHC về TTXH" />
+            // AutoComplete chứ không Select: hai cơ quan cấp dưới là 99% các
+            // trường hợp, nhưng CCCD/CMND cũ còn ghi công an tỉnh — khoá cứng
+            // danh sách là hồ sơ cũ không lưu lại được đúng chữ trên giấy tờ.
+            <AutoComplete
+              {...field}
+              options={NOI_CAP_CCCD_OPTIONS.map((o) => ({ value: o }))}
+              filterOption={(nhap, o) =>
+                (o?.value ?? "")
+                  .toString()
+                  .toLowerCase()
+                  .includes(nhap.toLowerCase())
+              }
+              placeholder="Chọn hoặc nhập nơi cấp"
+              className="w-full"
+            />
           )}
         />
         <FieldError>{errors.noiCapCccd?.message}</FieldError>
@@ -111,6 +128,16 @@ export function CaNhanTab() {
         <FieldError>{errors.mst?.message}</FieldError>
       </Col>
       <Col span={12} className="mt-2">
+        <FieldLabel>Số sổ BHXH</FieldLabel>
+        <Controller
+          name="soSoBH"
+          control={control}
+          render={({ field }) => (
+            <Input {...field} placeholder="Nhập số sổ BHXH" />
+          )}
+        />
+      </Col>
+      <Col span={12} className="mt-2">
         <FieldLabel required>Số điện thoại</FieldLabel>
         <Controller
           name="soDienThoai"
@@ -143,6 +170,34 @@ export function CaNhanTab() {
           )}
         />
         <FieldError>{errors.diaChi?.message}</FieldError>
+      </Col>
+
+      <Col span={24}>
+        <Divider titlePlacement="left" className="!mb-2 !mt-4">
+          Hồ sơ giấy tờ
+        </Divider>
+        <div className="space-y-2.5">
+          <DinhKemO
+            nhan="Ảnh CCCD — mặt trước"
+            doiTuong="nhan_vien"
+            doiTuongId={idDinhKem}
+            nhom="cccd_truoc"
+          />
+          <DinhKemO
+            nhan="Ảnh CCCD — mặt sau"
+            doiTuong="nhan_vien"
+            doiTuongId={idDinhKem}
+            nhom="cccd_sau"
+          />
+          <DinhKemO
+            nhan="Sơ yếu lý lịch"
+            doiTuong="nhan_vien"
+            doiTuongId={idDinhKem}
+            nhom="so_yeu_ly_lich"
+            nhieu
+            goiY="Tải được nhiều tệp: sơ yếu lý lịch, giấy khám sức khoẻ, ảnh thẻ…"
+          />
+        </div>
       </Col>
     </Row>
   );

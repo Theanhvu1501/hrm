@@ -1,5 +1,6 @@
 import { BaseStates } from "@/common/c-handler/core/actions/c-state.action";
 import { BangCap, Employee, NguoiPhuThuoc } from "@/services/employeeService";
+import type { CanCuBHXH } from "@/services/cauHinhLuongService";
 
 export interface HoSoNhanVienFormValues {
   hoTen: string;
@@ -9,6 +10,7 @@ export interface HoSoNhanVienFormValues {
   ngaySinh?: string;
   gioiTinh?: string;
   mst?: string;
+  soSoBH?: string;
   soDienThoai?: string;
   email?: string;
   diaChi?: string;
@@ -28,15 +30,15 @@ export interface HoSoNhanVienFormValues {
   choPhepChamNgoaiVung?: boolean;
   luongThoaThuan: number;
   mucKhaiBao?: number;
-  phuCapCoDinh: number;
   /**
    * Số riêng theo từng khoản. `null`/vắng = để trống (ăn mức chung công ty);
    * `0` = người này không có khoản đó. Hai thứ KHÁC nhau — xem
    * `giaTriKhoanToDto`.
    */
   giaTriKhoan?: Record<string, number | null>;
-  soNguoiPhuThuoc: number;
   dongBH: boolean;
+  /** Thời điểm báo tăng bảo hiểm — chỉ có nghĩa khi `dongBH`. */
+  ngayBatDauDongBH?: string;
   thoiVu: boolean;
   camKet: boolean;
   hopDongThu2: boolean;
@@ -45,7 +47,7 @@ export interface HoSoNhanVienFormValues {
   orCongChuan?: number;
   orThuViecPhanTram?: number;
   orBhxhPhanTram?: number;
-  orBhxhCanCu?: "MUC_KHAI_BAO" | "LUONG_THOA_THUAN";
+  orBhxhCanCu?: CanCuBHXH;
 }
 
 export interface FormStates extends BaseStates {

@@ -12,6 +12,15 @@ export const TRANG_THAI_OPTIONS = [
   { value: "tam_nghi", label: "Tạm nghỉ" },
 ] as const;
 
+/**
+ * Hai cơ quan cấp CCCD gắn chip (yêu cầu d4). Vẫn gõ tay được cho CMND cũ do
+ * công an tỉnh cấp — xem AutoComplete ở CaNhanTab.
+ */
+export const NOI_CAP_CCCD_OPTIONS = [
+  "Cục Cảnh sát QLHC về TTXH",
+  "Bộ Công an",
+] as const;
+
 export const GIOI_TINH_OPTIONS = [
   { value: "nam", label: "Nam" },
   { value: "nu", label: "Nữ" },

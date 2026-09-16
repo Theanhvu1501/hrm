@@ -13,7 +13,11 @@ function tyLe(v: unknown): number | undefined {
 }
 
 function canCu(v: unknown): CauHinhLuongData['bhxh']['canCu'] | undefined {
-  return v === 'MUC_KHAI_BAO' || v === 'LUONG_THOA_THUAN' ? v : undefined;
+  return v === 'MUC_KHAI_BAO' ||
+    v === 'LUONG_THOA_THUAN' ||
+    v === 'LUONG_VA_PHU_CAP'
+    ? v
+    : undefined;
 }
 
 /**

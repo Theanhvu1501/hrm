@@ -52,6 +52,16 @@ export interface KhoanLuong {
   thuTu: number;
 }
 
+/**
+ * Căn cứ đóng bảo hiểm. `LUONG_VA_PHU_CAP` = lương + các khoản bật cờ
+ * `vaoBHXH` — xem `tinhNenBHXH()` để biết khoản nào được cộng và vì sao
+ * khoản biến động theo công thì không.
+ */
+export type CanCuBHXH =
+  | 'MUC_KHAI_BAO'
+  | 'LUONG_THOA_THUAN'
+  | 'LUONG_VA_PHU_CAP';
+
 export interface BacThue {
   /** cận trên của bậc; null = ∞ (bậc cuối). */
   den: number | null;
@@ -92,7 +102,7 @@ export interface CauHinhLuongData {
   khoanLuong: KhoanLuong[];
   giamTruBanThan: number;
   giamTruNPT: number;
-  bhxh: { tyLe: number; canCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN' };
+  bhxh: { tyLe: number; canCu: CanCuBHXH };
   bacThue: BacThue[];
   thuViec: { tyLe: number };
   quyTacThoiVu: { tyLe: number; nguong: number };
@@ -181,7 +191,7 @@ export interface CauHinhLuongRieng {
   congChuan?: number;
   thuViecTyLe?: number; // 0..1, cùng đơn vị CauHinhLuong.thuViec.tyLe
   bhxhTyLe?: number; // 0..1
-  bhxhCanCu?: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN';
+  bhxhCanCu?: CanCuBHXH;
 }
 
 /** Giá trị đã resolve (không còn `undefined`) — snapshot vào `DongLuong`. */

@@ -12,6 +12,8 @@ import { CongViecTab } from "./tabs/CongViecTab";
 import { ChamCongTab } from "./tabs/ChamCongTab";
 import { LuongTab } from "./tabs/LuongTab";
 import { HoSoNhanVienFormValues } from "./HoSoNhanVienForm.state";
+import { HoSoDinhKemContext } from "./HoSoDinhKemContext";
+import { idNhap } from "@/services/dinhKemService";
 import { cauHinhLuongRiengToForm } from "./tabs/luongTab.convert";
 import { toCreateEmployeeDto } from "./hoSoNhanVienForm.convert";
 import "./HoSoNhanVienForm.state";
@@ -24,6 +26,7 @@ const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   ngaySinh: "",
   gioiTinh: undefined,
   mst: "",
+  soSoBH: "",
   soDienThoai: "",
   email: "",
   diaChi: "",
@@ -46,9 +49,8 @@ const DEFAULT_VALUES: HoSoNhanVienFormValues = {
   // Vắng khoá = ăn mức chung công ty; đừng khởi tạo 0 cho từng khoản, 0 mang
   // nghĩa khác hẳn ("người này không có khoản đó").
   giaTriKhoan: {},
-  phuCapCoDinh: 0,
-  soNguoiPhuThuoc: 0,
   dongBH: false,
+  ngayBatDauDongBH: "",
   thoiVu: false,
   camKet: false,
   hopDongThu2: false,
@@ -72,6 +74,7 @@ export function toFormValues(employee: Employee | null): HoSoNhanVienFormValues 
     ngaySinh: employee.ngaySinh || "",
     gioiTinh: employee.gioiTinh,
     mst: employee.mst || "",
+    soSoBH: employee.soSoBH || "",
     soDienThoai: employee.soDienThoai || "",
     email: employee.email || "",
     diaChi: employee.diaChi || "",
@@ -96,9 +99,8 @@ export function toFormValues(employee: Employee | null): HoSoNhanVienFormValues 
     luongThoaThuan: employee.luongThoaThuan ?? 0,
     mucKhaiBao: employee.mucKhaiBao,
     giaTriKhoan: employee.giaTriKhoan ?? {},
-    phuCapCoDinh: employee.phuCapCoDinh ?? 0,
-    soNguoiPhuThuoc: employee.soNguoiPhuThuoc ?? 0,
     dongBH: employee.dongBH ?? false,
+    ngayBatDauDongBH: employee.ngayBatDauDongBH || "",
     thoiVu: employee.thoiVu ?? false,
     camKet: employee.camKet ?? false,
     hopDongThu2: employee.hopDongThu2 ?? false,
@@ -123,11 +125,20 @@ export function HoSoNhanVienForm() {
 
   const isEditing = !!editingEmployee;
 
+  /**
+   * Id để tệp đính kèm bám vào. Thêm mới thì sinh id NHÁP mỗi lần mở form —
+   * dùng lại id cũ là ảnh CCCD của người vừa nhập dở sẽ theo sang hồ sơ kế
+   * tiếp.
+   */
+  const [idNhapHoSo, setIdNhapHoSo] = useState("");
   useEffect(() => {
     if (formVisible) {
       reset(toFormValues(editingEmployee));
+      if (!editingEmployee) setIdNhapHoSo(idNhap());
     }
   }, [formVisible, editingEmployee, reset]);
+
+  const idDinhKem = editingEmployee?.id ?? idNhapHoSo;
 
   const handleCancel = () => {
     handler.executeEvent("closeForm", {});
@@ -142,7 +153,9 @@ export function HoSoNhanVienForm() {
     if (isEditing && editingEmployee) {
       handler.executeEvent("updateEmployee", { id: editingEmployee.id, dto });
     } else {
-      handler.executeEvent("createEmployee", dto);
+      // `idNhap` để handler chuyển các tệp đã đính (bám id nháp) sang id thật
+      // sau khi tạo xong.
+      handler.executeEvent("createEmployee", { dto, idNhap: idNhapHoSo });
     }
   };
 
@@ -208,11 +221,9 @@ export function HoSoNhanVienForm() {
       ]}
     >
       <FormProvider {...methods}>
-        <Tabs
-          items={items}
-          activeKey={tabDangMo}
-          onChange={setTabDangMo}
-        />
+        <HoSoDinhKemContext.Provider value={idDinhKem}>
+          <Tabs items={items} activeKey={tabDangMo} onChange={setTabDangMo} />
+        </HoSoDinhKemContext.Provider>
       </FormProvider>
     </Modal>
   );

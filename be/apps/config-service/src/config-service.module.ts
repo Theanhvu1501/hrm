@@ -26,6 +26,7 @@ import { QuyPhep_Module } from './quy-phep/quy-phep.module';
 import { QuyGio_Module } from './quy-gio/quy-gio.module';
 import { CauHinhChamCong_Module } from './cau-hinh-cham-cong/cau-hinh-cham-cong.module';
 import { PhongBanModule } from './phong-ban/phong-ban.module';
+import { DinhKem_Module } from './dinh-kem/dinh-kem.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { PhongBanModule } from './phong-ban/phong-ban.module';
     VaiTro_Module,
     PhieuTemplate_Module,
     TaiLieu_Module,
+    DinhKem_Module,
     NhanVien_Module,
     HopDong_Module,
     QuaTrinhCongTac_Module,

@@ -1,6 +1,6 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../base.entity';
-import type { KhoanLuong, BacThue, CauHinhLamThem } from './luong.types';
+import type { KhoanLuong, BacThue, CauHinhLamThem, CanCuBHXH } from './luong.types';
 
 @Entity('cau_hinh_luong')
 export class CauHinhLuong extends BaseEntity {
@@ -9,7 +9,7 @@ export class CauHinhLuong extends BaseEntity {
   @Column('json', { nullable: true }) khoanLuong: KhoanLuong[];
   @Column({ default: 15_500_000 }) giamTruBanThan: number;
   @Column({ default: 6_200_000 }) giamTruNPT: number;
-  @Column('json', { nullable: true }) bhxh: { tyLe: number; canCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN' };
+  @Column('json', { nullable: true }) bhxh: { tyLe: number; canCu: CanCuBHXH };
   @Column('json', { nullable: true }) bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
   /** Trừ vào lương NLĐ, tính trên lương đóng bảo hiểm — xem `CauHinhLuongData`. */
   @Column('json', { nullable: true }) phiCongDoan: { tyLe: number };

@@ -143,7 +143,6 @@ describe("toCreateEmployeeDto — các trường tuỳ chọn khác giữ nguyê
         values({
           luongThoaThuan: 15000000,
           dongBH: true,
-          soNguoiPhuThuoc: 2,
           mucKhaiBao: undefined,
         })
       )
@@ -151,8 +150,37 @@ describe("toCreateEmployeeDto — các trường tuỳ chọn khác giữ nguyê
 
     expect(body.luongThoaThuan).toBe(15000000);
     expect(body.dongBH).toBe(true);
-    expect(body.soNguoiPhuThuoc).toBe(2);
     expect("mucKhaiBao" in body).toBe(false);
+  });
+
+  /**
+   * Yêu cầu d9: số người phụ thuộc và phụ cấp cố định KHÔNG còn là ô nhập ở
+   * tab Lương. Form không được gửi chúng lên nữa — gửi lại là dựng lại đúng
+   * hai nguồn sự thật vừa bỏ (BE đếm người phụ thuộc từ danh sách Gia cảnh).
+   */
+  it("KHÔNG gửi soNguoiPhuThuoc và phuCapCoDinh — hai trường đã bỏ khỏi form", () => {
+    const body = bodyThucGui(toCreateEmployeeDto(values()));
+
+    expect("soNguoiPhuThuoc" in body).toBe(false);
+    expect("phuCapCoDinh" in body).toBe(false);
+  });
+
+  it("gửi số sổ BHXH và mốc báo tăng bảo hiểm, xoá trắng được", () => {
+    const co = bodyThucGui(
+      toCreateEmployeeDto(
+        values({ soSoBH: "0123456789", ngayBatDauDongBH: "2026-03-01" })
+      )
+    );
+    expect(co.soSoBH).toBe("0123456789");
+    expect(co.ngayBatDauDongBH).toBe("2026-03-01");
+
+    // Chuỗi rỗng thật, không phải `undefined`: `undefined` bị JSON.stringify
+    // loại khỏi body và BE (Object.assign) sẽ giữ nguyên giá trị cũ.
+    const xoa = bodyThucGui(
+      toCreateEmployeeDto(values({ soSoBH: "", ngayBatDauDongBH: "" }))
+    );
+    expect(xoa.soSoBH).toBe("");
+    expect(xoa.ngayBatDauDongBH).toBe("");
   });
 
   /**

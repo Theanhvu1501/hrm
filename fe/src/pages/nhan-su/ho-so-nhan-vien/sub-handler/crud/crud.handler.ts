@@ -3,6 +3,7 @@ import { CSubHanlder } from "@/common/c-handler/core/sub-handler.ts/sub-handler"
 import { message } from "antd";
 import { apiErrorMessage } from "@/config/api";
 import { employeeService } from "@/services/employeeService";
+import { dinhKemService } from "@/services/dinhKemService";
 import type {
   CreateEmployeeDto,
   Employee,
@@ -24,11 +25,27 @@ export class CrudHandler extends CSubHanlder {
     this.setState("editingEmployee", null);
   }
 
+  /**
+   * `idNhap` là id tạm mà các tệp đính kèm bám vào khi hồ sơ chưa tồn tại.
+   * Tạo xong phải chuyển chúng sang id thật, nếu không ảnh CCCD vừa tải lên
+   * sẽ nằm mồ côi và hồ sơ hiện ra không có tệp nào.
+   */
   @HandlerDecorator("createEmployee")
-  async createEmployee(dto: CreateEmployeeDto): Promise<void> {
+  async createEmployee(params: {
+    dto: CreateEmployeeDto;
+    idNhap?: string;
+  }): Promise<void> {
+    const { dto, idNhap } = params;
     this.setState("saving", true);
     try {
       const created = await employeeService.create(dto);
+      if (idNhap) {
+        // Lỗi ở bước này KHÔNG được làm hỏng việc tạo hồ sơ — hồ sơ đã lưu
+        // rồi, tệp thì HR đính lại được từ màn sửa.
+        await dinhKemService
+          .gan({ doiTuong: "nhan_vien", tuId: idNhap, sangId: created.id })
+          .catch((e) => console.error("Gán đính kèm thất bại:", e));
+      }
       const currentList = (this.getState("employeeList") as Employee[]) || [];
       this.setState("employeeList", [...currentList, created]);
       this.setState("formVisible", false);

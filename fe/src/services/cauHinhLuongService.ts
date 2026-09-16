@@ -1,5 +1,14 @@
 import { ServiceBase } from './base/service-base';
 
+/**
+ * Căn cứ đóng bảo hiểm. `LUONG_VA_PHU_CAP` = lương + các khoản bật cờ
+ * "Tính vào nền BHXH" ở Cấu hình lương (BE: `tinhNenBHXH`).
+ */
+export type CanCuBHXH =
+  | 'MUC_KHAI_BAO'
+  | 'LUONG_THOA_THUAN'
+  | 'LUONG_VA_PHU_CAP';
+
 /** Loại công thức cho một khoản lương — engine diễn giải, KHÔNG công thức tự do. */
 export type LoaiCongThuc =
   | 'LUONG_THEO_CONG'
@@ -117,7 +126,7 @@ export interface CauHinhLuong {
   khoanLuong: KhoanLuong[];
   giamTruBanThan: number;
   giamTruNPT: number;
-  bhxh: { tyLe: number; canCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN' };
+  bhxh: { tyLe: number; canCu: CanCuBHXH };
   /** Phần BH công ty chịu — `tyLeHopDongThu2` áp khi NV là HĐLĐ thứ 2. */
   bhCongTy: { tyLe: number; tyLeHopDongThu2: number };
   /** Phí công đoàn trừ vào lương NLĐ. Cấu hình cũ chưa có → đọc `?? 0`. */

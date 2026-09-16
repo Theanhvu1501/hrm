@@ -6,6 +6,7 @@ import {
   type CauHinhLuong,
 } from "@/services/cauHinhLuongService";
 import { FieldLabel } from "@/components/form/FieldLabel";
+import { OChonNgay } from "@/components/form/OChonNgay";
 import type { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
 import { dienGiaiThueVaBaoHiem } from "./luongTab.dienGiai";
 
@@ -120,6 +121,11 @@ export function LuongTab() {
   const mucChung = (k: (typeof khoanRieng)[number]): number | undefined =>
     k.loaiCongThuc === "DINH_MUC_x_CONG" ? k.thamSo.dinhMuc : k.thamSo.soTien;
 
+  const nguoiPhuThuoc = useWatch({ control, name: "nguoiPhuThuoc" });
+  // Đếm đúng như BE: chỉ dòng CÓ họ tên mới là một người phụ thuộc — dòng
+  // trống người dùng vừa bấm "Thêm" chưa phải là một suất giảm trừ.
+  const soNPT = (nguoiPhuThuoc ?? []).filter((n) => n?.hoTen?.trim()).length;
+
   const [dongBH, thoiVu, camKet, hopDongThu2] =
     useWatch({
       control,
@@ -168,27 +174,20 @@ export function LuongTab() {
             />
           </O>
         </Col>
+        {/* Hai ô cũ đã bỏ (yêu cầu d9):
+            - "Phụ cấp cố định": phụ cấp nay khai theo từng khoản ở Cấu hình
+              lương rồi đặt số riêng bên dưới, nên một ô gộp là con số thứ hai
+              nói cùng một chuyện.
+            - "Số người phụ thuộc": đã nhập ở tab Bằng cấp & Gia cảnh; BE đếm
+              từ đó (`chuanHoaHoSo`). Ở đây chỉ HIỂN THỊ lại. */}
         <Col span={12}>
           <O
-            nhan="Phụ cấp cố định (₫/tháng)"
-            goiY="Xăng xe, điện thoại, chuyên cần… gộp một số."
+            nhan="Số người phụ thuộc"
+            goiY="Đếm từ danh sách ở tab Bằng cấp & Gia cảnh — sửa ở tab đó."
           >
-            <Controller
-              name="phuCapCoDinh"
-              control={control}
-              render={({ field }) => <InputNumber {...tien} {...field} />}
-            />
-          </O>
-        </Col>
-        <Col span={12}>
-          <O nhan="Số người phụ thuộc" goiY="Dùng để tính giảm trừ gia cảnh.">
-            <Controller
-              name="soNguoiPhuThuoc"
-              control={control}
-              render={({ field }) => (
-                <InputNumber style={{ width: "100%" }} min={0} {...field} />
-              )}
-            />
+            <div className="flex h-[32px] items-center text-[12px]">
+              {soNPT} người
+            </div>
           </O>
         </Col>
       </Row>
@@ -261,6 +260,29 @@ export function LuongTab() {
               mo="Nhân viên đã có hợp đồng chính ở công ty khác."
             />
           </Col>
+          {/* Yêu cầu d9: "Mục đóng BH: chọn thời điểm báo tăng => từ thời
+              điểm". Chỉ hiện khi đã tích đóng BH — hỏi mốc báo tăng của người
+              không đóng bảo hiểm là một ô không bao giờ dùng tới. */}
+          {dongBH && (
+            <Col span={12}>
+              <O
+                nhan="Báo tăng bảo hiểm từ ngày"
+                goiY="Để trống = đóng từ đầu. Bảng BHXH chỉ trích từ tháng này trở đi."
+              >
+                <Controller
+                  name="ngayBatDauDongBH"
+                  control={control}
+                  render={({ field }) => (
+                    <OChonNgay
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                    />
+                  )}
+                />
+              </O>
+            </Col>
+          )}
         </Row>
 
         {/* Bốn ô tick trên cộng lại ra đúng MỘT cách tính, mà nhìn ô tick thì
@@ -357,6 +379,10 @@ export function LuongTab() {
                     options={[
                       { value: "MUC_KHAI_BAO", label: "Mức khai báo" },
                       { value: "LUONG_THOA_THUAN", label: "Lương thoả thuận" },
+                      {
+                        value: "LUONG_VA_PHU_CAP",
+                        label: "Lương + phụ cấp tính BHXH",
+                      },
                     ]}
                     {...field}
                   />

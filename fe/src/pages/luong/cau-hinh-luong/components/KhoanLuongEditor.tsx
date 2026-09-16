@@ -277,6 +277,41 @@ export function KhoanLuongEditor({ canEdit }: KhoanLuongEditorProps) {
       ),
     },
     {
+      // Yêu cầu d9: "Cấu hình lương => Thêm chọn: Phụ cấp này có đóng BHXH ko".
+      // Chỉ có tác dụng khi Căn cứ đóng bảo hiểm (khối Hằng số) đặt
+      // "Lương + phụ cấp tính BHXH" — hai căn cứ kia không đọc cờ này, nên cứ
+      // để hiện mà không nói gì là người dùng tick xong tưởng đã đổi nền đóng.
+      title: (
+        <Tooltip title="Chỉ có tác dụng khi Căn cứ đóng bảo hiểm = 'Lương + phụ cấp tính BHXH'. Khoản theo công (ăn ca, xăng xe/ngày), nhập theo kỳ và tiền làm thêm không cộng vào nền, dù có tích.">
+          <span>Tính vào nền BHXH</span>
+        </Tooltip>
+      ),
+      key: "vaoBHXH",
+      width: 130,
+      align: "center",
+      render: (_: unknown, record: KhoanLuong, index: number) => {
+        const congVaoNen =
+          record.loaiCongThuc === "CO_DINH_THANG" ||
+          record.loaiCongThuc === "TRON_THANG" ||
+          record.loaiCongThuc === "PHAN_TRAM_BASE" ||
+          record.loaiCongThuc === "LUONG_THEO_CONG";
+        const o = (
+          <Checkbox
+            checked={record.vaoBHXH}
+            disabled={!canEdit}
+            onChange={(e) => capNhatDong(index, { vaoBHXH: e.target.checked })}
+          />
+        );
+        return congVaoNen ? (
+          o
+        ) : (
+          <Tooltip title="Khoản biến động theo tháng không vào nền đóng bảo hiểm — tích ở đây sẽ không đổi số.">
+            {o}
+          </Tooltip>
+        );
+      },
+    },
+    {
       title: "Vào tổng thu nhập",
       key: "vaoTongThuNhap",
       width: 130,

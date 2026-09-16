@@ -1,12 +1,16 @@
 import { ServiceBase } from './base/service-base';
+import type { CanCuBHXH } from './cauHinhLuongService';
 
 export interface BangCap {
+  /** Khoá riêng của dòng — tệp đính kèm bám theo id này, không theo vị trí. */
+  id?: string;
   ten: string;
   noiCap?: string;
   nam?: string;
 }
 
 export interface NguoiPhuThuoc {
+  id?: string;
   hoTen: string;
   quanHe?: string;
   ngaySinh?: string;
@@ -30,6 +34,8 @@ export interface Employee {
   ngayCapCccd?: string;
   noiCapCccd?: string;
   mst?: string;
+  /** Số sổ BHXH — dùng cho bảng khai báo lao động với cơ quan bảo hiểm. */
+  soSoBH?: string;
   soDienThoai?: string;
   email?: string;
   diaChi?: string;
@@ -63,6 +69,8 @@ export interface Employee {
   giaTriKhoan?: Record<string, number>;
   soNguoiPhuThuoc: number;
   dongBH: boolean;
+  /** Thời điểm báo tăng bảo hiểm ("YYYY-MM-DD"). */
+  ngayBatDauDongBH?: string;
   thoiVu: boolean;
   camKet: boolean;
   hopDongThu2: boolean;
@@ -74,7 +82,7 @@ export interface CauHinhLuongRieng {
   congChuan?: number;
   thuViecTyLe?: number; // 0..1
   bhxhTyLe?: number; // 0..1
-  bhxhCanCu?: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN';
+  bhxhCanCu?: CanCuBHXH;
 }
 
 export interface EmployeeFilter {
@@ -92,6 +100,8 @@ export interface CreateEmployeeDto {
   ngaySinh?: string;
   gioiTinh?: string;
   mst?: string;
+  /** Số sổ BHXH — dùng cho bảng khai báo lao động với cơ quan bảo hiểm. */
+  soSoBH?: string;
   soDienThoai?: string;
   email?: string;
   diaChi?: string;
@@ -114,6 +124,7 @@ export interface CreateEmployeeDto {
   giaTriKhoan?: Record<string, number>;
   soNguoiPhuThuoc?: number;
   dongBH?: boolean;
+  ngayBatDauDongBH?: string;
   thoiVu?: boolean;
   camKet?: boolean;
   hopDongThu2?: boolean;

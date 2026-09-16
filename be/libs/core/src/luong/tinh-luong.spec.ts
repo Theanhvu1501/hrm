@@ -1,4 +1,9 @@
-import { tinhDongLuong, thueLuyTien, lamTronTheo } from './tinh-luong';
+import {
+  tinhDongLuong,
+  thueLuyTien,
+  lamTronTheo,
+  tinhNenBHXH,
+} from './tinh-luong';
 import { CauHinhLuongData, DauVaoDongLuong } from '@app/entities';
 
 const BAC_MAC_DINH = [
@@ -694,5 +699,81 @@ describe('TRON_THANG — trọn gói theo tháng', () => {
 
     const r = tinhDongLuong(dauVao({ congThuong: 12, congDayDu: 12 }), ch);
     expect(r.giaTriTungKhoan.PC_CHIA).toBe(1_200_000);
+  });
+});
+
+describe('tinhNenBHXH — căn cứ LUONG_VA_PHU_CAP (yêu cầu d9)', () => {
+  /** Cấu hình có 3 phụ cấp: 2 khoản tính vào nền BH, ăn ca thì không. */
+  function chPhuCap() {
+    return cauHinh({
+      bhxh: { tyLe: 0.105, canCu: 'LUONG_VA_PHU_CAP' },
+      khoanLuong: [
+        { ma: 'LUONG_CONG', ten: 'Lương theo công', loaiCongThuc: 'LUONG_THEO_CONG', thamSo: {}, chiuThue: true, tranMienThue: null, vaoTongThuNhap: true, vaoBHXH: true, thuTu: 1 },
+        { ma: 'PC_TRACH_NHIEM', ten: 'Phụ cấp trách nhiệm', loaiCongThuc: 'TRON_THANG', thamSo: { soTien: 2_000_000 }, choPhepRieng: true, chiuThue: true, tranMienThue: null, vaoTongThuNhap: true, vaoBHXH: true, thuTu: 2 },
+        { ma: 'PC_XANG_XE', ten: 'Phụ cấp xăng xe', loaiCongThuc: 'CO_DINH_THANG', thamSo: { soTien: 500_000 }, choPhepRieng: true, chiuThue: true, tranMienThue: null, vaoTongThuNhap: true, vaoBHXH: true, thuTu: 3 },
+        { ma: 'AN_CA', ten: 'Ăn ca', loaiCongThuc: 'DINH_MUC_x_CONG', thamSo: { dinhMuc: 50_000 }, chiuThue: true, tranMienThue: 1_200_000, vaoTongThuNhap: true, vaoBHXH: true, thuTu: 4 },
+      ],
+    });
+  }
+
+  it('cộng lương cơ bản với các khoản bật cờ vaoBHXH', () => {
+    const nen = tinhNenBHXH(
+      dauVao({ base: 10_000_000 }),
+      chPhuCap(),
+    );
+    // 10tr + 2tr (trách nhiệm) + 500k (xăng xe). Ăn ca KHÔNG cộng dù bật cờ:
+    // khoản theo công không phải phụ cấp ghi trong HĐLĐ.
+    expect(nen).toBe(12_500_000);
+  });
+
+  it('dùng mức RIÊNG của người này khi hồ sơ có khai', () => {
+    const nen = tinhNenBHXH(
+      dauVao({
+        base: 10_000_000,
+        giaTriKhoan: { PC_TRACH_NHIEM: 5_000_000, PC_XANG_XE: 0 },
+      }),
+      chPhuCap(),
+    );
+    // Mức riêng thắng mức chung; khai 0 nghĩa là KHÔNG có khoản đó, không
+    // phải "theo công ty".
+    expect(nen).toBe(15_000_000);
+  });
+
+  it('KHÔNG chia theo công — tháng nghỉ nhiều nền BH vẫn nguyên', () => {
+    const ch = chPhuCap();
+    const dayDu = tinhNenBHXH(dauVao({ base: 10_000_000, congThuong: 24 }), ch);
+    const nghiNhieu = tinhNenBHXH(
+      dauVao({ base: 10_000_000, congThuong: 5, congDayDu: 5 }),
+      ch,
+    );
+    expect(nghiNhieu).toBe(dayDu);
+  });
+
+  it('khoản tắt cờ vaoBHXH không được cộng', () => {
+    const ch = chPhuCap();
+    ch.khoanLuong[1].vaoBHXH = false;
+    expect(tinhNenBHXH(dauVao({ base: 10_000_000 }), ch)).toBe(10_500_000);
+  });
+
+  it('hai căn cứ cũ giữ nguyên hành vi', () => {
+    const dv = dauVao({ base: 10_000_000, mucKhaiBao: 5_500_000 });
+    expect(
+      tinhNenBHXH(dv, cauHinh({ bhxh: { tyLe: 0.105, canCu: 'MUC_KHAI_BAO' } })),
+    ).toBe(5_500_000);
+    expect(
+      tinhNenBHXH(
+        dv,
+        cauHinh({ bhxh: { tyLe: 0.105, canCu: 'LUONG_THOA_THUAN' } }),
+      ),
+    ).toBe(10_000_000);
+  });
+
+  it('tiền BHXH trừ của NLĐ đi theo nền mới', () => {
+    const kq = tinhDongLuong(
+      dauVao({ base: 10_000_000, dongBH: true }),
+      chPhuCap(),
+    );
+    // 10,5% × 12.500.000
+    expect(kq.bhxh).toBe(1_313_000);
   });
 });

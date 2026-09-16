@@ -1,14 +1,19 @@
-import { Controller, useFormContext } from "react-hook-form";
+import { Controller, useFormContext, useWatch } from "react-hook-form";
 import { Input, Select, Row, Col } from "antd";
 import { FieldLabel } from "@/components/form/FieldLabel";
 import { OChonNgay } from "@/components/form/OChonNgay";
 import { HoSoNhanVienFormValues } from "../HoSoNhanVienForm.state";
-import { LOAI_HOP_DONG_OPTIONS, TRANG_THAI_OPTIONS } from "../../../constants";
+import {
+  LOAI_HOP_DONG_OPTIONS,
+  TRANG_THAI_OPTIONS,
+  labelFor,
+} from "../../../constants";
 import { usePhongBanOptions } from "@/hooks/usePhongBanOptions";
 
 export function CongViecTab() {
   const { control } = useFormContext<HoSoNhanVienFormValues>();
   const { options, loading } = usePhongBanOptions();
+  const trangThai = useWatch({ control, name: "trangThai" });
 
   return (
     <Row gutter={12}>
@@ -88,22 +93,18 @@ export function CongViecTab() {
           )}
         />
       </Col>
+      {/* Ô "Trạng thái" đã bỏ khỏi đây (yêu cầu d8): trạng thái làm việc là
+          KẾT QUẢ của Quá trình công tác / Thôi việc, không phải thứ sửa tay
+          song song. Sửa được ở hai nơi thì hồ sơ ghi "đang làm việc" trong
+          khi đã có quyết định thôi việc, và không ai biết bên nào đúng. */}
       <Col span={12} className="mt-2">
-        <FieldLabel>Trạng thái</FieldLabel>
-        <Controller
-          name="trangThai"
-          control={control}
-          render={({ field }) => (
-            <Select
-              {...field}
-              className="w-full"
-              options={TRANG_THAI_OPTIONS.map((o) => ({
-                value: o.value,
-                label: o.label,
-              }))}
-            />
-          )}
-        />
+        <FieldLabel>Trạng thái làm việc</FieldLabel>
+        <div className="flex h-[32px] items-center text-[12px]">
+          {labelFor(TRANG_THAI_OPTIONS, trangThai)}
+        </div>
+        <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
+          Đổi ở màn Quá trình công tác hoặc Thôi việc.
+        </div>
       </Col>
     </Row>
   );

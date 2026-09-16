@@ -4,6 +4,7 @@ import './quy-chuan.entity';
 import './vai-tro.entity';
 import './phieu-template.entity';
 import './tai-lieu.entity';
+import './dinh-kem.entity';
 
 // Re-export all entities
 export * from './phan-quyen.entity';
@@ -11,3 +12,4 @@ export * from './quy-chuan.entity';
 export * from './vai-tro.entity';
 export * from './phieu-template.entity';
 export * from './tai-lieu.entity';
+export * from './dinh-kem.entity';

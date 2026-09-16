@@ -95,9 +95,19 @@ export function HangSoEditor({ canEdit }: HangSoEditorProps) {
           options={[
             { value: "MUC_KHAI_BAO", label: "Mức khai báo" },
             { value: "LUONG_THOA_THUAN", label: "Lương thoả thuận" },
+            {
+              value: "LUONG_VA_PHU_CAP",
+              label: "Lương + phụ cấp tính BHXH",
+            },
           ]}
           onChange={(canCu) => capNhat({ bhxh: { ...cauHinh.bhxh, canCu } })}
         />
+        {cauHinh.bhxh.canCu === "LUONG_VA_PHU_CAP" && (
+          <div className="mt-[2px] text-[10.5px] text-[hsl(var(--ink-2))]">
+            Nền đóng = lương thoả thuận + các khoản tích "Tính vào nền BHXH" ở
+            bảng bên dưới.
+          </div>
+        )}
       </Col>
       {/* `?.`/`?? 0`: tenant tạo trước P4.1 chưa từng lưu `bhCongTy` và vẫn có
           thể mở màn này trước khi BE backfill khối đó. */}

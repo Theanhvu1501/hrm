@@ -118,6 +118,60 @@ function tinhKhoan(
   return lamTronTheo(x, ch.lamTron);
 }
 
+/**
+ * Nền đóng bảo hiểm của một dòng lương.
+ *
+ * Ba căn cứ, chọn ở Cấu hình lương:
+ * - `MUC_KHAI_BAO`  — con số công ty khai với cơ quan BH (`Employee.mucKhaiBao`).
+ * - `LUONG_THOA_THUAN` — lương thoả thuận, không cộng phụ cấp.
+ * - `LUONG_VA_PHU_CAP` — lương + các khoản BẬT cờ `vaoBHXH` (yêu cầu d9 và
+ *   cột "Mức đóng BHXH" của bảng BHXH: "lấy từ Lương cơ bản và phụ cấp tính
+ *   BHXH").
+ *
+ * Với `LUONG_VA_PHU_CAP` chỉ cộng khoản mang MỘT MỨC THÁNG xác định trước
+ * (`CO_DINH_THANG`, `TRON_THANG`, `PHAN_TRAM_BASE`) và cộng nguyên mức tháng,
+ * KHÔNG chia theo công thực tế. Lý do: nền đóng BH là con số ghi trong hợp
+ * đồng, phải giữ nguyên cả tháng người ta nghỉ phép — nếu lấy số đã chia theo
+ * công thì tháng nghỉ nhiều là tiền bảo hiểm tự tụt xuống, sai với cơ quan BH
+ * mà bảng lương vẫn trông hợp lý.
+ *
+ * Khoản theo công (`DINH_MUC_x_CONG`: ăn ca, xăng xe), nhập theo kỳ (thưởng,
+ * hiệu suất) và tiền làm thêm cố ý KHÔNG cộng dù có bật cờ: chúng là số biến
+ * động từng tháng, không phải "phụ cấp ghi trong HĐLĐ". `LUONG_THEO_CONG`
+ * cũng bỏ qua vì nó CHÍNH LÀ `dv.base` — cộng lại là tính hai lần.
+ */
+export function tinhNenBHXH(
+  dv: DauVaoDongLuong,
+  ch: CauHinhLuongData,
+): number {
+  if (ch.bhxh.canCu === 'MUC_KHAI_BAO') return dv.mucKhaiBao;
+  if (ch.bhxh.canCu !== 'LUONG_VA_PHU_CAP') return dv.base;
+
+  let tong = dv.base;
+  for (const k of ch.khoanLuong ?? []) {
+    if (!k.vaoBHXH) continue;
+    const rieng = giaTriRieng(k, dv);
+    switch (k.loaiCongThuc) {
+      case 'CO_DINH_THANG':
+        tong +=
+          rieng ??
+          (k.thamSo.nguonHoSo === 'phuCapCoDinh'
+            ? dv.phuCapCoDinh
+            : k.thamSo.soTien ?? 0);
+        break;
+      case 'TRON_THANG':
+        tong += rieng ?? k.thamSo.soTien ?? 0;
+        break;
+      case 'PHAN_TRAM_BASE':
+        tong += (k.thamSo.tyLe ?? 0) * dv.base;
+        break;
+      default:
+        break;
+    }
+  }
+  return tong;
+}
+
 export function tinhDongLuong(
   dv: DauVaoDongLuong,
   ch: CauHinhLuongData,
@@ -150,10 +204,7 @@ export function tinhDongLuong(
     Math.max(0, dv.tienOt ?? 0),
   );
 
-  // Cơ sở đóng BHXH hiện là lựa chọn `canCu` cố định (MUC_KHAI_BAO | base);
-  // KhoanLuong.vaoBHXH chưa được cộng dồn ở đây — dành cho một task sau.
-  const baseBHXH =
-    ch.bhxh.canCu === 'MUC_KHAI_BAO' ? dv.mucKhaiBao : dv.base;
+  const baseBHXH = tinhNenBHXH(dv, ch);
 
   // HĐLĐ thứ 2: BHXH/BHYT/BHTN đã đóng ở nơi thứ nhất nên NLĐ không bị trừ
   // tại đây, dù HR có tích `dongBH`.

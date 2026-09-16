@@ -1,3 +1,4 @@
+import type { CanCuBHXH } from '@app/entities';
 import {
   IsArray,
   IsIn,
@@ -168,7 +169,7 @@ export class CapNhatCauHinhLuongDto {
   @IsOptional() @IsArray() khoanLuong?: KhoanLuong[];
   @IsOptional() @IsNumber() giamTruBanThan?: number;
   @IsOptional() @IsNumber() giamTruNPT?: number;
-  @IsOptional() @IsObject() bhxh?: { tyLe: number; canCu: 'MUC_KHAI_BAO' | 'LUONG_THOA_THUAN' };
+  @IsOptional() @IsObject() bhxh?: { tyLe: number; canCu: CanCuBHXH };
   @IsOptional() @IsArray() bacThue?: BacThue[];
   @IsOptional() @IsObject() thuViec?: { tyLe: number };
   @IsOptional() @IsObject() quyTacThoiVu?: { tyLe: number; nguong: number };
