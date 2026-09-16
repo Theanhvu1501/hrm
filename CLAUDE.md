@@ -34,6 +34,12 @@ Only **3 services** remain (the other 8 accounting microservices from master-seo
   `nguoi-dung`, `quy-gio`. (It also still wires `quy-chuan`, `phieu-template`, `tai-lieu`
   modules left over from the accounting fork — see Known limitations.)
 
+Modules added in the 2026-09 "Phần Hành Phần mềm" pass (see
+`docs/superpowers/plans/2026-09-16-hrm-theo-yeu-cau-phan-hanh.md`):
+`dinh-kem` (tệp đính kèm dùng chung, GridFS), `so-do-to-chuc` (cây tổ chức →
+nguồn của ô Chức danh), `tam-ung` (tạm ứng lương có duyệt),
+`bao-cao-nhan-su` (chỉ số + báo cáo tình hình sử dụng lao động).
+
 Shared libs: `libs/auth` (copied whole from master-seo, kept as `@app/auth`, not extracted
 into a shared package — see design spec §5), `libs/core`, `libs/database`, `libs/dto`,
 `libs/entities`, `libs/service-client`.
@@ -80,6 +86,19 @@ Test: `npm run test` (Vitest). No Playwright/e2e infra is set up in this repo.
   build a new feature with it. Keep using this pattern for new HR modules.
 - `contexts/AuthContext`, `components/ProtectedRoute`, `pages/auth/LoginPage`,
   `pages/profile`, `ComingSoon`/`NotFound`/`PlaceholderPage`.
+
+## Hai script BẮT BUỘC chạy khi deploy
+
+1. `ops/grant-quyen-module-moi.ts` — cấp quyền cho module mới. Đợt 2026-09 thêm
+   `/nhan-su/so-do-to-chuc` và `/luong/tam-ung`; không chạy thì hai màn đó 403
+   với mọi người.
+2. `ops/chuyen-phucapcodinh-sang-khoan.ts` — chạy MỘT LẦN: ô "Phụ cấp cố định"
+   đã bỏ khỏi hồ sơ NV, script chuyển số đang có sang mức riêng theo khoản để
+   HR còn sửa được từ giao diện.
+
+`ops/chuyen-mau-hop-dong.py` KHÔNG phải việc deploy — nó sinh lại
+`be/apps/config-service/src/hop-dong/lib/mauInMacDinh.ts` từ các file .docx
+trong `docs/Mau_hop_dong`, chạy khi bên pháp chế gửi mẫu mới.
 
 ## Roadmap (phân hệ nghiệp vụ — chưa làm ở base này)
 
