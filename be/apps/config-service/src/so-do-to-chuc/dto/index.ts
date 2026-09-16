@@ -1,3 +1,4 @@
+import { PartialType } from '@nestjs/mapped-types';
 import {
   IsIn,
   IsInt,
@@ -45,8 +46,11 @@ export class CreateOrgUnitDto {
   moTa?: string;
 }
 
-export class UpdateOrgUnitDto extends CreateOrgUnitDto {
-  @IsOptional()
-  @IsString()
-  ten: string;
-}
+/**
+ * Sửa đơn vị: mọi trường đều không bắt buộc.
+ *
+ * `PartialType` thay vì kế thừa rồi khai lại `ten` — khai lại sẽ ghi đè
+ * decorator của lớp cha và TypeScript báo TS2612 (thuộc tính che mất thuộc
+ * tính cùng tên của lớp cơ sở).
+ */
+export class UpdateOrgUnitDto extends PartialType(CreateOrgUnitDto) {}

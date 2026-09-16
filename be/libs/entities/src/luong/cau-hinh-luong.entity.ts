@@ -1,6 +1,11 @@
 import { Entity, Column } from 'typeorm';
 import { BaseEntity } from '../base.entity';
-import type { KhoanLuong, BacThue, CauHinhLamThem, CanCuBHXH } from './luong.types';
+import type {
+  KhoanLuong,
+  BacThue,
+  CauHinhLamThem,
+  CanCuBHXH,
+} from './luong.types';
 
 @Entity('cau_hinh_luong')
 export class CauHinhLuong extends BaseEntity {
@@ -27,7 +32,7 @@ export class CauHinhLuong extends BaseEntity {
    * Vì sao mặc định `khai_bao`: trừ của người lao động nhiều hơn số thực nộp
    * thì phần chênh không đi đâu cả, và không giải thích được với họ.
    */
-  @Column({ default: 'khai_bao' }) khauTruThueTheo: string;
+  @Column({ default: 'khai_bao' }) khauTruThueTheo: 'khai_bao' | 'thuc_te';
   @Column({ default: 1000 }) lamTron: number;
   @Column({ default: 8 }) soGioMoiNgay: number;
   @Column('json', { nullable: true }) lamThem: CauHinhLamThem;

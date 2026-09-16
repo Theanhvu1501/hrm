@@ -146,7 +146,6 @@ export class ThemGio_Service {
 
       const kq = tinhDongThemGio({
         luongThang: emp.luongThoaThuan ?? 0,
-        chucDanh: emp.chucDanh,
         congChuan: ch.congChuan,
         soGioMoiNgay: ch.soGioMoiNgay,
         gioTheoLoai: this.congGioTheoLoai(donCuaNV),
@@ -167,6 +166,8 @@ export class ThemGio_Service {
         } as Partial<DongLuongThemGio>);
 
       row.luongThang = emp.luongThoaThuan ?? 0;
+      // Chụp chức danh để in mẫu 03-LĐTL — KHÔNG đưa vào `tinhDongThemGio`:
+      // đó là hàm tính tiền, không nhận dữ liệu chỉ để hiển thị.
       row.chucDanh = emp.chucDanh;
       row.congChuan = ch.congChuan;
       row.soGioMoiNgay = ch.soGioMoiNgay;
