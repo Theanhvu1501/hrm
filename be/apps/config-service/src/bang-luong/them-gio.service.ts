@@ -146,6 +146,7 @@ export class ThemGio_Service {
 
       const kq = tinhDongThemGio({
         luongThang: emp.luongThoaThuan ?? 0,
+        chucDanh: emp.chucDanh,
         congChuan: ch.congChuan,
         soGioMoiNgay: ch.soGioMoiNgay,
         gioTheoLoai: this.congGioTheoLoai(donCuaNV),
@@ -166,6 +167,7 @@ export class ThemGio_Service {
         } as Partial<DongLuongThemGio>);
 
       row.luongThang = emp.luongThoaThuan ?? 0;
+      row.chucDanh = emp.chucDanh;
       row.congChuan = ch.congChuan;
       row.soGioMoiNgay = ch.soGioMoiNgay;
       row.donGiaNgay = kq.donGiaNgay;

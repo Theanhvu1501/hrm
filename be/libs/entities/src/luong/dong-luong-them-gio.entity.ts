@@ -27,6 +27,14 @@ export class DongLuongThemGio extends BaseEntity {
   @Column() employeeId: string;
   @Column({ nullable: true }) employeeName?: string;
   @Column({ nullable: true }) employeeCode?: string;
+  /**
+   * Chức danh TẠI THỜI ĐIỂM TỔNG HỢP — mẫu 03-LĐTL có cột này.
+   *
+   * Chụp lại thay vì tra hồ sơ lúc in: in lại bảng của tháng trước phải ra
+   * chức danh của tháng đó, không phải chức danh sau khi người ta được bổ
+   * nhiệm.
+   */
+  @Column({ nullable: true }) chucDanh?: string;
 
   // ── Snapshot mẫu số của đơn giá ──────────────────────────────────────────
   @Column({ default: 0 }) luongThang: number;

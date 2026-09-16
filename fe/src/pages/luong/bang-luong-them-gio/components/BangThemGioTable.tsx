@@ -77,6 +77,13 @@ export function BangThemGioTable() {
       ),
     },
     {
+      title: "Chức danh",
+      dataIndex: "chucDanh",
+      key: "chucDanh",
+      width: 150,
+      render: (v?: string) => v || "-",
+    },
+    {
       title: "Tiền lương tháng",
       key: "luongThang",
       align: "right",

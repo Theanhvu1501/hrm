@@ -29,6 +29,7 @@ import { PhongBanModule } from './phong-ban/phong-ban.module';
 import { DinhKem_Module } from './dinh-kem/dinh-kem.module';
 import { SoDoToChuc_Module } from './so-do-to-chuc/so-do-to-chuc.module';
 import { TamUng_Module } from './tam-ung/tam-ung.module';
+import { BaoCaoNhanSu_Module } from './bao-cao-nhan-su/bao-cao-nhan-su.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { TamUng_Module } from './tam-ung/tam-ung.module';
     DinhKem_Module,
     SoDoToChuc_Module,
     TamUng_Module,
+    BaoCaoNhanSu_Module,
     NhanVien_Module,
     HopDong_Module,
     QuaTrinhCongTac_Module,

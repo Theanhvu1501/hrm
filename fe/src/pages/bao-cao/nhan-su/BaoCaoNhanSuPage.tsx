@@ -1,8 +1,14 @@
-import { useMemo, useState } from 'react';
-import { Alert, Card, Select, Tag, Tooltip } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Card, Select, Tabs, Tag, Tooltip } from 'antd';
 import { FilterBar } from '@/components/common/FilterBar';
 import { DANH_SACH_KY, KY_MAC_DINH, layBaoCao } from './duLieuMau';
 import KhoiNhom from './components/KhoiNhom';
+import { apDungSoThat } from './soThat';
+import { SuDungLaoDongTab } from './components/SuDungLaoDongTab';
+import {
+  baoCaoNhanSuService,
+  type ChiSoThang,
+} from '@/services/baoCaoNhanSuService';
 import './baoCao.css';
 
 /** "2026-07" → "Tháng 07/2026". */
@@ -26,7 +32,29 @@ function nhanKy(ky: string): string {
  */
 export default function BaoCaoNhanSuPage() {
   const [ky, setKy] = useState(KY_MAC_DINH);
-  const baoCao = useMemo(() => layBaoCao(ky), [ky]);
+  const [chuoi, setChuoi] = useState<ChiSoThang[] | null>(null);
+
+  useEffect(() => {
+    let huy = false;
+    baoCaoNhanSuService
+      .chiSo(ky)
+      .then((ds) => {
+        if (!huy) setChuoi(ds);
+      })
+      // Lỗi tải (chưa có quyền, BE cũ) KHÔNG làm trắng màn hình — khung báo
+      // cáo vẫn hiện, chỉ là chưa có số thật.
+      .catch(() => {
+        if (!huy) setChuoi(null);
+      });
+    return () => {
+      huy = true;
+    };
+  }, [ky]);
+
+  const baoCao = useMemo(() => {
+    const khung = layBaoCao(ky);
+    return chuoi ? apDungSoThat(khung, chuoi, ky) : khung;
+  }, [ky, chuoi]);
 
   return (
     <div className="bao-cao-nhan-su space-y-3">
@@ -59,11 +87,19 @@ export default function BaoCaoNhanSuPage() {
             </>
           }
           actions={
-            <Tooltip title="Bản demo giao diện: số liệu lấy từ bộ mẫu trong ứng dụng, chưa nối vào dữ liệu thật của công ty.">
-              <Tag color="orange" className="cursor-help">
-                Số liệu mẫu
-              </Tag>
-            </Tooltip>
+            chuoi ? (
+              <Tooltip title="Các chỉ số có nguồn được tính từ dữ liệu thật của công ty (hồ sơ, quá trình công tác, bảng công). Chỉ số chưa có module nguồn vẫn để trống.">
+                <Tag color="green" className="cursor-help">
+                  Dữ liệu thật
+                </Tag>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Chưa tải được số liệu thật — khung báo cáo đang hiện bộ mẫu trong ứng dụng.">
+                <Tag color="orange" className="cursor-help">
+                  Số liệu mẫu
+                </Tag>
+              </Tooltip>
+            )
           }
         />
 
@@ -83,9 +119,26 @@ export default function BaoCaoNhanSuPage() {
         />
       </Card>
 
-      {baoCao.nhom.map((n) => (
-        <KhoiNhom key={n.ma} nhom={n} />
-      ))}
+      <Tabs
+        items={[
+          {
+            key: 'chi-so',
+            label: 'Chỉ số nhân sự',
+            children: (
+              <div className="space-y-3">
+                {baoCao.nhom.map((n) => (
+                  <KhoiNhom key={n.ma} nhom={n} />
+                ))}
+              </div>
+            ),
+          },
+          {
+            key: 'su-dung-lao-dong',
+            label: 'Tình hình sử dụng lao động',
+            children: <SuDungLaoDongTab />,
+          },
+        ]}
+      />
     </div>
   );
 }

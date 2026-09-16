@@ -52,15 +52,37 @@ tự chọn đánh đổi và ghi lại lý do tại chỗ.
 - [x] A8 Cảnh báo tạo hợp đồng trùng nhân viên
 - [x] A9 6 mẫu in hợp đồng từ `docs/Mau_hop_dong`
 - [x] O1 Sơ đồ tổ chức (cây + chức danh cho hồ sơ)
-- [ ] B1 Quá trình công tác
-- [ ] B2 Thôi việc
-- [ ] C1–C6 Công
-- [ ] D1–D7 Lương
-- [ ] E1–E2 Báo cáo
+- [x] B1 Quá trình công tác — lương mới đẩy về hồ sơ, chứng từ bắt buộc, phụ lục HĐ
+- [x] B2 Thôi việc — chứng từ bàn giao, tự ghi dòng quá trình, cờ tuyển thay thế
+- [x] C1 Làm từ xa / tại văn phòng khi chấm công (có cờ bật ở Cấu hình)
+- [x] C2 Tổng giờ trong ngày + bảng giờ làm thực tế (xuất Excel)
+- [x] C3 Gửi bảng công cho NLĐ xác nhận, có hạn, tự khoá
+- [x] C4 Ẩn người nghỉ từ tháng trước ở Bản ghi chấm công
+- [x] C5 Quỹ phép cộng dồn theo tháng (cơ chế đã có từ P3.10 — sửa nhãn cho đúng)
+- [x] C6 Gộp Cấu hình ca + Cấu hình chấm công thành một màn hai tab
+- [x] D1 Tạm ứng lương có duyệt, nối vào ô Tạm ứng của bảng lương
+- [x] D2 Bảng lương thêm giờ theo mẫu (thêm cột Chức danh; đơn giá đã theo lương cơ bản)
+- [x] D3 Bản in bảng lương chọn chỉ tiêu + sửa khấu trừ thuế của NLĐ
+- [x] D4 Bảng BHXH theo mẫu (5 quỹ, tổng 32%)
+- [x] D5 Thuế TNCN theo kỳ Tháng/Quý/Năm/Tự chọn
+- [x] D6 Danh sách phí công đoàn theo kỳ
+- [x] D7 Gửi phiếu lương + bố cục phiếu theo mẫu
+- [x] E1 Báo cáo tình hình sử dụng lao động (xuất Excel + in)
+- [x] E2 Báo cáo nhân sự nối dữ liệu thật (chỉ số nào chưa có nguồn thì nói rõ)
 
 ## Việc BẮT BUỘC khi deploy
 
 1. `ops/grant-quyen-module-moi.ts` — module quyền mới `/nhan-su/so-do-to-chuc`.
    Không chạy thì màn Sơ đồ tổ chức 403 với tất cả mọi người.
+   Đợt này có HAI module quyền mới: `/nhan-su/so-do-to-chuc` và `/luong/tam-ung`.
 2. `ops/chuyen-phucapcodinh-sang-khoan.ts` — di trú ô "Phụ cấp cố định" đã bỏ
    khỏi hồ sơ sang mức riêng theo khoản.
+
+## Việc CHƯA làm (đúng theo cột "Tình trạng" của sheet)
+
+- Phân hệ **IV. Đào tạo & Phát triển** và **V. Tuyển dụng**: sheet ghi "Bổ sung
+  sau". Cờ `canTuyenThayThe` ở hồ sơ thôi việc đã ghi nhận sẵn nhu cầu tuyển
+  thay thế để phân hệ Tuyển dụng đọc khi có.
+- Ba chỉ số của Báo cáo nhân sự (vượt thử việc, hồ sơ pháp lý đầy đủ, giữ chân
+  nhân sự cốt cán) vẫn ở trạng thái "chưa có nguồn" — cần mốc đánh giá thử
+  việc, quy định hồ sơ bắt buộc và cờ nhân sự cốt cán.

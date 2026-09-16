@@ -14,6 +14,8 @@ export interface DongLuongThemGio {
   employeeId: string;
   employeeName?: string;
   employeeCode?: string;
+  /** Chức danh tại thời điểm tổng hợp — cột của mẫu 03-LĐTL. */
+  chucDanh?: string;
   luongThang: number;
   congChuan: number;
   soGioMoiNgay: number;
