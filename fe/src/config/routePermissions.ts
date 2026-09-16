@@ -12,6 +12,7 @@ export const routePermissions: Record<string, string> = {
   '/luong/bang-luong-them-gio': '/luong/bang-luong:xem',
   '/luong/quyet-toan-tncn': '/luong/bang-luong:xem',
   '/nhan-su/ho-so-nhan-vien': '/nhan-su/ho-so-nhan-vien:xem',
+  '/nhan-su/so-do-to-chuc': '/nhan-su/so-do-to-chuc:xem',
   // Báo cáo nhân sự dùng CHUNG quyền với hồ sơ nhân viên: nó chỉ tổng hợp lại
   // chính dữ liệu đó, và khai một module quyền mới sẽ bắt phải chạy
   // `ops/grant-quyen-module-moi.ts` lúc deploy — quên là màn hình 403 với tất

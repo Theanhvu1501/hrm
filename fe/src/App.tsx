@@ -30,6 +30,7 @@ import {
   PhieuLuongCuaToiPage,
   QuyetToanTncnPage,
   HoSoNhanVienPage,
+  SoDoToChucPage,
   HopDongLaoDongPage,
   MauInHopDongPage,
   QuaTrinhCongTacPage,
@@ -230,6 +231,14 @@ const App = () => (
                     element={
                       <ProtectedRoute requiredPermission="/nhan-su/ho-so-nhan-vien:xem">
                         <HoSoNhanVienPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="so-do-to-chuc"
+                    element={
+                      <ProtectedRoute requiredPermission="/nhan-su/so-do-to-chuc:xem">
+                        <SoDoToChucPage />
                       </ProtectedRoute>
                     }
                   />

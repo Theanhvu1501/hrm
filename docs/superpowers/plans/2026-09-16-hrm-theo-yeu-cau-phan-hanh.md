@@ -42,4 +42,25 @@ tự chọn đánh đổi và ghi lại lý do tại chỗ.
 
 ## Tiến độ
 
-(cập nhật khi xong từng mục)
+- [x] A1 Nơi cấp CCCD dạng chọn — `CaNhanTab` + `NOI_CAP_CCCD_OPTIONS`
+- [x] A2 Hạ tầng đính kèm `dinh_kem` (GridFS) + ô đính kèm ở 6 chỗ
+- [x] A3 Số sổ BH
+- [x] A4 Bỏ ô Trạng thái khỏi tab Công việc (thành chỉ-đọc)
+- [x] A5 Tab Lương: bỏ phụ cấp cố định + số NPT, thêm mốc báo tăng BH
+- [x] A6 Cờ "Tính vào nền BHXH" + căn cứ `LUONG_VA_PHU_CAP` (`tinhNenBHXH`)
+- [x] A7 Bảng khai báo lao động BH (xuất Excel)
+- [x] A8 Cảnh báo tạo hợp đồng trùng nhân viên
+- [x] A9 6 mẫu in hợp đồng từ `docs/Mau_hop_dong`
+- [x] O1 Sơ đồ tổ chức (cây + chức danh cho hồ sơ)
+- [ ] B1 Quá trình công tác
+- [ ] B2 Thôi việc
+- [ ] C1–C6 Công
+- [ ] D1–D7 Lương
+- [ ] E1–E2 Báo cáo
+
+## Việc BẮT BUỘC khi deploy
+
+1. `ops/grant-quyen-module-moi.ts` — module quyền mới `/nhan-su/so-do-to-chuc`.
+   Không chạy thì màn Sơ đồ tổ chức 403 với tất cả mọi người.
+2. `ops/chuyen-phucapcodinh-sang-khoan.ts` — di trú ô "Phụ cấp cố định" đã bỏ
+   khỏi hồ sơ sang mức riêng theo khoản.

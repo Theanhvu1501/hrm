@@ -33,6 +33,10 @@ const MODULE_KHUON = '/cham-cong/ca-lam-viec';
  * Đợt P4.2a (Quỹ giờ làm thêm): cấp `/cham-cong/quy-gio`. (Đợt P3.8 đã cấp
  * `/cham-cong/quy-phep`; đợt P4 đã cấp `/luong/*`.)
  * Đợt P4.5 (Cấu hình chấm công): cấp `/cham-cong/cau-hinh`.
+ * Đợt "Phần Hành Phần mềm" (2026-09): cấp `/nhan-su/so-do-to-chuc` — module
+ * mới cho yêu cầu d13 (chức danh lấy theo sơ đồ tổ chức). Module KHUÔN cho
+ * nhóm này là `/nhan-su/ho-so-nhan-vien` chứ không phải ca làm việc: ai quản
+ * hồ sơ nhân sự thì cũng là người dựng sơ đồ tổ chức.
  * Script chỉ THÊM, idempotent — MỖI ĐỢT deploy module mới thì THÊM một phần
  * tử vào mảng này, KHÔNG thay thế đợt cũ: môi trường nào chưa từng chạy
  * script ở đợt trước (vd P4.2a) vẫn phải cấp được `/cham-cong/quy-gio` bằng
@@ -47,6 +51,10 @@ const MODULE_KHUON = '/cham-cong/ca-lam-viec';
  * ra khỏi script này sẽ phức tạp hơn giá trị nó mang lại.
  */
 const MODULE_CAN_CAP = ['/cham-cong/quy-gio', '/cham-cong/cau-hinh'];
+
+/** Module nhân sự — sao bộ hành động từ `/nhan-su/ho-so-nhan-vien`. */
+const MODULE_KHUON_NHAN_SU = '/nhan-su/ho-so-nhan-vien';
+const MODULE_CAN_CAP_NHAN_SU = ['/nhan-su/so-do-to-chuc'];
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -84,29 +92,38 @@ async function main() {
       ? row.permissions
       : [];
 
+    // Vai trò không có quyền nào với module khuôn → cố ý KHÔNG cấp gì cho
+    // nhóm tương ứng. Đây chính là chỗ ngăn việc vô tình mở màn hình quản trị
+    // cho "Nhân viên".
+    //
+    // KHÔNG `continue` khi thiếu khuôn chấm công: một vai trò có thể quản hồ
+    // sơ nhân sự mà không đụng tới ca làm việc — bỏ qua cả hàng là vai trò đó
+    // không bao giờ được cấp quyền sơ đồ tổ chức.
     const hanhDongKhuon = hanhDongCuaModule(hienCo, MODULE_KHUON);
-    if (hanhDongKhuon.length === 0) {
-      // Vai trò không có quyền nào với ca-lam-viec → cố ý KHÔNG cấp gì. Đây
-      // chính là chỗ ngăn việc vô tình mở màn hình quản trị cho "Nhân viên".
-      console.log(
-        `- BỎ QUA ${nhan}: không có quyền nào với ${MODULE_KHUON}, không cấp gì`,
-      );
-      continue;
-    }
 
-    const quyenThem = MODULE_CAN_CAP.flatMap((module) =>
-      hanhDongKhuon
-        .map((hanhDong) => `${module}:${hanhDong}`)
-        .filter((quyen) => !hienCo.includes(quyen)),
+    // Nhóm nhân sự đi theo khuôn RIÊNG: vai trò quản hồ sơ nhân sự chưa chắc
+    // có quyền nào với ca làm việc, mà sơ đồ tổ chức thì thuộc về họ.
+    const hanhDongKhuonNhanSu = hanhDongCuaModule(
+      hienCo,
+      MODULE_KHUON_NHAN_SU,
     );
 
+    const quyenThem = [
+      ...MODULE_CAN_CAP.flatMap((module) =>
+        hanhDongKhuon.map((hanhDong) => `${module}:${hanhDong}`),
+      ),
+      ...MODULE_CAN_CAP_NHAN_SU.flatMap((module) =>
+        hanhDongKhuonNhanSu.map((hanhDong) => `${module}:${hanhDong}`),
+      ),
+    ].filter((quyen) => !hienCo.includes(quyen));
+
     if (quyenThem.length === 0) {
-      console.log(`- ĐỦ RỒI ${nhan}: đã có đủ quyền 3 module, không đổi`);
+      console.log(`- ĐỦ RỒI ${nhan}: đã có đủ quyền các module, không đổi`);
       continue;
     }
 
     console.log(
-      `- CẬP NHẬT ${nhan}\n    khuôn ${MODULE_KHUON} = [${hanhDongKhuon.join(', ')}]\n    thêm ${quyenThem.length} quyền: ${quyenThem.join(', ')}`,
+      `- CẬP NHẬT ${nhan}\n    khuôn ${MODULE_KHUON} = [${hanhDongKhuon.join(', ')}]\n    khuôn ${MODULE_KHUON_NHAN_SU} = [${hanhDongKhuonNhanSu.join(', ')}]\n    thêm ${quyenThem.length} quyền: ${quyenThem.join(', ')}`,
     );
 
     soHangDoi += 1;

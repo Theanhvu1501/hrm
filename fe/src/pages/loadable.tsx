@@ -60,6 +60,10 @@ export const HoSoNhanVienPage = loadable(() => import('./nhan-su/ho-so-nhan-vien
   fallback: <PageLoader />
 });
 
+export const SoDoToChucPage = loadable(() => import('./nhan-su/so-do-to-chuc/SoDoToChucPage'), {
+  fallback: <PageLoader />
+});
+
 export const HopDongLaoDongPage = loadable(() => import('./nhan-su/hop-dong-lao-dong/HopDongLaoDongPage'), {
   fallback: <PageLoader />
 });
