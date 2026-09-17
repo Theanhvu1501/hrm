@@ -38,15 +38,14 @@ export function decodeTenantId(token: string | null): string | null {
   }
 }
 
-/** Danh sách appId ĐƯỢC BẬT cho công ty hiện tại (claim `apps` trong token). */
-export function decodeApps(token: string | null): string[] {
-  if (!token) return [];
-  try {
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    return Array.isArray(payload?.apps) ? (payload.apps as string[]) : [];
-  } catch {
-    return [];
-  }
+/**
+ * Trang chọn ứng dụng của Master CEO. Portal `/` vào thẳng màn đó khi phiên
+ * còn sống, nên không cần đường dẫn riêng.
+ *
+ * '' nếu chưa cấu hình identity — chỗ gọi tự quyết định ẩn lối vào.
+ */
+export function urlManChonUngDung(): string {
+  return IDENTITY_URL ? `${IDENTITY_URL.replace(/\/+$/, '')}/` : '';
 }
 
 /** identity SSO có được cấu hình không (dev để trống → fallback login cục bộ). */
@@ -59,43 +58,6 @@ const APP_ID = 'nhan-su';
 
 /** appId của app hiện tại (Nhân sự). */
 export const CURRENT_APP_ID = APP_ID;
-
-export interface IdentityApp {
-  appId: string;
-  name: string;
-  feUrl: string;
-  iconUrl?: string;
-}
-
-/**
- * Danh sách app user được phép dùng (từ Identity), để "Chuyển ứng dụng".
- * [] nếu chưa cấu hình identity, chưa có token, hoặc lỗi.
- */
-export async function identityApps(): Promise<IdentityApp[]> {
-  if (!IDENTITY_URL) return [];
-  const { getAuthToken } = await import('@/services/base/service-base');
-  const token = getAuthToken();
-  if (!token) return [];
-  try {
-    const res = await fetch(`${IDENTITY_URL}/api/me/apps`, {
-      headers: { Authorization: `Bearer ${token}` },
-      credentials: 'include',
-    });
-    if (!res.ok) return [];
-    const body = await res.json().catch(() => null);
-    const list = (body?.data ?? []) as Array<{
-      appId: string;
-      name: string;
-      feUrl: string;
-      iconUrl?: string;
-    }>;
-    return list
-      .filter((a) => a.feUrl)
-      .map((a) => ({ appId: a.appId, name: a.name, feUrl: a.feUrl, iconUrl: a.iconUrl }));
-  } catch {
-    return [];
-  }
-}
 
 /** Công ty dạng rút gọn cho cổng chấm công — chỉ cần đủ để chọn và hiển thị. */
 export interface TenantChamCong {
