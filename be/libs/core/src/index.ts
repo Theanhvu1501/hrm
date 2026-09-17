@@ -1,5 +1,6 @@
 export * from './core.module';
 export * from './filters';
+export * from './decorators/chuan-hoa-chuoi.decorator';
 export * from './interceptors';
 export * from './tenant';
 export * from './logger';

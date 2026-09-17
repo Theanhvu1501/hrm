@@ -59,6 +59,53 @@ describe('resolveBackendMessage', () => {
     );
   });
 
+  /**
+   * Sự cố 2026-09-17: HR bấm "Thêm nhân viên" 5 lần liên tiếp, lần nào cũng
+   * chỉ thấy đúng hai chữ "Validation failed" — không biết ô nào sai (thực tế
+   * là email dán từ Excel còn dính dấu cách). Câu cụ thể BE trả về nằm ở
+   * `error.details.validation`, còn `error.message` luôn là hằng số
+   * 'Validation failed' (xem be/libs/core/src/filters/global-exception.filter.ts).
+   * Chỉ đọc `error.message` là vứt đi toàn bộ thông tin hữu ích duy nhất.
+   */
+  it('lỗi validate: đọc error.details.validation thay vì hằng số "Validation failed"', () => {
+    expect(
+      resolveBackendMessage({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Validation failed',
+          details: { validation: ['Email không hợp lệ'] },
+        },
+      }),
+    ).toBe('Email không hợp lệ');
+  });
+
+  it('nhiều lỗi validate cùng lúc được nối thành một câu', () => {
+    expect(
+      resolveBackendMessage({
+        success: false,
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Validation failed',
+          details: { validation: ['Email không hợp lệ', 'Họ tên không được để trống'] },
+        },
+      }),
+    ).toBe('Email không hợp lệ; Họ tên không được để trống');
+  });
+
+  it('details.validation rỗng/không phải mảng → vẫn dùng error.message', () => {
+    expect(
+      resolveBackendMessage({
+        error: { message: 'Validation failed', details: { validation: [] } },
+      }),
+    ).toBe('Validation failed');
+    expect(
+      resolveBackendMessage({
+        error: { message: 'Đã có hợp đồng', details: { validation: 'hỏng' } },
+      }),
+    ).toBe('Đã có hợp đồng');
+  });
+
   it('mảng rỗng hoặc không có gì để đọc → undefined, không ném', () => {
     expect(resolveBackendMessage({ message: [] })).toBeUndefined();
     expect(resolveBackendMessage({})).toBeUndefined();

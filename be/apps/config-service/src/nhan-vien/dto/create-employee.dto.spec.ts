@@ -2,6 +2,7 @@ import { ArgumentMetadata, ValidationPipe } from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate, ValidationError } from 'class-validator';
 import { CreateEmployeeDto } from './create-employee.dto';
+import { UpdateEmployeeDto } from './update-employee.dto';
 
 /**
  * Test này khoá trực tiếp decorator class-validator trên CreateEmployeeDto —
@@ -190,5 +191,102 @@ describe('CreateEmployeeDto — ngayChinhThuc (P3.8)', () => {
       meta,
     );
     expect(ketQua.ngayChinhThuc).toBeUndefined();
+  });
+});
+
+/**
+ * Sự cố production 2026-09-17: HR dán dữ liệu nhân viên từ file Excel sang
+ * form "Thêm nhân viên". Ô Email nhận được chuỗi `"ddthuyanh@gmail.com "` —
+ * dư đúng một dấu cách vô hình ở cuối — và `@IsEmail` từ chối. Cả form 400,
+ * người dùng chỉ thấy "Validation failed", bấm lại 5 lần đều hỏng y hệt vì
+ * nhìn trên màn hình không có gì sai cả.
+ *
+ * Excel/Word còn hay kèm cả dấu cách cứng (U+00A0) và ký tự rộng-không
+ * (U+200B) — mắt thường không phân biệt được với dấu cách thường.
+ */
+describe('CreateEmployeeDto — chuẩn hoá chuỗi dán từ Excel', () => {
+  const pipe = new ValidationPipe({
+    whitelist: true,
+    transform: true,
+    forbidNonWhitelisted: true,
+  });
+  const meta: ArgumentMetadata = { type: 'body', metatype: CreateEmployeeDto };
+
+  it('email dư dấu cách hai đầu vẫn nhận, và được lưu ở dạng đã cắt', async () => {
+    const kq: any = await pipe.transform(
+      { ...BASE_HOP_LE, email: '  ddthuyanh@gmail.com ' },
+      meta,
+    );
+    expect(kq.email).toBe('ddthuyanh@gmail.com');
+  });
+
+  it('dấu cách cứng (U+00A0) và ký tự rộng-không (U+200B) cũng bị dọn', async () => {
+    const kq: any = await pipe.transform(
+      { ...BASE_HOP_LE, email: 'ddthuyanh@gmail.com ', mst: '​040177000610' },
+      meta,
+    );
+    expect(kq.email).toBe('ddthuyanh@gmail.com');
+    expect(kq.mst).toBe('040177000610');
+  });
+
+  it('họ tên và các ô chữ khác cũng được cắt đầu/cuối', async () => {
+    const kq: any = await pipe.transform(
+      {
+        hoTen: ' Đinh Đặng Thuỳ Anh ',
+        cccd: ' 040177000610 ',
+        noiCapCccd: 'Cục Cảnh sát QLHC về TTXH ',
+        soDienThoai: ' 0912345678',
+        diaChi: ' Số 26 Ngõ 172 Thái Thịnh ',
+      },
+      meta,
+    );
+    expect(kq.hoTen).toBe('Đinh Đặng Thuỳ Anh');
+    expect(kq.cccd).toBe('040177000610');
+    expect(kq.noiCapCccd).toBe('Cục Cảnh sát QLHC về TTXH');
+    expect(kq.soDienThoai).toBe('0912345678');
+    expect(kq.diaChi).toBe('Số 26 Ngõ 172 Thái Thịnh');
+  });
+
+  it('ô chỉ toàn dấu cách = bỏ trống, không lưu chuỗi rác', async () => {
+    const kq: any = await pipe.transform({ ...BASE_HOP_LE, mst: '   ' }, meta);
+    expect(kq.mst).toBe('');
+  });
+
+  it('họ tên toàn dấu cách bị từ chối như bỏ trống, không lưu " "', async () => {
+    await expect(
+      pipe.transform({ hoTen: '   ', cccd: '040177000610' }, meta),
+    ).rejects.toThrow();
+  });
+
+  it('dấu cách GIỮA các từ được giữ nguyên', async () => {
+    const kq: any = await pipe.transform(
+      { ...BASE_HOP_LE, hoTen: 'Đinh Đặng Thuỳ Anh' },
+      meta,
+    );
+    expect(kq.hoTen).toBe('Đinh Đặng Thuỳ Anh');
+  });
+});
+
+/**
+ * `UpdateEmployeeDto` là `PartialType(CreateEmployeeDto)`. Nó có kế thừa
+ * metadata của `@Transform` hay không là chi tiết nội bộ của
+ * `@nestjs/mapped-types` — nếu một bản nâng cấp nào đó thôi kế thừa, màn SỬA
+ * hồ sơ sẽ lại 400 vì dấu cách thừa y như lỗi 2026-09-17 mà không test nào
+ * biết. Sửa hồ sơ là đường HR đi nhiều hơn cả thêm mới.
+ */
+describe('UpdateEmployeeDto — kế thừa chuẩn hoá chuỗi từ CreateEmployeeDto', () => {
+  const pipe = new ValidationPipe({
+    whitelist: true,
+    transform: true,
+    forbidNonWhitelisted: true,
+  });
+  const meta: ArgumentMetadata = { type: 'body', metatype: UpdateEmployeeDto };
+
+  it('email dư dấu cách khi SỬA hồ sơ cũng được cắt, không trả 400', async () => {
+    const kq: any = await pipe.transform(
+      { email: ' ddthuyanh@gmail.com ' },
+      meta,
+    );
+    expect(kq.email).toBe('ddthuyanh@gmail.com');
   });
 });

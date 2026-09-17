@@ -14,6 +14,7 @@ import {
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ChuanHoaChuoi } from '@app/core';
 import type {
   BangCap,
   NguoiPhuThuoc,
@@ -49,65 +50,80 @@ export class CauHinhLuongRiengDto {
 }
 
 export class CreateEmployeeDto {
+  @ChuanHoaChuoi()
   @IsString()
   @IsNotEmpty({ message: 'Họ tên không được để trống' })
   hoTen: string;
 
+  @ChuanHoaChuoi()
   @IsString()
   @IsNotEmpty({ message: 'CCCD không được để trống' })
   cccd: string;
 
   // Hai trường này in thẳng lên hợp đồng lao động. Optional vì hồ sơ cũ
   // chưa có, và HR có thể chưa cầm bản CCCD lúc tạo hồ sơ.
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   ngayCapCccd?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   noiCapCccd?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   ngaySinh?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsIn(['nam', 'nu', 'khac'], { message: 'Giới tính không hợp lệ' })
   gioiTinh?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   mst?: string;
 
   /** Số sổ BHXH — dùng cho bảng khai báo lao động với cơ quan bảo hiểm. */
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   soSoBH?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   soDienThoai?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsEmail({}, { message: 'Email không hợp lệ' })
   email?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   diaChi?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   departmentId?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   chucDanh?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   ngayVaoLam?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   ngayChinhThuc?: string;
@@ -116,12 +132,14 @@ export class CreateEmployeeDto {
   @IsIn(['thu_viec', 'chinh_thuc', 'dich_vu'], {
     message: 'Loại hợp đồng không hợp lệ',
   })
+  @ChuanHoaChuoi()
   loaiHopDong?: string;
 
   @IsOptional()
   @IsIn(['dang_lam_viec', 'da_nghi', 'tam_nghi'], {
     message: 'Trạng thái không hợp lệ',
   })
+  @ChuanHoaChuoi()
   trangThai?: string;
 
   @IsOptional()
@@ -136,10 +154,12 @@ export class CreateEmployeeDto {
   @IsObject()
   lienHeKhanCap?: LienHeKhanCap;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   userId?: string;
 
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   workShiftId?: string;
@@ -200,6 +220,7 @@ export class CreateEmployeeDto {
    * Thời điểm báo tăng bảo hiểm ("YYYY-MM-DD"). Thiếu khai ở đây là cả form
    * 400 vì `main.ts` bật `forbidNonWhitelisted`.
    */
+  @ChuanHoaChuoi()
   @IsOptional()
   @IsString()
   ngayBatDauDongBH?: string;

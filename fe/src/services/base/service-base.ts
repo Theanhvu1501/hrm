@@ -76,14 +76,30 @@ export function clearAuthToken(): void {
  * phản hồi còn ở dạng cũ. `message` đôi khi là mảng (lỗi validate dạng thô,
  * trước khi qua GlobalExceptionFilter) — nối lại thành một câu thay vì để
  * axios/JSON.stringify hiện "[object Object]" hay tương tự.
+ *
+ * LỖI VALIDATE là trường hợp riêng phải xử lý TRƯỚC: với chúng
+ * `error.message` luôn là hằng số 'Validation failed' (tiếng Anh, không nói
+ * ô nào sai), còn câu thật nằm ở `error.details.validation`. Sự cố
+ * 2026-09-17: HR bấm Thêm nhân viên 5 lần, lần nào cũng chỉ thấy "Validation
+ * failed" trong khi thứ duy nhất sai là email dán từ Excel còn dính dấu cách
+ * — không ai đoán ra được từ câu đó.
  */
 export function resolveBackendMessage(data: unknown): string | undefined {
   const body = data as
     | {
         message?: string | string[];
-        error?: { message?: string | string[] };
+        error?: {
+          message?: string | string[];
+          details?: { validation?: unknown };
+        };
       }
     | undefined;
+
+  const chiTiet = body?.error?.details?.validation;
+  if (Array.isArray(chiTiet) && chiTiet.length > 0) {
+    return chiTiet.join('; ');
+  }
+
   const raw = body?.error?.message ?? body?.message;
   if (Array.isArray(raw)) {
     return raw.length > 0 ? raw.join('; ') : undefined;
