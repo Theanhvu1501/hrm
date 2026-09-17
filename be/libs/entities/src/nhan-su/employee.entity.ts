@@ -60,9 +60,16 @@ export class Employee extends BaseEntity {
   @Column('json', { nullable: true }) bangCap?: BangCap[];
   @Column('json', { nullable: true }) nguoiPhuThuoc?: NguoiPhuThuoc[];
   @Column('json', { nullable: true }) lienHeKhanCap?: LienHeKhanCap;
-  // Liên kết tài khoản SSO: `sub` của identity. Do HR gán có chủ ý —
-  // KHÔNG tự khớp theo email vì email nullable và không unique.
-  @Column({ nullable: true }) userId?: string;
+  /**
+   * Liên kết tài khoản SSO: `sub` của identity. Do HR gán có chủ ý —
+   * KHÔNG tự khớp theo email vì email nullable và không unique.
+   *
+   * `null` (không phải `''`) là cách duy nhất ghi "chưa gán tài khoản":
+   * chỉ mục unique `{tenantId, userId}` trên `employees` là partial theo
+   * `{userId: {$type: "string"}}`, mà chuỗi rỗng cũng là string — hai hồ sơ
+   * cùng để `''` là E11000. Chuẩn hoá ở `chuanHoaHoSo()`.
+   */
+  @Column({ nullable: true }) userId?: string | null;
   @Column({ nullable: true }) workShiftId?: string;
   // 0=CN, 1=T2 … 6=T7 — khớp Date.getDay()
   @Column('json', { nullable: true }) ngayLamViecTrongTuan?: number[];

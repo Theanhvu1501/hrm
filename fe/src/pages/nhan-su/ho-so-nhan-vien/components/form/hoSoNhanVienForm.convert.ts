@@ -63,6 +63,12 @@ export function toCreateEmployeeDto(
     // Chuỗi rỗng an toàn ở BE: DTO khai `@IsOptional() @IsString()` nên `""`
     // hợp lệ, và nhánh kiểm trùng `if (dto.userId && ...)` bỏ qua chuỗi rỗng
     // đúng như mong muốn — gỡ liên kết thì không có gì để kiểm trùng.
+    //
+    // `""` chỉ là TÍN HIỆU gửi đi, KHÔNG phải thứ được lưu: `chuanHoaHoSo()`
+    // bên BE đổi nó thành `null` trước khi ghi. Bắt buộc phải vậy — chỉ mục
+    // unique `{tenantId, userId}` của `employees` là partial theo
+    // `$type: "string"`, mà `""` cũng là string, nên để nguyên thì hồ sơ thứ
+    // hai chưa gán tài khoản là E11000 (sự cố production 2026-09-17).
     userId: values.userId || "",
     workShiftId: values.workShiftId || "",
 

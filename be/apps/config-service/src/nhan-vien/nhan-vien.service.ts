@@ -114,7 +114,7 @@ export class NhanVien_Service {
       isActive: true,
     } as Partial<Employee>);
 
-    const daLuu = await this.repo.save(entity);
+    const daLuu = await this.luuHoSo(entity);
 
     // Hồ sơ nhập liệu (vd. chuyển từ hệ thống cũ) có thể tạo mới với
     // ngayChinhThuc đã có sẵn — NV đã chính thức từ trước, chỉ mới được đưa
@@ -123,6 +123,67 @@ export class NhanVien_Service {
     await this.moKhoaQuyNeuCanThiet(daLuu, undefined);
 
     return daLuu;
+  }
+
+  /**
+   * Cửa GHI duy nhất của hồ sơ nhân viên: dịch lỗi trùng khoá của MongoDB
+   * thành 409 có câu chữ đọc được.
+   *
+   * Vì sao phải có: các nhánh kiểm trùng ở `create()`/`update()` CỐ Ý chỉ soi
+   * hồ sơ `isActive: true` (hồ sơ xoá mềm phải nhả tài khoản ra), nhưng chỉ
+   * mục unique `{tenantId, userId}` dưới Mongo thì không biết `isActive` là
+   * gì. Chênh lệch đó là một đường còn sống dẫn thẳng tới E11000: service cho
+   * qua, Mongo chặn.
+   *
+   * Lỗi thô lọt ra ngoài thì `GlobalExceptionFilter` không nhận ra
+   * `HttpException` ⇒ trả 500 kèm đúng một câu "An unexpected error occurred".
+   * Sự cố production 2026-09-17 mất gần một ngày mới lần ra chính vì câu đó:
+   * nó không nói được trường nào, hồ sơ nào, vì sao. Không lặp lại nữa.
+   */
+  private async luuHoSo(entity: Employee): Promise<Employee> {
+    try {
+      return await this.repo.save(entity);
+    } catch (e) {
+      throw this.dichLoiTrungKhoa(e);
+    }
+  }
+
+  /**
+   * Trả về `ConflictException` nếu `e` là lỗi trùng khoá, còn lại trả nguyên
+   * `e` để không nuốt mất lỗi thật.
+   *
+   * Nhận diện rộng tay có chủ đích: tuỳ đường ghi (`insertMany` qua bulk hay
+   * `updateOne`) driver ném `MongoServerError` hoặc `MongoBulkWriteError`, và
+   * `code`/`keyPattern` không phải lúc nào cũng nằm ở cùng một chỗ.
+   */
+  private dichLoiTrungKhoa(e: unknown): unknown {
+    const err = e as any;
+    const loiGhi = err?.writeErrors?.[0]?.err ?? err?.writeErrors?.[0] ?? err;
+    const laTrungKhoa =
+      err?.code === 11000 ||
+      loiGhi?.code === 11000 ||
+      /E11000/.test(String(err?.message ?? ''));
+    if (!laTrungKhoa) return e;
+
+    const khoa = Object.keys(
+      err?.keyPattern ?? loiGhi?.keyPattern ?? {},
+    ).filter((k) => k !== 'tenantId');
+    // Tên chỉ mục trong câu lỗi là đường lần ra cuối cùng khi driver không
+    // đính kèm `keyPattern` (đúng trường hợp bulk write đã gặp trên prod).
+    const tenChiMuc = /index:\s*(\S+)/.exec(String(err?.message ?? ''))?.[1] ?? '';
+
+    if (khoa.includes('userId') || tenChiMuc.includes('userId')) {
+      return new ConflictException(
+        'Tài khoản này đã được liên kết với một nhân viên khác. Nếu hồ sơ kia ' +
+          'đã ngưng hoạt động, hãy gỡ tài khoản khỏi hồ sơ đó trước.',
+      );
+    }
+
+    return new ConflictException(
+      khoa.length
+        ? `Đã có hồ sơ khác dùng cùng ${khoa.join(', ')} — không lưu được.`
+        : 'Hồ sơ bị trùng với một hồ sơ đã có — không lưu được.',
+    );
   }
 
   /**
@@ -250,7 +311,7 @@ export class NhanVien_Service {
 
     const truocKhiSua = item.ngayChinhThuc;
     Object.assign(item, chuanHoaHoSo({ ...dto }));
-    const daLuu = await this.repo.save(item);
+    const daLuu = await this.luuHoSo(item);
 
     await this.moKhoaQuyNeuCanThiet(daLuu, truocKhiSua);
 

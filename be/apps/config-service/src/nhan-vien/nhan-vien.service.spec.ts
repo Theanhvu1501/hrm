@@ -361,7 +361,10 @@ describe('NhanVien_Service', () => {
         workShiftId: '',
       } as any);
 
-      expect(result.userId).toBe('');
+      // `null`, KHÔNG phải `''`: chuỗi rỗng lọt xuống Mongo là đâm vào chỉ
+      // mục unique `tenantId_1_userId_1` (partial theo `$type: "string"`, mà
+      // `''` cũng là string) — xem describe "gỡ liên kết" ở cuối file.
+      expect(result.userId).toBeNull();
       expect(result.workShiftId).toBe('');
       // Chỉ findOne(id); nhánh `if (dto.userId && ...)` bỏ qua chuỗi rỗng.
       expect(mockEmployeeRepo.findOne).toHaveBeenCalledTimes(1);
@@ -803,5 +806,155 @@ describe('NhanVien_Service — findAll lọc theo tháng còn biên chế', () =
   it('không truyền tháng thì không lọc gì thêm', async () => {
     const svc = await dungVoiDanhSach();
     expect(await svc.findAll({})).toHaveLength(4);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Gỡ liên kết tài khoản vs. chỉ mục unique `tenantId_1_userId_1`
+//
+// Sự cố production 2026-09-17 (lần 2): thêm được ĐÚNG MỘT hồ sơ không gán tài
+// khoản (NV0015), từ đó mọi lần "Thêm nhân viên" đều trả "An unexpected error
+// occurred". Log BE:
+//
+//   E11000 duplicate key error collection: nhan_su.employees
+//   index: tenantId_1_userId_1 dup key: { tenantId: "...", userId: "" }
+//
+// Vì các mock repo ở trên KHÔNG có ràng buộc unique nào, test cũ xanh trong
+// khi production hỏng. Nhóm test này vá đúng lỗ đó: repo giả ở đây thi hành
+// chỉ mục thật (unique theo {tenantId, userId}, partial `$type: "string"`).
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Lỗi đúng hình dạng MongoServerError mà driver ném ra khi đụng E11000. */
+function loiTrungKhoa(userId: string) {
+  const e: any = new Error(
+    'E11000 duplicate key error collection: nhan_su.employees ' +
+      `index: tenantId_1_userId_1 dup key: { tenantId: "t1", userId: "${userId}" }`,
+  );
+  e.name = 'MongoServerError';
+  e.code = 11000;
+  e.keyPattern = { tenantId: 1, userId: 1 };
+  e.keyValue = { tenantId: 't1', userId };
+  return e;
+}
+
+async function dungServiceCoChiMucUnique() {
+  const { service, repoNv } = await dungServiceNhanVien();
+  const saveGoc = repoNv.save.bind(repoNv);
+  repoNv.save = async (x: any) => {
+    // Đúng ngữ nghĩa partialFilterExpression {userId: {$type: "string"}}:
+    // chỉ hồ sơ có userId KIỂU CHUỖI mới nằm trong chỉ mục. null/absent
+    // không nằm trong chỉ mục nên bao nhiêu dòng cũng được.
+    if (typeof x.userId === 'string') {
+      const dung = repoNv.kho.find(
+        (y: any) =>
+          typeof y.userId === 'string' &&
+          y.userId === x.userId &&
+          String(y._id) !== String(x._id),
+      );
+      if (dung) throw loiTrungKhoa(x.userId);
+    }
+    return saveGoc(x);
+  };
+  return { service, repoNv };
+}
+
+describe('NhanVien_Service — gỡ liên kết tài khoản không được đâm vào unique index', () => {
+  it('thêm HAI nhân viên đều KHÔNG gán tài khoản (FE gửi userId: "") — cả hai phải vào được', async () => {
+    const { service } = await dungServiceCoChiMucUnique();
+
+    await service.create({
+      hoTen: 'Đinh Đặng Thuỳ Anh',
+      cccd: '001111111111',
+      userId: '',
+    } as any);
+
+    await expect(
+      service.create({
+        hoTen: 'Trần Thị B',
+        cccd: '002222222222',
+        userId: '',
+      } as any),
+    ).resolves.toBeDefined();
+  });
+
+  it('hồ sơ lưu xuống KHÔNG mang chuỗi rỗng ở userId', async () => {
+    const { service, repoNv } = await dungServiceCoChiMucUnique();
+
+    await service.create({
+      hoTen: 'Đinh Đặng Thuỳ Anh',
+      cccd: '001111111111',
+      userId: '',
+    } as any);
+
+    expect(repoNv.kho[0].userId).toBeNull();
+  });
+
+  it('gán tài khoản thật vẫn bị chặn khi trùng (ràng buộc unique còn nguyên tác dụng)', async () => {
+    const { service } = await dungServiceCoChiMucUnique();
+
+    await service.create({
+      hoTen: 'Nguyễn Văn A',
+      cccd: '001111111111',
+      userId: 'sso-sub-1',
+    } as any);
+
+    await expect(
+      service.create({
+        hoTen: 'Trần Thị B',
+        cccd: '002222222222',
+        userId: 'sso-sub-1',
+      } as any),
+    ).rejects.toThrow(ConflictException);
+  });
+
+  it('sửa hồ sơ, xoá ô tài khoản → ghi null chứ không phải ""', async () => {
+    const { service, repoNv } = await dungServiceCoChiMucUnique();
+
+    const da = await service.create({
+      hoTen: 'Nguyễn Văn A',
+      cccd: '001111111111',
+      userId: 'sso-sub-1',
+    } as any);
+
+    await service.update(String((da as any)._id), { userId: '' } as any);
+
+    expect(repoNv.kho[0].userId).toBeNull();
+  });
+});
+
+describe('NhanVien_Service — E11000 không được lọt ra thành 500', () => {
+  /**
+   * Đường đi CÒN SỐNG tới E11000 sau bản vá trên: hồ sơ ĐÃ XOÁ MỀM vẫn nằm
+   * trong chỉ mục (chỉ mục không lọc `isActive`), trong khi nhánh kiểm trùng
+   * của service cố ý chỉ soi hồ sơ `isActive: true`. Gán lại tài khoản đó cho
+   * hồ sơ mới ⇒ service cho qua, Mongo chặn.
+   *
+   * Khi đó HR PHẢI đọc được câu tiếng Việt nói rõ chuyện gì, chứ không phải
+   * "An unexpected error occurred" — chính câu đó đã làm sự cố hôm nay mất
+   * gần một ngày mới lần ra.
+   */
+  it('ném ConflictException có nội dung đọc được, không phải lỗi thô 500', async () => {
+    const { service, repoNv } = await dungServiceCoChiMucUnique();
+
+    await service.create({
+      hoTen: 'Nguyễn Văn A',
+      cccd: '001111111111',
+      userId: 'sso-sub-1',
+    } as any);
+    // Xoá mềm: biến mất khỏi nhánh kiểm trùng `isActive: true`, vẫn nằm
+    // nguyên trong chỉ mục unique.
+    repoNv.kho[0].isActive = false;
+
+    const loi = await service
+      .create({
+        hoTen: 'Trần Thị B',
+        cccd: '002222222222',
+        userId: 'sso-sub-1',
+      } as any)
+      .catch((e) => e);
+
+    expect(loi).toBeInstanceOf(ConflictException);
+    expect(String(loi.message)).toMatch(/tài khoản/i);
+    expect(String(loi.message)).not.toMatch(/E11000|duplicate key/i);
   });
 });

@@ -40,3 +40,42 @@ describe('chuanHoaHoSo', () => {
     expect(new Set(ids).size).toBe(3);
   });
 });
+
+/**
+ * Sự cố production 2026-09-17 (lần 2): sau khi thêm được NV0015 (hồ sơ đầu
+ * tiên không gán tài khoản), MỌI lần "Thêm nhân viên" tiếp theo đều trả
+ * "An unexpected error occurred". Log BE:
+ *
+ *   E11000 duplicate key error collection: nhan_su.employees
+ *   index: tenantId_1_userId_1 dup key: { tenantId: "...", userId: "" }
+ *
+ * Chỉ mục `{tenantId, userId}` unique có `partialFilterExpression:
+ * {userId: {$type: "string"}}` — dụng ý là "chỉ ràng buộc hồ sơ ĐÃ gán tài
+ * khoản". Nhưng chuỗi rỗng VẪN là `$type: "string"`, nên hồ sơ thứ hai chưa
+ * gán tài khoản đâm thẳng vào hồ sơ thứ nhất.
+ *
+ * FE cố ý gửi `""` (không phải `undefined`) để "gỡ liên kết" có hiệu lực —
+ * xem docblock trong `hoSoNhanVienForm.convert.ts`. Nên chỗ sửa đúng là ở
+ * đây: `""` là TÍN HIỆU của FE, `null` là thứ được phép ghi xuống Mongo.
+ */
+describe('chuanHoaHoSo — gỡ liên kết tài khoản', () => {
+  it('userId chuỗi rỗng ⇒ null, KHÔNG được để "" rơi xuống Mongo', () => {
+    const ra = chuanHoaHoSo({ userId: '' });
+    expect(ra.userId).toBeNull();
+  });
+
+  it('userId thật giữ nguyên', () => {
+    const ra = chuanHoaHoSo({ userId: 'sso-sub-123' });
+    expect(ra.userId).toBe('sso-sub-123');
+  });
+
+  it('DTO không mang userId thì KHÔNG thêm khoá — PATCH đổi số điện thoại không được gỡ tài khoản', () => {
+    const ra = chuanHoaHoSo({ soNguoiPhuThuoc: 3 });
+    expect('userId' in ra).toBe(false);
+  });
+
+  it('userId đã là null thì vẫn là null', () => {
+    const ra = chuanHoaHoSo({ userId: null });
+    expect(ra.userId).toBeNull();
+  });
+});
