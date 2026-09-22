@@ -23,6 +23,7 @@ import {
   sanitizeHopDongHtml,
   timTokenLaCuaMauIn,
 } from './lib/hopDongRender';
+import { renderHopDongDocx } from './lib/hopDongDocx';
 
 const LOAI_MAU_IN_HOP_DONG = 'HOP_DONG_LAO_DONG' as const;
 
@@ -540,5 +541,60 @@ export class HopDong_Service {
       },
       congTy,
     });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // xuatWord — xuất hợp đồng ra file .docx để người dùng tải về chỉnh sửa.
+  // Điều chỉnh 20/9 #3.
+  // ──────────────────────────────────────────────────────────────────────────
+  async xuatWord(id: string): Promise<{ buffer: Buffer; filename: string }> {
+    const contract = await this.findOne(id);
+
+    const employeeObjectId = await parseObjectIdOrNotFound(
+      contract.employeeId,
+      `employeeId của hợp đồng ${id}`,
+    );
+    const employee = await this.employeeRepo.findOne({
+      where: { _id: employeeObjectId as any },
+    });
+    if (!employee) {
+      throw new NotFoundException(
+        `Không tìm thấy nhân viên (employeeId=${contract.employeeId}) của hợp đồng này`,
+      );
+    }
+
+    const congTy = await this.getThongTinCongTy();
+
+    const buffer = await renderHopDongDocx({
+      hopDong: {
+        contractNo: contract.contractNo,
+        loaiHopDong: contract.loaiHopDong,
+        ngayBatDau: contract.ngayBatDau,
+        ngayKetThuc: contract.ngayKetThuc,
+        mucLuong: contract.mucLuong,
+        phuCap: contract.phuCap,
+        chucDanh: contract.chucDanh,
+      },
+      nhanVien: {
+        hoTen: employee.hoTen,
+        ngaySinh: employee.ngaySinh,
+        gioiTinh: employee.gioiTinh,
+        cccd: employee.cccd,
+        ngayCapCccd: employee.ngayCapCccd,
+        noiCapCccd: employee.noiCapCccd,
+        diaChi: employee.diaChi,
+        soDienThoai: employee.soDienThoai,
+        chucDanh: employee.chucDanh,
+        email: employee.email,
+        mst: employee.mst,
+      },
+      congTy,
+    });
+
+    // Tên file an toàn: loại bỏ ký tự đặc biệt
+    const safeHoTen = (employee.hoTen ?? 'NhanVien').replace(/[^a-zA-Z0-9_À-ɏ]/g, '_');
+    const filename = `HopDong_${contract.contractNo ?? id}_${safeHoTen}.docx`;
+
+    return { buffer, filename };
   }
 }

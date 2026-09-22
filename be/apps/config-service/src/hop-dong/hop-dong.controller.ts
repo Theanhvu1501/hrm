@@ -9,7 +9,9 @@ import {
   Param,
   Query,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { HopDong_Service } from './hop-dong.service';
 import type { HopDongFilter } from './hop-dong.service';
 import {
@@ -139,6 +141,25 @@ export class HopDong_Controller {
   ) {
     const data = await this.hopDong_Service.renderHopDong(id, mauInId);
     return { success: true, data };
+  }
+
+  // Xuất hợp đồng ra file Word (.docx) để người dùng tải về chỉnh sửa.
+  // Điều chỉnh 20/9 #3.
+  @Get(':id/xuat-word')
+  @UseGuards(PermissionGuard)
+  @Permissions('/nhan-su/hop-dong-lao-dong:xuat')
+  async xuatWord(@Param('id') id: string, @Res() res: Response) {
+    const { buffer, filename } = await this.hopDong_Service.xuatWord(id);
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(filename)}"`,
+    );
+    res.send(buffer);
   }
 
   @Post()
