@@ -5,6 +5,7 @@ import {
   DongLuong,
   DongLuongThemGio,
   Employee,
+  MauInBangLuong,
   Timesheet,
 } from '@app/entities';
 import { DatabaseModule } from '@app/database';
@@ -31,6 +32,7 @@ import { TamUng_Module } from '../tam-ung/tam-ung.module';
       Employee,
       Timesheet,
       AttendanceRequest,
+      MauInBangLuong,
     ]),
   ],
   controllers: [BangLuong_Controller, ThemGio_Controller],

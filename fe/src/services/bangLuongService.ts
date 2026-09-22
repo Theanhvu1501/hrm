@@ -100,6 +100,15 @@ export interface DongThueTheoKy {
   thue: number;
 }
 
+/** Mẫu in bảng lương (yêu cầu d37). */
+export interface MauInBangLuong {
+  _id: string;
+  tenMau: string;
+  moTa?: string;
+  cacCot: string[];
+  laMacDinh: boolean;
+}
+
 class BangLuongService extends ServiceBase {
   constructor() {
     super({ endpoint: '/config/bang-luong' });
@@ -219,6 +228,33 @@ class BangLuongService extends ServiceBase {
       { thang },
       { endpoint: '/gui-phieu' },
     );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MẪU IN BẢNG LƯƠNG (yêu cầu d37)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Danh sách mẫu in của tenant. */
+  dsMauIn(): Promise<MauInBangLuong[]> {
+    return this.get<MauInBangLuong[]>({ endpoint: '/mau-in' });
+  }
+
+  /** Tạo mẫu in mới. */
+  taoMauIn(dto: { tenMau: string; moTa?: string; cacCot: string[] }): Promise<MauInBangLuong> {
+    return this.post<MauInBangLuong>(dto, { endpoint: '/mau-in' });
+  }
+
+  /** Cập nhật mẫu in. */
+  capNhatMauIn(
+    id: string,
+    dto: { tenMau?: string; moTa?: string; cacCot?: string[] },
+  ): Promise<MauInBangLuong> {
+    return this.patch<MauInBangLuong>(dto, { endpoint: `/mau-in/${id}` });
+  }
+
+  /** Xóa mẫu in. */
+  xoaMauIn(id: string): Promise<void> {
+    return this.delete({ endpoint: `/mau-in/${id}` });
   }
 
 }

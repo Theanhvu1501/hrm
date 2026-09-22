@@ -7,8 +7,11 @@ import {
   DongLuong,
   DongLuongThemGio,
   Employee,
+  MauInBangLuong,
+  TAT_CA_COT_BANG_LUONG,
   Timesheet,
 } from '@app/entities';
+import type { CotBangLuong } from '@app/entities';
 import { TamUng_Service } from '../tam-ung/tam-ung.service';
 import type {
   CauHinhLuongApDung,
@@ -83,6 +86,8 @@ export class BangLuong_Service {
     private readonly donRepo: Repository<AttendanceRequest>,
     @InjectRepository(DongLuongThemGio)
     private readonly themGioRepo: Repository<DongLuongThemGio>,
+    @InjectRepository(MauInBangLuong)
+    private readonly mauInRepo: Repository<MauInBangLuong>,
     // Đơn tạm ứng đã duyệt → điền sẵn ô "Tạm ứng" lúc tổng hợp (yêu cầu d30).
     private readonly tamUng_Service: TamUng_Service,
   ) {}
@@ -826,5 +831,113 @@ export class BangLuong_Service {
 
   async moLai(thang: string): Promise<DongLuong[]> {
     return this.setTrangThai(thang, 'nhap');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MẪU IN BẢNG LƯƠNG (yêu cầu d37)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Seed mẫu mặc định "Đầy đủ" nếu chưa có (tự động khi gọi dsMauIn).
+   */
+  private async seedMauInMacDinh(): Promise<void> {
+    const existing = await this.mauInRepo.findOne({
+      where: { laMacDinh: true, isActive: true } as any,
+    });
+    if (existing) return;
+
+    const macDinh = this.mauInRepo.create({
+      tenMau: 'Đầy đủ',
+      moTa: 'Hiển thị tất cả các cột',
+      cacCot: [...TAT_CA_COT_BANG_LUONG] as CotBangLuong[],
+      laMacDinh: true,
+    });
+    await this.mauInRepo.save(macDinh);
+  }
+
+  /** Danh sách mẫu in của tenant. */
+  async dsMauIn(): Promise<MauInBangLuong[]> {
+    await this.seedMauInMacDinh();
+    return this.mauInRepo.find({ where: { isActive: true } as any });
+  }
+
+  /** Tạo mẫu in mới. */
+  async taoMauIn(dto: {
+    tenMau: string;
+    moTa?: string;
+    cacCot: string[];
+  }): Promise<MauInBangLuong> {
+    if (!dto.tenMau?.trim()) {
+      throw new BadRequestException('Tên mẫu không được để trống');
+    }
+    if (!dto.cacCot?.length) {
+      throw new BadRequestException('Phải chọn ít nhất một cột');
+    }
+    // Validate cột hợp lệ
+    const hopLe = new Set<string>(TAT_CA_COT_BANG_LUONG);
+    for (const c of dto.cacCot) {
+      if (!hopLe.has(c)) {
+        throw new BadRequestException(`Cột "${c}" không hợp lệ`);
+      }
+    }
+
+    const entity = this.mauInRepo.create({
+      tenMau: dto.tenMau.trim(),
+      moTa: dto.moTa?.trim(),
+      cacCot: dto.cacCot as CotBangLuong[],
+      laMacDinh: false,
+    });
+    return this.mauInRepo.save(entity);
+  }
+
+  /** Cập nhật mẫu in (không được sửa mẫu mặc định). */
+  async capNhatMauIn(
+    id: string,
+    dto: { tenMau?: string; moTa?: string; cacCot?: string[] },
+  ): Promise<MauInBangLuong> {
+    const { ObjectId } = await import('mongodb');
+    const mau = await this.mauInRepo.findOne({
+      where: { _id: new ObjectId(id), isActive: true } as any,
+    });
+    if (!mau) {
+      throw new NotFoundException('Không tìm thấy mẫu in');
+    }
+    if (mau.laMacDinh) {
+      throw new BadRequestException('Không được sửa mẫu mặc định');
+    }
+
+    if (dto.tenMau !== undefined) mau.tenMau = dto.tenMau.trim();
+    if (dto.moTa !== undefined) mau.moTa = dto.moTa?.trim();
+    if (dto.cacCot !== undefined) {
+      if (!dto.cacCot.length) {
+        throw new BadRequestException('Phải chọn ít nhất một cột');
+      }
+      const hopLe = new Set<string>(TAT_CA_COT_BANG_LUONG);
+      for (const c of dto.cacCot) {
+        if (!hopLe.has(c)) {
+          throw new BadRequestException(`Cột "${c}" không hợp lệ`);
+        }
+      }
+      mau.cacCot = dto.cacCot as CotBangLuong[];
+    }
+
+    return this.mauInRepo.save(mau);
+  }
+
+  /** Xóa mẫu in (không được xóa mẫu mặc định). */
+  async xoaMauIn(id: string): Promise<void> {
+    const { ObjectId } = await import('mongodb');
+    const mau = await this.mauInRepo.findOne({
+      where: { _id: new ObjectId(id), isActive: true } as any,
+    });
+    if (!mau) {
+      throw new NotFoundException('Không tìm thấy mẫu in');
+    }
+    if (mau.laMacDinh) {
+      throw new BadRequestException('Không thể xóa mẫu mặc định');
+    }
+
+    mau.isActive = false;
+    await this.mauInRepo.save(mau);
   }
 }

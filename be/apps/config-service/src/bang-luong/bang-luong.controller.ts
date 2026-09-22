@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Patch, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { BangLuong_Service } from './bang-luong.service';
 import {
   CapNhatCauHinhLuongDto,
@@ -219,6 +219,45 @@ export class BangLuong_Controller {
   async quyetToanTncn(@Query('nam') nam: string) {
     const data = await this.bangLuong_Service.quyetToanNam(Number(nam));
     return { success: true, data };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // MẪU IN BẢNG LƯƠNG (yêu cầu d37)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  @Get('mau-in')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:xem')
+  async dsMauIn() {
+    const data = await this.bangLuong_Service.dsMauIn();
+    return { success: true, data };
+  }
+
+  @Post('mau-in')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:sua')
+  async taoMauIn(@Body() body: { tenMau: string; moTa?: string; cacCot: string[] }) {
+    const data = await this.bangLuong_Service.taoMauIn(body);
+    return { success: true, data };
+  }
+
+  @Patch('mau-in/:id')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:sua')
+  async capNhatMauIn(
+    @Param('id') id: string,
+    @Body() body: { tenMau?: string; moTa?: string; cacCot?: string[] },
+  ) {
+    const data = await this.bangLuong_Service.capNhatMauIn(id, body);
+    return { success: true, data };
+  }
+
+  @Delete('mau-in/:id')
+  @UseGuards(PermissionGuard)
+  @Permissions('/luong/bang-luong:xoa')
+  async xoaMauIn(@Param('id') id: string) {
+    await this.bangLuong_Service.xoaMauIn(id);
+    return { success: true };
   }
 
   @Get()

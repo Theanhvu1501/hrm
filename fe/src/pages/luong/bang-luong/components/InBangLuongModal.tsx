@@ -1,8 +1,25 @@
-import { useMemo, useState } from "react";
-import { Button, Checkbox, Modal, Segmented, Space, message } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Button,
+  Checkbox,
+  Divider,
+  Input,
+  Modal,
+  Popconfirm,
+  Segmented,
+  Select,
+  Space,
+  message,
+} from "antd";
+import { DeleteOutlined, SaveOutlined } from "@ant-design/icons";
 import { printHtml } from "@/utils/printHtml";
-import type { DongLuong } from "@/services/bangLuongService";
+import {
+  bangLuongService,
+  type DongLuong,
+  type MauInBangLuong,
+} from "@/services/bangLuongService";
 import type { KhoanLuong } from "@/services/cauHinhLuongService";
+import { apiErrorMessage } from "@/config/api";
 
 interface Props {
   open: boolean;
@@ -23,16 +40,31 @@ interface ChiTieu {
 
 const tien = (v?: number) => (v ?? 0).toLocaleString("vi-VN");
 
-/** Khoá localStorage — lựa chọn cột là tiện ích RIÊNG của từng người dùng. */
+/** Khoá localStorage — lựa chọn cột riêng của từng người dùng (fallback). */
 const KHOA_LUU = "in-bang-luong:chi-tieu";
 
 function chiTieuCoBan(khoanLuong: KhoanLuong[]): ChiTieu[] {
   return [
     { key: "maNhanVien", nhan: "Mã NV", lay: (d) => d.employeeCode ?? "" },
     { key: "hoTen", nhan: "Họ và tên", lay: (d) => d.employeeName ?? "" },
-    { key: "congThuong", nhan: "Công thường", lay: (d) => d.congThuong ?? 0, canPhai: true },
-    { key: "congThuViec", nhan: "Công thử việc", lay: (d) => d.congThuViec ?? 0, canPhai: true },
-    { key: "congKhac", nhan: "Công khác", lay: (d) => d.congKhac ?? 0, canPhai: true },
+    {
+      key: "congThuong",
+      nhan: "Công thường",
+      lay: (d) => d.congThuong ?? 0,
+      canPhai: true,
+    },
+    {
+      key: "congThuViec",
+      nhan: "Công thử việc",
+      lay: (d) => d.congThuViec ?? 0,
+      canPhai: true,
+    },
+    {
+      key: "congKhac",
+      nhan: "Công khác",
+      lay: (d) => d.congKhac ?? 0,
+      canPhai: true,
+    },
     ...khoanLuong.map((k) => ({
       key: `khoan:${k.ma}`,
       nhan: k.ten,
@@ -46,8 +78,18 @@ function chiTieuCoBan(khoanLuong: KhoanLuong[]): ChiTieu[] {
       canPhai: true,
       lay: (d, muc) => tien(d[muc]?.tongThuNhap),
     },
-    { key: "bhxh", nhan: "Bảo hiểm", canPhai: true, lay: (d, muc) => tien(d[muc]?.bhxh) },
-    { key: "thue", nhan: "Thuế TNCN", canPhai: true, lay: (d, muc) => tien(d[muc]?.thue) },
+    {
+      key: "bhxh",
+      nhan: "Bảo hiểm",
+      canPhai: true,
+      lay: (d, muc) => tien(d[muc]?.bhxh),
+    },
+    {
+      key: "thue",
+      nhan: "Thuế TNCN",
+      canPhai: true,
+      lay: (d, muc) => tien(d[muc]?.thue),
+    },
     {
       key: "phiCongDoan",
       nhan: "Phí công đoàn",
@@ -88,7 +130,6 @@ function docLuaChonDaLuu(): string[] | null {
     const ds = raw ? (JSON.parse(raw) as unknown) : null;
     return Array.isArray(ds) ? (ds as string[]) : null;
   } catch {
-    // Chế độ ẩn danh / chặn site data: bỏ qua, dùng mẫu gọn.
     return null;
   }
 }
@@ -101,13 +142,12 @@ function esc(v: unknown): string {
 }
 
 /**
- * Chọn chỉ tiêu cho bản in bảng lương (yêu cầu d32: "Cho chọn các nội dung
- * trên bản in: Bản full hoặc tạo các mẫu bản in có các chỉ tiêu muốn chọn
+ * Chọn chỉ tiêu cho bản in bảng lương (yêu cầu d37: "Cho chọn các nội dung
+ * trên bản in: Bản full hoặc Tạo các mẫu bản in có các chỉ tiêu muốn chọn
  * khác nhau").
  *
- * Lựa chọn nhớ trong localStorage của từng người: kế toán in cùng một bộ cột
- * mỗi tháng, bắt tick lại 15 ô mỗi lần là việc vô ích. Đây là tiện ích riêng
- * từng máy, không phải cấu hình công ty — nên không lưu xuống server.
+ * - Mẫu in lưu xuống server → cả công ty dùng chung.
+ * - Lựa chọn cá nhân nhớ trong localStorage (fallback nếu chưa chọn mẫu).
  */
 export function InBangLuongModal({
   open,
@@ -119,9 +159,88 @@ export function InBangLuongModal({
 }: Props) {
   const tatCa = useMemo(() => chiTieuCoBan(khoanLuong), [khoanLuong]);
   const [muc, setMuc] = useState<"khaiBao" | "thucTe">("thucTe");
-  const [chon, setChon] = useState<string[]>(
-    () => docLuaChonDaLuu() ?? MAU_GON,
-  );
+  const [chon, setChon] = useState<string[]>(() => docLuaChonDaLuu() ?? MAU_GON);
+
+  // Mẫu in từ server (yêu cầu d37)
+  const [dsMau, setDsMau] = useState<MauInBangLuong[]>([]);
+  const [mauDangChon, setMauDangChon] = useState<string | null>(null);
+  const [dangTaiMau, setDangTaiMau] = useState(false);
+
+  // Lưu mẫu mới
+  const [moLuuMau, setMoLuuMau] = useState(false);
+  const [tenMauMoi, setTenMauMoi] = useState("");
+  const [dangLuu, setDangLuu] = useState(false);
+
+  // Load danh sách mẫu in khi mở modal
+  useEffect(() => {
+    if (!open) return;
+    setDangTaiMau(true);
+    bangLuongService
+      .dsMauIn()
+      .then((ds) => {
+        setDsMau(ds);
+        // Nếu chưa chọn mẫu nào, mặc định chọn mẫu đầu tiên (thường là "Đầy đủ")
+        if (!mauDangChon && ds.length > 0) {
+          const macDinh = ds.find((m) => m.laMacDinh) ?? ds[0];
+          setMauDangChon(macDinh._id);
+          setChon(macDinh.cacCot);
+        }
+      })
+      .catch((err) => message.error(apiErrorMessage(err, "Không tải được mẫu in")))
+      .finally(() => setDangTaiMau(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Khi chọn mẫu khác → cập nhật danh sách cột
+  const handleChonMau = (mauId: string | null) => {
+    setMauDangChon(mauId);
+    if (mauId) {
+      const mau = dsMau.find((m) => m._id === mauId);
+      if (mau) setChon(mau.cacCot);
+    }
+  };
+
+  // Lưu lựa chọn hiện tại thành mẫu mới
+  const handleLuuMau = async () => {
+    if (!tenMauMoi.trim()) {
+      message.error("Nhập tên mẫu");
+      return;
+    }
+    if (chon.length === 0) {
+      message.error("Chọn ít nhất một chỉ tiêu");
+      return;
+    }
+    setDangLuu(true);
+    try {
+      const mauMoi = await bangLuongService.taoMauIn({
+        tenMau: tenMauMoi.trim(),
+        cacCot: chon,
+      });
+      setDsMau((ds) => [...ds, mauMoi]);
+      setMauDangChon(mauMoi._id);
+      setMoLuuMau(false);
+      setTenMauMoi("");
+      message.success("Đã lưu mẫu in");
+    } catch (err) {
+      message.error(apiErrorMessage(err, "Không lưu được mẫu in"));
+    } finally {
+      setDangLuu(false);
+    }
+  };
+
+  // Xóa mẫu
+  const handleXoaMau = async (mauId: string) => {
+    try {
+      await bangLuongService.xoaMauIn(mauId);
+      setDsMau((ds) => ds.filter((m) => m._id !== mauId));
+      if (mauDangChon === mauId) {
+        setMauDangChon(null);
+      }
+      message.success("Đã xóa mẫu in");
+    } catch (err) {
+      message.error(apiErrorMessage(err, "Không xóa được mẫu in"));
+    }
+  };
 
   const inRa = () => {
     const cot = tatCa.filter((c) => chon.includes(c.key));
@@ -132,7 +251,7 @@ export function InBangLuongModal({
     try {
       localStorage.setItem(KHOA_LUU, JSON.stringify(chon));
     } catch {
-      // Không lưu được thì thôi — không ảnh hưởng việc in.
+      // Không lưu được thì thôi.
     }
 
     const dau = cot
@@ -189,7 +308,7 @@ export function InBangLuongModal({
       onOk={inRa}
       okText="In"
       cancelText="Đóng"
-      width={640}
+      width={680}
     >
       <Space className="mb-3" wrap>
         <span className="text-[12px]">Mức in:</span>
@@ -201,24 +320,82 @@ export function InBangLuongModal({
             { label: "Khai báo", value: "khaiBao" },
           ]}
         />
-        <Button size="small" onClick={() => setChon(tatCa.map((c) => c.key))}>
-          Bản đầy đủ
-        </Button>
-        <Button size="small" onClick={() => setChon(MAU_GON)}>
-          Bản gọn
-        </Button>
       </Space>
 
+      <Divider className="my-2" />
+
+      {/* Chọn mẫu in (d37) */}
+      <div className="mb-3">
+        <span className="text-[12px] mr-2">Mẫu in:</span>
+        <Select
+          style={{ width: 200 }}
+          placeholder="Chọn mẫu in"
+          value={mauDangChon}
+          onChange={handleChonMau}
+          loading={dangTaiMau}
+          allowClear
+          options={dsMau.map((m) => ({
+            value: m._id,
+            label: m.tenMau + (m.laMacDinh ? " ★" : ""),
+          }))}
+        />
+        <Button
+          size="small"
+          className="ml-2"
+          icon={<SaveOutlined />}
+          onClick={() => setMoLuuMau(true)}
+        >
+          Lưu mẫu mới
+        </Button>
+        {mauDangChon && !dsMau.find((m) => m._id === mauDangChon)?.laMacDinh && (
+          <Popconfirm
+            title="Xóa mẫu in này?"
+            onConfirm={() => handleXoaMau(mauDangChon)}
+            okText="Xóa"
+            cancelText="Hủy"
+          >
+            <Button size="small" className="ml-1" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        )}
+      </div>
+
+      {/* Chọn từng cột */}
       <Checkbox.Group
         value={chon}
-        onChange={(v) => setChon(v as string[])}
+        onChange={(v) => {
+          setChon(v as string[]);
+          setMauDangChon(null); // Bỏ chọn mẫu khi tick thủ công
+        }}
         className="grid grid-cols-2 gap-1"
         options={tatCa.map((c) => ({ label: c.nhan, value: c.key }))}
       />
 
       <div className="mt-3 text-[10.5px] text-[hsl(var(--ink-2))]">
-        Lựa chọn chỉ tiêu được nhớ trên máy này cho lần in sau.
+        Chọn mẫu in có sẵn hoặc tick từng chỉ tiêu rồi "Lưu mẫu mới" để cả công ty
+        dùng chung.
       </div>
+
+      {/* Modal lưu mẫu mới */}
+      <Modal
+        title="Lưu mẫu in mới"
+        open={moLuuMau}
+        onCancel={() => setMoLuuMau(false)}
+        onOk={handleLuuMau}
+        okText="Lưu"
+        cancelText="Hủy"
+        confirmLoading={dangLuu}
+        width={400}
+      >
+        <Input
+          placeholder="Tên mẫu (VD: Gửi kế toán, Gửi ban GĐ...)"
+          value={tenMauMoi}
+          onChange={(e) => setTenMauMoi(e.target.value)}
+          onPressEnter={handleLuuMau}
+        />
+        <div className="mt-2 text-[11px] text-[hsl(var(--ink-2))]">
+          Mẫu này sẽ lưu {chon.length} chỉ tiêu đang chọn.
+        </div>
+      </Modal>
     </Modal>
   );
 }
