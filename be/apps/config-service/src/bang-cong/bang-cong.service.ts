@@ -374,12 +374,27 @@ export class BangCong_Service {
       soDongMoCoi: 0,
     };
 
+    // Ngày đầu tháng — dùng để lọc người đã nghỉ TRƯỚC tháng này.
+    // Ví dụ: nghỉ việc 15/8 thì `ngayCuoi = '2026-08-15'`, tổng hợp T9 thì
+    // `ngayDauThang = '2026-09-01'`, 15/8 < 01/9 ⇒ bỏ qua hoàn toàn.
+    // Điều chỉnh 20/9 #3: "sau chốt lương T8 không còn hiện trên bảng công".
+    const ngayDauThang = `${thang}-01`;
+
     for (const emp of employees) {
       const employeeId = String((emp as any)._id);
       let row = dongTheoNv.get(employeeId);
 
       if (row?.trangThai === 'chot') {
         tomTat.soDongBoQuaVIChot += 1;
+        continue;
+      }
+
+      // Bỏ qua người đã nghỉ TRƯỚC tháng đang tổng hợp — họ không còn làm
+      // việc nên không cần dòng bảng công mới. Người nghỉ TRONG tháng (VD:
+      // nghỉ 15/8 khi đang tổng hợp T8) vẫn được xử lý, suyKyHieuNgay() sẽ
+      // chỉ điền ô đến ngày cuối, các ngày sau để trống.
+      const ngayNghiCuaNv = ngayCuoi.get(employeeId);
+      if (ngayNghiCuaNv && ngayNghiCuaNv < ngayDauThang) {
         continue;
       }
 

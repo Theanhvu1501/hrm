@@ -267,6 +267,10 @@ export class BangLuong_Service {
     const ch = this.toCauHinhData(chEntity);
     const employees = await this.employeeRepo.find({ where: { isActive: true } });
 
+    // Ngày đầu tháng — dùng để lọc người đã nghỉ TRƯỚC tháng này.
+    // Điều chỉnh 20/9 #3: "sau chốt lương T8 không còn hiện trên bảng lương".
+    const ngayDauThang = `${thang}-01`;
+
     const themGioTheoNV = await this.layTienOtDaChot(thang, chEntity);
     // Tạm ứng ĐÃ DUYỆT của kỳ (yêu cầu d30) — điền sẵn ô "Tạm ứng". Lỗi đọc
     // KHÔNG được chặn cả kỳ lương: thiếu số tạm ứng thì kế toán gõ tay được,
@@ -279,6 +283,16 @@ export class BangLuong_Service {
 
     for (const emp of employees) {
       const employeeId = String((emp as any)._id);
+
+      // Bỏ qua người đã nghỉ TRƯỚC tháng đang tổng hợp — họ không còn làm
+      // việc nên không cần dòng bảng lương mới. Người nghỉ TRONG tháng (VD:
+      // nghỉ 15/8 khi đang tổng hợp T8) vẫn được tính lương cho những ngày
+      // còn làm việc.
+      // Điều chỉnh 20/9 #3: "sau chốt lương T8 không còn hiện trên bảng lương".
+      if (emp.ngayNghiViec && emp.ngayNghiViec < ngayDauThang) {
+        continue;
+      }
+
       const cong = await this.layCongThang(thang, employeeId);
 
       const existingRows = await this.dongLuongRepo.find({ where: { thang, employeeId } });
