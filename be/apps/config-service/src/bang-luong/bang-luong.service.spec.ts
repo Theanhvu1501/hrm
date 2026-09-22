@@ -8,6 +8,7 @@ import {
   CauHinhLuong,
   DongLuong,
   DongLuongThemGio,
+  MauInBangLuong,
   Employee,
   Timesheet,
 } from '@app/entities';
@@ -132,6 +133,7 @@ describe('BangLuong_Service', () => {
           useValue: { tongDaDuyetTheoKy: jest.fn().mockResolvedValue({}) },
         },
         { provide: getRepositoryToken(DongLuongThemGio), useValue: mockThemGioRepo },
+        { provide: getRepositoryToken(MauInBangLuong), useValue: { find: jest.fn().mockResolvedValue([]), findOne: jest.fn().mockResolvedValue(null), create: jest.fn((v: any) => v), save: jest.fn((v: any) => Promise.resolve(v)) } },
       ],
     }).compile();
 
@@ -1627,6 +1629,7 @@ async function dungServiceLuong() {
       { provide: getRepositoryToken(Timesheet), useValue: rong },
       { provide: getRepositoryToken(AttendanceRequest), useValue: rong },
       { provide: getRepositoryToken(DongLuongThemGio), useValue: rong },
+      { provide: getRepositoryToken(MauInBangLuong), useValue: rong },
       {
         provide: TamUng_Service,
         useValue: { tongDaDuyetTheoKy: jest.fn().mockResolvedValue({}) },

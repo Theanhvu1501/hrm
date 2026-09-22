@@ -46,6 +46,8 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
   // In hợp đồng (render) = hành động xuất tài liệu → quyền "xuat", giống
   // canExport ở FE (usePagePermission).
   ['renderHopDong', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xuat'],
+  // Xuất hợp đồng ra Word
+  ['xuatWord', RequestMethod.GET, '/nhan-su/hop-dong-lao-dong:xuat'],
 ];
 
 describe('HopDong_Controller — phân quyền', () => {

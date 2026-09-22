@@ -45,6 +45,11 @@ const BANG_QUYEN: Array<[string, RequestMethod, string]> = [
 ['quyetToanTncn', RequestMethod.GET, '/luong/bang-luong:xem'],
   ['danhSachDong', RequestMethod.GET, '/luong/bang-luong:xem'],
   ['capNhatDong', RequestMethod.PATCH, '/luong/bang-luong:sua'],
+  // Mẫu in bảng lương (yêu cầu d37)
+  ['dsMauIn', RequestMethod.GET, '/luong/bang-luong:xem'],
+  ['taoMauIn', RequestMethod.POST, '/luong/bang-luong:sua'],
+  ['capNhatMauIn', RequestMethod.PATCH, '/luong/bang-luong:sua'],
+  ['xoaMauIn', RequestMethod.DELETE, '/luong/bang-luong:xoa'],
   // Import ghi đè số nhập tay của cả kỳ — cùng mức nguy hiểm với sửa từng
   // dòng, nên cùng quyền `:sua`.
   ['importNhapTheoKy', RequestMethod.POST, '/luong/bang-luong:sua'],
