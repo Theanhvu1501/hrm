@@ -63,7 +63,8 @@ export const MENU_LEAVES: MenuLeaf[] = [
 
   // ===== 2. Nhân sự (5) =====
   { key: '/nhan-su/ho-so-nhan-vien', label: 'Hồ sơ nhân viên', module: 'nhan-su', cluster: 'HỒ SƠ & HỢP ĐỒNG', status: 'ok', icon: <IdcardOutlined /> },
-  { key: '/nhan-su/so-do-to-chuc', label: 'Sơ đồ tổ chức', module: 'nhan-su', cluster: 'HỒ SƠ & HỢP ĐỒNG', status: 'ok', icon: <ApartmentOutlined /> },
+  // Sơ đồ tổ chức đã có trong Quản trị chung → ẩn khỏi sidebar (Điều chỉnh 20/9 #1)
+  { key: '/nhan-su/so-do-to-chuc', label: 'Sơ đồ tổ chức', module: 'nhan-su', cluster: 'HỒ SƠ & HỢP ĐỒNG', status: 'ok', icon: <ApartmentOutlined />, legacy: true },
   { key: '/nhan-su/hop-dong-lao-dong', label: 'Hợp đồng lao động', module: 'nhan-su', cluster: 'HỒ SƠ & HỢP ĐỒNG', status: 'ok', icon: <FileTextOutlined /> },
   // Mẫu in đi chung quyền với Hợp đồng lao động (App.tsx cũng khoá bằng quyền đó).
   { key: '/nhan-su/mau-in-hop-dong', permKey: '/nhan-su/hop-dong-lao-dong', label: 'Mẫu in hợp đồng', module: 'nhan-su', cluster: 'HỒ SƠ & HỢP ĐỒNG', status: 'ok', icon: <PrinterOutlined /> },
