@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal, Button, Alert, Select, Spin } from "antd";
-import { FileExcelOutlined, PrinterOutlined } from "@ant-design/icons";
+import { FileExcelOutlined, FileWordOutlined, PrinterOutlined } from "@ant-design/icons";
 import { apiErrorMessage } from "@/config/api";
 import {
   hopDongTemplateService,
@@ -99,6 +99,16 @@ export function HopDongPrintModal({ open, contractId, contractLabel, onClose }: 
     xuatHopDongRaExcel(html, ten);
   };
 
+  // Xuất ra file Word để chỉnh sửa — Điều chỉnh 20/9 #3.
+  const handleXuatWord = async () => {
+    if (!contractId) return;
+    try {
+      await hopDongTemplateService.xuatWord(contractId);
+    } catch (err) {
+      setError(apiErrorMessage(err, "Không thể xuất file Word"));
+    }
+  };
+
   return (
     <Modal
       title="In hợp đồng lao động"
@@ -109,6 +119,14 @@ export function HopDongPrintModal({ open, contractId, contractLabel, onClose }: 
       footer={[
         <Button key="close" onClick={onClose}>
           Đóng
+        </Button>,
+        <Button
+          key="word"
+          icon={<FileWordOutlined />}
+          disabled={loading || !!error || !contractId}
+          onClick={handleXuatWord}
+        >
+          Xuất Word
         </Button>,
         <Button
           key="excel"

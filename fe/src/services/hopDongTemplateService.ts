@@ -1,4 +1,4 @@
-import { ServiceBase } from "./base/service-base";
+import { ServiceBase, getAuthToken } from "./base/service-base";
 
 /** Thông tin công ty dùng làm tiêu đề khi in hợp đồng lao động (letterhead). */
 export interface ThongTinCongTy {
@@ -116,6 +116,37 @@ class HopDongTemplateService extends ServiceBase {
       endpoint: `/${id}/in`,
       params: mauInId ? { mauInId } : undefined,
     });
+  }
+
+  /**
+   * Xuất hợp đồng ra file Word (.docx) để người dùng tải về chỉnh sửa.
+   * Điều chỉnh 20/9 #3.
+   */
+  async xuatWord(id: string): Promise<void> {
+    const token = getAuthToken();
+    const response = await fetch(`${this.baseUrl}${this.options.endpoint}/${id}/xuat-word`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Không thể xuất file Word");
+    }
+
+    const blob = await response.blob();
+    const contentDisposition = response.headers.get("Content-Disposition");
+    const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
+    const filename = filenameMatch?.[1]
+      ? decodeURIComponent(filenameMatch[1])
+      : `HopDong_${id}.docx`;
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }
 
