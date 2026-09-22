@@ -33,12 +33,16 @@ export const CAU_HINH_LUONG_MAC_DINH: CauHinhLuongData = {
   // Trừ vào lương NLĐ, tính trên lương đóng bảo hiểm. Xem ghi chú pháp lý ở
   // `CauHinhLuongData.phiCongDoan` — con số này lệch khung thông thường.
   phiCongDoan: { tyLe: 0.02 },
+  // Biểu thuế TNCN lũy tiến 7 bậc theo Luật Thuế TNCN (Điều 22).
+  // Sửa lại từ bản cũ chỉ có 5 bậc và sai ngưỡng — Điều chỉnh 20/9 #6.
   bacThue: [
-    { den: 10_000_000, suat: 0.05 },
-    { den: 30_000_000, suat: 0.1 },
-    { den: 60_000_000, suat: 0.2 },
-    { den: 100_000_000, suat: 0.3 },
-    { den: null, suat: 0.35 },
+    { den: 5_000_000, suat: 0.05 },    // Bậc 1: đến 5 triệu = 5%
+    { den: 10_000_000, suat: 0.1 },    // Bậc 2: 5-10 triệu = 10%
+    { den: 18_000_000, suat: 0.15 },   // Bậc 3: 10-18 triệu = 15%
+    { den: 32_000_000, suat: 0.2 },    // Bậc 4: 18-32 triệu = 20%
+    { den: 52_000_000, suat: 0.25 },   // Bậc 5: 32-52 triệu = 25%
+    { den: 80_000_000, suat: 0.3 },    // Bậc 6: 52-80 triệu = 30%
+    { den: null, suat: 0.35 },         // Bậc 7: trên 80 triệu = 35%
   ],
   thuViec: { tyLe: 0.85 },
   quyTacThoiVu: { tyLe: 0.1, nguong: 2_000_000 },
