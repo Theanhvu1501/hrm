@@ -172,6 +172,15 @@ class EmployeeService extends ServiceBase {
     return this.transform(res);
   }
 
+  /**
+   * Hồ sơ TỰ PHỤC VỤ: nhân viên xem hồ sơ CỦA MÌNH.
+   * Điều chỉnh 20/9 #2.
+   */
+  async me(): Promise<Employee> {
+    const res = await super.get<Record<string, unknown>>({ endpoint: "/me" });
+    return this.transform(res);
+  }
+
   async create(dto: CreateEmployeeDto): Promise<Employee> {
     const res = await this.post<Record<string, unknown>>(dto, {});
     return this.transform(res);

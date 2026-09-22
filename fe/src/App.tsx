@@ -30,6 +30,7 @@ import {
   BaoCaoLuongPage,
   BangThemGioPage,
   PhieuLuongCuaToiPage,
+  HoSoCaNhanPage,
   QuyetToanTncnPage,
   HoSoNhanVienPage,
   SoDoToChucPage,
@@ -443,6 +444,7 @@ const App = () => (
                 <Route path="don-tu" element={<DonTuCuaToiPage />} />
                 <Route path="bang-cong" element={<BangCongSapCoPage />} />
                 <Route path="phieu-luong" element={<PhieuLuongCuaToiPage />} />
+                <Route path="ho-so" element={<HoSoCaNhanPage />} />
                 <Route path="tai-khoan" element={<TaiKhoanPage />} />
               </Route>
 

@@ -59,6 +59,10 @@ export const PhieuLuongCuaToiPage = loadable(() => import('./toi/phieu-luong/Phi
   fallback: <PageLoader />
 });
 
+export const HoSoCaNhanPage = loadable(() => import('./toi/ho-so'), {
+  fallback: <PageLoader />
+});
+
 export const QuyetToanTncnPage = loadable(() => import('./luong/quyet-toan-tncn/QuyetToanTncnPage'), {
   fallback: <PageLoader />
 });
