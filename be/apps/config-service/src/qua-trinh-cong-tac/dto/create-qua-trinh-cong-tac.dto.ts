@@ -56,6 +56,14 @@ export class CreateQuaTrinhCongTacDto {
   @Min(0)
   mucLuongMoi?: number;
 
+  /**
+   * Lương đóng BHXH mới. Điều chỉnh 20/9 #4.
+   */
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  luongKhaiBaoMoi?: number;
+
   /** Mức riêng mới theo từng khoản lương, khoá là `ma` khoản. */
   @IsOptional()
   @IsObject()

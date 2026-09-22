@@ -24,6 +24,9 @@ export interface PhuLucThayDoi {
   chucDanhMoi?: string;
   mucLuongCu?: number;
   mucLuongMoi?: number;
+  /** Lương đóng BHXH. Điều chỉnh 20/9 #4. */
+  luongKhaiBaoCu?: number;
+  luongKhaiBaoMoi?: number;
   phuCapCu?: Record<string, number>;
   phuCapMoi?: Record<string, number>;
 }
@@ -123,6 +126,17 @@ export function dungDongThayDoi(input: PhuLucInput): DongThayDoi[] {
       chiTieu: 'Mức lương',
       cu: tien(td.mucLuongCu),
       moi: tien(td.mucLuongMoi),
+    });
+  }
+  // Điều chỉnh 20/9 #4: lương đóng BHXH
+  if (
+    typeof td.luongKhaiBaoMoi === 'number' &&
+    td.luongKhaiBaoMoi !== td.luongKhaiBaoCu
+  ) {
+    dong.push({
+      chiTieu: 'Lương đóng BHXH',
+      cu: tien(td.luongKhaiBaoCu),
+      moi: tien(td.luongKhaiBaoMoi),
     });
   }
 

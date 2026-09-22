@@ -36,6 +36,12 @@ export class EmploymentHistory extends BaseEntity {
   @Column({ nullable: true }) mucLuongCu?: number;
   @Column({ nullable: true }) mucLuongMoi?: number;
   /**
+   * Lương đóng BHXH TRƯỚC và SAU thay đổi.
+   * Ghi vào `Employee.luongDongBH` khi áp dụng. Điều chỉnh 20/9 #4.
+   */
+  @Column({ nullable: true }) luongKhaiBaoCu?: number;
+  @Column({ nullable: true }) luongKhaiBaoMoi?: number;
+  /**
    * Mức phụ cấp/KPI RIÊNG mới theo từng khoản lương (khoá là `ma` khoản).
    * Ghi đè vào `Employee.giaTriKhoan` — xem `apDungThayDoi`.
    */

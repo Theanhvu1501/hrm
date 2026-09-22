@@ -110,6 +110,8 @@ export class QuaTrinhCongTac_Service {
       trangThaiMoi: dto.trangThaiMoi,
       mucLuongCu: emp.luongThoaThuan,
       mucLuongMoi: dto.mucLuongMoi,
+      luongKhaiBaoCu: emp.mucKhaiBao,
+      luongKhaiBaoMoi: dto.luongKhaiBaoMoi,
       phuCapCu: emp.giaTriKhoan ?? undefined,
       phuCapMoi: dto.phuCapMoi,
       soQuyetDinh: dto.soQuyetDinh,
@@ -146,6 +148,10 @@ export class QuaTrinhCongTac_Service {
     emp.trangThai = dto.trangThaiMoi ?? emp.trangThai;
     if (typeof dto.mucLuongMoi === 'number') {
       emp.luongThoaThuan = dto.mucLuongMoi;
+    }
+    // Điều chỉnh 20/9 #4: ghi lương đóng BHXH mới
+    if (typeof dto.luongKhaiBaoMoi === 'number') {
+      emp.mucKhaiBao = dto.luongKhaiBaoMoi;
     }
     if (dto.phuCapMoi && Object.keys(dto.phuCapMoi).length) {
       // GỘP chứ không thay cả bảng: quyết định chỉ nói về vài khoản, các khoản
@@ -250,6 +256,8 @@ export class QuaTrinhCongTac_Service {
           chucDanhMoi: td.chucDanhMoi,
           mucLuongCu: td.mucLuongCu,
           mucLuongMoi: td.mucLuongMoi,
+          luongKhaiBaoCu: td.luongKhaiBaoCu,
+          luongKhaiBaoMoi: td.luongKhaiBaoMoi,
           phuCapCu: td.phuCapCu,
           phuCapMoi: td.phuCapMoi,
         },
