@@ -42,6 +42,7 @@
     "migrate:p2-split:dry-run": "env-cmd -e db -- node scripts/migrate-p2-split.js --dry-run"
   },
   "dependencies": {
+    "@keyv/redis": "^6.1.0",
     "@nestjs/cache-manager": "^12.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
@@ -61,6 +62,7 @@
     "cors": "^2.8.5",
     "docx": "^9.7.1",
     "joi": "^18.0.2",
+    "keyv": "^6.1.0",
     "mongodb": "^7.0.0",
     "nest-winston": "^1.10.2",
     "passport-jwt": "^4.0.1",
