@@ -34,7 +34,11 @@
       "@app/core": ["libs/core/src"],
       "@app/core/*": ["libs/core/src/*"],
       "@app/database": ["libs/database/src"],
-      "@app/database/*": ["libs/database/src/*"]
+      "@app/database/*": ["libs/database/src/*"],
+      "@app/cache": ["libs/cache/src"],
+      "@app/cache/*": ["libs/cache/src/*"],
+      "@app/metrics": ["libs/metrics/src"],
+      "@app/metrics/*": ["libs/metrics/src/*"]
     }
   }
 }

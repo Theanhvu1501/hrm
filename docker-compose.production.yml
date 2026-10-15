@@ -12,6 +12,7 @@ services:
       - ./be/env/db.env
       - ./be/env/jwt.env
       - ./be/env/services.env
+      - ./be/env/redis.env
     networks:
       - chimseo
     healthcheck:

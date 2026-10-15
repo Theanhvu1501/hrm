@@ -10,7 +10,10 @@ WORKDIR /app
 COPY package.json yarn.lock ./
 
 # Install all dependencies
-RUN yarn install --frozen-lockfile
+# --ignore-engines: cache-manager@7 + deps (keyv@6, nanoid@6) khai báo Node 22+,
+# nhưng code chạy tốt trên Node 20 (giống dieu-hanh/identity dùng npm chỉ warn).
+# yarn --frozen-lockfile fail cứng với engine mismatch nên phải bỏ qua.
+RUN yarn install --frozen-lockfile --ignore-engines
 
 # Copy source code
 COPY . .
