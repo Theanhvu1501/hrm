@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from '@app/auth';
 import { TenantModule } from '@app/core';
 import { DatabaseModule } from '@app/database';
+import { CacheModule } from '@app/cache';
 import { QuyChuan_Module } from './quy-chuan/quy-chuan.module';
 import { PhanQuyen_Module } from './phan-quyen/phan-quyen.module';
 import { NguoiDung_Module } from './nguoi-dung/nguoi-dung.module';
@@ -36,6 +37,7 @@ import { BaoCaoNhanSu_Module } from './bao-cao-nhan-su/bao-cao-nhan-su.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    CacheModule,
     TenantModule,
     DatabaseModule.forRoot(),
     AuthModule,
