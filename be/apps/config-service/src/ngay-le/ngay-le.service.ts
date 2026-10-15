@@ -2,10 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  Inject,
 } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Holiday } from '@app/entities';
@@ -17,15 +14,11 @@ export interface NgayLeFilter {
   isActive?: boolean | string;
 }
 
-const CACHE_KEY_PREFIX = 'ngay-le';
-const CACHE_TTL = 10 * 60 * 1000; // 10 phút
-
 @Injectable()
 export class NgayLe_Service {
   constructor(
     @InjectRepository(Holiday)
     private readonly repo: Repository<Holiday>,
-    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
   /**
@@ -54,9 +47,7 @@ export class NgayLe_Service {
       isActive: dto.isActive ?? true,
     } as Partial<Holiday>);
 
-    const saved = await this.repo.save(entity);
-    await this.invalidateCache();
-    return saved;
+    return this.repo.save(entity);
   }
 
   private coerceIsActive(value?: boolean | string): boolean {
@@ -66,24 +57,13 @@ export class NgayLe_Service {
   }
 
   async findAll(filter?: NgayLeFilter): Promise<Holiday[]> {
-    const isActive = this.coerceIsActive(filter?.isActive);
-    const nam = filter?.nam !== undefined && filter.nam !== '' ? Number(filter.nam) : null;
-    const cacheKey = `${CACHE_KEY_PREFIX}:all:${nam ?? 'all'}:${isActive}`;
-
-    const cached = await this.cache.get<Holiday[]>(cacheKey);
-    if (cached) {
-      console.log(`[NgayLe] Cache HIT: ${cacheKey}`);
-      return cached;
+    const where: Record<string, any> = {
+      isActive: this.coerceIsActive(filter?.isActive),
+    };
+    if (filter?.nam !== undefined && filter.nam !== '') {
+      where.nam = Number(filter.nam);
     }
-
-    console.log(`[NgayLe] Cache MISS: ${cacheKey}`);
-    const where: Record<string, any> = { isActive };
-    if (nam !== null) {
-      where.nam = nam;
-    }
-    const result = await this.repo.find({ where });
-    await this.cache.set(cacheKey, result, CACHE_TTL);
-    return result;
+    return this.repo.find({ where });
   }
 
   async findOne(id: string): Promise<Holiday> {
@@ -147,39 +127,12 @@ export class NgayLe_Service {
     const nam = this.validateKhoang(tuNgay, denNgay);
 
     Object.assign(item, dto, { nam });
-    const saved = await this.repo.save(item);
-    await this.invalidateCache();
-    return saved;
+    return this.repo.save(item);
   }
 
   async remove(id: string): Promise<void> {
     const item = await this.findOne(id);
     item.isActive = false;
     await this.repo.save(item);
-    await this.invalidateCache();
-  }
-
-  /**
-   * Xóa tất cả cache liên quan đến ngày lễ.
-   * Vì không biết chính xác các key đang có, xóa các key phổ biến.
-   */
-  private async invalidateCache(): Promise<void> {
-    try {
-      // Xóa các key cache phổ biến
-      const keysToDelete = [
-        `${CACHE_KEY_PREFIX}:all:all:true`,
-        `${CACHE_KEY_PREFIX}:all:all:false`,
-      ];
-      // Thêm các năm gần đây
-      const currentYear = new Date().getFullYear();
-      for (let y = currentYear - 1; y <= currentYear + 1; y++) {
-        keysToDelete.push(`${CACHE_KEY_PREFIX}:all:${y}:true`);
-        keysToDelete.push(`${CACHE_KEY_PREFIX}:all:${y}:false`);
-      }
-      await Promise.all(keysToDelete.map((k) => this.cache.del(k)));
-      console.log(`[NgayLe] Cache invalidated: ${keysToDelete.length} keys`);
-    } catch (err) {
-      console.warn(`[NgayLe] Cache invalidate failed:`, err);
-    }
   }
 }

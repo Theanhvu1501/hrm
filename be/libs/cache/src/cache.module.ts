@@ -1,7 +1,10 @@
-import { Module, Global } from '@nestjs/common';
+import { Module, Global, Logger } from '@nestjs/common';
 import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { redisStore } from 'cache-manager-redis-yet';
+import { CacheInvalidator, TenantCacheInterceptor } from './tenant-cache.interceptor';
+
+const logger = new Logger('CacheModule');
 
 @Global()
 @Module({
@@ -12,25 +15,37 @@ import { redisStore } from 'cache-manager-redis-yet';
       useFactory: async (config: ConfigService) => {
         const redisHost = config.get<string>('REDIS_HOST');
 
+        // Nếu không có REDIS_HOST, dùng in-memory cache (dev mode)
         if (!redisHost) {
-          console.log('[CacheModule] REDIS_HOST not set, using in-memory cache');
-          return { ttl: 5 * 60 * 1000 };
+          logger.log('REDIS_HOST not set, using in-memory cache');
+          return { ttl: 5 * 60 * 1000 }; // 5 phút (ms)
         }
 
-        console.log(`[CacheModule] Connecting to Redis at ${redisHost}`);
-        return {
-          store: await redisStore({
+        // Production: dùng Redis
+        try {
+          const redisPort = config.get<number>('REDIS_PORT', 6379);
+          const redisPassword = config.get<string>('REDIS_PASSWORD');
+
+          logger.log(`Connecting to Redis at ${redisHost}:${redisPort}`);
+
+          const store = await redisStore({
             socket: {
               host: redisHost,
-              port: config.get<number>('REDIS_PORT', 6379),
+              port: redisPort,
             },
-            password: config.get<string>('REDIS_PASSWORD') || undefined,
-            ttl: 5 * 60 * 1000,
-          }),
-        };
+            password: redisPassword || undefined,
+            ttl: 5 * 60 * 1000, // 5 phút (ms)
+          });
+
+          return { store };
+        } catch (err) {
+          logger.error(`Failed to connect Redis: ${err.message}, falling back to in-memory`);
+          return { ttl: 5 * 60 * 1000 };
+        }
       },
     }),
   ],
-  exports: [NestCacheModule],
+  providers: [CacheInvalidator, TenantCacheInterceptor],
+  exports: [NestCacheModule, CacheInvalidator, TenantCacheInterceptor],
 })
 export class CacheModule {}

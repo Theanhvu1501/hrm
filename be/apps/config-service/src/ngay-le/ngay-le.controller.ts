@@ -8,11 +8,15 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { NgayLe_Service } from './ngay-le.service';
 import type { NgayLeFilter } from './ngay-le.service';
 import { CreateNgayLeDto, UpdateNgayLeDto } from './dto';
 import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
+import { TenantCacheInterceptor, CacheInvalidator } from '@app/cache';
+
+const CACHE_PATH = '/ngay-le';
 
 /**
  * Ngày lễ quyết định tiền công của CẢ công ty: `suyNgayNghi()` hỏi đúng
@@ -40,8 +44,12 @@ import { JwtGuard, PermissionGuard, Permissions } from '@app/auth';
  */
 @Controller('ngay-le')
 @UseGuards(JwtGuard)
+@UseInterceptors(TenantCacheInterceptor)
 export class NgayLe_Controller {
-  constructor(private readonly ngayLe_Service: NgayLe_Service) {}
+  constructor(
+    private readonly ngayLe_Service: NgayLe_Service,
+    private readonly cacheInvalidator: CacheInvalidator,
+  ) {}
 
   @Get()
   @UseGuards(PermissionGuard)
@@ -64,6 +72,7 @@ export class NgayLe_Controller {
   @Permissions('/cham-cong/ngay-le:them')
   async create(@Body() body: CreateNgayLeDto) {
     const data = await this.ngayLe_Service.create(body);
+    await this.cacheInvalidator.invalidateByPath(CACHE_PATH);
     return { success: true, data };
   }
 
@@ -72,6 +81,7 @@ export class NgayLe_Controller {
   @Permissions('/cham-cong/ngay-le:sua')
   async update(@Param('id') id: string, @Body() body: UpdateNgayLeDto) {
     const data = await this.ngayLe_Service.update(id, body);
+    await this.cacheInvalidator.invalidateByPath(CACHE_PATH);
     return { success: true, data };
   }
 
@@ -80,6 +90,7 @@ export class NgayLe_Controller {
   @Permissions('/cham-cong/ngay-le:xoa')
   async remove(@Param('id') id: string) {
     await this.ngayLe_Service.remove(id);
+    await this.cacheInvalidator.invalidateByPath(CACHE_PATH);
     return { success: true, message: 'Xóa ngày lễ thành công' };
   }
 }
