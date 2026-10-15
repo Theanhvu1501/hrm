@@ -51,6 +51,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/terminus": "^12.1.0",
     "@nestjs/typeorm": "^11.0.0",
+    "@prometheus-io/client": "^0.16.1",
     "@willsoto/nestjs-prometheus": "^7.0.0",
     "bcrypt": "^6.0.0",
     "cache-manager": "^7.2.9",
